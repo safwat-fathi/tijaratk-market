@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
+import Image from "next/image";
+import heroMockup from "@/public/images/hero-mockup.png";
 
 const pricingPlans = [
 	{
@@ -41,7 +43,7 @@ const pricingPlans = [
 		highlighted: true,
 	},
 	{
-		name: "الباقة الذهبية",
+		name: "باقة الفروع",
 		price: "٦٩٩",
 		currency: "جنيه للفرع الأول / شهر",
 		subPrice: "٢٩٩ جنيه لكل فرع إضافي",
@@ -58,86 +60,31 @@ const pricingPlans = [
 	},
 ];
 
-const features = [
-	{
-		title: "الطلبات بتضيع وسط الرسايل؟",
-		description:
-			"كل طلب بيوصلك بشكل منظم وواضح، بيانات العميل والمنتجات والعنوان في مكان واحد.",
-		icon: (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				className="h-6 w-6 text-brand-primary"
-			>
-				<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-			</svg>
-		),
-	},
-	{
-		title: "العميل يغير الطلب أكتر من مرة؟",
-		description:
-			"وفر وقت الشرح، لينك واحد فيه كل حاجتك والعميل بيختار اللي عاوزه ويثبت طلبه.",
-		icon: (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				className="h-6 w-6 text-brand-primary"
-			>
-				<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
-				<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-				<path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
-				<path d="M2 7h20" />
-				<path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7" />
-			</svg>
-		),
-	},
-	{
-		title: "مش عارف حسابات اليوم؟",
-		description:
-			"تقارير يومية مفصلة بتعرفك إجمالي المبيعات والطلبات اللي اتنفذت.",
-		icon: (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				className="h-6 w-6 text-brand-primary"
-			>
-				<path d="M3 3v18h18" />
-				<path d="m19 9-5 5-4-4-3 3" />
-			</svg>
-		),
-	},
-];
+const SVGCheckCircle = ({ className }: { className?: string }) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="2"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+		className={className}
+	>
+		<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+		<path d="m9 11 3 3L22 4" />
+	</svg>
+);
 
 export default function LandingPage() {
 	return (
 		<div
-			className="flex min-h-screen flex-col bg-background font-sans"
+			className="flex min-h-screen flex-col font-sans bg-[#F7F8F6]"
 			dir="rtl"
 		>
 			{/* Header */}
-			<header className="sticky top-0 z-50 w-full border-b border-brand-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-				<div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+			<header className="sticky top-0 z-50 w-full bg-white shadow-sm">
+				<div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
 					<div className="flex items-center gap-2">
 						<Logo
 							variant="icon"
@@ -145,18 +92,18 @@ export default function LandingPage() {
 							height={32}
 							className="rounded-md"
 						/>
-						<span className="text-xl font-bold text-brand-text">تجارتك</span>
+						<span className="text-xl font-bold text-[#0F5A3D]">تجارتك</span>
 					</div>
-					<div className="flex items-center gap-3">
+					<div className="flex items-center gap-4">
 						<Link
 							href="/merchant/login"
-							className="text-sm font-semibold text-brand-text transition-colors hover:text-brand-primary"
+							className="text-sm font-semibold text-[#0F5A3D] transition-colors hover:text-[#27AE60]"
 						>
 							تسجيل الدخول
 						</Link>
 						<Link
 							href="/merchant/login"
-							className="inline-flex h-9 items-center justify-center rounded-md bg-brand-primary px-4 py-2 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/50"
+							className="inline-flex h-10 items-center justify-center rounded-full bg-[#0F5A3D] px-5 text-sm font-bold text-white transition-colors hover:bg-[#00412a]"
 						>
 							ابدأ الآن
 						</Link>
@@ -166,78 +113,313 @@ export default function LandingPage() {
 
 			<main className="flex-1">
 				{/* Hero Section */}
-				<section className="relative overflow-hidden py-20 sm:py-32 lg:pb-32 xl:pb-36">
-					<div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-						<div className="mx-auto max-w-3xl text-center">
-							<h1 className="text-4xl font-extrabold tracking-tight text-brand-text sm:text-5xl lg:text-6xl">
-								نظّم طلباتك على{" "}
-								<span className="text-brand-primary">واتساب</span> بسهولة
-							</h1>
-							<p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
-								استقبل الطلبات بشكل منظم بدل رسايل الواتساب الكتير والمكالمات
-								اللي بتتلخبط. وفر وقتك وكبّر تجارتك مع متجر إلكتروني متكامل.
-							</p>
-							<div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-								<Link
-									href="/merchant/login"
-									className="inline-flex h-12 w-full items-center justify-center rounded-md bg-brand-primary px-8 text-base font-semibold text-white shadow-soft transition-colors hover:bg-brand-primary-hover sm:w-auto"
+				<section className="bg-[#0F5A3D] px-4 pt-16 pb-12 sm:pt-24 sm:pb-16 lg:px-8">
+					<div className="mx-auto max-w-4xl text-center">
+						<h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
+							نظّم طلباتك على <span className="text-[#27AE60]">واتساب</span>{" "}
+							بسهولة
+						</h1>
+						<p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/90">
+							استقبل الطلبات بشكل منظم بدل رسايل الواتساب الكتير والمكالمات اللي
+							بتتلخبط. وفر وقتك وكبّر تجارتك مع متجر إلكتروني متكامل.
+						</p>
+
+						<div className="mt-8 flex justify-center">
+							<Link
+								href="/merchant/login"
+								className="inline-flex h-14 w-full sm:w-auto min-w-[200px] items-center justify-center rounded-2xl bg-[#27AE60] px-8 text-xl font-bold text-white transition-colors hover:bg-[#219653]"
+							>
+								أنشئ متجرك مجاناً
+							</Link>
+						</div>
+
+						{/* Trust Badges */}
+						<div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm font-medium text-white/90">
+							<div className="flex items-center gap-1.5">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
 								>
-									أنشئ متجرك مجاناً
-								</Link>
-								<Link
-									href="#pricing"
-									className="inline-flex h-12 w-full items-center justify-center rounded-md border border-brand-border bg-white px-8 text-base font-semibold text-brand-text shadow-sm transition-colors hover:bg-muted/50 sm:w-auto"
+									<circle cx="12" cy="12" r="10"></circle>
+									<path d="m9 12 2 2 4-4"></path>
+								</svg>
+								بدون عمولة
+							</div>
+							<div className="flex items-center gap-1.5">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
 								>
-									عرض الباقات
-								</Link>
+									<rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+									<line x1="12" y1="18" x2="12.01" y2="18"></line>
+								</svg>
+								يشتغل من الموبايل
+							</div>
+							<div className="flex items-center gap-1.5">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								>
+									<circle cx="12" cy="12" r="10"></circle>
+									<path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+									<line x1="9" y1="9" x2="9.01" y2="9"></line>
+									<line x1="15" y1="9" x2="15.01" y2="9"></line>
+								</svg>
+								سهل الاستخدام
+							</div>
+						</div>
+
+						{/* Phone Mockup Placeholder */}
+						{/* <div className="mx-auto mt-12 max-w-sm rounded-[2rem] bg-white/10 p-2 shadow-2xl backdrop-blur-sm sm:max-w-md">
+							<div className="aspect-[9/16] w-full overflow-hidden rounded-[1.75rem] bg-white relative border-[6px] border-[#0A3D2A]">
+								<div className="absolute top-0 w-full h-12 bg-white flex items-end justify-center pb-2 border-b border-gray-100 z-10">
+									<div className="w-1/3 h-1.5 bg-gray-200 rounded-full mb-1"></div>
+								</div>
+								<div className="p-4 pt-16 h-full bg-[#F7F8F6]">
+									<div className="w-2/3 h-6 bg-[#0F5A3D]/10 rounded-md mb-6"></div>
+									<div className="space-y-3">
+										<div className="w-full h-16 bg-white rounded-xl shadow-sm"></div>
+										<div className="w-full h-16 bg-white rounded-xl shadow-sm"></div>
+										<div className="w-full h-16 bg-white rounded-xl shadow-sm"></div>
+										<div className="w-full h-16 bg-white rounded-xl shadow-sm"></div>
+									</div>
+									<div className="absolute bottom-6 left-6 right-6 h-12 bg-[#27AE60] rounded-xl flex items-center justify-center">
+										<div className="w-1/3 h-2 bg-white/50 rounded-full"></div>
+									</div>
+								</div>
+							</div>
+						</div> */}
+						<div className="mt-4">
+							<Image
+								alt="Merchant using mobile app"
+								className="rounded-xl custom-shadow mx-auto w-full max-w-sm"
+								src={heroMockup}
+								placeholder="blur"
+								sizes="(max-width: 640px) 100vw, 384px"
+								loading="lazy"
+							/>
+						</div>
+					</div>
+				</section>
+
+				{/* Problems Section */}
+				<section className="bg-[#F7F8F6] px-4 py-16 sm:py-24 lg:px-8">
+					<div className="mx-auto max-w-5xl">
+						<h2 className="mb-12 text-center text-3xl font-bold text-[#222B2E] sm:text-4xl">
+							إيه المشاكل اللي بنحلها؟
+						</h2>
+						<div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+							{/* Card 1 */}
+							<div className="flex flex-col items-center rounded-2xl bg-white p-8 text-center shadow-sm border border-gray-100">
+								<div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="32"
+										height="32"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									>
+										<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+										<polyline points="14 2 14 8 20 8"></polyline>
+										<line x1="9.5" y1="12.5" x2="14.5" y2="17.5"></line>
+										<line x1="14.5" y1="12.5" x2="9.5" y2="17.5"></line>
+									</svg>
+								</div>
+								<h3 className="text-xl font-bold text-[#222B2E]">
+									الطلبات بتضيع وسط الرسايل
+								</h3>
+							</div>
+
+							{/* Card 2 */}
+							<div className="flex flex-col items-center rounded-2xl bg-white p-8 text-center shadow-sm border border-gray-100">
+								<div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="32"
+										height="32"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									>
+										<path d="M12 20h9"></path>
+										<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+									</svg>
+								</div>
+								<h3 className="text-xl font-bold text-[#222B2E]">
+									العميل يغير الطلب أكتر من مرة
+								</h3>
+							</div>
+
+							{/* Card 3 */}
+							<div className="flex flex-col items-center rounded-2xl bg-white p-8 text-center shadow-sm border border-gray-100">
+								<div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="32"
+										height="32"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									>
+										<path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path>
+										<path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path>
+										<path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path>
+									</svg>
+								</div>
+								<h3 className="text-xl font-bold text-[#222B2E]">
+									مش عارف حسابات اليوم راحت فين
+								</h3>
 							</div>
 						</div>
 					</div>
 				</section>
 
-				{/* Features / Problem Section */}
-				<section className="bg-brand-soft/30 py-20 sm:py-32">
-					<div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-						<div className="mx-auto max-w-2xl text-center">
-							<h2 className="text-3xl font-bold tracking-tight text-brand-text sm:text-4xl">
+				{/* Solutions Section */}
+				<section className="bg-white px-4 py-16 sm:py-24 lg:px-8">
+					<div className="mx-auto max-w-4xl">
+						<div className="mb-12 text-center">
+							<h2 className="inline-block text-3xl font-bold text-[#0F5A3D] sm:text-4xl border-b-4 border-[#27AE60] pb-2">
 								تجارتك بتنظم الشغل بدل اللخبطة
 							</h2>
-							<p className="mt-4 text-lg text-muted-foreground">
-								إيه المشاكل اللي بنحلها؟ الطلبات اللي بتضيع، والتغييرات الكتير،
-								والحسابات اللي مش واضحة.
-							</p>
 						</div>
-						<div className="mx-auto mt-16 max-w-5xl sm:mt-20">
-							<div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-								{features.map((feature, index) => (
-									<div
-										key={index}
-										className="relative rounded-2xl border border-brand-border/50 bg-white p-8 shadow-sm"
+
+						<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+							{/* Solution 1 */}
+							<div className="flex flex-col rounded-2xl bg-[#E8F5ED] p-8">
+								<div className="mb-4 flex items-center gap-4">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="32"
+										height="32"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										className="text-[#0F5A3D] flex-none"
 									>
-										<div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-soft">
-											{feature.icon}
-										</div>
-										<h3 className="mb-3 text-xl font-bold text-brand-text">
-											{feature.title}
-										</h3>
-										<p className="text-muted-foreground leading-relaxed">
-											{feature.description}
-										</p>
-									</div>
-								))}
+										<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+										<rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+										<path d="M12 11h4"></path>
+										<path d="M12 16h4"></path>
+										<path d="M8 11h.01"></path>
+										<path d="M8 16h.01"></path>
+									</svg>
+									<h3 className="text-xl font-bold text-[#0F5A3D]">
+										كل طلب بيوصلك بشكل منظم وواضح
+									</h3>
+								</div>
+								<p className="text-[#0F5A3D]/80 leading-relaxed mr-12">
+									بيانات العميل، المنتجات، والعنوان كلهم في مكان واحد.
+								</p>
+							</div>
+
+							{/* Solution 2 */}
+							<div className="flex flex-col rounded-2xl bg-[#E8F5ED] p-8">
+								<div className="mb-4 flex items-center gap-4">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="32"
+										height="32"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										className="text-[#0F5A3D] flex-none"
+									>
+										<path d="M22 14a8 8 0 0 1-8 8"></path>
+										<path d="M18 11v-1a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
+										<path d="M14 10V9a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v1"></path>
+										<path d="M10 9.5V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v10"></path>
+										<path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
+									</svg>
+									<h3 className="text-xl font-bold text-[#0F5A3D]">
+										العميل يشوف المنتجات ويطلب بنفسه
+									</h3>
+								</div>
+								<p className="text-[#0F5A3D]/80 leading-relaxed mr-12">
+									وفر وقت الشرح، لينك واحد فيه كل حاجتك والعميل بيختار اللي
+									عاوزه.
+								</p>
+							</div>
+
+							{/* Solution 3 */}
+							<div className="flex flex-col rounded-2xl bg-[#E8F5ED] p-8">
+								<div className="mb-4 flex items-center gap-4">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="32"
+										height="32"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										className="text-[#0F5A3D] flex-none"
+									>
+										<path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+										<path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9"></path>
+										<path d="M9 10a.5 .5 0 0 0 1 0v-1a.5 .5 0 0 0 -1 0v1a5 5 0 0 0 5 5h1a.5 .5 0 0 0 0 -1h-1a.5 .5 0 0 0 0 1"></path>
+									</svg>
+									<h3 className="text-xl font-bold text-[#0F5A3D]">
+										إشعارات واتساب ليك وللعميل
+									</h3>
+								</div>
+								<p className="text-[#0F5A3D]/80 leading-relaxed mr-12">
+									يوصلك تنبيه بأي طلب جديد أو تعديل، والعميل يعرف حالة طلبه أول
+									بأول.
+								</p>
 							</div>
 						</div>
 					</div>
 				</section>
 
 				{/* Pricing Section */}
-				<section id="pricing" className="py-20 sm:py-32">
-					<div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+				<section
+					id="pricing"
+					className="bg-[#F7F8F6] px-4 py-16 sm:py-24 lg:px-8"
+				>
+					<div className="mx-auto max-w-7xl">
 						<div className="mx-auto max-w-3xl text-center">
-							<h2 className="text-3xl font-bold tracking-tight text-brand-text sm:text-4xl">
+							<h2 className="text-3xl font-bold tracking-tight text-[#222B2E] sm:text-4xl">
 								خطط التسعير
 							</h2>
-							<p className="mt-4 text-lg text-muted-foreground">
+							<p className="mt-4 text-lg text-[#222B2E]/70">
 								اختر الباقة اللي تناسب حجم تجارتك وابدأ في النمو.
 							</p>
 						</div>
@@ -246,36 +428,34 @@ export default function LandingPage() {
 							{pricingPlans.map((plan, index) => (
 								<div
 									key={index}
-									className={`relative flex flex-col rounded-3xl p-8 shadow-sm ring-1 sm:p-10 ${
+									className={`relative flex flex-col rounded-[2rem] p-8 shadow-sm transition-transform hover:-translate-y-1 ${
 										plan.highlighted
-											? "bg-brand-text text-white ring-brand-text"
-											: "bg-white text-brand-text ring-brand-border/80"
+											? "bg-[#0F5A3D] text-white"
+											: "bg-white text-[#222B2E] border border-gray-100"
 									}`}
 								>
 									{plan.highlighted && index === 2 && (
-										<div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-brand-primary px-4 py-1 text-xs font-semibold text-white">
+										<div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-[#27AE60] px-4 py-1.5 text-xs font-bold text-white shadow-md">
 											الأكثر طلباً
 										</div>
 									)}
 									{plan.highlighted && index === 3 && (
-										<div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-yellow-500 px-4 py-1 text-xs font-semibold text-white">
+										<div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-yellow-500 px-4 py-1.5 text-xs font-bold text-white shadow-md">
 											للمتاجر الكبرى
 										</div>
 									)}
 									<h3
-										className={`text-xl font-semibold ${plan.highlighted ? "text-white" : "text-brand-text"}`}
+										className={`text-xl font-bold ${plan.highlighted ? "text-white" : "text-[#0F5A3D]"}`}
 									>
 										{plan.name}
 									</h3>
 									<div className="mt-4 flex items-baseline gap-x-2">
-										<span
-											className={`text-4xl font-bold tracking-tight ${plan.highlighted ? "text-white" : "text-brand-text"}`}
-										>
+										<span className="text-4xl font-extrabold tracking-tight">
 											{plan.price}
 										</span>
 										{plan.currency && (
 											<span
-												className={`text-sm font-semibold leading-6 ${plan.highlighted ? "text-gray-300" : "text-muted-foreground"}`}
+												className={`text-sm font-semibold leading-6 ${plan.highlighted ? "text-white/80" : "text-[#222B2E]/60"}`}
 											>
 												{plan.currency}
 											</span>
@@ -283,52 +463,37 @@ export default function LandingPage() {
 									</div>
 									{plan.subPrice && (
 										<p
-											className={`mt-2 text-sm ${plan.highlighted ? "text-gray-300" : "text-muted-foreground"}`}
+											className={`mt-2 text-sm font-medium ${plan.highlighted ? "text-white/80" : "text-[#222B2E]/60"}`}
 										>
 											{plan.subPrice}
 										</p>
 									)}
 									<p
-										className={`mt-6 text-sm leading-6 ${plan.highlighted ? "text-gray-300" : "text-muted-foreground"}`}
+										className={`mt-6 text-sm leading-relaxed ${plan.highlighted ? "text-white/80" : "text-[#222B2E]/70"}`}
 									>
 										{plan.description}
 									</p>
 									<ul
 										role="list"
-										className={`mt-8 space-y-3 text-sm leading-6 sm:mt-10 ${
-											plan.highlighted
-												? "text-gray-300"
-												: "text-muted-foreground"
-										} flex-1`}
+										className={`mt-8 space-y-4 text-sm leading-6 flex-1 ${
+											plan.highlighted ? "text-white/90" : "text-[#222B2E]/80"
+										}`}
 									>
 										{plan.features.map((feature, featureIndex) => (
 											<li key={featureIndex} className="flex gap-x-3">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="24"
-													height="24"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													strokeWidth="2"
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													className={`h-6 w-5 flex-none text-brand-primary`}
-													aria-hidden="true"
-												>
-													<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-													<path d="m9 11 3 3L22 4" />
-												</svg>
-												{feature}
+												<SVGCheckCircle
+													className={`h-5 w-5 flex-none ${plan.highlighted ? "text-[#27AE60]" : "text-[#27AE60]"}`}
+												/>
+												<span>{feature}</span>
 											</li>
 										))}
 									</ul>
 									<Link
 										href="/merchant/login"
-										className={`mt-8 block rounded-md px-3 py-3 text-center text-sm font-semibold leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+										className={`mt-8 block w-full rounded-xl px-3 py-3.5 text-center text-sm font-bold transition-colors ${
 											plan.highlighted
-												? "bg-brand-primary text-white hover:bg-brand-primary-hover focus-visible:outline-brand-primary"
-												: "bg-brand-soft text-brand-primary hover:bg-brand-soft/80 ring-1 ring-inset ring-brand-primary/20"
+												? "bg-[#27AE60] text-white hover:bg-[#219653]"
+												: "bg-[#E8F5ED] text-[#0F5A3D] hover:bg-[#D1EBDC]"
 										}`}
 									>
 										{plan.buttonText}
@@ -341,8 +506,8 @@ export default function LandingPage() {
 			</main>
 
 			{/* Footer */}
-			<footer className="border-t border-brand-border/40 bg-white py-12">
-				<div className="container mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-4 sm:flex-row sm:px-6 lg:px-8">
+			<footer className="bg-white py-12 border-t border-gray-100">
+				<div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-4 sm:flex-row sm:px-6 lg:px-8">
 					<div className="flex items-center gap-2">
 						<Logo
 							variant="icon"
@@ -350,13 +515,11 @@ export default function LandingPage() {
 							height={24}
 							className="rounded-md opacity-80"
 						/>
-						<span className="text-lg font-bold text-muted-foreground">
-							تجارتك
-						</span>
+						<span className="text-lg font-bold text-[#0F5A3D]">تجارتك</span>
 					</div>
-					<p className="text-sm text-muted-foreground">
+					<p className="text-sm font-medium text-[#222B2E]/60">
 						© {new Date().getFullYear()} جميع الحقوق محفوظة لـ{" "}
-						<span className="text-brand-primary font-bold">تجارتك</span>.
+						<span className="text-[#0F5A3D] font-bold">تجارتك</span>.
 					</p>
 				</div>
 			</footer>
