@@ -141,7 +141,7 @@ export default async function StorePage({ params, searchParams }: Props) {
 		]);
 
 	return (
-		<div className="mx-auto min-h-screen w-full max-w-md overflow-x-hidden bg-background">
+		<div className="mx-auto min-h-screen w-full max-w-md bg-background">
 			<StoreHeader tenant={tenant} />
 			{/* <WriteOrderFAB /> */}
 

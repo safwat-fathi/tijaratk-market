@@ -83,7 +83,7 @@ export default function RootLayout({
 	return (
 		<html lang="ar" dir="rtl">
 			<body
-				className={`${ibmPlexSansArabic.variable} ${poppins.variable} overflow-x-hidden font-sans antialiased`}
+				className={`${ibmPlexSansArabic.variable} ${poppins.variable} font-sans antialiased`}
 			>
 				{children}
 			</body>

@@ -162,7 +162,7 @@
     @apply border-border;
   }
   html, body {
-    @apply overflow-x-hidden;
+    @apply overflow-x-clip;
   }
   html {
     -webkit-tap-highlight-color: transparent;
