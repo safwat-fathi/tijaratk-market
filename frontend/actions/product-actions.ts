@@ -100,6 +100,46 @@ const normalizeUpdateProductPayload = (formData: FormData): FormData => {
   return normalizedPayload;
 };
 
+const buildCreateProductFormData = ({
+  name,
+  imageUrl,
+  currentPrice,
+  category,
+  orderMode,
+  orderConfig,
+  imageFile,
+}: {
+  name: string;
+  imageUrl?: string;
+  currentPrice?: number;
+  category?: string;
+  orderMode?: ProductOrderMode;
+  orderConfig?: ProductOrderConfig;
+  imageFile: File;
+}): FormData => {
+  const payload = new FormData();
+  payload.set('name', name);
+
+  if (imageUrl?.trim()) {
+    payload.set('image_url', imageUrl.trim());
+  }
+  if (typeof currentPrice === 'number') {
+    payload.set('current_price', String(currentPrice));
+  }
+  if (category) {
+    payload.set('category', category);
+  }
+  if (orderMode) {
+    payload.set('order_mode', orderMode);
+  }
+  if (orderConfig) {
+    payload.set('order_config', JSON.stringify(orderConfig));
+  }
+
+  payload.set('file', imageFile);
+  return payload;
+};
+
 export async function createProductAction(
   name: string,
   imageUrl?: string,
@@ -107,12 +147,40 @@ export async function createProductAction(
   category?: string,
   orderMode?: ProductOrderMode,
   orderConfig?: ProductOrderConfig,
+  imageFile?: File | null,
 ) {
   try {
     const normalizedCategory = category?.trim() || undefined;
+    const normalizedName = name.trim();
+
+    if (imageFile && imageFile.size > 0) {
+      const payload = buildCreateProductFormData({
+        name: normalizedName,
+        imageUrl,
+        currentPrice,
+        category: normalizedCategory,
+        orderMode,
+        orderConfig,
+        imageFile,
+      });
+
+      const response = await productsService.createProduct(payload);
+
+      if (!response.success || !response.data) {
+        return {
+          success: false,
+          message: normalizeUpdateProductErrorMessage(response.message),
+        };
+      }
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    }
 
     const response = await productsService.createProduct({
-      name,
+      name: normalizedName,
       image_url: imageUrl,
       current_price: currentPrice,
       category: normalizedCategory,
@@ -138,7 +206,9 @@ export async function createProductAction(
     console.error('Create product failed:', error);
     return {
       success: false,
-      message: 'تعذر إضافة المنتج',
+      message: normalizeUpdateProductErrorMessage(
+        error instanceof Error ? error.message : undefined,
+      ),
     };
   }
 }

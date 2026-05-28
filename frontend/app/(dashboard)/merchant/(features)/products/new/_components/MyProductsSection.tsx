@@ -1,11 +1,11 @@
-import { useRef } from 'react';
-import SafeImage from '@/components/ui/SafeImage';
-import type { Product } from '@/types/models/product';
-import { SECTION_MY_PRODUCTS } from '../_utils/product-onboarding.constants';
+import { useRef } from "react";
+import SafeImage from "@/components/ui/SafeImage";
+import type { Product } from "@/types/models/product";
+import { SECTION_MY_PRODUCTS } from "../_utils/product-onboarding.constants";
 import {
-	normalizeModeBadge,
-	resolveImageUrl,
-	resolveProductPriceText,
+  normalizeModeBadge,
+  resolveImageUrl,
+  resolveProductPriceText,
 } from "../_utils/product-onboarding";
 
 type MyProductsSectionProps = {
@@ -61,11 +61,13 @@ export default function MyProductsSection({
       id={`section-panel-${SECTION_MY_PRODUCTS}`}
       role="tabpanel"
       aria-labelledby={`section-tab-${SECTION_MY_PRODUCTS}`}
-      className={active ? 'block' : 'hidden'}
+      className={active ? "block" : "hidden"}
     >
       <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <h2 className="text-lg font-bold text-gray-900">منتجاتك</h2>
-        <p className="mt-1 text-sm text-gray-500">{displayedProductsCountLabel}</p>
+        <p className="mt-1 text-sm text-gray-500">
+          {displayedProductsCountLabel}
+        </p>
 
         <div className="mt-3">
           <div className="relative">
@@ -92,27 +94,40 @@ export default function MyProductsSection({
                   stroke="currentColor"
                   strokeWidth={2}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             )}
           </div>
           {needsMoreSearchChars && (
-            <p className="mt-2 text-xs text-gray-500">اكتب حرفين أو أكثر لبدء البحث</p>
+            <p className="mt-2 text-xs text-gray-500">
+              اكتب حرفين أو أكثر لبدء البحث
+            </p>
           )}
-          {isSearchLoading && <p className="mt-2 text-xs text-gray-500">جاري البحث...</p>}
-          {!isSearchLoading && searchError && <p className="mt-2 text-xs text-red-600">{searchError}</p>}
+          {isSearchLoading && (
+            <p className="mt-2 text-xs text-gray-500">جاري البحث...</p>
+          )}
+          {!isSearchLoading && searchError && (
+            <p className="mt-2 text-xs text-red-600">{searchError}</p>
+          )}
         </div>
 
         <div className="lg:max-h-[58vh] lg:overflow-y-auto lg:pe-1">
           {displayedProducts.length === 0 && !isSearchLoading ? (
             <p className="mt-4 rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-              {isSearchActive ? 'لا توجد نتائج مطابقة.' : 'لا توجد منتجات حتى الآن.'}
+              {isSearchActive
+                ? "لا توجد نتائج مطابقة."
+                : "لا توجد منتجات حتى الآن."}
             </p>
           ) : (
             <ul className="mt-4 space-y-2">
               {displayedProducts.map((product) => {
-                const isConfirmingRemoval = confirmRemoveProductId === product.id;
+                const isConfirmingRemoval =
+                  confirmRemoveProductId === product.id;
                 const isRemoving = removingProductId === product.id;
                 const isHighlighted = highlightedProductId === product.id;
 
@@ -123,8 +138,8 @@ export default function MyProductsSection({
                     tabIndex={-1}
                     className={`flex items-center justify-between rounded-xl border px-3 py-2 transition ${
                       isHighlighted
-                        ? 'border-amber-300 bg-amber-50 ring-2 ring-amber-200'
-                        : 'border-gray-100'
+                        ? "border-amber-300 bg-amber-50 ring-2 ring-amber-200"
+                        : "border-gray-100"
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -149,13 +164,16 @@ export default function MyProductsSection({
                       )}
 
                       <div>
-                        <span className="block text-sm font-medium text-gray-900">{product.name}</span>
+                        <span className="block text-sm font-medium text-gray-900">
+                          {product.name}
+                        </span>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
-                            {product.source === 'catalog' ? 'كتالوج' : 'يدوي'}
+                            {product.source === "catalog" ? "كتالوج" : "يدوي"}
                           </span>
                           <span className="rounded-full bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-primary">
-                            {resolveProductPriceText(product.current_price) || 'السعر غير محدد'}
+                            {resolveProductPriceText(product.current_price) ||
+                              "السعر غير محدد"}
                           </span>
                           <span className="rounded-full bg-status-success/15 px-2 py-1 text-xs font-semibold text-status-success">
                             {normalizeModeBadge(product.order_mode)}
@@ -178,7 +196,7 @@ export default function MyProductsSection({
                             disabled={isRemoving}
                             className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                           >
-                            {isRemoving ? '...جاري الحذف' : 'تأكيد الحذف'}
+                            {isRemoving ? "...جاري الحذف" : "تأكيد الحذف"}
                           </button>
                           <button
                             type="button"

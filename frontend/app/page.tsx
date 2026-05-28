@@ -113,110 +113,94 @@ export default function LandingPage() {
 
 			<main className="flex-1">
 				{/* Hero Section */}
-				<section className="bg-[#0F5A3D] px-4 pt-16 pb-12 sm:pt-24 sm:pb-16 lg:px-8">
-					<div className="mx-auto max-w-4xl text-center">
-						<h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
-							نظّم طلباتك على <span className="text-[#27AE60]">واتساب</span>{" "}
-							بسهولة
-						</h1>
-						<p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/90">
-							استقبل الطلبات بشكل منظم بدل رسايل الواتساب الكتير والمكالمات اللي
-							بتتلخبط. وفر وقتك وكبّر تجارتك مع متجر إلكتروني متكامل.
-						</p>
+				<section className="bg-[#0F5A3D] px-4 pt-12 pb-12 sm:pt-20 sm:pb-20 lg:pt-28 lg:pb-28 lg:px-8">
+					<div className="mx-auto max-w-7xl flex flex-col-reverse lg:flex-row items-center justify-between gap-12 lg:gap-20">
+						{/* Text Content */}
+						<div className="flex-1 text-center lg:text-right max-w-2xl lg:max-w-xl">
+							<h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
+								نظّم طلباتك على <span className="text-[#27AE60]">واتساب</span>{" "}
+								بسهولة
+							</h1>
+							<p className="mx-auto lg:mx-0 mt-6 max-w-2xl text-lg leading-relaxed text-white/90">
+								استقبل الطلبات بشكل منظم بدل رسايل الواتساب الكتير والمكالمات اللي
+								بتتلخبط. وفر وقتك وكبّر تجارتك مع متجر إلكتروني متكامل.
+							</p>
 
-						<div className="mt-8 flex justify-center">
-							<Link
-								href="/merchant/login"
-								className="inline-flex h-14 w-full sm:w-auto min-w-[200px] items-center justify-center rounded-2xl bg-[#27AE60] px-8 text-xl font-bold text-white transition-colors hover:bg-[#219653]"
-							>
-								أنشئ متجرك مجاناً
-							</Link>
-						</div>
+							<div className="mt-8 flex justify-center lg:justify-start">
+								<Link
+									href="/merchant/login"
+									className="inline-flex h-14 w-full sm:w-auto min-w-[200px] items-center justify-center rounded-2xl bg-[#27AE60] px-8 text-xl font-bold text-white transition-colors hover:bg-[#219653]"
+								>
+									أنشئ متجرك مجاناً
+								</Link>
+							</div>
 
-						{/* Trust Badges */}
-						<div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm font-medium text-white/90">
-							<div className="flex items-center gap-1.5">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="16"
-									height="16"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								>
-									<circle cx="12" cy="12" r="10"></circle>
-									<path d="m9 12 2 2 4-4"></path>
-								</svg>
-								بدون عمولة
-							</div>
-							<div className="flex items-center gap-1.5">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="16"
-									height="16"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								>
-									<rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-									<line x1="12" y1="18" x2="12.01" y2="18"></line>
-								</svg>
-								يشتغل من الموبايل
-							</div>
-							<div className="flex items-center gap-1.5">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="16"
-									height="16"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								>
-									<circle cx="12" cy="12" r="10"></circle>
-									<path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
-									<line x1="9" y1="9" x2="9.01" y2="9"></line>
-									<line x1="15" y1="9" x2="15.01" y2="9"></line>
-								</svg>
-								سهل الاستخدام
-							</div>
-						</div>
-
-						{/* Phone Mockup Placeholder */}
-						{/* <div className="mx-auto mt-12 max-w-sm rounded-[2rem] bg-white/10 p-2 shadow-2xl backdrop-blur-sm sm:max-w-md">
-							<div className="aspect-[9/16] w-full overflow-hidden rounded-[1.75rem] bg-white relative border-[6px] border-[#0A3D2A]">
-								<div className="absolute top-0 w-full h-12 bg-white flex items-end justify-center pb-2 border-b border-gray-100 z-10">
-									<div className="w-1/3 h-1.5 bg-gray-200 rounded-full mb-1"></div>
+							{/* Trust Badges */}
+							<div className="mt-6 flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 text-sm font-medium text-white/90">
+								<div className="flex items-center gap-1.5">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<path d="m9 12 2 2 4-4"></path>
+									</svg>
+									بدون عمولة
 								</div>
-								<div className="p-4 pt-16 h-full bg-[#F7F8F6]">
-									<div className="w-2/3 h-6 bg-[#0F5A3D]/10 rounded-md mb-6"></div>
-									<div className="space-y-3">
-										<div className="w-full h-16 bg-white rounded-xl shadow-sm"></div>
-										<div className="w-full h-16 bg-white rounded-xl shadow-sm"></div>
-										<div className="w-full h-16 bg-white rounded-xl shadow-sm"></div>
-										<div className="w-full h-16 bg-white rounded-xl shadow-sm"></div>
-									</div>
-									<div className="absolute bottom-6 left-6 right-6 h-12 bg-[#27AE60] rounded-xl flex items-center justify-center">
-										<div className="w-1/3 h-2 bg-white/50 rounded-full"></div>
-									</div>
+								<div className="flex items-center gap-1.5">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									>
+										<rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+										<line x1="12" y1="18" x2="12.01" y2="18"></line>
+									</svg>
+									يشتغل من الموبايل
+								</div>
+								<div className="flex items-center gap-1.5">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+										<line x1="9" y1="9" x2="9.01" y2="9"></line>
+										<line x1="15" y1="9" x2="15.01" y2="9"></line>
+									</svg>
+									سهل الاستخدام
 								</div>
 							</div>
-						</div> */}
-						<div className="mt-4">
+						</div>
+
+						{/* Image Wrapper */}
+						<div className="flex-1 flex justify-center lg:justify-end w-full">
 							<Image
 								alt="Merchant using mobile app"
-								className="rounded-xl custom-shadow mx-auto w-full max-w-sm"
+								className="rounded-xl custom-shadow w-full max-w-sm lg:max-w-md"
 								src={heroMockup}
 								placeholder="blur"
-								sizes="(max-width: 640px) 100vw, 384px"
+								sizes="(max-width: 640px) 100vw, (max-width: 1024px) 384px, 448px"
 								loading="lazy"
 							/>
 						</div>

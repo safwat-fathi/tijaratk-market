@@ -46,12 +46,36 @@ export class ProductsController {
   @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Create product (quick manual add)' })
-  @ApiBody({ type: CreateProductDto })
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string' },
+        image_url: { type: 'string' },
+        current_price: { type: 'number', format: 'float' },
+        category: { type: 'string' },
+        order_mode: { type: 'string', enum: Object.values(ProductOrderMode) },
+        order_config: { type: 'object' },
+        is_available: { type: 'boolean' },
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: 1024 * 1024 * 5 },
+  })
   @ApiResponse({
     status: HttpStatus.CREATED,
     description: 'Product created successfully',
   })
-  create(@Req() req: Request, @Body() createProductDto: CreateProductDto) {
+  create(
+    @Req() req: Request,
+    @Body() createProductDto: CreateProductDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
     const parsedAvailability = this.parseAvailabilityFromRequestBody(req);
     if (parsedAvailability !== undefined) {
       createProductDto.is_available = parsedAvailability;
@@ -62,7 +86,7 @@ export class ProductsController {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.productsService.create(tenantId, createProductDto);
+    return this.productsService.create(tenantId, createProductDto, file);
   }
 
   @Post('from-catalog')

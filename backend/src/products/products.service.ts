@@ -106,6 +106,7 @@ export class ProductsService {
   async create(
     tenantId: number,
     createProductDto: CreateProductDto,
+    file?: Express.Multer.File,
   ): Promise<Product> {
     const normalizedName = createProductDto.name.trim();
     if (!normalizedName) {
@@ -119,12 +120,15 @@ export class ProductsService {
       orderMode,
       createProductDto.order_config,
     );
+    const imageUrl = file?.path
+      ? await this.imageProcessorService.processProductThumbnail(file.path)
+      : createProductDto.image_url;
 
     const product = await this.getPrismaClient().product.create({
       data: {
         tenant_id: tenantId,
         name: normalizedName,
-        image_url: createProductDto.image_url,
+        image_url: imageUrl,
         category: this.normalizeCategory(createProductDto.category),
         source: ProductSource.MANUAL,
         status: ProductStatus.ACTIVE,

@@ -98,6 +98,9 @@ export default function ProductOnboardingClient({
 		useState<CategoryMode>(CATEGORY_MODE_SELECT);
 	const [manualCategorySelect, setManualCategorySelect] = useState("");
 	const [manualCategoryCustom, setManualCategoryCustom] = useState("");
+	const [manualImageFile, setManualImageFile] = useState<File | null>(null);
+	const [manualImagePreview, setManualImagePreview] = useState<string | null>(null);
+	const [manualImageError, setManualImageError] = useState<string | null>(null);
 
 	const [message, setMessage] = useState<string | null>(null);
 	const [activeCategory, setActiveCategory] = useState(ALL_CATALOG_ITEMS);
@@ -358,6 +361,7 @@ export default function ProductOnboardingClient({
 
 	const handleManualSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
+		setManualImageError(null);
 
 		const trimmedName = manualName.trim();
 		if (!trimmedName) {
@@ -402,9 +406,17 @@ export default function ProductOnboardingClient({
 				normalizedCategory,
 				manualOrderMode,
 				orderConfig,
+				manualImageFile,
 			);
 
 			if (!response.success || !response.data) {
+				const imageErrorMessage = normalizeImageUploadErrorMessage(response.message);
+				if (imageErrorMessage) {
+					setManualImageError(imageErrorMessage);
+					setMessage(null);
+					return;
+				}
+
 				if (isDuplicateMessage(response.message)) {
 					const existingProduct = productsByNormalizedName.get(
 						normalizeProductName(trimmedName),
@@ -432,10 +444,54 @@ export default function ProductOnboardingClient({
 			setManualCategoryMode(CATEGORY_MODE_SELECT);
 			setManualCategorySelect("");
 			setManualCategoryCustom("");
+			if (manualImagePreview?.startsWith("blob:")) {
+				URL.revokeObjectURL(manualImagePreview);
+			}
+			setManualImageFile(null);
+			setManualImagePreview(null);
+			setManualImageError(null);
 			refreshSearchResultsIfActive();
 			setConfirmRemoveProductId(null);
 			setMessage("تم حفظ المنتج");
 		});
+	};
+
+	const handleManualImageChange = (
+		event: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const selectedFile = event.target.files?.[0] ?? null;
+		setManualImageError(null);
+
+		if (manualImagePreview?.startsWith("blob:")) {
+			URL.revokeObjectURL(manualImagePreview);
+		}
+
+		if (selectedFile && selectedFile.size > MAX_PRODUCT_IMAGE_SIZE_BYTES) {
+			setManualImageFile(null);
+			setManualImagePreview(null);
+			event.target.value = "";
+			setMessage(null);
+			setManualImageError(
+				`حجم الصورة كبير. الحد الأقصى ${MAX_PRODUCT_IMAGE_SIZE_MB} ميجابايت.`,
+			);
+			return;
+		}
+
+		if (selectedFile && !hasAllowedProductImageFormat(selectedFile)) {
+			setManualImageFile(null);
+			setManualImagePreview(null);
+			event.target.value = "";
+			setMessage(null);
+			setManualImageError(
+				"صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP أو HEIC أو HEIF.",
+			);
+			return;
+		}
+
+		setManualImageFile(selectedFile);
+		setManualImagePreview(
+			selectedFile ? URL.createObjectURL(selectedFile) : null,
+		);
 	};
 
 	const handleAddFromCatalog = (item: CatalogItem) => {
@@ -834,6 +890,9 @@ export default function ProductOnboardingClient({
 				manualCategoryCustom={manualCategoryCustom}
 				onManualCategoryCustomChange={setManualCategoryCustom}
 				availableProductCategories={availableProductCategories}
+				manualImagePreview={manualImagePreview}
+				manualImageError={manualImageError}
+				onManualImageChange={handleManualImageChange}
 			/>
 
 			<CatalogSection

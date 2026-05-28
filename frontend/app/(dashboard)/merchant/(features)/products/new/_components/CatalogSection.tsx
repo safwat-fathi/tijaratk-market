@@ -1,8 +1,9 @@
-import SafeImage from '@/components/ui/SafeImage';
-import type { CatalogItem } from '@/types/models/product';
-import { formatArabicInteger } from '@/lib/utils/number';
-import type { CategoryTab } from '../_utils/product-onboarding.types';
-import { SECTION_CATALOG } from '../_utils/product-onboarding.constants';
+import SafeImage from "@/components/ui/SafeImage";
+import type { CatalogItem } from "@/types/models/product";
+import { formatArabicInteger } from "@/lib/utils/number";
+import { ScrollableTabList, TabButton } from "@/components/ui/ScrollableTabs";
+import type { CategoryTab } from "../_utils/product-onboarding.types";
+import { SECTION_CATALOG } from "../_utils/product-onboarding.constants";
 import { resolveImageUrl } from "../_utils/product-onboarding";
 
 type CatalogSectionProps = {
@@ -31,25 +32,26 @@ export default function CatalogSection({
       id={`section-panel-${SECTION_CATALOG}`}
       role="tabpanel"
       aria-labelledby={`section-tab-${SECTION_CATALOG}`}
-      className={active ? 'block' : 'hidden'}
+      className={active ? "block" : "hidden"}
     >
       <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-bold text-gray-900">اختار من منتجات جاهزة</h2>
+        <h2 className="text-lg font-bold text-gray-900">
+          اختار من منتجات جاهزة
+        </h2>
         <p className="mt-1 text-sm text-gray-500">
-          اضغط إضافة ويتم حفظ المنتج فوراً. متاح الآن {formatArabicInteger(catalogItems.length) || catalogItems.length} منتج من قاعدة البيانات.
+          اضغط إضافة ويتم حفظ المنتج فوراً. متاح الآن{" "}
+          {formatArabicInteger(catalogItems.length) || catalogItems.length} منتج
+          من قاعدة البيانات.
         </p>
 
-        <div className="mb-4 mt-3 flex gap-2 overflow-x-auto pb-2">
+        <ScrollableTabList className="mb-4 mt-3">
           {categoryTabs.map((category) => (
-            <button
+            <TabButton
               key={category.key}
-              type="button"
+              variant="pill"
+              isActive={activeCategory === category.key}
               onClick={() => onCategoryChange(category.key)}
-              className={`h-14 shrink-0 rounded-2xl border px-3 py-1.5 ${
-                activeCategory === category.key
-                  ? 'border-brand-primary bg-brand-soft text-brand-primary'
-                  : 'border-gray-300 bg-white text-gray-700'
-              }`}
+              className="rounded-2xl"
             >
               <span className="flex items-center gap-2">
                 <SafeImage
@@ -65,19 +67,22 @@ export default function CatalogSection({
                     </span>
                   }
                 />
-                <span className="whitespace-nowrap text-sm font-medium">{category.label}</span>
+                <span className="whitespace-nowrap text-sm font-medium">
+                  {category.label}
+                </span>
                 <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
                   {formatArabicInteger(category.count) || category.count}
                 </span>
               </span>
-            </button>
+            </TabButton>
           ))}
-        </div>
+        </ScrollableTabList>
 
         <div className="lg:max-h-[58vh] lg:overflow-y-auto lg:pe-1">
           {filteredCatalogItems.length === 0 ? (
             <p className="mt-4 rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-              لا توجد منتجات في الكتالوج حالياً. شغّل seeder لإضافة عناصر الكتالوج ثم حدّث الصفحة.
+              لا توجد منتجات في الكتالوج حالياً. شغّل seeder لإضافة عناصر
+              الكتالوج ثم حدّث الصفحة.
             </p>
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -85,7 +90,10 @@ export default function CatalogSection({
                 const catalogItemImageUrl = resolveImageUrl(item.image_url);
 
                 return (
-                  <div key={item.id} className="rounded-xl border border-gray-200 p-3">
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-gray-200 p-3"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         {catalogItemImageUrl ? (
@@ -109,8 +117,12 @@ export default function CatalogSection({
                         )}
 
                         <div>
-                          <p className="font-semibold text-gray-900">{item.name}</p>
-                          <p className="text-xs text-gray-500">{item.category}</p>
+                          <p className="font-semibold text-gray-900">
+                            {item.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {item.category}
+                          </p>
                         </div>
                       </div>
                       <button
@@ -119,7 +131,7 @@ export default function CatalogSection({
                         disabled={Boolean(pendingCatalogIds[item.id])}
                         className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
                       >
-                        {pendingCatalogIds[item.id] ? '...جاري' : 'إضافة'}
+                        {pendingCatalogIds[item.id] ? "...جاري" : "إضافة"}
                       </button>
                     </div>
                   </div>

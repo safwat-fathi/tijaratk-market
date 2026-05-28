@@ -81,6 +81,7 @@ export default function EditProductSheet({
   const currentImageUrl = editingProduct
     ? editImagePreview || resolveImageUrl(editingProduct.image_url)
     : null;
+  const imageActionLabel = currentImageUrl ? "تغيير الصورة" : "إضافة صورة";
 
   return (
     <BottomSheet
@@ -99,13 +100,21 @@ export default function EditProductSheet({
             />
           </label>
 
-          <label className="block">
-            <span className="mb-1 block text-sm text-brand-text">صورة المنتج</span>
+          <label className="block rounded-md border border-dashed border-brand-border bg-brand-soft/40 p-3 transition hover:border-brand-accent">
+            <span className="mb-2 block text-sm font-semibold text-brand-text">
+              صورة المنتج
+            </span>
+            <span className="inline-flex cursor-pointer items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-brand-primary shadow-sm ring-1 ring-brand-border transition hover:bg-brand-soft">
+              {imageActionLabel}
+            </span>
+            <span className="mt-2 block text-xs text-muted-foreground">
+              JPG أو PNG أو WEBP أو HEIC حتى 5 ميجابايت.
+            </span>
             <input
               type="file"
               accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
               onChange={onEditImageChange}
-              className="w-full rounded-md border border-brand-border px-3 py-2 text-sm"
+              className="sr-only"
             />
             {editImageError ? (
               <span className="mt-1 block text-xs text-status-error">

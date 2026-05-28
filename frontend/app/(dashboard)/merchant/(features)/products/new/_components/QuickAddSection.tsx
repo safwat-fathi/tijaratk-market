@@ -1,4 +1,5 @@
-import type { FormEvent } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
+import SafeImage from '@/components/ui/SafeImage';
 import type { ProductOrderMode } from '@/types/models/product';
 import type { CategoryMode } from '../_utils/product-onboarding.types';
 import { SECTION_QUICK_ADD } from '../_utils/product-onboarding.constants';
@@ -33,6 +34,9 @@ type QuickAddSectionProps = {
 	manualCategoryCustom: string;
 	onManualCategoryCustomChange: (value: string) => void;
 	availableProductCategories: string[];
+	manualImagePreview: string | null;
+	manualImageError: string | null;
+	onManualImageChange: (event: ChangeEvent<HTMLInputElement>) => void;
 };
 
 export default function QuickAddSection({
@@ -63,7 +67,12 @@ export default function QuickAddSection({
 	manualCategoryCustom,
 	onManualCategoryCustomChange,
 	availableProductCategories,
+	manualImagePreview,
+	manualImageError,
+	onManualImageChange,
 }: QuickAddSectionProps) {
+	const imageActionLabel = manualImagePreview ? "تغيير الصورة" : "إضافة صورة";
+
 	return (
 		<section
 			id={`section-panel-${SECTION_QUICK_ADD}`}
@@ -103,6 +112,46 @@ export default function QuickAddSection({
 						inputMode="decimal"
 						className="w-full rounded-md border border-brand-border px-4 py-3 text-base focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
 					/>
+
+					<label className="block rounded-md border border-dashed border-brand-border bg-brand-soft/40 p-3 transition hover:border-brand-accent">
+						<span className="mb-2 block text-sm font-semibold text-brand-text">
+							صورة المنتج (اختياري)
+						</span>
+						<span className="inline-flex cursor-pointer items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-brand-primary shadow-sm ring-1 ring-brand-border transition hover:bg-brand-soft">
+							{imageActionLabel}
+						</span>
+						<span className="mt-2 block text-xs text-muted-foreground">
+							JPG أو PNG أو WEBP أو HEIC حتى 5 ميجابايت.
+						</span>
+						<input
+							type="file"
+							accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+							onChange={onManualImageChange}
+							className="sr-only"
+						/>
+						{manualImageError ? (
+							<span className="mt-1 block text-xs text-status-error">
+								{manualImageError}
+							</span>
+						) : null}
+						{manualImagePreview ? (
+							<div className="mt-3">
+								<SafeImage
+									src={manualImagePreview}
+									alt="معاينة صورة المنتج"
+									width={96}
+									height={96}
+									unoptimized
+									imageClassName="h-24 w-24 rounded-md border border-brand-border bg-brand-soft object-cover"
+									fallback={
+										<div className="flex h-24 w-24 items-center justify-center rounded-md border border-brand-border bg-brand-soft text-xs text-muted-foreground">
+											لا توجد صورة
+										</div>
+									}
+								/>
+							</div>
+						) : null}
+					</label>
 
 					<OrderModeFields
 						orderMode={manualOrderMode}

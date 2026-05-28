@@ -49,7 +49,7 @@ class ProductsService extends HttpService {
     });
   }
 
-  public async createProduct(payload: {
+  public async createProduct(payload: FormData | {
     name: string;
     image_url?: string;
     current_price?: number;
@@ -58,7 +58,10 @@ class ProductsService extends HttpService {
     order_mode?: 'quantity' | 'weight' | 'price';
     order_config?: ProductOrderConfig;
   }) {
-    return this.post<Product>('', payload, undefined, { authRequired: true });
+    return this.post<Product>('', payload, undefined, {
+      authRequired: true,
+      timeoutMs: payload instanceof FormData ? 30000 : undefined,
+    });
   }
 
   public async addProductFromCatalog(catalogItemId: number) {

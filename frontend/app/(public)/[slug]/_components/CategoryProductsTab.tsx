@@ -1,4 +1,5 @@
 import { ScrollableTabList, TabButton } from "@/components/ui/ScrollableTabs";
+import SafeImage from "@/components/ui/SafeImage";
 import { formatArabicInteger } from "@/lib/utils/number";
 import { ALL_PRODUCTS_CATEGORY, type CategoryTab } from "../_utils/order-form";
 
@@ -37,6 +38,19 @@ export default function CategoryProductsTab({
 								: ""
 						}
 					>
+						<SafeImage
+							src={category.image_url}
+							alt={category.label}
+							width={40}
+							height={40}
+							unoptimized
+							imageClassName="h-8 w-8 rounded-full object-cover ring-1 ring-gray-200"
+							fallback={
+								<span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px]">
+									🛒
+								</span>
+							}
+						/>
 						{category.label}
 						<span
 							className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${

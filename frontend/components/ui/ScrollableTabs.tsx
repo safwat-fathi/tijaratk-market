@@ -55,7 +55,7 @@ export const TabButton = React.forwardRef<HTMLElement, TabButtonProps>(
   ) => {
     // Shared accessibility & focus ring styles
     const baseStyles =
-      "shrink-0 transition-all duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 border";
+      "relative shrink-0 transition-all duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 border";
 
     // Visual variants
     const variantStyles = {
