@@ -11,8 +11,7 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 ## Fix issues
 
-1. Fix overflow in store page after selecting a category (the `CategoryProductsView` component is the suspect)
+1. change Hero section in landing page to row layout instead of column layout for large screens and for mobile and tablet put the image on top and the text below.
+2. Fix updating product price on order details view for merchant.
 
 ## New Features
-
-1. Add phone number customer search on input in `OrderForm` component. Use `@react-hook/debounce` for the search. Search should be triggered only if user data is not found in browser cache.
