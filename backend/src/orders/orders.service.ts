@@ -559,15 +559,15 @@ export class OrdersService {
     }
 
     if (replacementProductId === null) {
-      orderItem.pending_replacement_product_id = null;
-      orderItem.replaced_by_product_id = null;
-      orderItem.replacement_decision_status = ReplacementDecisionStatus.NONE;
-      orderItem.replacement_decision_reason = null;
-      orderItem.replacement_decided_at = null;
-
       return this.orderItemClient().update({
         where: { id: orderItem.id },
-        data: orderItem as any,
+        data: {
+          pending_replacement_product_id: null,
+          replaced_by_product_id: null,
+          replacement_decision_status: ReplacementDecisionStatus.NONE,
+          replacement_decision_reason: null,
+          replacement_decided_at: null,
+        },
       }) as unknown as OrderItem;
     }
 
@@ -585,15 +585,15 @@ export class OrdersService {
       );
     }
 
-    orderItem.pending_replacement_product_id = replacement.id;
-    orderItem.replaced_by_product_id = null;
-    orderItem.replacement_decision_status = ReplacementDecisionStatus.PENDING;
-    orderItem.replacement_decision_reason = null;
-    orderItem.replacement_decided_at = null;
-
     const savedItem = await this.orderItemClient().update({
       where: { id: orderItem.id },
-      data: orderItem as any,
+      data: {
+        pending_replacement_product_id: replacement.id,
+        replaced_by_product_id: null,
+        replacement_decision_status: ReplacementDecisionStatus.PENDING,
+        replacement_decision_reason: null,
+        replacement_decided_at: null,
+      },
     });
 
     await this.notifyCustomerReplacementRequested(
@@ -622,15 +622,15 @@ export class OrdersService {
 
     this.ensureCustomerDecisionWindow(orderItem.order.status as any);
 
-    orderItem.pending_replacement_product_id = null;
-    orderItem.replaced_by_product_id = null;
-    orderItem.replacement_decision_status = ReplacementDecisionStatus.NONE;
-    orderItem.replacement_decision_reason = null;
-    orderItem.replacement_decided_at = null;
-
     return this.orderItemClient().update({
       where: { id: orderItem.id },
-      data: orderItem as any,
+      data: {
+        pending_replacement_product_id: null,
+        replaced_by_product_id: null,
+        replacement_decision_status: ReplacementDecisionStatus.NONE,
+        replacement_decision_reason: null,
+        replacement_decided_at: null,
+      },
     }) as unknown as OrderItem;
   }
 
@@ -673,27 +673,31 @@ export class OrdersService {
 
     const normalizedReason = this.normalizeOptionalReason(reason);
 
-    if (decision === ReplacementDecisionAction.APPROVE) {
-      orderItem.replaced_by_product_id =
-        orderItem.pending_replacement_product_id;
-      orderItem.pending_replacement_product_id = null;
-      orderItem.replacement_decision_status =
-        ReplacementDecisionStatus.APPROVED;
-    } else if (decision === ReplacementDecisionAction.REJECT) {
-      orderItem.replaced_by_product_id = null;
-      orderItem.pending_replacement_product_id = null;
-      orderItem.replacement_decision_status =
-        ReplacementDecisionStatus.REJECTED;
-    } else {
+    if (
+      decision !== ReplacementDecisionAction.APPROVE &&
+      decision !== ReplacementDecisionAction.REJECT
+    ) {
       throw new BadRequestException('Invalid replacement decision');
     }
 
-    orderItem.replacement_decision_reason = normalizedReason;
-    orderItem.replacement_decided_at = new Date();
-
     const savedItem = await this.orderItemClient().update({
       where: { id: orderItem.id },
-      data: orderItem as any,
+      data:
+        decision === ReplacementDecisionAction.APPROVE
+          ? {
+              replaced_by_product_id: orderItem.pending_replacement_product_id,
+              pending_replacement_product_id: null,
+              replacement_decision_status: ReplacementDecisionStatus.APPROVED,
+              replacement_decision_reason: normalizedReason,
+              replacement_decided_at: new Date(),
+            }
+          : {
+              replaced_by_product_id: null,
+              pending_replacement_product_id: null,
+              replacement_decision_status: ReplacementDecisionStatus.REJECTED,
+              replacement_decision_reason: normalizedReason,
+              replacement_decided_at: new Date(),
+            },
     });
 
     await this.notifyMerchantReplacementDecision(
