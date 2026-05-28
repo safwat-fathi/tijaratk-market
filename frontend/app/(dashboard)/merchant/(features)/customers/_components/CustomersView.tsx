@@ -15,6 +15,7 @@ interface CustomersViewProps {
 	initialCustomers: Customer[];
 	initialPage: number;
 	initialLastPage: number;
+	initialError?: string;
 	initialSearch?: string;
 }
 
@@ -25,6 +26,7 @@ export default function CustomersView({
 	initialCustomers,
 	initialPage,
 	initialLastPage,
+	initialError,
 	initialSearch = "",
 }: CustomersViewProps) {
 	const safeInitialPage = Math.max(1, initialPage || 1);
@@ -43,7 +45,7 @@ export default function CustomersView({
 	const [page, setPage] = useState(safeInitialPage);
 	const [hasMore, setHasMore] = useState(safeInitialPage < safeInitialLastPage);
 	const [isLoading, setIsLoading] = useState(false);
-	const [listError, setListError] = useState<string | null>(null);
+	const [listError, setListError] = useState<string | null>(initialError || null);
 
 	const observerTarget = useRef<HTMLDivElement | null>(null);
 	const requestIdRef = useRef(0);

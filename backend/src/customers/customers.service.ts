@@ -115,14 +115,15 @@ export class CustomersService {
       }
     }
 
-    const [data, total] = await this.prisma.$transaction([
-      this.getCustomersDb().findMany({
+    const customersDb = this.getCustomersDb();
+    const [data, total] = await Promise.all([
+      customersDb.findMany({
         where,
         orderBy: { last_order_at: { sort: 'desc', nulls: 'last' } },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.getCustomersDb().count({ where }),
+      customersDb.count({ where }),
     ]);
 
     return {
@@ -157,13 +158,14 @@ export class CustomersService {
     });
     if (!customer) return null;
 
-    const [orders, totalOrders] = await this.prisma.$transaction([
-      this.getOrdersDb().findMany({
+    const ordersDb = this.getOrdersDb();
+    const [orders, totalOrders] = await Promise.all([
+      ordersDb.findMany({
         where: { customer_id: id },
         orderBy: { created_at: 'desc' },
         take: 5,
       }),
-      this.getOrdersDb().count({
+      ordersDb.count({
         where: { customer_id: id },
       }),
     ]);

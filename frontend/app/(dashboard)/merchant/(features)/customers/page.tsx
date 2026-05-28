@@ -19,6 +19,7 @@ export default async function CustomersPage() {
 			initialCustomers={initialResult.data}
 			initialPage={initialResult.meta.page}
 			initialLastPage={initialResult.meta.last_page}
+			initialError={initialResult.success ? undefined : initialResult.message}
 			initialSearch=""
 		/>
 	);

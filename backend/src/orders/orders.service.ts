@@ -352,12 +352,13 @@ export class OrdersService {
     tenantId: number,
   ): Promise<DayCloseTodayStatusPayload> {
     const closureDate = this.getCairoDateKey();
+    const closureDateValue = this.toDateOnlyValue(closureDate);
 
     const [closure, preview] = await Promise.all([
       this.dayClosureClient().findFirst({
         where: {
           tenant_id: tenantId,
-          closure_date: closureDate,
+          closure_date: closureDateValue,
         },
       }),
       this.computeDayCloseSummary(tenantId, closureDate),
@@ -379,11 +380,12 @@ export class OrdersService {
    */
   async closeDay(tenantId: number): Promise<CloseDayResultPayload> {
     const closureDate = this.getCairoDateKey();
+    const closureDateValue = this.toDateOnlyValue(closureDate);
 
     const existingClosure = await this.dayClosureClient().findFirst({
       where: {
         tenant_id: tenantId,
-        closure_date: closureDate,
+        closure_date: closureDateValue,
       },
     });
 
@@ -399,7 +401,7 @@ export class OrdersService {
 
     const closure = {
       tenant_id: tenantId,
-      closure_date: closureDate,
+      closure_date: closureDateValue,
       orders_count: summary.orders_count,
       cancelled_count: summary.cancelled_count,
       completed_sales_total: summary.completed_sales_total,
@@ -417,7 +419,7 @@ export class OrdersService {
       const duplicateClosure = await this.dayClosureClient().findFirst({
         where: {
           tenant_id: tenantId,
-          closure_date: closureDate,
+          closure_date: closureDateValue,
         },
       });
 
@@ -999,7 +1001,7 @@ export class OrdersService {
   private mapDayClosure(closure: DayClosure): DayClosePayload {
     return {
       id: closure.id,
-      closure_date: String(closure.closure_date),
+      closure_date: this.formatDateOnlyValue(closure.closure_date),
       closed_at: closure.closed_at,
       orders_count: this.toSafeInt(closure.orders_count),
       cancelled_count: this.toSafeInt(closure.cancelled_count),
@@ -1027,6 +1029,20 @@ export class OrdersService {
     }
 
     return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * Converts a YYYY-MM-DD key into a Date value accepted by Prisma for @db.Date.
+   */
+  private toDateOnlyValue(dateKey: string): Date {
+    return new Date(`${dateKey}T00:00:00.000Z`);
+  }
+
+  /**
+   * Formats a persisted date-only value for API responses.
+   */
+  private formatDateOnlyValue(date: Date): string {
+    return date.toISOString().slice(0, 10);
   }
 
   /**
