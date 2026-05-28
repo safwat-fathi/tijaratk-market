@@ -1,9 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useCallback, useState } from "react";
 
 type OrderSuccessViewProps = {
 	tenantSlug: string;
 	orderToken: string;
-	onCopyToken: () => void;
 };
 
 const TrackingOrdersIcon = () => (
@@ -31,8 +33,16 @@ const TrackingOrdersIcon = () => (
 export default function OrderSuccessView({
 	tenantSlug,
 	orderToken,
-	onCopyToken,
 }: OrderSuccessViewProps) {
+	const [copied, setCopied] = useState(false);
+
+	const handleCopyToken = useCallback(() => {
+		const url = `${window.location.origin}/track-order/${orderToken}`;
+		navigator.clipboard.writeText(url);
+		setCopied(true);
+		setTimeout(() => setCopied(false), 2000);
+	}, [orderToken]);
+
 	return (
 		<div className="fixed inset-0 z-50 flex animate-fade-in flex-col items-center justify-center bg-white p-6 text-center">
 			<div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-status-success/15 text-status-success">
@@ -74,25 +84,16 @@ export default function OrderSuccessView({
 				<button
 					id="copy-btn"
 					type="button"
-					onClick={onCopyToken}
+					onClick={handleCopyToken}
 					aria-label="نسخ رابط التتبع"
 					className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-white hover:text-brand-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
 					title="نسخ الرابط"
 				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="20"
-						height="20"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					>
-						<rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-						<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-					</svg>
+					{copied ? (
+						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-status-success"><path d="M20 6 9 17l-5-5"/></svg>
+					) : (
+						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+					)}
 				</button>
 			</div>
 
@@ -120,6 +121,7 @@ export default function OrderSuccessView({
 				</Link>
 				<Link
 					href="/track-orders"
+					prefetch={true}
 					className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-brand-border bg-white py-3.5 text-center font-semibold text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
 				>
 					<TrackingOrdersIcon />
@@ -128,6 +130,7 @@ export default function OrderSuccessView({
 
 				<Link
 					href={`/${tenantSlug}`}
+					prefetch={true}
 					className="w-full rounded-md py-3.5 font-semibold text-muted-foreground transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
 				>
 					عمل طلب جديد

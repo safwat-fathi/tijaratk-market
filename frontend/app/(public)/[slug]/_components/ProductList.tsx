@@ -683,16 +683,16 @@ const ProductListCard = ({
 					)}
 				</div>
 
-				<div className="flex-1">
+				<div className="min-w-0 flex-1">
 					<h3
-						className={`text-base font-semibold ${
+						className={`truncate text-base font-semibold ${
 							isUnavailable ? "text-muted-foreground" : "text-brand-text"
 						}`}
 					>
 						{product.name}
 					</h3>
 					<p
-						className={`text-xs ${
+						className={`truncate text-xs ${
 							isUnavailable ? "text-muted-foreground/70" : "text-muted-foreground"
 						}`}
 					>

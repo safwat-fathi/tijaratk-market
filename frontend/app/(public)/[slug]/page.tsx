@@ -141,11 +141,11 @@ export default async function StorePage({ params, searchParams }: Props) {
 		]);
 
 	return (
-		<div className="mx-auto min-h-screen w-full max-w-md bg-background">
+		<div className="mx-auto min-h-screen w-full max-w-md overflow-x-hidden bg-background">
 			<StoreHeader tenant={tenant} />
 			{/* <WriteOrderFAB /> */}
 
-			<div>
+			<div className="min-w-0">
 				{products.length === 0 && (
 					<div className="mx-4 my-6 rounded-lg border border-brand-border bg-white p-4 text-center text-muted-foreground shadow-soft">
 						<p className="font-medium text-brand-text">لا توجد منتجات بعد.</p>

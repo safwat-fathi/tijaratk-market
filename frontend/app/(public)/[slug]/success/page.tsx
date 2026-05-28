@@ -1,0 +1,28 @@
+import { notFound, redirect } from "next/navigation";
+import OrderSuccessView from "../_components/OrderSuccessView";
+import { tenantsService } from "@/services/api/tenants.service";
+
+type Props = {
+	params: Promise<{ slug: string }>;
+	searchParams: Promise<{ token?: string }>;
+};
+
+export default async function OrderSuccessPage({ params, searchParams }: Props) {
+	const { slug } = await params;
+	const { token } = await searchParams;
+
+	if (!token) {
+		redirect(`/${slug}`);
+	}
+
+	const response = await tenantsService.getPublicTenant(slug);
+	if (!response.success || !response.data) {
+		notFound();
+	}
+
+	return (
+		<div className="mx-auto min-h-screen w-full max-w-md overflow-x-hidden bg-background relative">
+			<OrderSuccessView tenantSlug={slug} orderToken={token} />
+		</div>
+	);
+}

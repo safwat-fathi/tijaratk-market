@@ -14,6 +14,10 @@ type CustomersListResponse = {
 	meta: CustomersListMeta;
 };
 
+export type PublicCustomerProfile = Pick<Customer, "name" | "phone" | "notes"> & {
+	addresses: string[];
+};
+
 class CustomersService extends HttpService {
 	constructor() {
 		super("/customers");
@@ -25,6 +29,12 @@ class CustomersService extends HttpService {
 
 	public async getCustomer(id: number) {
 		return this.get<Customer>(`${id}`, undefined, { authRequired: true });
+	}
+
+	public async getPublicCustomerByPhone(slug: string, phone: string) {
+		return this.get<PublicCustomerProfile | null>(`public/${slug}/by-phone`, { phone }, {
+			cache: "no-store",
+		});
 	}
 }
 

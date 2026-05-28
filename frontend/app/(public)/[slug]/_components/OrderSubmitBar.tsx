@@ -33,7 +33,7 @@ export default function OrderSubmitBar({
 		<>
 			<div
 				data-order-submit-bar
-				className="fixed bottom-0 left-0 right-0 z-50 border-t border-brand-border bg-white/90 p-4 shadow-float backdrop-blur-xl"
+				className="fixed bottom-0 left-0 right-0 z-[40] border-t border-brand-border bg-white/90 px-4 pt-4 safe-bottom-padding shadow-float backdrop-blur-xl"
 			>
 				<div className="max-w-md mx-auto">
 					<div className="mb-4 flex items-end justify-between px-2">

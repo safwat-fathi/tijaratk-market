@@ -7,8 +7,8 @@ export default function PublicLayout({
 }) {
 	return (
 		<>
-			<div className="flex min-h-screen flex-col items-center bg-background px-4 pb-8 sm:px-6 lg:px-8">
-				<div className="w-full max-w-3xl space-y-8">{children}</div>
+			<div className="flex min-h-screen flex-col bg-background px-4 pb-8 sm:px-6 lg:px-8 overflow-x-hidden">
+				<div className="mx-auto w-full max-w-3xl space-y-8">{children}</div>
 			</div>
 			<footer className="flex w-full items-center justify-center border-t border-brand-border bg-white">
 				<div className="flex items-center justify mx-auto max-w-7xl px-4 py-6 sm:px-6 gap-2 lg:px-8">

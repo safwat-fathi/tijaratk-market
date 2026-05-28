@@ -7,19 +7,17 @@ declare global {
       APP_URL: string;
       JWT_SECRET: string;
       CSRF_SECRET: string;
-      FACEBOOK_GRAPH_API_BASE_URL: string;
-      FACEBOOK_APP_ID: string;
-      FACEBOOK_APP_SECRET: string;
-      FACEBOOK_CALLBACK_URL: string;
       CLIENT_URL: string;
-      WHATS_APP_API_KEY: string;
-      WHATS_APP_BASE_URL: string;
-      WHATS_APP_SENDER: string;
+      ACCOUNT_SID: string;
+      AUTH_TOKEN: string;
+      WHATSAPP_PHONE_NUMBER: string;
+      WHATSAPP_NOTIFICATIONS_ENABLED: boolean;
       TWILIO_CONTENT_SID_NEW_ORDER_MERCHANT: string;
       TWILIO_CONTENT_SID_ORDER_RECEIVED_CUSTOMER: string;
       TWILIO_CONTENT_SID_ORDER_OUT_FOR_DELIVERY: string;
       TWILIO_CONTENT_SID_ORDER_STATUS_UPDATE_CUSTOMER: string;
       TWILIO_CONTENT_SID_MERCHANT_DAY_CLOSURE_SUMMARY: string;
+      SEED_SUPERMARKET_OWNER_CREDENTIAL: string;
     }
   }
 }

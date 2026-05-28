@@ -4,6 +4,7 @@ import { ordersService } from '@/services/api/orders.service';
 import { OrderStatus, OrderType } from '@/types/enums';
 import { CloseDayResponse, CreateOrderRequest } from '@/types/services/orders';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { createOrderSchema } from '@/lib/validations/order';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import {
@@ -294,6 +295,15 @@ export async function createOrderAction(
         customerData,
       });
 
+      const publicToken =
+        typeof (response.data as CreatedOrderMeta)?.public_token === 'string'
+          ? ((response.data as CreatedOrderMeta).public_token as string).trim()
+          : '';
+
+      if (publicToken) {
+        redirect(`/${tenantSlug}/success?token=${publicToken}`);
+      }
+
       return {
         success: true,
         message: 'Order created successfully',
@@ -307,6 +317,10 @@ export async function createOrderAction(
       errors: response.errors as Record<string, string[]> | undefined,
     };
   } catch (error: unknown) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    
     console.error('Failed to create order:', error);
     return {
       success: false,

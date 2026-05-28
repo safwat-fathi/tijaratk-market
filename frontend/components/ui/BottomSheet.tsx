@@ -111,7 +111,10 @@ export default function BottomSheet({
           </div>
 
           <div
-            className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 [-webkit-overflow-scrolling:touch]"
+            className={cn(
+              "flex-1 overflow-y-auto overscroll-contain px-4 py-4 [-webkit-overflow-scrolling:touch]",
+              !footer && "safe-bottom-padding"
+            )}
           >
             {children}
           </div>

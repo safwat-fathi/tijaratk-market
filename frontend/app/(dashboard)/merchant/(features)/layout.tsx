@@ -118,7 +118,7 @@ export default function MerchantLayout({
   return (
 		<div className="min-h-screen bg-background">
 			{/* Mobile sidebar placeholder/trigger */}
-			<div className="sticky top-0 z-40 flex items-center gap-x-6 border-b border-brand-border bg-white px-4 py-4 shadow-soft sm:px-6 lg:hidden">
+			<div className="fixed inset-x-0 top-0 z-40 flex items-center gap-x-6 border-b border-brand-border bg-white px-4 py-4 shadow-soft sm:px-6 lg:hidden">
 				<button
 					type="button"
 					className="-m-2.5 rounded-md p-2.5 text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 lg:hidden"
@@ -145,14 +145,7 @@ export default function MerchantLayout({
 				</div>
 				<Link href="#">
 					<span className="sr-only">الملف الشخصي</span>
-					<SafeImage
-						src="/logo.png"
-						alt=""
-						width={32}
-						height={32}
-						imageClassName="h-8 w-8 rounded-full bg-brand-soft"
-						fallback={<div className="h-8 w-8 rounded-full bg-brand-soft" />}
-					/>
+					<Logo variant="icon" width={32} height={32} className="h-8 w-8 rounded-full bg-brand-soft" />
 				</Link>
 			</div>
 
@@ -210,7 +203,7 @@ export default function MerchantLayout({
 			</div>
 
 			{/* Main content */}
-			<main className="py-10 lg:ps-72">
+			<main className="pt-24 pb-10 lg:py-10 lg:ps-72">
 				<div className="px-4 sm:px-6 lg:px-8">{children}</div>
 			</main>
 

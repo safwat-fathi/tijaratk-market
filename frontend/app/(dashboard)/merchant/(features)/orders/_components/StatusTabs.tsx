@@ -1,5 +1,6 @@
 import { formatArabicInteger } from "@/lib/utils/number";
 import { OrderStatus } from "@/types/enums";
+import { ScrollableTabList, TabButton } from "@/components/ui/ScrollableTabs";
 
 interface StatusTabsProps {
   currentStatus: OrderStatus;
@@ -23,22 +24,18 @@ export default function StatusTabs({ currentStatus, counts, onTabChange }: Statu
 
   return (
     <div className="border-b border-brand-border bg-white">
-      <div className="flex overflow-x-auto no-scrollbar px-4 py-2 gap-2">
+      <ScrollableTabList className="px-4 py-2">
         {tabs.map((tab) => {
           const isActive = currentStatus === tab.id;
           const count = counts[tab.id] || 0;
 
           return (
-            <button
+            <TabButton
               key={tab.id}
+              variant="pill"
+              isActive={isActive}
+              className={isActive ? tab.color : ""}
               onClick={() => onTabChange(tab.id as OrderStatus)}
-              className={`
-                min-h-11 whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-[background-color,border-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20
-                flex items-center gap-2 border
-                ${isActive
-                  ? `${tab.color} border-current ring-1 ring-current`
-                  : "bg-white text-brand-text border-brand-border hover:bg-brand-soft/60"}
-              `}
             >
               {tab.label}
               {count > 0 && (
@@ -49,10 +46,10 @@ export default function StatusTabs({ currentStatus, counts, onTabChange }: Statu
                   {formatArabicInteger(count) || count}
                 </span>
               )}
-            </button>
+            </TabButton>
           );
         })}
-      </div>
+      </ScrollableTabList>
     </div>
   );
 }

@@ -63,11 +63,31 @@ model Customer {
   completed_order_count Int       @default(0)
   tenant                Tenant    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_97913f35ac2e435a4463fb50a01")
   orders                Order[]
+  addresses             CustomerAddress[]
 
   @@unique([tenant_id, code], map: "UQ_31e385cc0f0f40cc6a0149b9806")
   @@unique([tenant_id, phone], map: "UQ_d9ef0802e47c0384f5831b59733")
   @@index([tenant_id], map: "IDX_97913f35ac2e435a4463fb50a0")
   @@map("customers")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model CustomerAddress {
+  created_at   DateTime  @default(now()) @db.Timestamp(6)
+  updated_at   DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at   DateTime? @db.Timestamp(6)
+  tenant_id    Int
+  id           Int       @id(map: "PK_customer_addresses_id") @default(autoincrement())
+  customer_id  Int
+  address      String
+  last_used_at DateTime? @db.Timestamp(6)
+  customer     Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_customer_addresses_customer")
+  tenant       Tenant    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_customer_addresses_tenant")
+
+  @@unique([tenant_id, customer_id, address], map: "UQ_customer_addresses_tenant_customer_address")
+  @@index([customer_id], map: "IDX_customer_addresses_customer_id")
+  @@index([tenant_id], map: "IDX_customer_addresses_tenant_id")
+  @@map("customer_addresses")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -230,6 +250,7 @@ model Tenant {
 
   availability_requests     AvailabilityRequest[]
   customers                 Customer[]
+  customer_addresses        CustomerAddress[]
   day_closures              DayClosure[]
   orders                    Order[]
   product_price_history     ProductPriceHistory[]

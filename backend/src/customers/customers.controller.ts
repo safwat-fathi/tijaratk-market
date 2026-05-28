@@ -22,13 +22,13 @@ import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 
 @ApiTags('Customers')
-@ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
-@UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
 @Controller('customers')
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Post()
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Create a new customer' })
   @ApiBody({ type: CreateCustomerDto })
   @ApiResponse({
@@ -43,6 +43,8 @@ export class CustomersController {
   }
 
   @Get()
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Get all customers' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Return all customers' })
   async findAll(
@@ -61,7 +63,23 @@ export class CustomersController {
     return result;
   }
 
+  @Get('public/:slug/by-phone')
+  @ApiOperation({ summary: 'Find customer profile by phone (Public)' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description:
+      'Return public customer profile fields for storefront autofill',
+  })
+  findPublicProfileByPhone(
+    @Param('slug') slug: string,
+    @Query('phone') phone: string,
+  ) {
+    return this.customersService.findPublicProfileByPhone(slug, phone);
+  }
+
   @Get(':id')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Get a customer by ID' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Return the customer' })
   @ApiResponse({
@@ -76,6 +94,8 @@ export class CustomersController {
   }
 
   @Post(':id/label')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Update merchant label for a customer' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Customer updated' })
   updateLabel(

@@ -5,7 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { Order, OrderItem, DayClosure, Prisma } from '../../generated/prisma/client';
+import {
+  Order,
+  OrderItem,
+  DayClosure,
+  Prisma,
+} from '../../generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -52,6 +57,11 @@ type CloseDayResultPayload = {
   whatsapp_sent: boolean;
 };
 
+type OrderWithItemsPayload = Order & {
+  order_items?: OrderItem[];
+  items?: OrderItem[];
+};
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -64,14 +74,10 @@ export class OrdersService {
 
   constructor(
     private readonly prisma: PrismaService,
-    
-    
-    
-    
+
     private readonly customersService: CustomersService,
     private readonly tenantsService: TenantsService,
     private readonly orderWhatsappService: OrderWhatsappService,
-    
   ) {}
 
   async createForTenantSlug(
@@ -135,9 +141,11 @@ export class OrdersService {
           products.map((product) => [product.id, product]),
         );
 
-        const tenant = await manager.tenant.findUnique({ where: { id: tenantId } });
+        const tenant = await manager.tenant.findUnique({
+          where: { id: tenantId },
+        });
         const deliveryFee = Number(tenant?.delivery_fee || 0);
-        
+
         let deliveryTimeWindowSnapshot: string | null = null;
         if (tenant?.delivery_starts_at && tenant?.delivery_ends_at) {
           const formatTime = (time: string) => {
@@ -149,7 +157,7 @@ export class OrdersService {
           };
           deliveryTimeWindowSnapshot = `من ${formatTime(tenant.delivery_starts_at)} إلى ${formatTime(tenant.delivery_ends_at)}`;
         }
-        
+
         let subtotal: number | undefined;
         let total: number | undefined;
         let pricingMode = PricingMode.MANUAL;
@@ -165,13 +173,18 @@ export class OrdersService {
           delivery_time_window_snapshot: deliveryTimeWindowSnapshot,
           free_text_payload: createOrderDto.free_text_payload,
           notes: createOrderDto.notes,
+          delivery_address: createOrderDto.customer.address,
+          customer_phone: customer.phone,
+          customer_name: createOrderDto.customer.name,
         };
 
-        const persistedOrder = await manager.order.create({ data: orderPayload });
+        const persistedOrder = await manager.order.create({
+          data: orderPayload,
+        });
 
         if (hasItems) {
-          const orderItemsPayload: Prisma.OrderItemUncheckedCreateInput[] = items.map(
-            (item) => {
+          const orderItemsPayload: Prisma.OrderItemUncheckedCreateInput[] =
+            items.map((item) => {
               const matchedProduct = item.product_id
                 ? productsById.get(item.product_id)
                 : undefined;
@@ -239,11 +252,14 @@ export class OrdersService {
                 selection_amount_egp: selectionAmountEgp,
                 unit_option_id: unitOptionId,
               };
-            },
-          );
+            });
 
-          await manager.orderItem.createMany({ data: orderItemsPayload as any });
-          const orderItems = await manager.orderItem.findMany({ where: { order_id: persistedOrder.id } });
+          await manager.orderItem.createMany({
+            data: orderItemsPayload as any,
+          });
+          const orderItems = await manager.orderItem.findMany({
+            where: { order_id: persistedOrder.id },
+          });
 
           const pricedLines = orderItems
             .map((item) =>
@@ -275,12 +291,20 @@ export class OrdersService {
           total = undefined;
         }
 
-        await manager.order.update({ where: { id: persistedOrder.id }, data: { pricing_mode: pricingMode, subtotal, total } });
+        await manager.order.update({
+          where: { id: persistedOrder.id },
+          data: { pricing_mode: pricingMode, subtotal, total },
+        });
         persistedOrder.pricing_mode = pricingMode;
-        persistedOrder.subtotal = subtotal === undefined ? null : new Prisma.Decimal(subtotal);
-        persistedOrder.total = total === undefined ? null : new Prisma.Decimal(total);
+        persistedOrder.subtotal =
+          subtotal === undefined ? null : new Prisma.Decimal(subtotal);
+        persistedOrder.total =
+          total === undefined ? null : new Prisma.Decimal(total);
 
-        await manager.customer.update({ where: { id: customer.id }, data: { order_count: { increment: 1 }, last_order_at: new Date() } });
+        await manager.customer.update({
+          where: { id: customer.id },
+          data: { order_count: { increment: 1 }, last_order_at: new Date() },
+        });
 
         if (customer.order_count === 0) {
           isFirstOrder = true;
@@ -304,7 +328,7 @@ export class OrdersService {
         lte: new Date(`${date}T23:59:59.999+02:00`),
       };
     }
-    return this.orderClient().findMany({
+    const orders = await this.orderClient().findMany({
       where: whereClause,
       include: {
         customer: true,
@@ -312,11 +336,13 @@ export class OrdersService {
           include: {
             replaced_by_product: true,
             pending_replacement_product: true,
-          }
-        }
+          },
+        },
       },
       orderBy: { created_at: 'desc' },
-    }) as unknown as Order[];
+    });
+
+    return orders.map((order) => this.mapOrderPayload(order));
   }
 
   /**
@@ -439,37 +465,65 @@ export class OrdersService {
   async findOne(id: number): Promise<Order> {
     const order = await this.orderClient().findFirst({
       where: { id },
-      include: { customer: true, order_items: { include: { replaced_by_product: true, pending_replacement_product: true } }, tenant: true },
+      include: {
+        customer: true,
+        order_items: {
+          include: {
+            replaced_by_product: true,
+            pending_replacement_product: true,
+          },
+        },
+        tenant: true,
+      },
     });
 
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
 
-    return order;
+    return this.mapOrderPayload(order);
   }
 
   async update(id: number, updateOrderDto: UpdateOrderDto): Promise<Order> {
     const order = await this.findOne(id);
-    const previousStatus = order.status;
+    const previousStatus = order.status as unknown as OrderStatus;
+    const nextStatus = updateOrderDto.status;
 
-    if (updateOrderDto.status && updateOrderDto.status !== previousStatus) {
-      this.validateStatusTransition(previousStatus as any, updateOrderDto.status as any);
+    if (nextStatus && nextStatus !== previousStatus) {
+      this.validateStatusTransition(previousStatus, nextStatus);
     }
 
-    Object.assign(order, updateOrderDto);
+    const updateData: Prisma.OrderUpdateInput = {};
+
+    if (nextStatus !== undefined) {
+      updateData.status = nextStatus;
+    }
 
     if (updateOrderDto.total !== undefined) {
-      order.pricing_mode = PricingMode.MANUAL;
+      updateData.total = updateOrderDto.total;
+      updateData.pricing_mode = PricingMode.MANUAL;
     }
 
-    const savedOrder = await this.orderClient().update({ where: { id: order.id }, data: order as any });
+    const savedOrder = await this.orderClient().update({
+      where: { id: order.id },
+      data: updateData,
+      include: {
+        customer: true,
+        order_items: {
+          include: {
+            replaced_by_product: true,
+            pending_replacement_product: true,
+          },
+        },
+        tenant: true,
+      },
+    });
 
-    if (updateOrderDto.status && updateOrderDto.status !== previousStatus) {
+    if (nextStatus && nextStatus !== previousStatus) {
       await this.notifyCustomerStatusChange(savedOrder);
     }
 
-    return savedOrder;
+    return this.mapOrderPayload(savedOrder);
   }
 
   /**
@@ -509,7 +563,10 @@ export class OrdersService {
       orderItem.replacement_decision_reason = null;
       orderItem.replacement_decided_at = null;
 
-      return this.orderItemClient().update({ where: { id: orderItem.id }, data: orderItem as any }) as unknown as OrderItem;
+      return this.orderItemClient().update({
+        where: { id: orderItem.id },
+        data: orderItem as any,
+      }) as unknown as OrderItem;
     }
 
     const replacement = await this.productClient().findFirst({
@@ -532,7 +589,10 @@ export class OrdersService {
     orderItem.replacement_decision_reason = null;
     orderItem.replacement_decided_at = null;
 
-    const savedItem = await this.orderItemClient().update({ where: { id: orderItem.id }, data: orderItem as any });
+    const savedItem = await this.orderItemClient().update({
+      where: { id: orderItem.id },
+      data: orderItem as any,
+    });
 
     await this.notifyCustomerReplacementRequested(
       savedItem.order_id,
@@ -566,7 +626,10 @@ export class OrdersService {
     orderItem.replacement_decision_reason = null;
     orderItem.replacement_decided_at = null;
 
-    return this.orderItemClient().update({ where: { id: orderItem.id }, data: orderItem as any }) as unknown as OrderItem;
+    return this.orderItemClient().update({
+      where: { id: orderItem.id },
+      data: orderItem as any,
+    }) as unknown as OrderItem;
   }
 
   /**
@@ -626,7 +689,10 @@ export class OrdersService {
     orderItem.replacement_decision_reason = normalizedReason;
     orderItem.replacement_decided_at = new Date();
 
-    const savedItem = await this.orderItemClient().update({ where: { id: orderItem.id }, data: orderItem as any });
+    const savedItem = await this.orderItemClient().update({
+      where: { id: orderItem.id },
+      data: orderItem as any,
+    });
 
     await this.notifyMerchantReplacementDecision(
       savedItem.order_id,
@@ -659,7 +725,10 @@ export class OrdersService {
     order.customer_rejection_reason = this.normalizeOptionalReason(reason);
     order.customer_rejected_at = new Date();
 
-    return this.orderClient().update({ where: { id: order.id }, data: order as any }) as unknown as Order;
+    return this.orderClient().update({
+      where: { id: order.id },
+      data: order as any,
+    }) as unknown as Order;
   }
 
   /**
@@ -705,7 +774,10 @@ export class OrdersService {
 
       orderItem.total_price = new Prisma.Decimal(normalizedTotal);
       orderItem.unit_price = new Prisma.Decimal(normalizedUnitPrice);
-      const savedItem = await orderItemRepository.update({ where: { id: orderItem.id }, data: orderItem as any }) as any;
+      const savedItem = (await orderItemRepository.update({
+        where: { id: orderItem.id },
+        data: orderItem as any,
+      })) as any;
 
       const order = await orderRepository.findFirst({
         where: { id: orderItem.order_id },
@@ -748,9 +820,16 @@ export class OrdersService {
       }
 
       order.pricing_mode = PricingMode.MANUAL;
-      order.subtotal = subtotal === undefined ? null : new Prisma.Decimal(subtotal);
-      order.total = recomputedTotal === undefined ? null : new Prisma.Decimal(recomputedTotal);
-      await orderRepository.update({ where: { id: order.id }, data: order as any });
+      order.subtotal =
+        subtotal === undefined ? null : new Prisma.Decimal(subtotal);
+      order.total =
+        recomputedTotal === undefined
+          ? null
+          : new Prisma.Decimal(recomputedTotal);
+      await orderRepository.update({
+        where: { id: order.id },
+        data: order as any,
+      });
 
       const targetProductId =
         orderItem.replaced_by_product_id ?? orderItem.product_id ?? null;
@@ -770,14 +849,23 @@ export class OrdersService {
   async findByPublicToken(token: string): Promise<Order> {
     const order = await this.orderClient().findFirst({
       where: { public_token: token },
-      include: { customer: true, order_items: { include: { replaced_by_product: true, pending_replacement_product: true } }, tenant: { select: { id: true, name: true, slug: true } } },
+      include: {
+        customer: true,
+        order_items: {
+          include: {
+            replaced_by_product: true,
+            pending_replacement_product: true,
+          },
+        },
+        tenant: { select: { id: true, name: true, slug: true } },
+      },
     });
 
     if (!order) {
       throw new NotFoundException(`Order with token ${token} not found`);
     }
 
-    return order;
+    return this.mapOrderPayload(order);
   }
 
   async findByPublicTokens(tokens: string[]): Promise<Order[]> {
@@ -788,7 +876,16 @@ export class OrdersService {
 
     const orders = await this.orderClient().findMany({
       where: { public_token: { in: normalizedTokens } },
-      include: { customer: true, order_items: { include: { replaced_by_product: true, pending_replacement_product: true } }, tenant: { select: { id: true, name: true, slug: true } } },
+      include: {
+        customer: true,
+        order_items: {
+          include: {
+            replaced_by_product: true,
+            pending_replacement_product: true,
+          },
+        },
+        tenant: { select: { id: true, name: true, slug: true } },
+      },
     });
 
     const ordersByToken = new Map(
@@ -797,7 +894,20 @@ export class OrdersService {
 
     return normalizedTokens
       .map((token) => ordersByToken.get(token))
-      .filter((order) => Boolean(order)) as unknown as Order[];
+      .filter((order) => Boolean(order))
+      .map((order) => this.mapOrderPayload(order as OrderWithItemsPayload));
+  }
+
+  /**
+   * Normalizes Prisma relation names to the frontend order contract.
+   */
+  private mapOrderPayload(order: OrderWithItemsPayload): Order {
+    const orderItems = order.order_items;
+
+    return {
+      ...order,
+      items: order.items ?? orderItems ?? [],
+    } as unknown as Order;
   }
 
   private normalizeTrackingTokens(tokens: string[]): string[] {
@@ -846,17 +956,28 @@ export class OrdersService {
         created_at: {
           gte: new Date(`${closureDate}T00:00:00.000+02:00`),
           lte: new Date(`${closureDate}T23:59:59.999+02:00`),
-        }
+        },
       },
-      select: { id: true, status: true, total: true }
+      select: { id: true, status: true, total: true },
     });
 
     const dayAggregate = {
       orders_count: orders.length,
-      cancelled_count: orders.filter((o: any) => OrdersService.CANCELLED_STATUSES.includes(o.status as any)).length,
-      completed_count: orders.filter((o: any) => o.status === OrderStatus.COMPLETED).length,
-      non_cancelled_sales_total: orders.filter((o: any) => !OrdersService.CANCELLED_STATUSES.includes(o.status as any)).reduce((sum: number, o: any) => sum + (Number(o.total) || 0), 0),
-      completed_sales_total: orders.filter((o: any) => o.status === OrderStatus.COMPLETED).reduce((sum: number, o: any) => sum + (Number(o.total) || 0), 0),
+      cancelled_count: orders.filter((o: any) =>
+        OrdersService.CANCELLED_STATUSES.includes(o.status as any),
+      ).length,
+      completed_count: orders.filter(
+        (o: any) => o.status === OrderStatus.COMPLETED,
+      ).length,
+      non_cancelled_sales_total: orders
+        .filter(
+          (o: any) =>
+            !OrdersService.CANCELLED_STATUSES.includes(o.status as any),
+        )
+        .reduce((sum: number, o: any) => sum + (Number(o.total) || 0), 0),
+      completed_sales_total: orders
+        .filter((o: any) => o.status === OrderStatus.COMPLETED)
+        .reduce((sum: number, o: any) => sum + (Number(o.total) || 0), 0),
     };
 
     return {
@@ -1196,10 +1317,7 @@ export class OrdersService {
         product_id: targetProduct.id,
         effective_to: null,
       },
-      orderBy: [
-        { effective_from: 'desc' },
-        { id: 'desc' },
-      ],
+      orderBy: [{ effective_from: 'desc' }, { id: 'desc' }],
     });
 
     const activeHistoryPrice =
@@ -1212,7 +1330,10 @@ export class OrdersService {
       activeHistoryPrice !== null &&
       activeHistoryPrice === normalizedUnitPrice
     ) {
-      await manager.product.update({ where: { id: targetProduct.id }, data: { current_price: normalizedUnitPrice } });
+      await manager.product.update({
+        where: { id: targetProduct.id },
+        data: { current_price: normalizedUnitPrice },
+      });
       return;
     }
 
@@ -1232,7 +1353,7 @@ export class OrdersService {
         price: normalizedUnitPrice,
         effective_from: now,
         reason: 'manual update from order item',
-      }
+      },
     });
 
     await manager.product.update({
@@ -1274,7 +1395,7 @@ export class OrdersService {
     itemId: number,
   ): Promise<void> {
     try {
-      const order = await this.findOne(orderId) as any;
+      const order = (await this.findOne(orderId)) as any;
       const item = order.order_items.find((line) => line.id === itemId);
       if (!item || !item.pending_replacement_product) {
         return;
@@ -1302,7 +1423,7 @@ export class OrdersService {
     reason?: string | null,
   ): Promise<void> {
     try {
-      const order = await this.findOne(orderId) as any;
+      const order = (await this.findOne(orderId)) as any;
       const item = order.order_items.find((line) => line.id === itemId);
       if (!item) {
         return;
@@ -1376,7 +1497,9 @@ export class OrdersService {
     tenantId: number,
     callback: (manager: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    const manager = DbTenantContext.getManager() as Prisma.TransactionClient | undefined;
+    const manager = DbTenantContext.getManager() as
+      | Prisma.TransactionClient
+      | undefined;
     if (manager) {
       return callback(manager);
     }
@@ -1388,22 +1511,30 @@ export class OrdersService {
   }
 
   private orderClient() {
-    const manager = DbTenantContext.getManager() as Prisma.TransactionClient | undefined;
+    const manager = DbTenantContext.getManager() as
+      | Prisma.TransactionClient
+      | undefined;
     return manager ? manager.order : this.prisma.order;
   }
 
   private orderItemClient() {
-    const manager = DbTenantContext.getManager() as Prisma.TransactionClient | undefined;
+    const manager = DbTenantContext.getManager() as
+      | Prisma.TransactionClient
+      | undefined;
     return manager ? manager.orderItem : this.prisma.orderItem;
   }
 
   private productClient() {
-    const manager = DbTenantContext.getManager() as Prisma.TransactionClient | undefined;
+    const manager = DbTenantContext.getManager() as
+      | Prisma.TransactionClient
+      | undefined;
     return manager ? manager.product : this.prisma.product;
   }
 
   private dayClosureClient() {
-    const manager = DbTenantContext.getManager() as Prisma.TransactionClient | undefined;
+    const manager = DbTenantContext.getManager() as
+      | Prisma.TransactionClient
+      | undefined;
     return manager ? manager.dayClosure : this.prisma.dayClosure;
   }
 }

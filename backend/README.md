@@ -53,9 +53,6 @@ Auth, session, and security:
 
 WhatsApp providers:
 
-- `WHATS_APP_API_KEY`: WhatsApp provider API key.
-- `WHATS_APP_BASE_URL`: WhatsApp provider base URL.
-- `WHATS_APP_SENDER`: WhatsApp sender identifier.
 - `ACCOUNT_SID`: Twilio account SID.
 - `AUTH_TOKEN`: Twilio auth token.
 - `WHATSAPP_PHONE_NUMBER`: Twilio WhatsApp sender number.

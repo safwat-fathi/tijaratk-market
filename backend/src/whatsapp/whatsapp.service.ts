@@ -22,7 +22,7 @@ export class WhatsappService {
    * Allows development environments to disable all WhatsApp side effects.
    */
   private isNotificationsEnabled(): boolean {
-    return process.env.WHATSAPP_NOTIFICATIONS_ENABLED !== 'false';
+    return process.env.WHATSAPP_NOTIFICATIONS_ENABLED !== false;
   }
 
   /**

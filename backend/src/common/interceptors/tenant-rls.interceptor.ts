@@ -52,7 +52,7 @@ export class TenantRlsInterceptor implements NestInterceptor {
   ): Promise<unknown> {
     return this.prisma.$transaction(async (tx) => {
       const tenantId = await this.resolveTenantId(req, tx);
-      
+
       if (tenantId === TenantRlsInterceptor.NO_TENANT_CONTEXT) {
         return firstValueFrom<unknown>(next.handle());
       }
@@ -63,9 +63,8 @@ export class TenantRlsInterceptor implements NestInterceptor {
 
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
 
-      return DbTenantContext.run(
-        { tenantId, manager: tx },
-        async () => firstValueFrom<unknown>(next.handle()),
+      return DbTenantContext.run({ tenantId, manager: tx }, async () =>
+        firstValueFrom<unknown>(next.handle()),
       );
     });
   }
@@ -95,6 +94,11 @@ export class TenantRlsInterceptor implements NestInterceptor {
     }
 
     if (this.isAvailabilityRequestsPublicSlugRoute(parts)) {
+      const slug = parts[2];
+      return this.resolveTenantIdBySlug(slug, tx);
+    }
+
+    if (this.isCustomersPublicSlugRoute(parts)) {
       const slug = parts[2];
       return this.resolveTenantIdBySlug(slug, tx);
     }
@@ -204,6 +208,15 @@ export class TenantRlsInterceptor implements NestInterceptor {
   }
 
   /**
+   * Returns true for /customers/public/:slug routes.
+   */
+  private isCustomersPublicSlugRoute(parts: string[]): boolean {
+    return (
+      parts.length >= 3 && parts[0] === 'customers' && parts[1] === 'public'
+    );
+  }
+
+  /**
    * Returns true for public order create route: POST /orders/:tenant_slug.
    */
   private isOrdersPublicCreateRoute(method: string, parts: string[]): boolean {
@@ -244,7 +257,9 @@ export class TenantRlsInterceptor implements NestInterceptor {
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const normalizedSlug = this.safeDecodePathSegment(slug);
-    const rows = await tx.$queryRaw<{ tenant_id: number }[]>`SELECT app.resolve_tenant_id_by_slug(${normalizedSlug})::int AS tenant_id`;
+    const rows = await tx.$queryRaw<
+      { tenant_id: number }[]
+    >`SELECT app.resolve_tenant_id_by_slug(${normalizedSlug})::int AS tenant_id`;
 
     const tenantId = this.parseTenantId(rows?.[0]?.tenant_id);
     if (!tenantId) {
@@ -263,7 +278,9 @@ export class TenantRlsInterceptor implements NestInterceptor {
     token: string,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    const rows = await tx.$queryRaw<{ tenant_id: number }[]>`SELECT app.resolve_tenant_id_by_order_token(${token})::int AS tenant_id`;
+    const rows = await tx.$queryRaw<
+      { tenant_id: number }[]
+    >`SELECT app.resolve_tenant_id_by_order_token(${token})::int AS tenant_id`;
 
     const tenantId = this.parseTenantId(rows?.[0]?.tenant_id);
     if (!tenantId) {
@@ -285,10 +302,7 @@ export class TenantRlsInterceptor implements NestInterceptor {
     const validTokens: string[] = [];
 
     for (const token of tokens) {
-      const tenantId = await this.tryResolveTenantIdByOrderToken(
-        token,
-        tx,
-      );
+      const tenantId = await this.tryResolveTenantIdByOrderToken(token, tx);
       if (!tenantId) {
         continue;
       }
@@ -346,7 +360,9 @@ export class TenantRlsInterceptor implements NestInterceptor {
     token: string,
     tx: Prisma.TransactionClient,
   ): Promise<number | null> {
-    const rows = await tx.$queryRaw<{ tenant_id: number }[]>`SELECT app.resolve_tenant_id_by_order_token(${token})::int AS tenant_id`;
+    const rows = await tx.$queryRaw<
+      { tenant_id: number }[]
+    >`SELECT app.resolve_tenant_id_by_order_token(${token})::int AS tenant_id`;
 
     const tenantId = this.parseTenantId(rows?.[0]?.tenant_id);
     return tenantId ?? null;
