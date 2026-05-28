@@ -774,11 +774,12 @@ export class OrdersService {
           ? this.roundCurrency(normalizedTotal / numericQty)
           : normalizedTotal;
 
-      orderItem.total_price = new Prisma.Decimal(normalizedTotal);
-      orderItem.unit_price = new Prisma.Decimal(normalizedUnitPrice);
       const savedItem = (await orderItemRepository.update({
         where: { id: orderItem.id },
-        data: orderItem as any,
+        data: {
+          total_price: new Prisma.Decimal(normalizedTotal),
+          unit_price: new Prisma.Decimal(normalizedUnitPrice),
+        },
       })) as any;
 
       const order = await orderRepository.findFirst({
@@ -821,16 +822,17 @@ export class OrdersService {
         recomputedTotal = undefined;
       }
 
-      order.pricing_mode = PricingMode.MANUAL;
-      order.subtotal =
-        subtotal === undefined ? null : new Prisma.Decimal(subtotal);
-      order.total =
-        recomputedTotal === undefined
-          ? null
-          : new Prisma.Decimal(recomputedTotal);
       await orderRepository.update({
         where: { id: order.id },
-        data: order as any,
+        data: {
+          pricing_mode: PricingMode.MANUAL,
+          subtotal:
+            subtotal === undefined ? null : new Prisma.Decimal(subtotal),
+          total:
+            recomputedTotal === undefined
+              ? null
+              : new Prisma.Decimal(recomputedTotal),
+        },
       });
 
       const targetProductId =
