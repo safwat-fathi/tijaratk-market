@@ -13,6 +13,5 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 1. Fix updating product price on order details view for merchant.
 2. Product replacement for orders is not working.
-3. Listing customers is not working for merchants.
 
 ## New Features

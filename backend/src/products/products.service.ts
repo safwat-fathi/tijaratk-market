@@ -637,31 +637,35 @@ export class ProductsService {
     const searchParam = addParam(normalizedSearch);
     const prefixParam = addParam(prefixPattern);
     const containsParam = addParam(containsPattern);
-    const strictSimParam = addParam(
-      strictMatchThresholds.strictSimilarityThreshold,
-    );
-    const strictWordSimParam = addParam(
-      strictMatchThresholds.strictWordSimilarityThreshold,
-    );
+    const searchTextParam = `${searchParam}::text`;
+    const prefixTextParam = `${prefixParam}::text`;
+    const containsTextParam = `${containsParam}::text`;
 
     const comparableNameSql = this.buildComparableProductNameExpression('name');
 
-    let rankSql = `(word_similarity(${comparableNameSql}, ${searchParam}) * 0.55) + (similarity(${comparableNameSql}, ${searchParam}) * 0.30) + (CASE WHEN ${comparableNameSql} LIKE ${prefixParam} THEN 1 ELSE 0 END) * 0.15`;
+    let rankSql = `(word_similarity(${comparableNameSql}, ${searchTextParam}) * 0.55) + (similarity(${comparableNameSql}, ${searchTextParam}) * 0.30) + (CASE WHEN ${comparableNameSql} LIKE ${prefixTextParam} THEN 1 ELSE 0 END) * 0.15`;
+
+    if (!rankAll) {
+      const strictSimParam = addParam(
+        strictMatchThresholds.strictSimilarityThreshold,
+      );
+      const strictWordSimParam = addParam(
+        strictMatchThresholds.strictWordSimilarityThreshold,
+      );
+
+      conditions.push(`(
+        ${comparableNameSql} LIKE ${prefixTextParam}
+        OR ${comparableNameSql} LIKE ${containsTextParam}
+        OR (
+          similarity(${comparableNameSql}, ${searchTextParam}) >= ${strictSimParam}::double precision
+          AND word_similarity(${comparableNameSql}, ${searchTextParam}) >= ${strictWordSimParam}::double precision
+        )
+      )`);
+    }
 
     if (useCategoryAsBoost) {
       const catParam = addParam(category);
-      rankSql = `(word_similarity(${comparableNameSql}, ${searchParam}) * 0.50) + (similarity(${comparableNameSql}, ${searchParam}) * 0.25) + (CASE WHEN ${comparableNameSql} LIKE ${prefixParam} THEN 1 ELSE 0 END) * 0.15 + (CASE WHEN category = ${catParam} THEN 0.10 ELSE 0 END)`;
-    }
-
-    if (!rankAll) {
-      conditions.push(`(
-        ${comparableNameSql} LIKE ${prefixParam}
-        OR ${comparableNameSql} LIKE ${containsParam}
-        OR (
-          similarity(${comparableNameSql}, ${searchParam}) >= ${strictSimParam}
-          AND word_similarity(${comparableNameSql}, ${searchParam}) >= ${strictWordSimParam}
-        )
-      )`);
+      rankSql = `(word_similarity(${comparableNameSql}, ${searchTextParam}) * 0.50) + (similarity(${comparableNameSql}, ${searchTextParam}) * 0.25) + (CASE WHEN ${comparableNameSql} LIKE ${prefixTextParam} THEN 1 ELSE 0 END) * 0.15 + (CASE WHEN category = ${catParam}::text THEN 0.10 ELSE 0 END)`;
     }
 
     const whereClause = conditions.join(' AND ');
@@ -672,13 +676,13 @@ export class ProductsService {
     const dataQuery = `
       SELECT *, 
         ${rankSql} as search_rank,
-        word_similarity(${comparableNameSql}, ${searchParam}) as word_sim,
-        similarity(${comparableNameSql}, ${searchParam}) as name_similarity,
-        CASE WHEN ${comparableNameSql} LIKE ${containsParam} THEN 1 ELSE 0 END as contains_score
+        word_similarity(${comparableNameSql}, ${searchTextParam}) as word_sim,
+        similarity(${comparableNameSql}, ${searchTextParam}) as name_similarity,
+        CASE WHEN ${comparableNameSql} LIKE ${containsTextParam} THEN 1 ELSE 0 END as contains_score
       FROM products
       WHERE ${whereClause}
       ORDER BY search_rank DESC, word_sim DESC, name_similarity DESC, contains_score DESC, created_at DESC, id DESC
-      LIMIT ${limitParam} OFFSET ${offsetParam}
+      LIMIT ${limitParam}::int OFFSET ${offsetParam}::int
     `;
 
     const countQuery = `
