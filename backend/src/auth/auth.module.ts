@@ -21,7 +21,9 @@ import { TenantsModule } from '../tenants/tenants.module';
         const secret = configService.get<string>('JWT_SECRET');
 
         if (!secret) {
-          throw new Error('JWT_SECRET is required to sign authentication tokens.');
+          throw new Error(
+            'JWT_SECRET is required to sign authentication tokens.',
+          );
         }
 
         return {

@@ -1,6 +1,9 @@
 export const formatPhoneNumber = (phone: string): string => {
   // 1. Remove non-numeric characters except leading +
-  const cleaned = phone.trim().replace(/(?!^)\+/g, '').replace(/[^\d+]/g, '');
+  const cleaned = phone
+    .trim()
+    .replace(/(?!^)\+/g, '')
+    .replace(/[^\d+]/g, '');
 
   // 2. Already in E.164 format for Egypt (+20...)
   if (cleaned.startsWith('+20')) {

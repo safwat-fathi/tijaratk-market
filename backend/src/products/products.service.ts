@@ -644,8 +644,7 @@ export class ProductsService {
       strictMatchThresholds.strictWordSimilarityThreshold,
     );
 
-    const comparableNameSql =
-      this.buildComparableProductNameExpression('name');
+    const comparableNameSql = this.buildComparableProductNameExpression('name');
 
     let rankSql = `(word_similarity(${comparableNameSql}, ${searchParam}) * 0.55) + (similarity(${comparableNameSql}, ${searchParam}) * 0.30) + (CASE WHEN ${comparableNameSql} LIKE ${prefixParam} THEN 1 ELSE 0 END) * 0.15`;
 

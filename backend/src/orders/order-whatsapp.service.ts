@@ -1,11 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { WhatsappService } from 'src/whatsapp/whatsapp.service';
-import { Order, OrderItem, Customer, Tenant, Product } from '../../generated/prisma/client';
+import {
+  Order,
+  OrderItem,
+  Customer,
+  Tenant,
+  Product,
+} from '../../generated/prisma/client';
 import { welcomeCustomer } from 'src/whatsapp/templates';
 import { OrderStatus } from 'src/common/enums/order-status.enum';
 
-type OrderWithRelations = Order & { customer?: Customer | null; tenant?: Tenant | null };
-type OrderItemWithProduct = OrderItem & { pending_replacement_product?: Product | null };
+type OrderWithRelations = Order & {
+  customer?: Customer | null;
+  tenant?: Tenant | null;
+};
+type OrderItemWithProduct = OrderItem & {
+  pending_replacement_product?: Product | null;
+};
 
 @Injectable()
 export class OrderWhatsappService {

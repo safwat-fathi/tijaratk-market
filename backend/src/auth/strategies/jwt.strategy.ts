@@ -34,7 +34,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const jwtSecret = configService.get<string>('JWT_SECRET');
 
     if (!jwtSecret) {
-      throw new Error('JWT_SECRET is required to validate authentication tokens.');
+      throw new Error(
+        'JWT_SECRET is required to validate authentication tokens.',
+      );
     }
 
     super({

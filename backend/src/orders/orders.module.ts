@@ -7,11 +7,7 @@ import { OrderWhatsappService } from './order-whatsapp.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
-  imports: [
-    PrismaModule,
-    CustomersModule,
-    TenantsModule,
-  ],
+  imports: [PrismaModule, CustomersModule, TenantsModule],
   controllers: [OrdersController],
   providers: [OrdersService, OrderWhatsappService],
   exports: [OrdersService],

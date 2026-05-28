@@ -70,22 +70,16 @@ export class AuthService {
     }
 
     // 1. Create Tenant
-    const tenant = await this.tenantsService.create(
-      storeName,
-      phone,
-      category,
-    );
+    const tenant = await this.tenantsService.create(storeName, phone, category);
 
     // 2. Create User (Owner)
-    const user = await this.usersService.create(
-      {
-        phone,
-        password,
-        name,
-        role: UserRole.owner,
-        tenant_id: tenant.id, // Link to the new tenant
-      }
-    );
+    const user = await this.usersService.create({
+      phone,
+      password,
+      name,
+      role: UserRole.owner,
+      tenant_id: tenant.id, // Link to the new tenant
+    });
 
     // 3. Return Login Response
     return this.login(user);

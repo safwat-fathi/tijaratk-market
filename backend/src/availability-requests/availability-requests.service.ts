@@ -85,17 +85,18 @@ export class AvailabilityRequestsService {
         throw error;
       }
 
-      const existing = await this.getPrismaClient().availabilityRequest.findFirst({
-        where: {
-          tenant_id: product.tenant_id,
-          product_id: product.id,
-          visitor_key: visitorKey,
-          request_date: requestDate,
-        },
-        orderBy: {
-          created_at: 'desc',
-        },
-      });
+      const existing =
+        await this.getPrismaClient().availabilityRequest.findFirst({
+          where: {
+            tenant_id: product.tenant_id,
+            product_id: product.id,
+            visitor_key: visitorKey,
+            request_date: requestDate,
+          },
+          orderBy: {
+            created_at: 'desc',
+          },
+        });
 
       return {
         status: 'already_requested_today',
@@ -116,12 +117,13 @@ export class AvailabilityRequestsService {
     const todayDate = this.getCairoDateKey();
     const fromDate = this.shiftDateKey(todayDate, normalizedDays - 1);
 
-    const totalRequests = await this.getPrismaClient().availabilityRequest.count({
-      where: {
-        tenant_id: tenantId,
-        request_date: todayDate,
-      },
-    });
+    const totalRequests =
+      await this.getPrismaClient().availabilityRequest.count({
+        where: {
+          tenant_id: tenantId,
+          request_date: todayDate,
+        },
+      });
 
     const topGroups = await this.getPrismaClient().availabilityRequest.groupBy({
       by: ['product_id'],

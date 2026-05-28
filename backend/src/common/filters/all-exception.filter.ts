@@ -86,7 +86,9 @@ export class AllExceptionFilter implements ExceptionFilter {
   private isDatabaseException(
     exception: unknown,
   ): exception is Record<string, unknown> {
-    return typeof exception === 'object' && exception !== null && 'code' in exception;
+    return (
+      typeof exception === 'object' && exception !== null && 'code' in exception
+    );
   }
 
   private resolveErrorDetails(exception: unknown): {
@@ -153,7 +155,10 @@ export class AllExceptionFilter implements ExceptionFilter {
     } else {
       const errMsg = exception instanceof Error ? exception.message : 'Unknown';
       const errStack = exception instanceof Error ? exception.stack : undefined;
-      this.logger.error(`Database Error [${String(code)}]: ${errMsg}`, errStack);
+      this.logger.error(
+        `Database Error [${String(code)}]: ${errMsg}`,
+        errStack,
+      );
     }
     return { status, message };
   }
