@@ -11,6 +11,8 @@ CREATE TABLE "customer_addresses" (
   CONSTRAINT "PK_customer_addresses_id" PRIMARY KEY ("id")
 );
 
+ALTER TABLE "customers" DISABLE ROW LEVEL SECURITY;
+
 INSERT INTO "customer_addresses" (
   "tenant_id",
   "customer_id",
@@ -29,6 +31,9 @@ SELECT
 FROM "customers"
 WHERE "address" IS NOT NULL AND btrim("address") <> ''
 ON CONFLICT DO NOTHING;
+
+ALTER TABLE "customers" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "customers" FORCE ROW LEVEL SECURITY;
 
 CREATE UNIQUE INDEX "UQ_customer_addresses_tenant_customer_address"
   ON "customer_addresses" ("tenant_id", "customer_id", "address");

@@ -45,6 +45,14 @@ This file provides guidelines for AI agents and coding assistants when working w
 - For JSONB columns, always use `jsonb` instead of `json`.
 - For relations, always use `Relation<Post[]>` instead of `Post[]`.
 
+## RLS migrations
+
+- When writing migrations that touch RLS tables, do data backfills before enabling RLS on the table.
+- If reading from an existing RLS-protected table, temporarily disable RLS inside the migration.
+- Re-enable `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY` immediately after the trusted data operation.
+- Test migrations from an empty DB with `migrate reset`, not only against a dev DB that already has state.
+- Be careful with `FORCE ROW LEVEL SECURITY`; it makes even the table owner subject to policies, so migration reads can fail.
+
 ## Dependencies and tooling changes
 
 - Do not add new dependencies unless they are necessary to satisfy the request.
