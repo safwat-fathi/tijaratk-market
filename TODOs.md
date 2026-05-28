@@ -11,11 +11,8 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 ## Fix issues
 
-1. change Hero section in landing page to row layout instead of column layout for large screens and for mobile and tablet put the image on top and the text below.
-2. Fix updating product price on order details view for merchant.
-3. Missing add picture for a product
-4. Catalog page is not working (Tabs issue) use `ScrollableTabs` component.
-5. Product replacement for orders is not working.
-6. Listing customers is not working for merchants.
+1. Fix updating product price on order details view for merchant.
+2. Product replacement for orders is not working.
+3. Listing customers is not working for merchants.
 
 ## New Features

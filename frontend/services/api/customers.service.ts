@@ -24,11 +24,11 @@ class CustomersService extends HttpService {
 	}
 
 	public async getCustomers(params?: { search?: string; page?: number; limit?: number }) {
-		return this.get<CustomersListResponse>("", params, { authRequired: true });
+		return this.get<CustomersListResponse>("", params, { authRequired: true, cache: "no-store" });
 	}
 
 	public async getCustomer(id: number) {
-		return this.get<Customer>(`${id}`, undefined, { authRequired: true });
+		return this.get<Customer>(`${id}`, undefined, { authRequired: true, cache: "no-store" });
 	}
 
 	public async getPublicCustomerByPhone(slug: string, phone: string) {
