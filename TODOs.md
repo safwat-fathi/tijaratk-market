@@ -12,5 +12,9 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 ## Fix issues
 
 1. Replacing order item with another product is not working.
+~~2. Increase file size limit for product images to be aligned with modern phone cameras (15mb).~~
+3. Make sure WhatsApp messages are sent after order creation.
 
 ## New Features
+
+- Can we let customers order from WhatsApp bot?

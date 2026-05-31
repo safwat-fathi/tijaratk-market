@@ -2,8 +2,8 @@ import type { ProductOrderMode } from '@/types/models/product';
 import type { ProductSection } from './product-onboarding.types';
 
 export const ALL_CATALOG_ITEMS = '__all__';
-export const MAX_PRODUCT_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-export const MAX_PRODUCT_IMAGE_SIZE_MB = 5;
+export const MAX_PRODUCT_IMAGE_SIZE_BYTES = 15 * 1024 * 1024;
+export const MAX_PRODUCT_IMAGE_SIZE_MB = 15;
 
 export const ALLOWED_PRODUCT_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',

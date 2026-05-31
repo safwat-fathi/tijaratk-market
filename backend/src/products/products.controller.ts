@@ -65,7 +65,7 @@ export class ProductsController {
   })
   @UploadFile('file', {
     fileFilter: imageFileFilter,
-    limits: { fileSize: 1024 * 1024 * 5 },
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -261,7 +261,7 @@ export class ProductsController {
   })
   @UploadFile('file', {
     fileFilter: imageFileFilter,
-    limits: { fileSize: 1024 * 1024 * 5 },
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
   })
   @ApiResponse({
     status: HttpStatus.OK,

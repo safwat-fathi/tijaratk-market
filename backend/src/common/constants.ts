@@ -19,6 +19,9 @@ const CONSTANTS = {
     'account management',
     'payment issue',
   ],
+  UPLOAD: {
+    MAX_IMAGE_SIZE_BYTES: 15 * 1024 * 1024, // 15 MB
+  },
 };
 
 export default CONSTANTS;
