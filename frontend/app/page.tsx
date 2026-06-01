@@ -5,17 +5,12 @@ import heroMockup from "@/public/images/hero-mockup.png";
 
 const pricingPlans = [
 	{
-		name: "الباقة المجانية",
-		price: "مجانًا",
-		description: "ابدأ تجارتك الأونلاين بدون أي تكاليف",
-		features: ["متجر أونلاين", "١٠٠ طلب في الشهر", "عدد منتجات غير محدود"],
-		buttonText: "ابدأ مجاناً",
-		highlighted: false,
-	},
-	{
 		name: "الباقة الأساسية",
-		price: "١٩٩",
+		originalPrice: "١٩٩",
 		currency: "جنيه/شهر",
+		promoPrice: "٠",
+		promoText: "أول شهرين مجاناً",
+		afterPromoText: "ثم ١٩٩ جنيه/شهر بعد ذلك",
 		description: "للمتاجر النامية التي تحتاج لمتابعة أفضل",
 		features: [
 			"عدد منتجات غير محدود",
@@ -24,13 +19,16 @@ const pricingPlans = [
 			"خدمة عملاء سريعة",
 			"تعديلات واجهة المتجر (ألوان المتجر، شعار المتجر)",
 		],
-		buttonText: "اشترك الآن",
+		buttonText: "ابدأ فترة التجربة",
 		highlighted: false,
 	},
 	{
 		name: "الباقة الكاملة",
-		price: "٥٩٩",
+		originalPrice: "٥٩٩",
 		currency: "جنيه/شهر",
+		promoPrice: "٠",
+		promoText: "أول شهرين مجاناً",
+		afterPromoText: "ثم ٥٩٩ جنيه/شهر بعد ذلك",
 		description: "لكل ما تحتاجه للنمو والظهور بقوة",
 		features: [
 			"كل ما في الباقة الأساسية",
@@ -39,14 +37,17 @@ const pricingPlans = [
 			"خدمة عملاء VIP",
 			"ظهور متجرك على جوجل (صفحة نشاط تجاري، خرائط، ربط واتساب)",
 		],
-		buttonText: "اشترك الآن",
+		buttonText: "ابدأ فترة التجربة",
 		highlighted: true,
 	},
 	{
 		name: "باقة الفروع",
-		price: "٦٩٩",
+		originalPrice: "٦٩٩",
 		currency: "جنيه للفرع الأول / شهر",
-		subPrice: "٢٩٩ جنيه لكل فرع إضافي",
+		subPrice: "٢٩٩ جنيه لكل فرع إضافي بعد الفترة المجانية",
+		promoPrice: "٠",
+		promoText: "أول شهرين مجاناً",
+		afterPromoText: "ثم ٦٩٩ جنيه للفرع الأول / شهر بعد ذلك",
 		description: "للمتاجر ذات الفروع المتعددة والإدارة الذكية",
 		features: [
 			"كل ما في الباقة الكاملة",
@@ -408,55 +409,106 @@ export default function LandingPage() {
 							</p>
 						</div>
 
-						<div className="mx-auto mt-16 grid max-w-7xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+						<div className="mx-auto mt-16 grid max-w-6xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 justify-center">
 							{pricingPlans.map((plan, index) => (
 								<div
 									key={index}
-									className={`relative flex flex-col rounded-[2rem] p-8 shadow-sm transition-transform hover:-translate-y-1 ${
+									className={`relative flex flex-col rounded-[2.5rem] p-8 md:p-10 shadow-md transition-all duration-300 hover:-translate-y-2 hover:shadow-xl ${
 										plan.highlighted
-											? "bg-[#0F5A3D] text-white"
-											: "bg-white text-[#222B2E] border border-gray-100"
+											? "bg-gradient-to-b from-[#0F5A3D] to-[#0A412A] text-white ring-4 ring-[#27AE60]/20"
+											: "bg-white text-[#222B2E] border border-[#DDE5E1]"
 									}`}
 								>
+									{/* Top Badge for Plan Highlight */}
+									{plan.highlighted && index === 1 && (
+										<div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 px-5 py-1.5 text-xs font-black text-white shadow-lg tracking-wider animate-pulse">
+											الأكثر طلباً 🔥
+										</div>
+									)}
 									{plan.highlighted && index === 2 && (
-										<div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-[#27AE60] px-4 py-1.5 text-xs font-bold text-white shadow-md">
-											الأكثر طلباً
+										<div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-[#27AE60] px-5 py-1.5 text-xs font-black text-white shadow-lg tracking-wider">
+											للمتاجر الكبرى 🏢
 										</div>
 									)}
-									{plan.highlighted && index === 3 && (
-										<div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-yellow-500 px-4 py-1.5 text-xs font-bold text-white shadow-md">
-											للمتاجر الكبرى
-										</div>
-									)}
-									<h3
-										className={`text-xl font-bold ${plan.highlighted ? "text-white" : "text-[#0F5A3D]"}`}
-									>
-										{plan.name}
-									</h3>
-									<div className="mt-4 flex items-baseline gap-x-2">
-										<span className="text-4xl font-extrabold tracking-tight">
-											{plan.price}
+
+									{/* Header & Promo Badge */}
+									<div className="flex items-center justify-between gap-4 mb-4">
+										<h3
+											className={`text-2xl font-black ${
+												plan.highlighted ? "text-white" : "text-[#0F5A3D]"
+											}`}
+										>
+											{plan.name}
+										</h3>
+										<span
+											className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border transition-colors ${
+												plan.highlighted
+													? "bg-[#27AE60]/20 text-[#27AE60] border-[#27AE60]/30"
+													: "bg-[#E8F5ED] text-[#0F5A3D] border-[#27AE60]/20"
+											}`}
+										>
+											🎁 {plan.promoText}
 										</span>
-										{plan.currency && (
+									</div>
+
+									{/* Pricing Section - Marketing Focused */}
+									<div className="mt-4 flex flex-col">
+										<div className="flex items-center gap-2 mb-1">
 											<span
-												className={`text-sm font-semibold leading-6 ${plan.highlighted ? "text-white/80" : "text-[#222B2E]/60"}`}
+												className={`text-sm line-through font-medium ${
+													plan.highlighted ? "text-white/50" : "text-[#222B2E]/50"
+												}`}
 											>
-												{plan.currency}
+												{plan.originalPrice} {plan.currency}
 											</span>
+											<span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-500">
+												توفير ١٠٠٪
+											</span>
+										</div>
+										<div className="flex items-baseline gap-x-2">
+											<span
+												className={`text-5xl font-black tracking-tight ${
+													plan.highlighted ? "text-[#27AE60]" : "text-[#0F5A3D]"
+												}`}
+											>
+												مجانًا
+											</span>
+											<span
+												className={`text-sm font-extrabold ${
+													plan.highlighted ? "text-white/90" : "text-[#222B2E]/80"
+												}`}
+											>
+												لأول شهرين
+											</span>
+										</div>
+										<span
+											className={`mt-2 text-xs font-bold leading-relaxed ${
+												plan.highlighted ? "text-white/70" : "text-[#222B2E]/60"
+											}`}
+										>
+											{plan.afterPromoText}
+										</span>
+										{plan.subPrice && (
+											<p
+												className={`mt-1.5 text-xs font-black ${
+													plan.highlighted ? "text-[#27AE60]" : "text-[#27AE60]"
+												}`}
+											>
+												{plan.subPrice}
+											</p>
 										)}
 									</div>
-									{plan.subPrice && (
-										<p
-											className={`mt-2 text-sm font-medium ${plan.highlighted ? "text-white/80" : "text-[#222B2E]/60"}`}
-										>
-											{plan.subPrice}
-										</p>
-									)}
+
+									{/* Description */}
 									<p
-										className={`mt-6 text-sm leading-relaxed ${plan.highlighted ? "text-white/80" : "text-[#222B2E]/70"}`}
+										className={`mt-6 text-sm leading-relaxed ${
+											plan.highlighted ? "text-white/80" : "text-[#222B2E]/70"
+										}`}
 									>
 										{plan.description}
 									</p>
+
+									{/* Features List */}
 									<ul
 										role="list"
 										className={`mt-8 space-y-4 text-sm leading-6 flex-1 ${
@@ -464,19 +516,23 @@ export default function LandingPage() {
 										}`}
 									>
 										{plan.features.map((feature, featureIndex) => (
-											<li key={featureIndex} className="flex gap-x-3">
+											<li key={featureIndex} className="flex gap-x-3 items-start">
 												<SVGCheckCircle
-													className={`h-5 w-5 flex-none ${plan.highlighted ? "text-[#27AE60]" : "text-[#27AE60]"}`}
+													className={`h-5 w-5 flex-none mt-0.5 ${
+														plan.highlighted ? "text-[#27AE60]" : "text-[#27AE60]"
+													}`}
 												/>
 												<span>{feature}</span>
 											</li>
 										))}
 									</ul>
+
+									{/* CTA Link */}
 									<Link
 										href="/merchant/login"
-										className={`mt-8 block w-full rounded-xl px-3 py-3.5 text-center text-sm font-bold transition-colors ${
+										className={`mt-8 block w-full rounded-2xl px-4 py-4 text-center text-sm font-black transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md ${
 											plan.highlighted
-												? "bg-[#27AE60] text-white hover:bg-[#219653]"
+												? "bg-[#27AE60] text-white hover:bg-[#219653] hover:shadow-[#27AE60]/20"
 												: "bg-[#E8F5ED] text-[#0F5A3D] hover:bg-[#D1EBDC]"
 										}`}
 									>
