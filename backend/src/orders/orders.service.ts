@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
@@ -10,6 +11,7 @@ import {
   OrderItem,
   DayClosure,
   Prisma,
+  TenantStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -87,6 +89,10 @@ export class OrdersService {
     const tenant = await this.tenantsService.findOneBySlug(tenantSlug);
     if (!tenant) {
       throw new NotFoundException(`Tenant with slug ${tenantSlug} not found`);
+    }
+
+    if (tenant.status === TenantStatus.suspended) {
+      throw new ForbiddenException('هذا المتجر غير متاح حاليا');
     }
 
     if (tenant.delivery_available === false) {

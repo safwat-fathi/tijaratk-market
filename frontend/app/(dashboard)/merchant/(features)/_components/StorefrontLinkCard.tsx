@@ -5,11 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 interface StorefrontLinkCardProps {
 	slug?: string;
+	status?: "active" | "inactive" | "suspended";
 }
 
 type CopyState = "idle" | "copied" | "error";
 
-export default function StorefrontLinkCard({ slug }: StorefrontLinkCardProps) {
+export default function StorefrontLinkCard({ slug, status = "active" }: StorefrontLinkCardProps) {
 	const [copyState, setCopyState] = useState<CopyState>("idle");
 	const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -100,7 +101,19 @@ export default function StorefrontLinkCard({ slug }: StorefrontLinkCardProps) {
 				</div>
 			)}
 
-			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+			{status === "suspended" && (
+				<div className="relative z-10 mb-4 flex items-start gap-3 rounded-md border border-status-error/20 bg-status-error/10 p-3 text-status-error">
+					<svg className="mt-0.5 h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+						<path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+					</svg>
+					<div>
+						<h4 className="text-sm font-semibold">حسابك موقوف</h4>
+						<p className="mt-1 text-xs opacity-90">متجرك غير متاح للعملاء حالياً. يرجى التواصل مع الدعم الفني لمراجعة حالة الحساب وإعادة تفعيله.</p>
+					</div>
+				</div>
+			)}
+
+			<div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div className="min-w-0">
 					<div className="flex items-center gap-2">
 						<span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/12 text-primary">
@@ -124,8 +137,23 @@ export default function StorefrontLinkCard({ slug }: StorefrontLinkCardProps) {
 							</svg>
 						</span>
 						<p className="text-sm font-semibold text-foreground">رابط متجرك</p>
+						{status === "active" && (
+							<span className="ms-1 inline-flex items-center rounded-full bg-status-success/15 px-2 py-0.5 text-[10px] font-medium text-status-success">
+								متاح
+							</span>
+						)}
+						{status === "suspended" && (
+							<span className="ms-1 inline-flex items-center rounded-full bg-status-error/15 px-2 py-0.5 text-[10px] font-medium text-status-error">
+								موقوف
+							</span>
+						)}
+						{status === "inactive" && (
+							<span className="ms-1 inline-flex items-center rounded-full bg-status-warning/15 px-2 py-0.5 text-[10px] font-medium text-status-warning">
+								غير متاح
+							</span>
+						)}
 					</div>
-					<p className="text-xs text-muted-foreground">
+					<p className="text-xs text-muted-foreground mt-1">
 						شارك الرابط مع عملائك للطلب مباشرة
 					</p>
 					<p className="mt-1 truncate text-xs font-medium text-primary" dir="ltr">

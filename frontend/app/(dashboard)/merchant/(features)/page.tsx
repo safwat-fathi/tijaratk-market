@@ -104,7 +104,7 @@ export default async function Dashboard() {
 					{new Date().getHours() < 12 ? "صباح الخير" : "مساء الخير"} {name}
 				</h1>
 			</div>
-			<StorefrontLinkCard slug={tenantSlug} />
+			<StorefrontLinkCard slug={tenantSlug} status={tenant?.status} />
 
 			{/* 1. Today Snapshot */}
 			<TodaySnapshot stats={stats} />

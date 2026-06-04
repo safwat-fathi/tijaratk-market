@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   NotFoundException,
+  ForbiddenException,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -21,6 +22,7 @@ import { Request } from 'express';
 import CONSTANTS from 'src/common/constants';
 import { TenantsService } from './tenants.service';
 import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-settings.dto';
+import { TenantStatus } from '../../generated/prisma/client';
 
 @ApiTags('Tenants')
 @Controller('tenants')
@@ -82,6 +84,11 @@ export class TenantsController {
     if (!tenant) {
       throw new NotFoundException(`Tenant with slug ${slug} not found`);
     }
+
+    if (tenant.status === TenantStatus.suspended) {
+      throw new ForbiddenException('هذا المتجر غير متاح حاليا');
+    }
+
     return tenant;
   }
 }
