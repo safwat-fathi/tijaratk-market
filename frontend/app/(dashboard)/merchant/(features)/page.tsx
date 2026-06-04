@@ -18,14 +18,18 @@ export const metadata = {
 	description: "نظرة عامة على نشاط متجرك، الطلبات اليومية، وحالة المبيعات.",
 };
 
-function isToday(dateString: string): boolean {
-	const date = new Date(dateString);
-	const today = new Date();
-	return (
-		date.getDate() === today.getDate() &&
-		date.getMonth() === today.getMonth() &&
-		date.getFullYear() === today.getFullYear()
-	);
+function getTodayDateString(): string {
+	const now = new Date();
+	const parts = new Intl.DateTimeFormat('en-US', {
+		timeZone: 'Africa/Cairo',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	}).formatToParts(now);
+	const y = parts.find(p => p.type === 'year')?.value;
+	const m = parts.find(p => p.type === 'month')?.value;
+	const d = parts.find(p => p.type === 'day')?.value;
+	return `${y}-${m}-${d}`;
 }
 
 export default async function Dashboard() {
@@ -33,15 +37,20 @@ export default async function Dashboard() {
 	const user = userCookie ? JSON.parse(userCookie) : null;
 	const name = user?.name || "تاجر";
 
+	// ⚡ Bolt Performance Optimization:
+	// Fetching only today's orders from the backend instead of fetching all historical orders and filtering them in-memory.
+	// This reduces data transfer, parsing time, and memory usage.
+	const todayDateString = getTodayDateString();
+
 	const [ordersResponse, tenantResponse, dayCloseStatusResponse, availabilityResponse] =
 		await Promise.all([
-			ordersService.getOrders(),
+			ordersService.getOrders(todayDateString),
 			tenantsService.getMyTenant(),
 			ordersService.getTodayDayCloseStatus(),
 			availabilityRequestsService.getMerchantSummary({ days: 1, limit: 5 }),
 		]);
 
-	const allOrders =
+	const todayOrders =
 		ordersResponse.success && ordersResponse.data ? ordersResponse.data : [];
 	const tenantSlug =
 		tenantResponse.success && tenantResponse.data
@@ -50,7 +59,6 @@ export default async function Dashboard() {
 	const tenant = tenantResponse.success ? tenantResponse.data : undefined;
 
 	// 1. Process Today's Snapshot
-	const todayOrders = allOrders.filter(o => isToday(o.created_at));
 
 	const stats: DashboardStats = {
 		totalEgp: todayOrders.reduce((sum, o) => sum + Number(o.total || 0), 0),
