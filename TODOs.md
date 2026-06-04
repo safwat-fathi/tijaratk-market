@@ -11,7 +11,7 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 ## Database
 
-- Add backup for live database
+- Add auto backup for live database
 
 ## Fix issues
 
