@@ -15,11 +15,16 @@ async function bootstrap() {
   const logger = new Logger('Seed');
   logger.log('Seeding...');
 
-  if (!process.env.DB_URL) {
-    throw new Error('DB_URL is required to run the database seed.');
+  const seedDatabaseUrl =
+    process.env.SEED_DB_URL ?? process.env.MIGRATE_DB_URL ?? process.env.DB_URL;
+
+  if (!seedDatabaseUrl) {
+    throw new Error(
+      'SEED_DB_URL, MIGRATE_DB_URL, or DB_URL is required to run the database seed.',
+    );
   }
 
-  const pool = new Pool({ connectionString: process.env.DB_URL });
+  const pool = new Pool({ connectionString: seedDatabaseUrl });
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 

@@ -11,9 +11,7 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 ## Fix issues
 
-1. Replacing order item with another product is not working.
-2. Add settings page in dashboard for store name, logo, social media links, contact phone number, delivery fees, working hours.
-
 ## New Features
 
 - Can we let customers order from WhatsApp bot?
+- Add settings page in dashboard for store name, logo, social media links, contact phone number, delivery fees, working hours.

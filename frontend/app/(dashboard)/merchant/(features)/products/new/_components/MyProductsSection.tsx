@@ -168,9 +168,6 @@ export default function MyProductsSection({
                           {product.name}
                         </span>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
-                            {product.source === "catalog" ? "كتالوج" : "يدوي"}
-                          </span>
                           <span className="rounded-full bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-primary">
                             {resolveProductPriceText(product.current_price) ||
                               "السعر غير محدد"}
