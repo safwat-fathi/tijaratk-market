@@ -1,41 +1,19 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useActionState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { Logo } from '@/components/ui/Logo';
+import { adminLoginAction, ActionState } from '@/actions/admin-server';
+
+const initialState: ActionState = {
+  success: false,
+  message: '',
+  errors: undefined,
+};
 
 export default function AdminLogin() {
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const router = useRouter();
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, password }),
-      });
-
-      if (!res.ok) {
-        throw new Error('بيانات الدخول غير صحيحة');
-      }
-
-      router.push('/admin');
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [state, action, isPending] = useActionState(adminLoginAction, initialState);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8" dir="rtl">
@@ -46,37 +24,35 @@ export default function AdminLogin() {
             لوحة تحكم الإدارة
           </h2>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-          {error && (
+        <form className="mt-8 space-y-6" action={action}>
+          {state?.message && !state.success && (
             <div className="bg-red-50 text-red-500 p-3 rounded-md text-sm text-center">
-              {error}
+              {state.message}
             </div>
           )}
           <div className="space-y-4">
-            <Field label="رقم الهاتف" htmlFor="phone">
+            <Field label="رقم الهاتف" htmlFor="phone" error={state?.errors?.phone?.[0]}>
               <Input
                 id="phone"
+                name="phone"
                 type="tel"
                 required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
                 placeholder="010..."
                 dir="ltr"
               />
             </Field>
-            <Field label="كلمة المرور" htmlFor="password">
+            <Field label="كلمة المرور" htmlFor="password" error={state?.errors?.password?.[0]}>
               <Input
                 id="password"
+                name="password"
                 type="password"
                 required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
               />
             </Field>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'جاري الدخول...' : 'تسجيل الدخول'}
+          <Button type="submit" className="w-full" disabled={isPending}>
+            {isPending ? 'جاري الدخول...' : 'تسجيل الدخول'}
           </Button>
         </form>
       </div>

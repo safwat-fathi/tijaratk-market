@@ -1,15 +1,32 @@
 import { Controller, Post, Body, Get, UseGuards, Param, Patch, ParseIntPipe, Res } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
+import { UpdateTenantStatusDto } from './dto/update-tenant-status.dto';
+import { TogglePlanStatusDto } from './dto/toggle-plan-status.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
-import { TenantStatus } from '../../generated/prisma/client';
 import { Response } from 'express';
+import {
+  AdminLoginResponseDto,
+  AdminLogoutResponseDto,
+  AdminDashboardStatsResponseDto,
+  AdminTenantResponseDto,
+  AdminPlanResponseDto,
+} from './dto/admin-responses.dto';
 
+@ApiTags('Admin')
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Post('login')
+  @ApiOperation({
+    summary: 'Admin login',
+    description: 'Authenticate an admin user and set a secure cookie with the access token.',
+  })
+  @ApiBody({ type: AdminLoginDto })
+  @ApiResponse({ status: 200, type: AdminLoginResponseDto, description: 'Login successful, access token cookie set' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: AdminLoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.adminService.login(loginDto);
     
@@ -24,6 +41,11 @@ export class AdminController {
   }
 
   @Post('logout')
+  @ApiOperation({
+    summary: 'Admin logout',
+    description: 'Clear the admin access token cookie to log out the user.',
+  })
+  @ApiResponse({ status: 200, type: AdminLogoutResponseDto, description: 'Logout successful' })
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie('admin_access_token');
     return { success: true };
@@ -31,37 +53,73 @@ export class AdminController {
 
   @UseGuards(AdminAuthGuard)
   @Get('dashboard-stats')
+  @ApiOperation({
+    summary: 'Get dashboard stats',
+    description: 'Retrieve general stats for the admin dashboard including merchant, order, and plan counts.',
+  })
+  @ApiResponse({ status: 200, type: AdminDashboardStatsResponseDto, description: 'Stats retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   getDashboardStats() {
     return this.adminService.getDashboardStats();
   }
 
   @UseGuards(AdminAuthGuard)
   @Get('tenants')
+  @ApiOperation({
+    summary: 'Get all tenants',
+    description: 'Retrieve a list of all registered tenants, including order and customer counts.',
+  })
+  @ApiResponse({ status: 200, type: [AdminTenantResponseDto], description: 'List of tenants retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   getTenants() {
     return this.adminService.getTenants();
   }
 
   @UseGuards(AdminAuthGuard)
   @Patch('tenants/:id/status')
+  @ApiOperation({
+    summary: 'Update tenant status',
+    description: 'Update the activation status of a specific tenant.',
+  })
+  @ApiParam({ name: 'id', description: 'The unique ID of the tenant', type: Number })
+  @ApiBody({ type: UpdateTenantStatusDto })
+  @ApiResponse({ status: 200, type: AdminTenantResponseDto, description: 'Tenant status updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Tenant not found' })
   updateTenantStatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body('status') status: TenantStatus,
+    @Body() updateTenantStatusDto: UpdateTenantStatusDto,
   ) {
-    return this.adminService.updateTenantStatus(id, status);
+    return this.adminService.updateTenantStatus(id, updateTenantStatusDto.status);
   }
 
   @UseGuards(AdminAuthGuard)
   @Get('plans')
+  @ApiOperation({
+    summary: 'Get subscription plans',
+    description: 'Retrieve all available subscription plans, ordered by price.',
+  })
+  @ApiResponse({ status: 200, type: [AdminPlanResponseDto], description: 'Subscription plans retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   getPlans() {
     return this.adminService.getPlans();
   }
 
   @UseGuards(AdminAuthGuard)
   @Patch('plans/:id/status')
+  @ApiOperation({
+    summary: 'Toggle subscription plan status',
+    description: 'Enable or disable a subscription plan.',
+  })
+  @ApiParam({ name: 'id', description: 'The unique ID of the subscription plan', type: Number })
+  @ApiBody({ type: TogglePlanStatusDto })
+  @ApiResponse({ status: 200, type: AdminPlanResponseDto, description: 'Plan status updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Plan not found' })
   togglePlanStatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body('is_active') is_active: boolean,
+    @Body() togglePlanStatusDto: TogglePlanStatusDto,
   ) {
-    return this.adminService.togglePlanStatus(id, is_active);
+    return this.adminService.togglePlanStatus(id, togglePlanStatusDto.is_active);
   }
 }

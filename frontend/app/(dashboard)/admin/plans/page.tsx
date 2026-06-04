@@ -1,50 +1,31 @@
-'use client';
-
-import { useEffect, useState } from 'react';
+import { adminService } from '@/services/api/admin.service';
 import { Card } from '@/components/ui/Card';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Button } from '@/components/ui/Button';
+import { togglePlanStatusAction } from '@/actions/admin-server';
+import { isNextRedirectError } from '@/lib/auth/navigation-errors';
+import { redirect } from 'next/navigation';
 
-export default function AdminPlans() {
-  const [plans, setPlans] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export const dynamic = 'force-dynamic';
 
-  const fetchPlans = async () => {
-    try {
-      const res = await fetch('/api/admin/plans');
-      if (res.ok) {
-        const data = await res.json();
-        setPlans(Array.isArray(data) ? data : data?.data || []);
-      }
-    } finally {
-      setLoading(false);
+async function getPlans() {
+  try {
+    const response = await adminService.getPlans();
+    if (response.success && response.data) {
+      return Array.isArray(response.data) ? response.data : (response.data as any).data || [];
     }
-  };
-
-  useEffect(() => {
-    fetchPlans();
-  }, []);
-
-  const toggleStatus = async (id: number, currentStatus: boolean) => {
-    try {
-      await fetch(`/api/admin/plans/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !currentStatus }),
-      });
-      fetchPlans(); // Refresh list
-    } catch (error) {
-      console.error('Failed to toggle status');
+    if (!response.success && response.message === 'Unauthorized') {
+      redirect('/admin/login');
     }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner />
-      </div>
-    );
+    return [];
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error('Failed to fetch plans:', error);
+    return [];
   }
+}
+
+export default async function AdminPlans() {
+  const plans = await getPlans();
 
   return (
     <div className="space-y-6">
@@ -54,42 +35,32 @@ export default function AdminPlans() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                الباقة
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                السعر
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                الحالة
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                إجراءات
-              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الباقة</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">السعر</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحالة</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {(Array.isArray(plans) ? plans : []).map((plan: any) => (
+            {plans.map((plan: any) => (
               <tr key={plan.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {plan.name}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {plan.price} ج.م
-                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{plan.name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.price} ج.م</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${plan.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                     {plan.is_active ? 'مفعلة' : 'معطلة'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <Button 
-                    variant={plan.is_active ? 'outline' : 'primary'}
-                    size="sm"
-                    onClick={() => toggleStatus(plan.id, plan.is_active)}
-                  >
-                    {plan.is_active ? 'إيقاف' : 'تفعيل'}
-                  </Button>
+                  <form action={togglePlanStatusAction.bind(null, plan.id, plan.is_active)}>
+                    <Button 
+                      type="submit"
+                      variant={plan.is_active ? 'outline' : 'primary'}
+                      size="sm"
+                    >
+                      {plan.is_active ? 'إيقاف' : 'تفعيل'}
+                    </Button>
+                  </form>
                 </td>
               </tr>
             ))}

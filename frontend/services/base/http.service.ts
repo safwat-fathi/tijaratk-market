@@ -204,13 +204,15 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 		return { message: errorMessage, data: errorData };
 	}
 
+	protected _tokenKey: string = STORAGE_KEYS.ACCESS_TOKEN;
+
 	private async _getAuthHeaders(): Promise<HeadersInit> {
 		if (typeof window !== "undefined") {
 			return {};
 		}
 
 		// Always get fresh token from cookies
-		this._token = await getCookieAction(STORAGE_KEYS.ACCESS_TOKEN);
+		this._token = await getCookieAction(this._tokenKey);
 
 		const headers: HeadersInit = {};
 

@@ -1,42 +1,37 @@
-'use client';
-
-import { useEffect, useState } from 'react';
+import { adminService } from '@/services/api/admin.service';
 import { Card } from '@/components/ui/Card';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { useRouter } from 'next/navigation';
+import { isNextRedirectError } from '@/lib/auth/navigation-errors';
+import { redirect } from 'next/navigation';
 
-export default function AdminDashboard() {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+export const dynamic = 'force-dynamic';
 
-  useEffect(() => {
-    fetch('/api/admin/dashboard-stats')
-      .then((res) => {
-        if (res.status === 401) {
-          router.push('/admin/login');
-          return;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data) {
-          setStats(data.data || data);
-          setLoading(false);
-        }
-      })
-      .catch(() => setLoading(false));
-  }, [router]);
+async function getStats() {
+  try {
+    const response = await adminService.getDashboardStats();
+    if (response.success && response.data) {
+      return response.data;
+    }
+    if (!response.success && response.message === 'Unauthorized') {
+      redirect('/admin/login');
+    }
+    return null;
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error('Failed to fetch admin stats:', error);
+    return null;
+  }
+}
 
-  if (loading) {
+export default async function AdminDashboard() {
+  const stats = await getStats();
+
+  if (!stats) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner />
+      <div className="flex justify-center items-center h-64 text-gray-500">
+        تعذر تحميل الإحصائيات أو ليس لديك صلاحية الوصول.
       </div>
     );
   }
-
-  if (!stats) return null;
 
   return (
     <div className="space-y-6">

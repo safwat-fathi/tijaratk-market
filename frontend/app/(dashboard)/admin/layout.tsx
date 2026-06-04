@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/ui/Logo';
+import { Button } from '@/components/ui/Button';
+import { adminLogoutAction } from '@/actions/admin-server';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,7 +22,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row rtl:space-x-reverse" dir="rtl">
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-white border-l border-gray-200 flex-shrink-0">
+      <aside className="w-full md:w-64 bg-white border-l border-gray-200 flex-shrink-0 flex flex-col min-h-screen md:min-h-0">
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <Logo />
           <span className="mr-2 font-bold text-red-600">Admin</span>
@@ -43,6 +45,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
+        <div className="p-4 border-t border-gray-200 mt-auto">
+          <form action={adminLogoutAction}>
+            <Button type="submit" variant="outline" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50">
+              تسجيل خروج
+            </Button>
+          </form>
+        </div>
       </aside>
 
       {/* Main Content */}
