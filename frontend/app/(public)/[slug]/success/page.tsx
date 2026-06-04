@@ -1,6 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import OrderSuccessView from "../_components/OrderSuccessView";
 import { tenantsService } from "@/services/api/tenants.service";
+import { createNoIndexMetadata } from "@/lib/marketing-seo";
+
+export const metadata = createNoIndexMetadata(
+	"تم إرسال الطلب",
+	"صفحة تأكيد طلب خاصة بالعميل وليست مخصصة للفهرسة.",
+);
 
 type Props = {
 	params: Promise<{ slug: string }>;

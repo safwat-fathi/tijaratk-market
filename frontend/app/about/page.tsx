@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { createPublicMetadata, publicMarketingPages } from "@/lib/marketing-seo";
 
-export const metadata: Metadata = {
-	title: "عن تجارتك",
-	description:
-		"تجارتك منصة بسيطة تساعد أصحاب المتاجر على إدارة الطلبات، استقبال الطلبات، ومتابعة التنبيهات عبر واتساب من مكان واحد.",
-};
+const page = publicMarketingPages.find(item => item.path === "/about")!;
+
+export const metadata: Metadata = createPublicMetadata(page);
 
 const valuePoints = [
 	{
@@ -108,6 +107,12 @@ export default function AboutPage() {
 			<div className="pointer-events-none absolute -right-16 bottom-20 -z-10 h-56 w-56 rounded-full bg-brand-primary/10 blur-3xl" />
 
 			<div className="mx-auto w-full max-w-5xl space-y-8 sm:space-y-10">
+				<nav className="flex flex-wrap gap-4 rounded-xl border border-brand-border bg-white/90 p-4 text-sm font-semibold text-brand-primary shadow-soft">
+					<Link href="/features">تعرف على مميزات تجارتك لإدارة الطلبات</Link>
+					<Link href="/pricing">راجع أسعار تجارتك بدون عمولة</Link>
+					<Link href="/docs/faq">اقرأ الأسئلة الشائعة عن تجارتك</Link>
+					<Link href="/contact">تواصل مع فريق تجارتك</Link>
+				</nav>
 				<section className="animate-fade-in rounded-xl border border-brand-border/90 bg-white/90 p-6 shadow-soft backdrop-blur-sm sm:p-8">
 					<p className="text-xs font-bold tracking-[0.16em] text-muted-foreground">
 						عن تجارتك

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans_Arabic, Poppins } from "next/font/google";
+import { SITE_DESCRIPTION, SITE_URL } from "@/lib/marketing-seo";
 import "./globals.css";
 
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
@@ -17,11 +18,12 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
+	metadataBase: new URL(SITE_URL),
 	title: {
-		default: "تجارتك | منصة إدارة المتاجر",
+		default: "تجارتك | نظام بسيط لإدارة طلبات المحلات أونلاين",
 		template: "%s | تجارتك",
 	},
-	description: "تجارتك هي المنصة المتكاملة لإدارة متجرك بفعالية، تتبع الطلبات، وإدارة العملاء والمنتجات بكل سهولة.",
+	description: SITE_DESCRIPTION,
 	keywords: [
 		"تجارتك",
 		"منصة تجارة",
@@ -30,7 +32,8 @@ export const metadata: Metadata = {
 		"تتبع الطلبات",
 		"إدارة العملاء",
 		"نظام مبيعات",
-		"تجارة إلكترونية",
+		"طلبات أونلاين بدون عمولة",
+		"محلات مصر",
 	],
 	authors: [{ name: "تجارتك" }],
 	creator: "تجارتك",
@@ -42,11 +45,11 @@ export const metadata: Metadata = {
 	},
 	openGraph: {
 		type: "website",
-		locale: "ar_SA",
-		url: "https://tijaratk.com",
+		locale: "ar_EG",
+		url: SITE_URL,
 		siteName: "تجارتك",
-		title: "تجارتك | منصة إدارة المتاجر",
-		description: "تجارتك هي المنصة المتكاملة لإدارة متجرك بفعالية، تتبع الطلبات، وإدارة العملاء والمنتجات بكل سهولة.",
+		title: "تجارتك | نظام بسيط لإدارة طلبات المحلات أونلاين",
+		description: SITE_DESCRIPTION,
 		images: [
 			{
 				url: "/logo.png",
@@ -58,8 +61,8 @@ export const metadata: Metadata = {
 	},
 	twitter: {
 		card: "summary_large_image",
-		title: "تجارتك | منصة إدارة المتاجر",
-		description: "تجارتك هي المنصة المتكاملة لإدارة متجرك بفعالية، تتبع الطلبات، وإدارة العملاء والمنتجات بكل سهولة.",
+		title: "تجارتك | نظام بسيط لإدارة طلبات المحلات أونلاين",
+		description: SITE_DESCRIPTION,
 		images: ["/logo.png"],
 	},
 	robots: {

@@ -1,10 +1,11 @@
 import { getCustomersPageAction } from "@/actions/customer-actions";
 import CustomersView from "./_components/CustomersView";
+import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
-export const metadata = {
-	title: "قاعدة بيانات العملاء",
-	description: "إدارة سجلات عملائك، متابعة نشاطهم وبناء علاقات قوية ومستدامة.",
-};
+export const metadata = createNoIndexMetadata(
+	"قاعدة بيانات العملاء",
+	"إدارة سجلات عملائك، متابعة نشاطهم وبناء علاقات قوية ومستدامة.",
+);
 
 export const dynamic = "force-dynamic";
 

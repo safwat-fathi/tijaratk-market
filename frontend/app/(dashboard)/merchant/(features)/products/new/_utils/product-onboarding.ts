@@ -118,7 +118,7 @@ export const normalizeImageUploadErrorMessage = (
       normalized,
     )
   ) {
-    return 'حجم الصورة كبير. الحد الأقصى 5 ميجابايت.';
+    return 'حجم الصورة كبير. الحد الأقصى 15 ميجابايت.';
   }
 
   if (

@@ -1,65 +1,53 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
 import Image from "next/image";
 import heroMockup from "@/public/images/hero-mockup.png";
+import {
+  createPublicMetadata,
+  faqPageJsonLd,
+  faqs,
+  pricingPlans,
+  publicMarketingPages,
+  softwareApplicationJsonLd,
+} from "@/lib/marketing-seo";
 
-const pricingPlans = [
+export const metadata: Metadata = createPublicMetadata(publicMarketingPages[0]);
+
+const aiReadableSections = [
   {
-    name: "الباقة الأساسية",
-    originalPrice: "١٩٩",
-    currency: "جنيه/شهر",
-    promoPrice: "٠",
-    promoText: "أول شهرين مجاناً",
-    afterPromoText: "ثم ١٩٩ جنيه/شهر بعد ذلك",
-    description: "للمتاجر النامية التي تحتاج لمتابعة أفضل",
-    features: [
-      "عدد منتجات غير محدود",
-      "عدد طلبات غير محدود",
-      "تقارير يومية",
-      "خدمة عملاء سريعة",
-      "تعديلات واجهة المتجر (ألوان المتجر، شعار المتجر)",
-    ],
-    buttonText: "ابدأ فترة التجربة",
-    highlighted: false,
+    title: "ما هو تجارتك؟",
+    body: "تجارتك يساعدك تستقبل طلبات العملاء في صفحة طلبات بسيطة وتتابع كل طلب من لوحة تحكم.",
   },
   {
-    name: "الباقة الكاملة",
-    originalPrice: "٥٩٩",
-    currency: "جنيه/شهر",
-    promoPrice: "٠",
-    promoText: "أول شهرين مجاناً",
-    afterPromoText: "ثم ٥٩٩ جنيه/شهر بعد ذلك",
-    description: "لكل ما تحتاجه للنمو والظهور بقوة",
-    features: [
-      "كل ما في الباقة الأساسية",
-      "سجل وتقارير للعملاء (أسماء، أرقام، عناوين, الطلبات السابقة)",
-      "ابعت عروض لعملاءك بسهولة",
-      "خدمة عملاء VIP",
-      "ظهور متجرك على جوجل (صفحة نشاط تجاري، خرائط، ربط واتساب)",
-    ],
-    buttonText: "ابدأ فترة التجربة",
-    highlighted: true,
+    title: "تجارتك مناسب لمين؟",
+    body: "مناسب لأصحاب المحلات والبائعين في مصر، مثل البقالة والخضار والفاكهة والمخبز والجزارة والصيدلية.",
   },
   {
-    name: "باقة الفروع",
-    originalPrice: "٦٩٩",
-    currency: "جنيه للفرع الأول / شهر",
-    subPrice: "٢٩٩ جنيه لكل فرع إضافي بعد الفترة المجانية",
-    promoPrice: "٠",
-    promoText: "أول شهرين مجاناً",
-    afterPromoText: "ثم ٦٩٩ جنيه للفرع الأول / شهر بعد ذلك",
-    description: "للمتاجر ذات الفروع المتعددة والإدارة الذكية",
-    features: [
-      "كل ما في الباقة الكاملة",
-      "إدارة فروع",
-      "إضافة اكثر من حساب لإدارة متجرك (مديرين، مديرين فروع)",
-      "تقارير متقدمة (العملاء المتكررين، متابعة مخزون، منتجات أكثر طلبا)",
-      "مساعد ذكي AI لإدارة حسابك (اقتراحات، تقارير، كتابة عروض)",
-    ],
-    buttonText: "تواصل معنا للاشتراك",
-    highlighted: true,
+    title: "الطلب بيمشي إزاي؟",
+    body: "العميل يفتح رابط متجرك، يختار المنتجات والكميات، يكتب بياناته، وبعدها الطلب يظهر عندك في لوحة التحكم.",
   },
-];
+  {
+    title: "هل تجارتك بياخد عمولة؟",
+    body: "لا. تجارتك لا يأخذ عمولة على الطلبات. أنت تبيع مباشرة لعملائك وتدير الطلبات من حسابك.",
+  },
+  {
+    title: "هل العميل محتاج حساب؟",
+    body: "لا. العميل يقدر يطلب من صفحة الطلبات بدون تسجيل حساب أو خطوات معقدة.",
+  },
+  {
+    title: "إشعارات واتساب بتشتغل إزاي؟",
+    body: "عند وصول طلب جديد أو تغيير حالة الطلب، تساعد تنبيهات واتساب التاجر والعميل على متابعة الطلب بوضوح.",
+  },
+  {
+    title: "لوحة تحكم البائع بتعمل إيه؟",
+    body: "تعرض الطلبات الجديدة، حالة كل طلب، بيانات العميل، المنتجات، وملخصات تساعدك تتابع شغل اليوم.",
+  },
+  {
+    title: "إيه الموجود في التجربة المجانية؟",
+    body: "تقدر تبدأ بفترة مجانية وتشوف استقبال الطلبات، إدارة المنتجات، متابعة الطلبات، وتنبيهات التشغيل الأساسية.",
+  },
+] as const;
 
 const SVGCheckCircle = ({ className }: { className?: string }) => (
   <svg
@@ -83,6 +71,16 @@ export default function LandingPage() {
       className="flex min-h-screen flex-col font-sans bg-[#F7F8F6]"
       dir="rtl"
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(softwareApplicationJsonLd),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageJsonLd) }}
+      />
       {/* Header */}
       <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -95,7 +93,7 @@ export default function LandingPage() {
             />
             <span className="text-xl font-bold text-[#0F5A3D]">تجارتك</span>
           </div>
-          <div className="flex items-center gap-4">
+			<div className="flex items-center gap-4">
             <Link
               href="/merchant/login"
               className="text-sm font-semibold text-[#0F5A3D] transition-colors hover:text-[#27AE60]"
@@ -103,7 +101,7 @@ export default function LandingPage() {
               تسجيل الدخول
             </Link>
             <Link
-              href="/merchant/login"
+              href="/merchant/register"
               className="inline-flex h-10 items-center justify-center rounded-full bg-[#0F5A3D] px-5 text-sm font-bold text-white transition-colors hover:bg-[#00412a]"
             >
               ابدأ الآن
@@ -129,7 +127,7 @@ export default function LandingPage() {
 
               <div className="mt-8 flex justify-center lg:justify-start">
                 <Link
-                  href="/merchant/login"
+                  href="/merchant/register"
                   className="inline-flex h-14 w-full sm:w-auto min-w-[200px] items-center justify-center rounded-2xl bg-[#27AE60] px-8 text-xl font-bold text-white transition-colors hover:bg-[#219653]"
                 >
                   أنشئ متجرك مجاناً
@@ -204,13 +202,40 @@ export default function LandingPage() {
             {/* Image Wrapper */}
             <div className="flex-1 flex justify-center lg:justify-end w-full">
               <Image
-                alt="Merchant using mobile app"
+                alt="Tijaratk seller dashboard showing new orders, order statuses, customer details, and daily sales summary."
                 className="rounded-xl custom-shadow w-full max-w-sm lg:max-w-md"
                 src={heroMockup}
                 placeholder="blur"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 384px, 448px"
                 loading="lazy"
               />
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white px-4 py-16 sm:py-24 lg:px-8">
+          <div className="mx-auto max-w-6xl">
+            <div className="mx-auto max-w-3xl text-center">
+              <p className="text-sm font-bold text-[#27AE60]">معلومات واضحة عن تجارتك</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#222B2E] sm:text-4xl">
+                إجابات مباشرة للبائعين ومحركات البحث ووكلاء الذكاء الاصطناعي
+              </h2>
+              <p className="mt-4 text-lg leading-relaxed text-[#222B2E]/70">
+                تجارتك ليس سوقاً ولا يأخذ عمولة. هو أداة بسيطة تساعد المحل يستقبل الطلبات وينظمها من لوحة تحكم.
+              </p>
+            </div>
+            <div className="mt-10 grid gap-5 md:grid-cols-2">
+              {aiReadableSections.map(section => (
+                <article
+                  key={section.title}
+                  className="rounded-2xl border border-[#DDE5E1] bg-[#F7F8F6] p-6"
+                >
+                  <h3 className="text-xl font-bold text-[#0F5A3D]">
+                    {section.title}
+                  </h3>
+                  <p className="mt-3 leading-7 text-[#222B2E]/75">{section.body}</p>
+                </article>
+              ))}
             </div>
           </div>
         </section>
@@ -499,15 +524,11 @@ export default function LandingPage() {
                     >
                       {plan.afterPromoText}
                     </span>
-                    {plan.subPrice && (
-                      <p
-                        className={`mt-1.5 text-xs font-black ${
-                          plan.highlighted ? "text-[#27AE60]" : "text-[#27AE60]"
-                        }`}
-                      >
-                        {plan.subPrice}
-                      </p>
-                    )}
+					{plan.subPrice && (
+						<p className="mt-1.5 text-xs font-black text-[#27AE60]">
+							{plan.subPrice}
+						</p>
+					)}
                   </div>
 
                   {/* Description */}
@@ -531,21 +552,17 @@ export default function LandingPage() {
                         key={featureIndex}
                         className="flex gap-x-3 items-start"
                       >
-                        <SVGCheckCircle
-                          className={`h-5 w-5 flex-none mt-0.5 ${
-                            plan.highlighted
-                              ? "text-[#27AE60]"
-                              : "text-[#27AE60]"
-                          }`}
-                        />
+						<SVGCheckCircle
+							className="h-5 w-5 flex-none mt-0.5 text-[#27AE60]"
+						/>
                         <span>{feature}</span>
                       </li>
                     ))}
                   </ul>
 
                   {/* CTA Link */}
-                  <Link
-                    href="/merchant/login"
+				<Link
+					href="/merchant/register"
                     className={`mt-8 block w-full rounded-2xl px-4 py-4 text-center text-sm font-black transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md ${
                       plan.highlighted
                         ? "bg-[#27AE60] text-white hover:bg-[#219653] hover:shadow-[#27AE60]/20"
@@ -556,6 +573,43 @@ export default function LandingPage() {
                   </Link>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white px-4 py-16 sm:py-24 lg:px-8">
+          <div className="mx-auto max-w-4xl">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold tracking-tight text-[#222B2E] sm:text-4xl">
+                أسئلة شائعة عن تجارتك
+              </h2>
+              <p className="mt-4 text-lg leading-relaxed text-[#222B2E]/70">
+                إجابات مختصرة تساعدك تفهم الخدمة قبل التسجيل.
+              </p>
+            </div>
+            <div className="mt-10 space-y-4">
+              {faqs.map(faq => (
+                <article
+                  key={faq.question}
+                  className="rounded-2xl border border-[#DDE5E1] bg-[#F7F8F6] p-6"
+                >
+                  <h3 className="text-lg font-bold text-[#0F5A3D]">
+                    {faq.question}
+                  </h3>
+                  <p className="mt-2 leading-7 text-[#222B2E]/75">{faq.answer}</p>
+                </article>
+              ))}
+            </div>
+            <div className="mt-8 flex flex-wrap justify-center gap-3 text-sm font-bold">
+              <Link href="/features/order-management" className="rounded-full bg-[#E8F5ED] px-4 py-2 text-[#0F5A3D] hover:bg-[#D1EBDC]">
+                تعلم كيف يدير تجارتك الطلبات اليومية
+              </Link>
+              <Link href="/docs/faq" className="rounded-full bg-[#E8F5ED] px-4 py-2 text-[#0F5A3D] hover:bg-[#D1EBDC]">
+                اقرأ كل الأسئلة الشائعة عن تجارتك
+              </Link>
+              <Link href="/contact" className="rounded-full bg-[#E8F5ED] px-4 py-2 text-[#0F5A3D] hover:bg-[#D1EBDC]">
+                تواصل مع فريق تجارتك
+              </Link>
             </div>
           </div>
         </section>
@@ -577,7 +631,17 @@ export default function LandingPage() {
             © {new Date().getFullYear()} جميع الحقوق محفوظة لـ{" "}
             <span className="text-[#0F5A3D] font-bold">تجارتك</span>.
           </p>
-        </div>
+          <div className="flex items-center gap-4 text-[#222B2E]/60">
+            <a href="https://www.facebook.com/profile.php?id=61589320905109" target="_blank" rel="noopener noreferrer" className="hover:text-[#0F5A3D] transition-colors">
+              <span className="sr-only">فيسبوك</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+            </a>
+            <a href="https://wa.me/201037007345" target="_blank" rel="noopener noreferrer" className="hover:text-[#0F5A3D] transition-colors">
+              <span className="sr-only">واتساب</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9"></path><path d="M9 10a.5 .5 0 0 0 1 0v-1a.5 .5 0 0 0 -1 0v1a5 5 0 0 0 5 5h1a.5 .5 0 0 0 0 -1h-1a.5 .5 0 0 0 0 1"></path></svg>
+            </a>
+          </div>
+		</div>
       </footer>
     </div>
   );

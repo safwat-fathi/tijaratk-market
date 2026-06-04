@@ -12,11 +12,12 @@ import StorefrontLinkCard from "./_components/StorefrontLinkCard";
 import AvailabilityRequestsCard from "./_components/AvailabilityRequestsCard";
 import DeliverySettingsCard from "./_components/DeliverySettingsCard";
 import { DashboardStats } from "./_components/dashboard.types";
+import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
-export const metadata = {
-	title: "لوحة التحكم",
-	description: "نظرة عامة على نشاط متجرك، الطلبات اليومية، وحالة المبيعات.",
-};
+export const metadata = createNoIndexMetadata(
+	"لوحة التحكم",
+	"نظرة عامة على نشاط متجرك، الطلبات اليومية، وحالة المبيعات.",
+);
 
 function isToday(dateString: string): boolean {
 	const date = new Date(dateString);

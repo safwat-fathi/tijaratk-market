@@ -1,11 +1,12 @@
 import { ordersService } from "@/services/api/orders.service";
 import OrdersView from "./_components/OrdersView";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
-export const metadata = {
-	title: "إدارة الطلبات",
-	description: "تتبع وإدارة جميع طلبات عملائك من مكان واحد بكل كفاءة.",
-};
+export const metadata = createNoIndexMetadata(
+	"إدارة الطلبات",
+	"تتبع وإدارة جميع طلبات عملائك من مكان واحد بكل كفاءة.",
+);
 
 export const dynamic = "force-dynamic";
 

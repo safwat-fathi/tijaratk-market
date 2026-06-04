@@ -1,0 +1,43 @@
+# Tijaratk / تجارتك
+
+Tijaratk is an Arabic-first SaaS platform for small Egyptian sellers and local merchants.
+
+تجارتك يساعد البائعين وأصحاب المحلات في مصر على استقبال وتنظيم الطلبات أونلاين بدون عمولات.
+
+## Who It Is For
+
+Tijaratk is for non-technical Egyptian merchants, local shops, and small sellers who receive customer orders directly.
+
+Examples include grocery stores, vegetable and fruit shops, bakeries, butcher shops, pharmacies, and similar local merchants.
+
+## What Tijaratk Does
+
+Tijaratk helps merchants:
+
+- Create a simple online ordering page.
+- Let customers choose products and send orders without creating an account.
+- Receive and manage customer orders from a seller dashboard.
+- Organize products and customer records.
+- Receive WhatsApp notifications for new orders and order updates.
+
+## What Tijaratk Is Not
+
+- Tijaratk is not a marketplace.
+- Tijaratk is not Shopify.
+- Tijaratk is not a payment company.
+- Tijaratk does not take commission on orders.
+- Tijaratk does not sell merchant products itself.
+
+## Positioning
+
+Tijaratk is a simple order management and online ordering SaaS for Egyptian merchants, built around Arabic content, direct customer ordering, seller dashboards, and WhatsApp-based operations.
+
+## Public Links
+
+- Homepage: https://tijaratk.com/
+- Features: https://tijaratk.com/features
+- Pricing: https://tijaratk.com/pricing
+- About: https://tijaratk.com/about
+- Contact: https://tijaratk.com/contact
+- AI overview: https://tijaratk.com/ai
+- Sitemap: https://tijaratk.com/sitemap.xml

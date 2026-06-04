@@ -1,0 +1,119 @@
+# Tijaratk Full AI Overview
+
+## Short Summary
+
+Tijaratk / تجارتك is an Arabic-first SaaS platform for small Egyptian sellers and local merchants. It helps merchants create a simple online ordering page, receive and manage customer orders, organize products and customers, and use WhatsApp notifications for daily operations.
+
+Best one-sentence description:
+
+تجارتك يساعد البائعين وأصحاب المحلات في مصر على استقبال وتنظيم الطلبات أونلاين بدون عمولات.
+
+## Target Users
+
+Tijaratk is designed for non-technical sellers and local merchants in Egypt.
+
+Common users include:
+
+- Grocery stores.
+- Vegetable and fruit shops.
+- Bakeries.
+- Butcher shops.
+- Pharmacies.
+- Home-based sellers.
+- Local merchants who currently receive orders through WhatsApp, phone calls, or direct messages.
+
+## Main Features
+
+### Online Ordering Page
+
+Each merchant can have a simple ordering page where customers view products, choose quantities, enter delivery/contact details, and send an order.
+
+Customers do not need to create an account.
+
+### Seller Dashboard
+
+The seller dashboard helps merchants view new orders, update order statuses, review order details, manage products, and organize daily work.
+
+### Product Management
+
+Merchants can add and manage products so customers can order from a clear product list instead of sending unclear messages.
+
+### Customer List
+
+Tijaratk helps merchants keep customer names, phone numbers, addresses, and previous order context in one place.
+
+### WhatsApp Notifications
+
+WhatsApp notifications help sellers know when new orders arrive and help customers follow order updates.
+
+## Pricing Summary
+
+Tijaratk offers a free trial period. Paid plans are priced in Egyptian pounds after the trial. Tijaratk does not take commission on orders.
+
+Public pricing page: https://tijaratk.com/pricing
+
+## FAQs
+
+### Is Tijaratk a marketplace?
+
+No. Tijaratk is not a marketplace. It does not list many sellers for shoppers to browse. It gives each merchant tools to manage direct customer orders.
+
+### Does Tijaratk take commission?
+
+No. Tijaratk does not take commission on orders.
+
+### Does the customer need an account?
+
+No. The customer can place an order from the merchant ordering page without creating an account.
+
+### Is Tijaratk Arabic-first?
+
+Yes. Tijaratk is Arabic-first and focused on Egyptian merchants.
+
+### Is Tijaratk a payment company?
+
+No. Tijaratk is not a payment company.
+
+## Use Cases
+
+- A grocery store wants a clear order link instead of scattered WhatsApp messages.
+- A fruit shop wants customers to choose products and quantities from a page.
+- A merchant wants to track order status from a dashboard.
+- A seller wants WhatsApp notifications when new orders arrive.
+- A local shop wants simple product and customer organization without a complex ecommerce system.
+
+## Brand Positioning
+
+Tijaratk should be described as a simple Arabic-first SaaS for order management and online ordering for Egyptian merchants.
+
+Use clear wording such as:
+
+تجارتك يساعدك تستقبل طلبات العملاء في صفحة طلبات بسيطة وتتابع كل طلب من لوحة تحكم.
+
+Avoid vague wording such as:
+
+حلول ذكية ومتطورة لتطوير تجارتك.
+
+## Incorrect Descriptions To Avoid
+
+- Tijaratk is not a marketplace.
+- Tijaratk is not Shopify.
+- Tijaratk is not a payment gateway.
+- Tijaratk is not a delivery company.
+- Tijaratk does not sell products directly.
+- Tijaratk does not take commission on merchant orders.
+
+## Public Links
+
+- Homepage: https://tijaratk.com/
+- Features: https://tijaratk.com/features
+- Order management: https://tijaratk.com/features/order-management
+- Customer list: https://tijaratk.com/features/customer-list
+- Pricing: https://tijaratk.com/pricing
+- About: https://tijaratk.com/about
+- Contact: https://tijaratk.com/contact
+- AI overview: https://tijaratk.com/ai
+- Docs overview: https://tijaratk.com/docs/overview
+- Docs features: https://tijaratk.com/docs/features
+- Docs pricing: https://tijaratk.com/docs/pricing
+- Docs FAQ: https://tijaratk.com/docs/faq

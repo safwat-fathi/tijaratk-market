@@ -16,6 +16,10 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 export const metadata = {
 	title: "تتبع طلباتي",
 	description: "تابع جميع طلباتك السابقة وحالتها الحالية من جميع المتاجر في مكان واحد بكل سهولة وبدون الحاجة لتسجيل دخول.",
+	robots: {
+		index: false,
+		follow: false,
+	},
 };
 
 const statusConfig: Record<

@@ -30,6 +30,10 @@ export async function generateMetadata({
 	return {
 		title: `تفاصيل الطلب #${id}`,
 		description: `عرض وتعديل تفاصيل الطلب رقم ${id} وإدارة حالته.`,
+		robots: {
+			index: false,
+			follow: false,
+		},
 	};
 }
 

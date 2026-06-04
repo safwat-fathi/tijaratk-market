@@ -29,9 +29,13 @@ export default function CategoryProductsTab({
 						ref={node => setCategoryPillRef?.(category.key, node)}
 						variant="pill"
 						isActive={isActive}
+						draggable={false}
 						href={category.key === ALL_PRODUCTS_CATEGORY ? "?" : `?category=${encodeURIComponent(category.key)}`}
 						prefetch={true}
-						onClick={() => onCategoryChange(category.key)}
+						onClick={(e) => {
+							// Allow onCategoryChange to handle the URL if needed
+							onCategoryChange(category.key);
+						}}
 						className={
 							isActive
 								? "border-brand-primary bg-brand-soft text-brand-primary"
@@ -43,6 +47,7 @@ export default function CategoryProductsTab({
 							alt={category.label}
 							width={40}
 							height={40}
+							draggable={false}
 							unoptimized
 							imageClassName="h-8 w-8 rounded-full object-cover ring-1 ring-gray-200"
 							fallback={

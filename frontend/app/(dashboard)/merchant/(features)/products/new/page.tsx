@@ -2,11 +2,12 @@ import ProductOnboardingClient from './_components/ProductOnboardingClient';
 import { productsService } from '@/services/api/products.service';
 import { CatalogItem, Product } from '@/types/models/product';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
+import { createNoIndexMetadata } from '@/lib/marketing-seo';
 
-export const metadata = {
-	title: "إدارة المنتجات",
-	description: "أضف منتجات جديدة لمتجرك بسهولة، اختر من الكتالوج أو أضف منتجاتك الخاصة.",
-};
+export const metadata = createNoIndexMetadata(
+	"إدارة المنتجات",
+	"أضف منتجات جديدة لمتجرك بسهولة، اختر من الكتالوج أو أضف منتجاتك الخاصة.",
+);
 
 export const dynamic = 'force-dynamic';
 
