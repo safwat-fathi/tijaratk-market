@@ -10,7 +10,7 @@ import {
 
 const UPDATE_PRODUCT_FALLBACK_MESSAGE = 'تعذر تعديل المنتج، حاول مرة أخرى.';
 const UPDATE_PRODUCT_IMAGE_SIZE_MESSAGE =
-  'حجم الصورة كبير. الحد الأقصى 5 ميجابايت.';
+  'حجم الصورة كبير. الحد الأقصى 15 ميجابايت.';
 const UPDATE_PRODUCT_IMAGE_FORMAT_MESSAGE =
   'صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP أو HEIC أو HEIF.';
 const UPDATE_PRODUCT_TIMEOUT_MESSAGE =

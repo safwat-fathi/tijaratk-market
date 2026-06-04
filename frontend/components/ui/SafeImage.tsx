@@ -7,7 +7,8 @@ type SafeImageProps = Omit<ComponentProps<typeof Image>, "src"> & {
 	src?: ComponentProps<typeof Image>["src"] | null;
 	fallback: ReactNode;
 	containerClassName?: string;
-	imageClassName?: string;
+  imageClassName?: string;
+  draggable?: boolean;
 };
 
 export default function SafeImage({
@@ -22,6 +23,7 @@ export default function SafeImage({
   priority,
   sizes,
   loading,
+  draggable,
 }: SafeImageProps) {
   const normalizedSrc = useMemo(() => {
     const trimmedSrc = src?.toString().trim();
@@ -59,6 +61,7 @@ export default function SafeImage({
       priority={priority}
       sizes={sizes}
       loading={loading}
+      draggable={draggable}
       onError={() => setFailedSrc(normalizedSrc)}
     />
   );

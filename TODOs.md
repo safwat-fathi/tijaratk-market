@@ -12,8 +12,7 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 ## Fix issues
 
 1. Replacing order item with another product is not working.
-~~2. Increase file size limit for product images to be aligned with modern phone cameras (15mb).~~
-3. Make sure WhatsApp messages are sent after order creation.
+2. Add settings page in dashboard for store name, logo, social media links, contact phone number, delivery fees, working hours.
 
 ## New Features
 

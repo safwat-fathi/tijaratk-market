@@ -12,10 +12,64 @@ export function ScrollableTabList({
   children: React.ReactNode;
   className?: string;
 }) {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const isDragging = React.useRef(false);
+  const startX = React.useRef(0);
+  const scrollLeft = React.useRef(0);
+  const dragged = React.useRef(false);
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY !== 0 && !e.shiftKey) {
+      e.currentTarget.scrollLeft += e.deltaY;
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!scrollRef.current) return;
+    isDragging.current = true;
+    dragged.current = false;
+    startX.current = e.pageX - scrollRef.current.offsetLeft;
+    scrollLeft.current = scrollRef.current.scrollLeft;
+  };
+
+  const handleMouseLeave = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging.current || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX.current) * 1.5;
+    if (Math.abs(walk) > 5) {
+      dragged.current = true;
+    }
+    scrollRef.current.scrollLeft = scrollLeft.current - walk;
+  };
+
+  const handleClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (dragged.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      dragged.current = false;
+    }
+  };
+
   return (
     <div
+      ref={scrollRef}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseLeave={handleMouseLeave}
+      onMouseUp={handleMouseUp}
+      onMouseMove={handleMouseMove}
+      onClickCapture={handleClickCapture}
       className={cn(
-        "flex min-w-0 space-x-2 space-x-reverse overflow-x-auto py-2 no-scrollbar",
+        "flex min-w-0 gap-2 overflow-x-auto py-2 no-scrollbar touch-pan-x select-none",
         className,
       )}
     >

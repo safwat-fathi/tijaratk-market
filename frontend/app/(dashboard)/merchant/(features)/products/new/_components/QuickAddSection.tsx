@@ -121,7 +121,7 @@ export default function QuickAddSection({
 							{imageActionLabel}
 						</span>
 						<span className="mt-2 block text-xs text-muted-foreground">
-							JPG أو PNG أو WEBP أو HEIC حتى 5 ميجابايت.
+							JPG أو PNG أو WEBP أو HEIC حتى 15 ميجابايت.
 						</span>
 						<input
 							type="file"
