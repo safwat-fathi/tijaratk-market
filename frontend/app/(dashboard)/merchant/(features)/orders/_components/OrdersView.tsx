@@ -1,7 +1,7 @@
 "use client";
 
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Order } from "@/types/models/order";
 import { OrderStatus } from "@/types/enums";
 import OrderStats from "./OrderStats";
@@ -17,16 +17,10 @@ interface OrdersViewProps {
 
 export default function OrdersView({ initialOrders, selectedDate }: OrdersViewProps) {
   const [activeStatus, setActiveStatus] = useState<OrderStatus>(OrderStatus.DRAFT);
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
 
 
-  // Sync state when initialOrders changes (e.g. date filter)
-  useEffect(() => {
-    setOrders(initialOrders);
-  }, [initialOrders]);
-
-
-  // Memoize filtered orders and counts from LOCAL STATE (orders)
+  // ⚡ Bolt: Removed redundant `orders` state and `useEffect` to prevent double re-renders.
+  // Memoize filtered orders and counts directly from props (initialOrders)
   const { filteredOrders, statusCounts } = useMemo(() => {
     const counts: Record<string, number> = {
       [OrderStatus.DRAFT]: 0,
@@ -39,7 +33,7 @@ export default function OrdersView({ initialOrders, selectedDate }: OrdersViewPr
 
     const filtered: Order[] = [];
 
-    orders.forEach((order) => {
+    initialOrders.forEach((order) => {
       // Count every order
       if (counts[order.status] !== undefined) {
         counts[order.status]++;
@@ -54,10 +48,10 @@ export default function OrdersView({ initialOrders, selectedDate }: OrdersViewPr
     });
 
     return { filteredOrders: filtered, statusCounts: counts };
-  }, [orders, activeStatus]);
+  }, [initialOrders, activeStatus]);
 
-  // Total for the current view (based on orders)
-  const totalCount = orders.length; 
+  // Total for the current view (based on initialOrders)
+  const totalCount = initialOrders.length;
 
   const renderEmptyState = () => {
     switch (activeStatus) {
