@@ -1,0 +1,3 @@
+## 2025-02-18 - Anti-pattern: Derived State Causing Double Re-renders
+**Learning:** In React Server Components architectures (like Next.js App Router), passing server-fetched data as props (`initialOrders`) to Client Components and then duplicating it into local state (`useState(initialOrders)`) with an `useEffect` to sync them is an anti-pattern. This causes a double re-render every time the server data updates: first when the props change, and second when the `useEffect` updates the local state.
+**Action:** Avoid deriving state from props unless necessary for editing. Use props directly and compute derived values synchronously during render using `useMemo`.
