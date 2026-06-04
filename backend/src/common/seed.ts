@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { config } from 'dotenv';
 import { seedCatalog } from './seeders/catalog.seeder';
 import { seedSupermarketMerchant } from './seeders/supermarket-merchant.seeder';
+import { seedAdmin } from './seeders/admin.seeder';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -33,6 +34,7 @@ async function bootstrap() {
   try {
     await seedCatalog(prisma);
     await seedSupermarketMerchant(prisma);
+    await seedAdmin(prisma);
 
     logger.log('Seeding completed successfully.');
   } catch (error) {

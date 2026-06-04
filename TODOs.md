@@ -9,9 +9,14 @@
 
 Note: **pricing plans features details is in `pricing-plans.md`**
 
+## Database
+
+- Add backup for live database
+
 ## Fix issues
 
 ## New Features
 
+- add an admin dashboard for managing merchants, plans, orders, etc.
 - Can we let customers order from WhatsApp bot?
 - Add settings page in dashboard for store name, logo, social media links, contact phone number, delivery fees, working hours.

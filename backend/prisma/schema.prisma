@@ -46,22 +46,22 @@ model CatalogItem {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model Customer {
-  created_at            DateTime  @default(now()) @db.Timestamp(6)
-  updated_at            DateTime  @default(now()) @db.Timestamp(6)
-  deleted_at            DateTime? @db.Timestamp(6)
+  created_at            DateTime          @default(now()) @db.Timestamp(6)
+  updated_at            DateTime          @default(now()) @db.Timestamp(6)
+  deleted_at            DateTime?         @db.Timestamp(6)
   tenant_id             Int
-  id                    Int       @id(map: "PK_133ec679a801fab5e070f73d3ea") @default(autoincrement())
-  phone                 String    @db.VarChar
-  name                  String?   @db.VarChar
+  id                    Int               @id(map: "PK_133ec679a801fab5e070f73d3ea") @default(autoincrement())
+  phone                 String            @db.VarChar
+  name                  String?           @db.VarChar
   code                  Int
-  merchant_label        String?   @db.VarChar
+  merchant_label        String?           @db.VarChar
   address               String?
   notes                 String?
-  first_order_at        DateTime? @db.Timestamp(6)
-  last_order_at         DateTime? @db.Timestamp(6)
-  order_count           Int       @default(0)
-  completed_order_count Int       @default(0)
-  tenant                Tenant    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_97913f35ac2e435a4463fb50a01")
+  first_order_at        DateTime?         @db.Timestamp(6)
+  last_order_at         DateTime?         @db.Timestamp(6)
+  order_count           Int               @default(0)
+  completed_order_count Int               @default(0)
+  tenant                Tenant            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_97913f35ac2e435a4463fb50a01")
   orders                Order[]
   addresses             CustomerAddress[]
 
@@ -140,27 +140,27 @@ model OrderItem {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model Order {
-  created_at                DateTime    @default(now()) @db.Timestamp(6)
-  updated_at                DateTime    @default(now()) @db.Timestamp(6)
-  deleted_at                DateTime?   @db.Timestamp(6)
-  tenant_id                 Int
-  id                        Int         @id(map: "PK_710e2d4957aa5878dfe94e4ac2f") @default(autoincrement())
-  customer_id               Int
-  public_token              String      @unique(map: "UQ_3bf085262cc6cb52991c77f90bb") @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar
-  order_type                OrderType   @map("order_type")
-  status                    OrderStatus @default(draft) @map("status")
-  pricing_mode              PricingMode @default(auto) @map("pricing_mode")
+  created_at                    DateTime    @default(now()) @db.Timestamp(6)
+  updated_at                    DateTime    @default(now()) @db.Timestamp(6)
+  deleted_at                    DateTime?   @db.Timestamp(6)
+  tenant_id                     Int
+  id                            Int         @id(map: "PK_710e2d4957aa5878dfe94e4ac2f") @default(autoincrement())
+  customer_id                   Int
+  public_token                  String      @unique(map: "UQ_3bf085262cc6cb52991c77f90bb") @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar
+  order_type                    OrderType   @map("order_type")
+  status                        OrderStatus @default(draft) @map("status")
+  pricing_mode                  PricingMode @default(auto) @map("pricing_mode")
   subtotal                      Decimal?    @db.Decimal(10, 2)
   delivery_fee                  Decimal     @default(0) @db.Decimal(10, 2)
   delivery_address              String?
   delivery_time_window_snapshot String?     @db.VarChar(64)
   customer_phone                String?     @db.VarChar
   customer_name                 String?     @db.VarChar
-  total                     Decimal?    @db.Decimal(10, 2)
-  free_text_payload         Json?
-  notes                     String?
-  customer_rejection_reason String?
-  customer_rejected_at      DateTime?   @db.Timestamptz(6)
+  total                         Decimal?    @db.Decimal(10, 2)
+  free_text_payload             Json?
+  notes                         String?
+  customer_rejection_reason     String?
+  customer_rejected_at          DateTime?   @db.Timestamptz(6)
 
   order_items OrderItem[]
   tenant      Tenant      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_527dd6efd5f3402f729c6b3e826")
@@ -233,20 +233,20 @@ model TenantProductCategory {
 }
 
 model Tenant {
-  created_at       DateTime       @default(now()) @db.Timestamp(6)
-  updated_at       DateTime       @default(now()) @db.Timestamp(6)
-  deleted_at       DateTime?      @db.Timestamp(6)
-  id               Int            @id(map: "PK_53be67a04681c66b87ee27c9321") @default(autoincrement())
-  name             String         @db.VarChar
-  phone            String         @unique(map: "UQ_23d5a62128e1a248126c8453ff0") @db.VarChar
-  customer_counter Int            @default(0)
-  category         TenantCategory @default(other) @map("category")
-  slug             String         @unique(map: "UQ_2310ecc5cb8be427097154b18fc") @db.VarChar
-  status           TenantStatus   @default(active) @map("status")
-  delivery_fee       Decimal                 @default(0) @db.Decimal(10, 2)
-  delivery_available Boolean                 @default(true)
-  delivery_starts_at String?                 @db.VarChar(5)
-  delivery_ends_at   String?                 @db.VarChar(5)
+  created_at         DateTime       @default(now()) @db.Timestamp(6)
+  updated_at         DateTime       @default(now()) @db.Timestamp(6)
+  deleted_at         DateTime?      @db.Timestamp(6)
+  id                 Int            @id(map: "PK_53be67a04681c66b87ee27c9321") @default(autoincrement())
+  name               String         @db.VarChar
+  phone              String         @unique(map: "UQ_23d5a62128e1a248126c8453ff0") @db.VarChar
+  customer_counter   Int            @default(0)
+  category           TenantCategory @default(other) @map("category")
+  slug               String         @unique(map: "UQ_2310ecc5cb8be427097154b18fc") @db.VarChar
+  status             TenantStatus   @default(active) @map("status")
+  delivery_fee       Decimal        @default(0) @db.Decimal(10, 2)
+  delivery_available Boolean        @default(true)
+  delivery_starts_at String?        @db.VarChar(5)
+  delivery_ends_at   String?        @db.VarChar(5)
 
   availability_requests     AvailabilityRequest[]
   customers                 Customer[]
@@ -257,6 +257,7 @@ model Tenant {
   products                  Product[]
   tenant_product_categories TenantProductCategory[]
   users                     User[]
+  tenant_subscriptions      TenantSubscription[]
 
   @@map("tenants")
 }
@@ -366,4 +367,47 @@ enum UserRole {
   staff
 
   @@map("users_role_enum")
+}
+
+model AdminUser {
+  id         Int      @id @default(autoincrement())
+  phone      String   @unique @db.VarChar
+  password   String   @db.VarChar
+  name       String   @db.VarChar
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+
+  @@map("admin_users")
+}
+
+model SubscriptionPlan {
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar
+  price      Decimal  @db.Decimal(10, 2)
+  features   Json?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+
+  tenant_subscriptions TenantSubscription[]
+
+  @@map("subscription_plans")
+}
+
+model TenantSubscription {
+  id         Int       @id @default(autoincrement())
+  tenant_id  Int
+  plan_id    Int
+  start_date DateTime  @default(now()) @db.Timestamptz(6)
+  end_date   DateTime? @db.Timestamptz(6)
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime  @default(now()) @db.Timestamp(6)
+
+  tenant Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan @relation(fields: [plan_id], references: [id], onDelete: Restrict)
+
+  @@index([tenant_id])
+  @@index([plan_id])
+  @@map("tenant_subscriptions")
 }
