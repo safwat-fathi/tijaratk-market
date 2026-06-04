@@ -4,6 +4,7 @@ import { AdminService } from './admin.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { UpdateTenantStatusDto } from './dto/update-tenant-status.dto';
 import { TogglePlanStatusDto } from './dto/toggle-plan-status.dto';
+import { UpdateTenantPlanDto } from './dto/update-tenant-plan.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { Response } from 'express';
 import {
@@ -91,6 +92,24 @@ export class AdminController {
     @Body() updateTenantStatusDto: UpdateTenantStatusDto,
   ) {
     return this.adminService.updateTenantStatus(id, updateTenantStatusDto.status);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Patch('tenants/:id/plan')
+  @ApiOperation({
+    summary: 'Update tenant plan',
+    description: 'Update the subscription plan of a specific tenant.',
+  })
+  @ApiParam({ name: 'id', description: 'The unique ID of the tenant', type: Number })
+  @ApiBody({ type: UpdateTenantPlanDto })
+  @ApiResponse({ status: 200, description: 'Tenant plan updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Tenant or plan not found' })
+  updateTenantPlan(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateTenantPlanDto: UpdateTenantPlanDto,
+  ) {
+    return this.adminService.updateTenantPlan(id, updateTenantPlanDto.plan_id);
   }
 
   @UseGuards(AdminAuthGuard)

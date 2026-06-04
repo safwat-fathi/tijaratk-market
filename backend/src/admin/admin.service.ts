@@ -70,6 +70,10 @@ export class AdminService {
             customers: true,
           },
         },
+        tenant_subscriptions: {
+          where: { is_active: true },
+          include: { plan: true },
+        },
       },
       orderBy: { created_at: 'desc' },
     });
@@ -82,6 +86,30 @@ export class AdminService {
     return this.prisma.tenant.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  async updateTenantPlan(tenantId: number, planId: number) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: planId } });
+    if (!plan) throw new NotFoundException('Plan not found');
+
+    // Deactivate current active subscription
+    await this.prisma.tenantSubscription.updateMany({
+      where: { tenant_id: tenantId, is_active: true },
+      data: { is_active: false, end_date: new Date() },
+    });
+
+    // Create new subscription
+    return this.prisma.tenantSubscription.create({
+      data: {
+        tenant_id: tenantId,
+        plan_id: planId,
+        start_date: new Date(),
+        is_active: true,
+      },
     });
   }
 

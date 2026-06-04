@@ -40,7 +40,7 @@ export default function StorefrontLinkCard({ slug, status = "active" }: Storefro
 	};
 
 	const handleCopy = async () => {
-		if (!storePath || typeof window === "undefined") {
+		if (!storePath || status === "suspended" || typeof window === "undefined") {
 			return;
 		}
 
@@ -163,13 +163,13 @@ export default function StorefrontLinkCard({ slug, status = "active" }: Storefro
 
 				<div className="flex items-center gap-2">
 					<Link
-					prefetch={true}
-						href={storePath ?? "#"}
+						prefetch={true}
+						href={(storePath && status !== "suspended") ? storePath : "#"}
 						target="_blank"
 						rel="noreferrer"
-						aria-disabled={!storePath}
+						aria-disabled={!storePath || status === "suspended"}
 						className={`inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors ${
-							storePath
+							storePath && status !== "suspended"
 								? "bg-white text-primary hover:bg-primary/10"
 								: "pointer-events-none bg-gray-100 text-gray-400"
 						}`}
@@ -192,7 +192,7 @@ export default function StorefrontLinkCard({ slug, status = "active" }: Storefro
 					<button
 						type="button"
 						onClick={handleCopy}
-						disabled={!storePath}
+						disabled={!storePath || status === "suspended"}
 						className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
 					>
 						{copyState === "copied" ? (

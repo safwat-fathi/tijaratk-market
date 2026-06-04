@@ -32,6 +32,10 @@ class AdminApiService extends HttpService {
 		return this.patch<any>(`tenants/${id}/status`, { status });
 	}
 
+	public async updateTenantPlan(id: number, plan_id: number) {
+		return this.patch<any>(`tenants/${id}/plan`, { plan_id });
+	}
+
 	public async getPlans() {
 		return this.get<any[]>("plans");
 	}

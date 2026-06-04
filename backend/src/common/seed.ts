@@ -33,8 +33,8 @@ async function bootstrap() {
 
   try {
     await seedCatalog(prisma);
-    await seedSupermarketMerchant(prisma);
     await seedAdmin(prisma);
+    await seedSupermarketMerchant(prisma);
 
     logger.log('Seeding completed successfully.');
   } catch (error) {

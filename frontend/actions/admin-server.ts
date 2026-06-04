@@ -76,6 +76,13 @@ export async function toggleTenantStatusAction(id: number, currentStatus: string
   }
 }
 
+export async function updateTenantPlanAction(id: number, plan_id: number): Promise<void> {
+  const response = await adminService.updateTenantPlan(id, plan_id);
+  if (response.success) {
+    revalidatePath("/admin/merchants");
+  }
+}
+
 export async function togglePlanStatusAction(id: number, currentStatus: boolean): Promise<void> {
   const response = await adminService.togglePlanStatus(id, !currentStatus);
   if (response.success) {

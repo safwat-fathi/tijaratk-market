@@ -1,33 +1,41 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Logo } from '@/components/ui/Logo';
-import { Button } from '@/components/ui/Button';
-import { adminLogoutAction } from '@/actions/admin-server';
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Logo } from "@/components/ui/Logo";
+import { Button } from "@/components/ui/Button";
+import { adminLogoutAction } from "@/actions/admin-server";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
 
-  if (pathname === '/admin/login') {
+  if (pathname === "/admin/login") {
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
 
   const navItems = [
-    { label: 'لوحة التحكم', href: '/admin' },
-    { label: 'التجار', href: '/admin/merchants' },
-    { label: 'الباقات', href: '/admin/plans' },
+    { label: "لوحة التحكم", href: "/admin" },
+    { label: "التجار", href: "/admin/merchants" },
+    { label: "الباقات", href: "/admin/plans" },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row rtl:space-x-reverse" dir="rtl">
+    <div
+      className="min-h-screen bg-gray-50 flex flex-col md:flex-row rtl:space-x-reverse"
+      dir="rtl"
+    >
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-white border-l border-gray-200 flex-shrink-0 flex flex-col min-h-screen md:min-h-0">
-        <div className="h-16 flex items-center px-6 border-b border-gray-200">
-          <Logo />
-          <span className="mr-2 font-bold text-red-600">Admin</span>
+      <aside className="w-full md:w-64 bg-white border-l border-gray-200 shrink-0 flex flex-col min-h-screen md:min-h-0">
+        <div className="h-16 flex justify-center items-center px-6 border-b border-gray-200">
+          <span className="mr-2 font-bold text-brand-accent">
+            مسئولى تجارتك
+          </span>
         </div>
-        <nav className="p-4 space-y-1">
+        <nav className="p-4 space-y-1 ">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -36,8 +44,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.href}
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md ${
                   isActive
-                    ? 'bg-red-50 text-red-700'
-                    : 'text-gray-900 hover:bg-gray-50'
+                    ? "bg-red-50 text-red-700"
+                    : "text-gray-900 hover:bg-gray-50"
                 }`}
               >
                 {item.label}
@@ -45,12 +53,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
-        <div className="p-4 border-t border-gray-200 mt-auto">
-          <form action={adminLogoutAction}>
-            <Button type="submit" variant="outline" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50">
+        <div className="py-4 flex flex-col gap-2 justify-center items-center border-t border-gray-200 mt-auto">
+          <form action={adminLogoutAction} className="w-full px-4">
+            <Button
+              type="submit"
+              variant="outline"
+              className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
               تسجيل خروج
             </Button>
           </form>
+          <Logo />
         </div>
       </aside>
 
