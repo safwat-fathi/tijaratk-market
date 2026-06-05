@@ -890,13 +890,22 @@ export default function LandingPage() {
       <footer className="bg-white py-12 border-t border-gray-100">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-4 sm:flex-row sm:px-6 lg:px-8">
           <div className="flex items-center gap-2">
-            <Logo
+            {/* <Logo
               variant="icon"
               width={24}
               height={24}
               className="rounded-md opacity-80"
             />
-            <span className="text-lg font-bold text-[#0F5A3D]">تجارتك</span>
+            <span className="text-lg font-bold text-[#0F5A3D]">تجارتك</span> */}
+            <Image
+              alt="تجارتك أسهل. تجارتك أونلاين. "
+              src="/tijaratk-logo-suite/horizontal-logo-dark.png"
+              width={1774}
+              height={887}
+              className="w-32 sm:w-36 h-auto rounded-2xl"
+              sizes="(max-width: 640px) 128px, 144px"
+              loading="lazy"
+            />
           </div>
           <p className="text-sm font-medium text-[#222B2E]/60">
             © {new Date().getFullYear()} جميع الحقوق محفوظة لـ{" "}
@@ -912,8 +921,8 @@ export default function LandingPage() {
               <span className="sr-only">فيسبوك</span>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
+                width="32"
+                height="32"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -933,8 +942,8 @@ export default function LandingPage() {
               <span className="sr-only">واتساب</span>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
+                width="32"
+                height="32"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
