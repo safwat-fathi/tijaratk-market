@@ -17,6 +17,6 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 ## New Features
 
-- add an admin dashboard for managing merchants, plans, orders, etc.
+- Add search by phone for customers
 - Can we let customers order from WhatsApp bot?
 - Add settings page in dashboard for store name, logo, social media links, contact phone number, delivery fees, working hours.
