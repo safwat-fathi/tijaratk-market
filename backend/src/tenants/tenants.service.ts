@@ -24,12 +24,24 @@ export class TenantsService {
       return !!existing;
     });
 
+    const basicPlan = await db.subscriptionPlan.findFirst({
+      where: { name: 'الباقة الاساسية' },
+    });
+
     return db.tenant.create({
       data: {
         name: storeName,
         phone,
         slug,
         category: category || TENANT_CATEGORIES.OTHER.value,
+        ...(basicPlan && {
+          tenant_subscriptions: {
+            create: {
+              plan_id: basicPlan.id,
+              is_active: true,
+            },
+          },
+        }),
       },
     });
   }

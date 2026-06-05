@@ -181,6 +181,11 @@
   button, a, input, select, textarea {
     touch-action: manipulation;
   }
+  input[type="password"],
+  input[type="tel"] {
+    direction: ltr !important;
+    text-align: left !important;
+  }
 }
 
 @layer utilities {

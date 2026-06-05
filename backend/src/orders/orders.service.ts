@@ -978,15 +978,14 @@ export class OrdersService {
     const dayAggregate = {
       orders_count: orders.length,
       cancelled_count: orders.filter((o: any) =>
-        OrdersService.CANCELLED_STATUSES.includes(o.status as any),
+        OrdersService.CANCELLED_STATUSES.includes(o.status),
       ).length,
       completed_count: orders.filter(
         (o: any) => o.status === OrderStatus.COMPLETED,
       ).length,
       non_cancelled_sales_total: orders
         .filter(
-          (o: any) =>
-            !OrdersService.CANCELLED_STATUSES.includes(o.status as any),
+          (o: any) => !OrdersService.CANCELLED_STATUSES.includes(o.status),
         )
         .reduce((sum: number, o: any) => sum + (Number(o.total) || 0), 0),
       completed_sales_total: orders
@@ -1525,9 +1524,7 @@ export class OrdersService {
     tenantId: number,
     callback: (manager: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    const manager = DbTenantContext.getManager() as
-      | Prisma.TransactionClient
-      | undefined;
+    const manager = DbTenantContext.getManager();
     if (manager) {
       return callback(manager);
     }
@@ -1539,30 +1536,22 @@ export class OrdersService {
   }
 
   private orderClient() {
-    const manager = DbTenantContext.getManager() as
-      | Prisma.TransactionClient
-      | undefined;
+    const manager = DbTenantContext.getManager();
     return manager ? manager.order : this.prisma.order;
   }
 
   private orderItemClient() {
-    const manager = DbTenantContext.getManager() as
-      | Prisma.TransactionClient
-      | undefined;
+    const manager = DbTenantContext.getManager();
     return manager ? manager.orderItem : this.prisma.orderItem;
   }
 
   private productClient() {
-    const manager = DbTenantContext.getManager() as
-      | Prisma.TransactionClient
-      | undefined;
+    const manager = DbTenantContext.getManager();
     return manager ? manager.product : this.prisma.product;
   }
 
   private dayClosureClient() {
-    const manager = DbTenantContext.getManager() as
-      | Prisma.TransactionClient
-      | undefined;
+    const manager = DbTenantContext.getManager();
     return manager ? manager.dayClosure : this.prisma.dayClosure;
   }
 }

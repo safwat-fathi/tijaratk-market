@@ -18,7 +18,6 @@ const ownerCredential =
 
 import { supermarketProducts } from './supermarket-products.data';
 
-
 /**
  * Seeds a supermarket tenant, owner user, categories, and product inventory.
  */

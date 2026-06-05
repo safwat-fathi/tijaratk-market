@@ -22,7 +22,9 @@ export async function seedAdmin(prisma: PrismaClient) {
           name: 'System Admin',
         },
       });
-      logger.log(`✅ Admin user created (phone: ${adminPhone}, password: admin123)`);
+      logger.log(
+        `✅ Admin user created (phone: ${adminPhone}, password: admin123)`,
+      );
     } else {
       logger.log(`ℹ️ Admin user already exists`);
     }

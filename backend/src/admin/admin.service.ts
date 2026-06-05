@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -90,10 +94,14 @@ export class AdminService {
   }
 
   async updateTenantPlan(tenantId: number, planId: number) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: planId } });
+    const plan = await this.prisma.subscriptionPlan.findUnique({
+      where: { id: planId },
+    });
     if (!plan) throw new NotFoundException('Plan not found');
 
     // Deactivate current active subscription

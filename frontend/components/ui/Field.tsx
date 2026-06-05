@@ -34,19 +34,22 @@ export const FieldError = ({ children }: { children: ReactNode }) => (
 	</p>
 );
 
-export const Input = ({ className, type, ...props }: ComponentProps<"input">) => {
+export const Input = ({ className, type, dir, ...props }: ComponentProps<"input">) => {
 	const [showPassword, setShowPassword] = useState(false);
 
 	if (type === "password") {
 		const isShowing = showPassword;
 		const toggleType = showPassword ? "text" : "password";
+		const resolvedDir = dir || "ltr";
 
 		return (
-			<div className="relative w-full">
+			<div className="relative w-full" dir={resolvedDir}>
 				<input
 					type={toggleType}
+					dir={resolvedDir}
 					className={cn(
 						"block min-h-11 w-full rounded-md border border-(--brand-border) bg-white ps-4 pe-12 py-3 text-base text-(--brand-text) shadow-sm transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-muted-foreground focus:border-(--brand-accent) focus:outline-none focus:ring-4 focus:ring-(--brand-accent)/15 disabled:cursor-not-allowed disabled:opacity-60",
+						"text-left",
 						className,
 					)}
 					{...props}
@@ -72,11 +75,16 @@ export const Input = ({ className, type, ...props }: ComponentProps<"input">) =>
 		);
 	}
 
+	const resolvedDir = dir || (type === "tel" ? "ltr" : undefined);
+	const isLtr = resolvedDir === "ltr";
+
 	return (
 		<input
 			type={type}
+			dir={resolvedDir}
 			className={cn(
 				"block min-h-11 w-full rounded-md border border-(--brand-border) bg-white px-4 py-3 text-base text-(--brand-text) shadow-sm transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-muted-foreground focus:border-(--brand-accent) focus:outline-none focus:ring-4 focus:ring-(--brand-accent)/15 disabled:cursor-not-allowed disabled:opacity-60",
+				isLtr && "text-left",
 				className,
 			)}
 			{...props}

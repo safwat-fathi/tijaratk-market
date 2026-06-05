@@ -13,7 +13,7 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 - Add auto backup for live database
 
-## Fix issues
+## Issues
 
 ## New Features
 

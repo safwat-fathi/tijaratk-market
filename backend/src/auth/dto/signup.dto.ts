@@ -5,6 +5,8 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { formatPhoneNumber } from 'src/common/utils/phone.util';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Match } from 'src/common/decorators/match.decorator';
 import { IsPhoneNumber } from 'src/common/validators/is-phone-number.validator';
@@ -34,6 +36,9 @@ export class SignupDto {
     example: '+201112223334',
     description: 'The phone number of the owner',
   })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? formatPhoneNumber(value) : value,
+  )
   @IsNotEmpty()
   @IsPhoneNumber({ allowedCountries: ['EG'] })
   phone: string;

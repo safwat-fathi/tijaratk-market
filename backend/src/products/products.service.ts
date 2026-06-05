@@ -434,7 +434,7 @@ export class ProductsService {
       orderBy: { category: 'asc' },
     });
 
-    return rows.map((row) => row.category).filter((c) => c != null) as string[];
+    return rows.map((row) => row.category).filter((c) => c != null);
   }
 
   /**
@@ -571,7 +571,7 @@ export class ProductsService {
     });
 
     if (typeof updateProductDto.category === 'string') {
-      await this.storeTenantProductCategory(tenantId, updatedProduct.category!);
+      await this.storeTenantProductCategory(tenantId, updatedProduct.category);
     }
     await this.bumpTenantSearchCacheVersion(tenantId);
 
