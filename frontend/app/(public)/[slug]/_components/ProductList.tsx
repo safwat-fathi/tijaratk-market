@@ -668,7 +668,7 @@ const ProductListCard = ({
 							width={56}
 							height={56}
 							loading="lazy"
-							unoptimized
+							sizes="56px"
 							imageClassName={`h-full w-full object-cover ${isUnavailable ? "grayscale" : ""}`}
 							fallback={
 								<div className="flex h-full w-full items-center justify-center text-base">

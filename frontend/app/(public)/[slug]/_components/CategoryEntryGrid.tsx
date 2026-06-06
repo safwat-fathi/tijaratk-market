@@ -106,7 +106,7 @@ export default function CategoryEntryGrid({
 								alt={category.label}
 								width={54}
 								height={54}
-								unoptimized
+								sizes="56px"
 								imageClassName="h-14 w-14 rounded-md object-cover ring-1 ring-brand-border"
 								fallback={<span className="text-2xl">🛒</span>}
 							/>

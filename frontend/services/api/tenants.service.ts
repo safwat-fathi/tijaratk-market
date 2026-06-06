@@ -1,6 +1,8 @@
 import HttpService from "@/services/base/http.service";
 import { Tenant } from "@/types/models/tenant";
 
+const PUBLIC_STOREFRONT_REVALIDATE_SECONDS = 60;
+
 type UpdateTenantDeliverySettingsRequest = {
   delivery_fee: number;
   delivery_available: boolean;
@@ -15,7 +17,7 @@ class TenantsService extends HttpService {
 
   public async getPublicTenant(slug: string) {
     return this.get<Tenant>(`public/${slug}`, undefined, {
-      cache: "no-store",
+      next: { revalidate: PUBLIC_STOREFRONT_REVALIDATE_SECONDS },
     });
   }
 

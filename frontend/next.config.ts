@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+const apiImageHost = apiBaseUrl ? new URL(apiBaseUrl).hostname : null;
+
 const nextConfig: NextConfig = {
 	output: "standalone",
 	experimental: {
@@ -9,6 +12,18 @@ const nextConfig: NextConfig = {
 	},
 	images: {
 		remotePatterns: [
+			{
+				protocol: "https",
+				hostname: "tijaratk.com",
+			},
+			...(apiImageHost
+				? [
+						{
+							protocol: "https" as const,
+							hostname: apiImageHost,
+						},
+					]
+				: []),
 			{
 				protocol: "http",
 				hostname: "localhost",

@@ -32,7 +32,7 @@ export default function CategoryProductsTab({
 						draggable={false}
 						href={category.key === ALL_PRODUCTS_CATEGORY ? "?" : `?category=${encodeURIComponent(category.key)}`}
 						prefetch={true}
-						onClick={(e) => {
+						onClick={() => {
 							// Allow onCategoryChange to handle the URL if needed
 							onCategoryChange(category.key);
 						}}
@@ -48,7 +48,7 @@ export default function CategoryProductsTab({
 							width={40}
 							height={40}
 							draggable={false}
-							unoptimized
+							sizes="32px"
 							imageClassName="h-8 w-8 rounded-full object-cover ring-1 ring-gray-200"
 							fallback={
 								<span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px]">

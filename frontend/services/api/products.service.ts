@@ -8,6 +8,8 @@ import {
   TenantProductsSearchResponse,
 } from '@/types/models/product';
 
+const PUBLIC_STOREFRONT_REVALIDATE_SECONDS = 60;
+
 class ProductsService extends HttpService {
   constructor() {
     super('/products');
@@ -39,13 +41,13 @@ class ProductsService extends HttpService {
     params?: { search?: string; category?: string; page?: number; limit?: number },
   ) {
     return this.get<PublicProductsResponse>(`public/${slug}`, params, {
-      cache: 'no-store',
+      next: { revalidate: PUBLIC_STOREFRONT_REVALIDATE_SECONDS },
     });
   }
 
   public async getPublicProductCategories(slug: string) {
     return this.get<PublicProductCategory[]>(`public/${slug}/categories`, undefined, {
-      cache: 'no-store',
+      next: { revalidate: PUBLIC_STOREFRONT_REVALIDATE_SECONDS },
     });
   }
 

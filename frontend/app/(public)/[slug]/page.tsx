@@ -98,6 +98,9 @@ export async function generateMetadata(
 	return {
 		title,
 		description,
+		alternates: {
+			canonical: `/${slug}`,
+		},
 		keywords: [tenant.name, categoryLabel, "تجارتك", "طلب أونلاين", "قائمة المنتجات"],
 		openGraph: {
 			title,

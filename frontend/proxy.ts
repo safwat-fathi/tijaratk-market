@@ -36,16 +36,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-	// matcher: ['/merchant/:path*'],
-	matcher: [
-		/*
-		 * Match all request paths except for the ones starting with:
-		 * - api (API routes)
-		 * - _next/static (static files)
-		 * - _next/image (image optimization files)
-		 * - favicon.ico (favicon file)
-		 * - public (any files in your public folder)
-		 */
-		"/((?!api|_next/static|_next/image|favicon.ico|public|images).*)",
-	],
+	matcher: ["/merchant/:path*"],
 };

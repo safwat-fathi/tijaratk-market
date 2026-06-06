@@ -1,7 +1,6 @@
 import { TENANT_CATEGORIES, type TenantCategory } from "@/constants";
 import { Tenant } from "@/types/models/tenant";
 import Link from "next/link";
-import Image from "next/image";
 import SafeImage from "@/components/ui/SafeImage";
 
 type TenantCategoryMeta =
