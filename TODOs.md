@@ -17,6 +17,8 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 ## New Features
 
+- Make app ready for multiple store types (supermarket, restaurant, online store, pharmacy, etc.)
+- Catalog products for supermarkets
 - Add search by phone for customers
 - Can we let customers order from WhatsApp bot?
 - Add settings page in dashboard for store name, logo, social media links, contact phone number, delivery fees, working hours.

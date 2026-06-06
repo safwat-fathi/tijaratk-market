@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
+import { PublicFooter } from "@/components/layout/PublicFooter";
 
 type PublicPageShellProps = {
 	eyebrow: string;
@@ -39,21 +40,7 @@ export default function PublicPageShell({
 				<div className="mt-8 space-y-8">{children}</div>
 			</main>
 
-			<footer className="border-t border-brand-border bg-white px-4 py-8">
-				<div className="mx-auto flex max-w-6xl flex-col gap-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-					<p>© {new Date().getFullYear()} تجارتك. منصة لإدارة الطلبات بدون عمولة.</p>
-					<div className="flex items-center gap-4">
-						<a href="https://www.facebook.com/profile.php?id=61589320905109" target="_blank" rel="noopener noreferrer" className="hover:text-brand-primary transition-colors">
-							<span className="sr-only">فيسبوك</span>
-							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
-						</a>
-						<a href="https://wa.me/201037007345" target="_blank" rel="noopener noreferrer" className="hover:text-brand-primary transition-colors">
-							<span className="sr-only">واتساب</span>
-							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9"></path><path d="M9 10a.5 .5 0 0 0 1 0v-1a.5 .5 0 0 0 -1 0v1a5 5 0 0 0 5 5h1a.5 .5 0 0 0 0 -1h-1a.5 .5 0 0 0 0 1"></path></svg>
-						</a>
-					</div>
-				</div>
-			</footer>
+			<PublicFooter />
 		</div>
 	);
 }
