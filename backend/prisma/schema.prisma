@@ -39,6 +39,8 @@ model CatalogItem {
   name       String    @db.VarChar
   image_url  String?
   category   String    @db.VarChar
+  price      Decimal?  @db.Decimal(10, 2)
+  currency   String    @default("EGP") @db.VarChar(3)
   is_active  Boolean   @default(true)
 
   @@map("catalog_items")

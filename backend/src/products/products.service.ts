@@ -181,6 +181,7 @@ export class ProductsService {
         category: catalogCategory,
         source: ProductSource.CATALOG,
         status: ProductStatus.ACTIVE,
+        current_price: catalogItem.price,
         order_mode: ProductOrderMode.QUANTITY,
         order_config: this.normalizeProductOrderConfig(
           ProductOrderMode.QUANTITY,

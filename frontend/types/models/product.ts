@@ -41,6 +41,8 @@ export interface CatalogItem {
   id: number;
   name: string;
   image_url?: string | null;
+  price?: number | string | null;
+  currency?: string;
   category: string;
   is_active: boolean;
   created_at: string;
