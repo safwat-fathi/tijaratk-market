@@ -32,7 +32,7 @@ async function bootstrap() {
   await prisma.$connect();
 
   try {
-    await seedCatalog(prisma);
+    // await seedCatalog(prisma);
     await seedAdmin(prisma);
     await seedSupermarketMerchant(prisma);
 

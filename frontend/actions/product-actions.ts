@@ -4,6 +4,7 @@ import { productsService } from '@/services/api/products.service';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import {
   Product,
+  CatalogItemsResponse,
   ProductOrderConfig,
   ProductOrderMode,
 } from '@/types/models/product';
@@ -15,6 +16,12 @@ const UPDATE_PRODUCT_IMAGE_FORMAT_MESSAGE =
   'صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP أو HEIC أو HEIF.';
 const UPDATE_PRODUCT_TIMEOUT_MESSAGE =
   'استغرق رفع/معالجة الصورة وقتًا أطول من المتوقع. حاول مرة أخرى.';
+
+type LoadCatalogItemsParams = {
+  category?: string;
+  page?: number;
+  limit?: number;
+};
 
 const normalizeUpdateProductErrorMessage = (
   message?: string,
@@ -236,6 +243,39 @@ export async function addProductFromCatalogAction(catalogItemId: number) {
     return {
       success: false,
       message: 'تعذر إضافة المنتج من الكتالوج',
+    };
+  }
+}
+
+export async function loadCatalogItemsAction(
+  params: LoadCatalogItemsParams,
+): Promise<{
+  success: boolean;
+  data?: CatalogItemsResponse;
+  message?: string;
+}> {
+  try {
+    const response = await productsService.getCatalogItems(params);
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || 'تعذر تحميل منتجات الكتالوج',
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Load catalog items failed:', error);
+    return {
+      success: false,
+      message: 'تعذر تحميل منتجات الكتالوج',
     };
   }
 }

@@ -6,12 +6,18 @@ import { useDebounce } from 'use-debounce';
 import {
   addProductFromCatalogAction,
   createProductAction,
+  loadCatalogItemsAction,
   removeProductAction,
   searchTenantProductsAction,
   updateProductAction,
 } from '@/actions/product-actions';
 import { formatArabicInteger } from '@/lib/utils/number';
-import type { CatalogItem, Product, ProductOrderMode } from '@/types/models/product';
+import type {
+  CatalogItem,
+  Product,
+  ProductOrderMode,
+  PublicProductsMeta,
+} from '@/types/models/product';
 import CatalogSection from './CatalogSection';
 import EditProductSheet from './EditProductSheet';
 import MyProductsSection from './MyProductsSection';
@@ -36,12 +42,10 @@ import {
 } from '../_utils/product-onboarding.constants';
 import {
 	buildAvailableProductCategories,
-	buildCategoryTabsFromCatalog,
 	buildOrderConfigPayload,
 	buildProductsByNormalizedNameMap,
 	buildSectionTabs,
 	deriveEditFormState,
-	filterCatalogItemsByCategory,
 	hasAllowedProductImageFormat,
 	isDuplicateMessage,
 	isServerActionBodyLimitError,
@@ -55,9 +59,12 @@ import type { CategoryMode, ProductSection } from '../_utils/product-onboarding.
 
 type ProductOnboardingClientProps = {
 	initialProducts: Product[];
-	catalogItems: CatalogItem[];
+	initialCatalogItems: CatalogItem[];
+	initialCatalogMeta: PublicProductsMeta;
 	productCategories: string[];
 };
+
+const CATALOG_PAGE_LIMIT = 40;
 
 const removeProductFromList = (productList: Product[], productId: number) =>
 	productList.filter((item) => item.id !== productId);
@@ -71,7 +78,8 @@ const replaceProductInList = (
 
 export default function ProductOnboardingClient({
 	initialProducts,
-	catalogItems,
+	initialCatalogItems,
+	initialCatalogMeta,
 	productCategories,
 }: ProductOnboardingClientProps) {
 	const router = useRouter();
@@ -79,6 +87,13 @@ export default function ProductOnboardingClient({
 	const searchParams = useSearchParams();
 
 	const [products, setProducts] = useState<Product[]>(initialProducts);
+	const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(
+		initialCatalogItems,
+	);
+	const [catalogMeta, setCatalogMeta] =
+		useState<PublicProductsMeta>(initialCatalogMeta);
+	const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+	const [catalogError, setCatalogError] = useState<string | null>(null);
 
 	const [manualName, setManualName] = useState("");
 	const [manualPrice, setManualPrice] = useState("");
@@ -149,6 +164,7 @@ export default function ProductOnboardingClient({
 	const [searchRefreshKey, setSearchRefreshKey] = useState(0);
 
 	const productRowRefs = useRef<Map<number, HTMLLIElement | null>>(new Map());
+	const categoryRequestIdRef = useRef(0);
 
 	const [isPending, startTransition] = useTransition();
 	const [isEditPending, startEditTransition] = useTransition();
@@ -169,15 +185,24 @@ export default function ProductOnboardingClient({
 		[availableProductCategories],
 	);
 
-	const categoryTabs = useMemo(
-		() => buildCategoryTabsFromCatalog(catalogItems),
-		[catalogItems],
-	);
+	const categoryTabs = useMemo(() => {
+		const tabs = productCategories.map(category => ({
+			key: category,
+			label: category,
+			count: 0,
+			imageUrl: null,
+		}));
 
-	const filteredCatalogItems = useMemo(
-		() => filterCatalogItemsByCategory(catalogItems, activeCategory),
-		[activeCategory, catalogItems],
-	);
+		return [
+			{
+				key: ALL_CATALOG_ITEMS,
+				label: 'الكل',
+				count: catalogMeta.total,
+				imageUrl: null,
+			},
+			...tabs,
+		];
+	}, [catalogMeta.total, productCategories]);
 
 	const normalizedSearchInput = searchQuery.trim();
 	const normalizedDebouncedSearch = debouncedSearchQuery.trim();
@@ -196,8 +221,8 @@ export default function ProductOnboardingClient({
 		: `${formatArabicInteger(products.length) || products.length} منتج`;
 
 	const sectionTabs = useMemo(
-		() => buildSectionTabs(catalogItems.length, products.length),
-		[catalogItems.length, products.length],
+		() => buildSectionTabs(catalogMeta.total, products.length),
+		[catalogMeta.total, products.length],
 	);
 
 	const activeSectionLabel =
@@ -242,6 +267,83 @@ export default function ProductOnboardingClient({
 	const handleSectionChange = (section: ProductSection) => {
 		setActiveSection(section);
 		replaceSectionInQuery(section);
+	};
+
+	const resolveCatalogCategoryParam = (category: string) =>
+		category === ALL_CATALOG_ITEMS ? undefined : category;
+
+	const loadCatalogPage = async ({
+		category,
+		page,
+		append,
+	}: {
+		category: string;
+		page: number;
+		append: boolean;
+	}) => {
+		if (append && isLoadingCatalog) {
+			return;
+		}
+
+		const requestId = categoryRequestIdRef.current + 1;
+		categoryRequestIdRef.current = requestId;
+		setIsLoadingCatalog(true);
+		setCatalogError(null);
+
+		const response = await loadCatalogItemsAction({
+			category: resolveCatalogCategoryParam(category),
+			page,
+			limit: CATALOG_PAGE_LIMIT,
+		});
+
+		if (categoryRequestIdRef.current !== requestId) {
+			return;
+		}
+
+		setIsLoadingCatalog(false);
+		if (!response.success || !response.data) {
+			setCatalogError(response.message || 'تعذر تحميل منتجات الكتالوج');
+			return;
+		}
+
+		const catalogResponse = response.data;
+		setCatalogMeta(catalogResponse.meta);
+		setCatalogItems(currentItems =>
+			append ? [...currentItems, ...catalogResponse.data] : catalogResponse.data,
+		);
+	};
+
+	const handleCategoryChange = (category: string) => {
+		if (category === activeCategory) {
+			return;
+		}
+
+		setActiveCategory(category);
+		setCatalogItems([]);
+		setCatalogMeta({
+			total: 0,
+			page: 1,
+			limit: CATALOG_PAGE_LIMIT,
+			last_page: 1,
+			has_next: false,
+		});
+		void loadCatalogPage({
+			category,
+			page: 1,
+			append: false,
+		});
+	};
+
+	const handleLoadMoreCatalogItems = () => {
+		if (isLoadingCatalog || !catalogMeta.has_next) {
+			return;
+		}
+
+		void loadCatalogPage({
+			category: activeCategory,
+			page: catalogMeta.page + 1,
+			append: true,
+		});
 	};
 
 	useEffect(() => {
@@ -900,8 +1002,11 @@ export default function ProductOnboardingClient({
 				catalogItems={catalogItems}
 				categoryTabs={categoryTabs}
 				activeCategory={activeCategory}
-				onCategoryChange={setActiveCategory}
-				filteredCatalogItems={filteredCatalogItems}
+				onCategoryChange={handleCategoryChange}
+				catalogMeta={catalogMeta}
+				isLoadingCatalog={isLoadingCatalog}
+				catalogError={catalogError}
+				onLoadMore={handleLoadMoreCatalogItems}
 				pendingCatalogIds={pendingCatalogIds}
 				onAddFromCatalog={handleAddFromCatalog}
 			/>

@@ -4,36 +4,46 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 const apiImageHost = apiBaseUrl ? new URL(apiBaseUrl).hostname : null;
 
 const nextConfig: NextConfig = {
-	output: "standalone",
-	experimental: {
-		serverActions: {
-			bodySizeLimit: "15mb",
-		},
-	},
-	images: {
-		remotePatterns: [
-			{
-				protocol: "https",
-				hostname: "tijaratk.com",
-			},
-			...(apiImageHost
-				? [
-						{
-							protocol: "https" as const,
-							hostname: apiImageHost,
-						},
-					]
-				: []),
-			{
-				protocol: "http",
-				hostname: "localhost",
-			},
-			{
-				protocol: "http",
-				hostname: "127.0.0.1",
-			},
-		],
-	},
+  output: "standalone",
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "15mb",
+    },
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "tijaratk.com",
+      },
+      {
+        protocol: "https",
+        hostname: "talabat.dhmedia.io",
+        pathname: "/image/**",
+      },
+      {
+        protocol: "https",
+        hostname: "images.deliveryhero.io",
+        pathname: "/image/**",
+      },
+      ...(apiImageHost
+        ? [
+            {
+              protocol: "https" as const,
+              hostname: apiImageHost,
+            },
+          ]
+        : []),
+      {
+        protocol: "http",
+        hostname: "localhost",
+      },
+      {
+        protocol: "http",
+        hostname: "127.0.0.1",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

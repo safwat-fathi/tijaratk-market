@@ -48,6 +48,11 @@ export interface CatalogItem {
   created_at: string;
 }
 
+export interface CatalogItemsResponse {
+  data: CatalogItem[];
+  meta: PublicProductsMeta;
+}
+
 export interface PublicProductsMeta {
   total: number;
   page: number;

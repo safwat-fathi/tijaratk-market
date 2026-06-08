@@ -38,7 +38,7 @@ export async function adminLoginAction(prevState: ActionState, formData: FormDat
 
     // Ensure we read the token correctly based on AdminController response format
     // backend returns { admin_access_token: '...', user: {...} }
-    const token = (response.data as any)?.admin_access_token;
+    const token = response.data?.admin_access_token;
     
     if (response.success && token) {
       await setCookieAction(STORAGE_KEYS.ADMIN_ACCESS_TOKEN, token);
@@ -88,4 +88,24 @@ export async function togglePlanStatusAction(id: number, currentStatus: boolean)
   if (response.success) {
     revalidatePath("/admin/plans");
   }
+}
+
+export async function uploadCatalogImportAction(formData: FormData): Promise<void> {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("ملف الاستيراد مطلوب");
+  }
+
+  const cleanFormData = new FormData();
+  cleanFormData.set("file", file);
+  cleanFormData.set("type", "catalog_items");
+  cleanFormData.set("mode", String(formData.get("mode") || "upsert"));
+
+  const response = await adminService.createImport(cleanFormData);
+  if (response.success && response.data?.id) {
+    revalidatePath("/admin/imports");
+    redirect(`/admin/imports/${response.data.id}`);
+  }
+
+  throw new Error(response.message || "تعذر رفع ملف الاستيراد");
 }

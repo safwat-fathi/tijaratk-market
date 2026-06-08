@@ -1,6 +1,6 @@
 import HttpService from '@/services/base/http.service';
 import {
-  CatalogItem,
+  CatalogItemsResponse,
   Product,
   ProductOrderConfig,
   PublicProductCategory,
@@ -102,12 +102,25 @@ class ProductsService extends HttpService {
     });
   }
 
-  public async getCatalogItems(category?: string) {
-    const route = category
-      ? `catalog?category=${encodeURIComponent(category)}`
-      : 'catalog';
+  public async getCatalogItems(params?: {
+    category?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.category) {
+      query.set('category', params.category);
+    }
+    if (params?.page) {
+      query.set('page', String(params.page));
+    }
+    if (params?.limit) {
+      query.set('limit', String(params.limit));
+    }
+    const search = query.toString();
+    const route = search ? `catalog?${search}` : 'catalog';
 
-    return this.get<CatalogItem[]>(route, undefined, {
+    return this.get<CatalogItemsResponse>(route, undefined, {
       cache: 'no-store',
       authRequired: true,
     });

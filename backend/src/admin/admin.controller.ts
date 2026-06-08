@@ -15,6 +15,7 @@ import {
   ApiResponse,
   ApiBody,
   ApiParam,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
@@ -30,6 +31,7 @@ import {
   AdminTenantResponseDto,
   AdminPlanResponseDto,
 } from './dto/admin-responses.dto';
+import CONSTANTS from 'src/common/constants';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -66,6 +68,8 @@ export class AdminController {
   }
 
   @Post('logout')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Admin logout',
     description: 'Clear the admin access token cookie to log out the user.',
@@ -75,6 +79,7 @@ export class AdminController {
     type: AdminLogoutResponseDto,
     description: 'Logout successful',
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie('admin_access_token');
     return { success: true };
@@ -82,6 +87,7 @@ export class AdminController {
 
   @UseGuards(AdminAuthGuard)
   @Get('dashboard-stats')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Get dashboard stats',
     description:
@@ -99,6 +105,7 @@ export class AdminController {
 
   @UseGuards(AdminAuthGuard)
   @Get('tenants')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Get all tenants',
     description:
@@ -116,6 +123,7 @@ export class AdminController {
 
   @UseGuards(AdminAuthGuard)
   @Patch('tenants/:id/status')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Update tenant status',
     description: 'Update the activation status of a specific tenant.',
@@ -145,6 +153,7 @@ export class AdminController {
 
   @UseGuards(AdminAuthGuard)
   @Patch('tenants/:id/plan')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Update tenant plan',
     description: 'Update the subscription plan of a specific tenant.',
@@ -167,6 +176,7 @@ export class AdminController {
 
   @UseGuards(AdminAuthGuard)
   @Get('plans')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Get subscription plans',
     description: 'Retrieve all available subscription plans, ordered by price.',
@@ -183,6 +193,7 @@ export class AdminController {
 
   @UseGuards(AdminAuthGuard)
   @Patch('plans/:id/status')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Toggle subscription plan status',
     description: 'Enable or disable a subscription plan.',

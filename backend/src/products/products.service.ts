@@ -74,6 +74,17 @@ type TenantProductsSearchResult = {
   };
 };
 
+type CatalogItemsResult = {
+  data: CatalogItem[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    last_page: number;
+    has_next: boolean;
+  };
+};
+
 type TenantProductsSearchOptions = {
   rankAll?: boolean;
   excludeProductIds?: number[];
@@ -473,16 +484,42 @@ export class ProductsService {
   /**
    * Returns active catalog items, optionally filtered by category.
    */
-  async findCatalogItems(category?: string): Promise<CatalogItem[]> {
+  async findCatalogItems(
+    category?: string,
+    page = 1,
+    limit = 40,
+  ): Promise<CatalogItemsResult> {
+    const normalizedPage = Number.isFinite(page) ? Math.max(1, page) : 1;
+    const normalizedLimit = Number.isFinite(limit)
+      ? Math.min(100, Math.max(1, limit))
+      : 40;
     const where: Prisma.CatalogItemWhereInput = { is_active: true };
     if (category) {
       where.category = category;
     }
 
-    return this.getPrismaClient().catalogItem.findMany({
-      where,
-      orderBy: [{ category: 'asc' }, { name: 'asc' }],
-    });
+    const [data, total] = await Promise.all([
+      this.getPrismaClient().catalogItem.findMany({
+        where,
+        orderBy: [{ category: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+        skip: (normalizedPage - 1) * normalizedLimit,
+        take: normalizedLimit,
+      }),
+      this.getPrismaClient().catalogItem.count({ where }),
+    ]);
+
+    const lastPage = total > 0 ? Math.ceil(total / normalizedLimit) : 1;
+
+    return {
+      data,
+      meta: {
+        total,
+        page: normalizedPage,
+        limit: normalizedLimit,
+        last_page: lastPage,
+        has_next: normalizedPage < lastPage,
+      },
+    };
   }
 
   /**

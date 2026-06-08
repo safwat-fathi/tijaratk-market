@@ -34,6 +34,7 @@ import { imageFileFilter } from 'src/common/utils/file-filters';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { GetPublicProductsDto } from './dto/get-public-products.dto';
 import { GetTenantProductsDto } from './dto/get-tenant-products.dto';
+import { GetCatalogItemsDto } from './dto/get-catalog-items.dto';
 import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
 import { parseBooleanLike } from './utils/parse-boolean-like';
 
@@ -149,8 +150,12 @@ export class ProductsController {
     description: 'Filter items by category',
   })
   @ApiResponse({ status: HttpStatus.OK, description: 'Return catalog items' })
-  findCatalogItems(@Query('category') category?: string) {
-    return this.productsService.findCatalogItems(category);
+  findCatalogItems(@Query() query: GetCatalogItemsDto) {
+    return this.productsService.findCatalogItems(
+      query.category,
+      query.page,
+      query.limit,
+    );
   }
 
   @Get()

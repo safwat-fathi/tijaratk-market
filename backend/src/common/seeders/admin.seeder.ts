@@ -8,13 +8,21 @@ export async function seedAdmin(prisma: PrismaClient) {
     logger.log('Seeding Admin and Plans...');
 
     // 1. Create Admin
-    const adminPhone = '+201000000000'; // Default admin phone
+    const adminPhone = process.env.ADMIN_PHONE?.trim();
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminPhone || !adminPassword) {
+      throw new Error(
+        'ADMIN_PHONE and ADMIN_PASSWORD are required to seed the admin user.',
+      );
+    }
+
     const existingAdmin = await prisma.adminUser.findUnique({
       where: { phone: adminPhone },
     });
 
     if (!existingAdmin) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const hashedPassword = await bcrypt.hash(adminPassword, 10);
       await prisma.adminUser.create({
         data: {
           phone: adminPhone,
@@ -22,9 +30,7 @@ export async function seedAdmin(prisma: PrismaClient) {
           name: 'System Admin',
         },
       });
-      logger.log(
-        `✅ Admin user created (phone: ${adminPhone}, password: admin123)`,
-      );
+      logger.log(`✅ Admin user created (phone: ${adminPhone})`);
     } else {
       logger.log(`ℹ️ Admin user already exists`);
     }

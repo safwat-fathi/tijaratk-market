@@ -23,6 +23,7 @@ export default function SafeImage({
   priority,
   sizes,
   loading,
+  quality,
   draggable,
 }: SafeImageProps) {
   const normalizedSrc = useMemo(() => {
@@ -61,6 +62,7 @@ export default function SafeImage({
       priority={priority}
       sizes={sizes}
       loading={loading}
+      quality={quality}
       draggable={draggable}
       onError={() => setFailedSrc(normalizedSrc)}
     />

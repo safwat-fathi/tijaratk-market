@@ -15,6 +15,7 @@ import { TenantRlsInterceptor } from './common/interceptors/tenant-rls.intercept
 import { AvailabilityRequestsModule } from './availability-requests/availability-requests.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AdminModule } from './admin/admin.module';
+import { ImportsModule } from './imports/imports.module';
 
 const ENV = process.env.NODE_ENV;
 
@@ -45,6 +46,7 @@ const ENV = process.env.NODE_ENV;
     AvailabilityRequestsModule,
     WebhooksModule,
     AdminModule,
+    ImportsModule,
   ],
   controllers: [HealthController],
   providers: [TenantRlsInterceptor],

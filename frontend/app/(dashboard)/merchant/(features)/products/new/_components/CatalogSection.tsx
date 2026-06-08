@@ -1,6 +1,7 @@
+import { useEffect, useRef } from "react";
 import SafeImage from "@/components/ui/SafeImage";
-import type { CatalogItem } from "@/types/models/product";
-import { formatArabicInteger } from "@/lib/utils/number";
+import type { CatalogItem, PublicProductsMeta } from "@/types/models/product";
+import { formatArabicInteger, formatArabicNumber } from "@/lib/utils/number";
 import { ScrollableTabList, TabButton } from "@/components/ui/ScrollableTabs";
 import type { CategoryTab } from "../_utils/product-onboarding.types";
 import { SECTION_CATALOG } from "../_utils/product-onboarding.constants";
@@ -12,7 +13,10 @@ type CatalogSectionProps = {
   categoryTabs: CategoryTab[];
   activeCategory: string;
   onCategoryChange: (category: string) => void;
-  filteredCatalogItems: CatalogItem[];
+  catalogMeta: PublicProductsMeta;
+  isLoadingCatalog: boolean;
+  catalogError: string | null;
+  onLoadMore: () => void;
   pendingCatalogIds: Record<number, boolean>;
   onAddFromCatalog: (item: CatalogItem) => void;
 };
@@ -23,10 +27,38 @@ export default function CatalogSection({
   categoryTabs,
   activeCategory,
   onCategoryChange,
-  filteredCatalogItems,
+  catalogMeta,
+  isLoadingCatalog,
+  catalogError,
+  onLoadMore,
   pendingCatalogIds,
   onAddFromCatalog,
 }: CatalogSectionProps) {
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!active || !catalogMeta.has_next || isLoadingCatalog) {
+      return;
+    }
+
+    const sentinel = sentinelRef.current;
+    if (!sentinel) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: "240px" },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [active, catalogMeta.has_next, isLoadingCatalog, onLoadMore]);
+
   return (
     <section
       id={`section-panel-${SECTION_CATALOG}`}
@@ -40,7 +72,7 @@ export default function CatalogSection({
         </h2>
         <p className="mt-1 text-sm text-gray-500">
           اضغط إضافة ويتم حفظ المنتج فوراً. متاح الآن{" "}
-          {formatArabicInteger(catalogItems.length) || catalogItems.length} منتج
+          {formatArabicInteger(catalogMeta.total) || catalogMeta.total} منتج
           من قاعدة البيانات.
         </p>
 
@@ -54,12 +86,14 @@ export default function CatalogSection({
               className="rounded-2xl"
             >
               <span className="flex items-center gap-2">
-                <SafeImage
+                  <SafeImage
                   src={category.imageUrl}
                   alt={category.label}
                   width={40}
                   height={40}
-                  unoptimized
+                  sizes="40px"
+                  loading="lazy"
+                  quality={70}
                   imageClassName="h-10 w-10 rounded object-cover ring-1 ring-gray-200"
                   fallback={
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px]">
@@ -79,14 +113,14 @@ export default function CatalogSection({
         </ScrollableTabList>
 
         <div className="lg:max-h-[58vh] lg:overflow-y-auto lg:pe-1">
-          {filteredCatalogItems.length === 0 ? (
+          {catalogItems.length === 0 && !isLoadingCatalog ? (
             <p className="mt-4 rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
               لا توجد منتجات في الكتالوج حالياً. شغّل seeder لإضافة عناصر
               الكتالوج ثم حدّث الصفحة.
             </p>
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {filteredCatalogItems.map((item) => {
+              {catalogItems.map((item) => {
                 const catalogItemImageUrl = resolveImageUrl(item.image_url);
 
                 return (
@@ -102,7 +136,9 @@ export default function CatalogSection({
                             alt={item.name}
                             width={56}
                             height={56}
-                            unoptimized
+                            sizes="56px"
+                            loading="lazy"
+                            quality={70}
                             imageClassName="h-14 w-14 rounded-lg border border-gray-200 bg-gray-50 object-cover"
                             fallback={
                               <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-1 text-center text-[10px] leading-4 text-gray-500">
@@ -120,9 +156,17 @@ export default function CatalogSection({
                           <p className="font-semibold text-gray-900">
                             {item.name}
                           </p>
-                          <p className="text-xs text-gray-500">
-                            {item.category}
-                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                            <span>{item.category}</span>
+                            {item.price !== null && item.price !== undefined ? (
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                                {formatArabicNumber(item.price, {
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 2,
+                                }) || item.price} {item.currency || "EGP"}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                       <button
@@ -139,6 +183,35 @@ export default function CatalogSection({
               })}
             </div>
           )}
+          <div ref={sentinelRef} className="h-1" />
+          {isLoadingCatalog ? (
+            <p className="mt-4 rounded-xl bg-gray-50 p-3 text-center text-sm font-medium text-gray-500">
+              جاري تحميل المزيد...
+            </p>
+          ) : null}
+          {catalogError ? (
+            <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+              <p>{catalogError}</p>
+              {catalogMeta.has_next ? (
+                <button
+                  type="button"
+                  onClick={onLoadMore}
+                  className="mt-2 font-semibold text-red-800 underline"
+                >
+                  حاول مرة أخرى
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {!isLoadingCatalog && catalogMeta.has_next ? (
+            <button
+              type="button"
+              onClick={onLoadMore}
+              className="mt-4 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              تحميل المزيد
+            </button>
+          ) : null}
         </div>
       </div>
     </section>
