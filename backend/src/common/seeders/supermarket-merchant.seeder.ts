@@ -12,8 +12,6 @@ const SUPERMARKET_TENANT = {
   ownerName: 'خالد محمد',
 } as const;
 
-const ownerCredential = process.env.SEED_SUPERMARKET_OWNER_CREDENTIAL;
-
 import { supermarketProducts } from './supermarket-products.data';
 
 /**
@@ -21,6 +19,7 @@ import { supermarketProducts } from './supermarket-products.data';
  */
 export async function seedSupermarketMerchant(prisma: PrismaClient) {
   const logger = new Logger('SupermarketMerchantSeeder');
+  const ownerCredential = process.env.SEED_SUPERMARKET_OWNER_CREDENTIAL;
 
   await prisma.$transaction(async (tx) => {
     let tenant = await tx.tenant.findFirst({
@@ -64,7 +63,7 @@ export async function seedSupermarketMerchant(prisma: PrismaClient) {
           tenant_id: tenant.id,
           phone: SUPERMARKET_TENANT.phone,
           name: SUPERMARKET_TENANT.ownerName,
-          password: ownerCredential,
+          password: ownerCredential!,
           role: 'owner',
         },
       });
