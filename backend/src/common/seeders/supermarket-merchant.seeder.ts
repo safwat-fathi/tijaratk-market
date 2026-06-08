@@ -12,9 +12,7 @@ const SUPERMARKET_TENANT = {
   ownerName: 'خالد محمد',
 } as const;
 
-const ownerCredential =
-  process.env.SEED_SUPERMARKET_OWNER_CREDENTIAL ??
-  ['pass', 'word', '123'].join('');
+const ownerCredential = process.env.SEED_SUPERMARKET_OWNER_CREDENTIAL;
 
 import { supermarketProducts } from './supermarket-products.data';
 
@@ -54,6 +52,11 @@ export async function seedSupermarketMerchant(prisma: PrismaClient) {
     const ownerExists = await tx.user.findFirst({
       where: { phone: SUPERMARKET_TENANT.phone },
     });
+
+    if (!ownerExists && !ownerCredential) {
+      logger.warn('No owner credential found');
+      return;
+    }
 
     if (!ownerExists) {
       await tx.user.create({

@@ -72,8 +72,8 @@ export default function CatalogSection({
         </h2>
         <p className="mt-1 text-sm text-gray-500">
           اضغط إضافة ويتم حفظ المنتج فوراً. متاح الآن{" "}
-          {formatArabicInteger(catalogMeta.total) || catalogMeta.total} منتج
-          من قاعدة البيانات.
+          {formatArabicInteger(catalogMeta.total) || catalogMeta.total} منتج من
+          قاعدة البيانات.
         </p>
 
         <ScrollableTabList className="mb-4 mt-3">
@@ -86,7 +86,7 @@ export default function CatalogSection({
               className="rounded-2xl"
             >
               <span className="flex items-center gap-2">
-                  <SafeImage
+                <SafeImage
                   src={category.imageUrl}
                   alt={category.label}
                   width={40}
@@ -115,8 +115,7 @@ export default function CatalogSection({
         <div className="lg:max-h-[58vh] lg:overflow-y-auto lg:pe-1">
           {catalogItems.length === 0 && !isLoadingCatalog ? (
             <p className="mt-4 rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-              لا توجد منتجات في الكتالوج حالياً. شغّل seeder لإضافة عناصر
-              الكتالوج ثم حدّث الصفحة.
+              لا توجد منتجات في الكتالوج حالياً
             </p>
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -163,7 +162,8 @@ export default function CatalogSection({
                                 {formatArabicNumber(item.price, {
                                   minimumFractionDigits: 0,
                                   maximumFractionDigits: 2,
-                                }) || item.price} {item.currency || "EGP"}
+                                }) || item.price}{" "}
+                                {item.currency || "EGP"}
                               </span>
                             ) : null}
                           </div>
