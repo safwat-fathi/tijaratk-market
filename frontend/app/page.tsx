@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
 import Image from "next/image";
 import { PublicFooter } from "@/components/layout/PublicFooter";
-import heroMockup from "@/public/images/hero-mockup.png";
+import heroMockup from "@/public/images/hero-mockup.webp";
 import {
   createPublicMetadata,
   faqPageJsonLd,
@@ -174,6 +174,7 @@ export default function LandingPage() {
                 placeholder="blur"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 384px, 448px"
                 priority
+                fetchPriority="high"
               />
             </div>
           </div>
