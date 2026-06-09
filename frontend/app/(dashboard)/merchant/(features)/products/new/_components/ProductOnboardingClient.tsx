@@ -1003,6 +1003,7 @@ export default function ProductOnboardingClient({
 				manualImagePreview={manualImagePreview}
 				manualImageError={manualImageError}
 				onManualImageChange={handleManualImageChange}
+				storeType={storeType}
 			/>
 
 			{storeType === 'grocery' && (
@@ -1082,6 +1083,7 @@ export default function ProductOnboardingClient({
 				editImagePreview={editImagePreview}
 				editImageError={editImageError}
 				onEditImageChange={handleEditImageChange}
+				storeType={storeType}
 			/>
 		</div>
 	);

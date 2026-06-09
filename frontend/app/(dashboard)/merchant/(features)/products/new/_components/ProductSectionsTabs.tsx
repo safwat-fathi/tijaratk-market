@@ -15,7 +15,9 @@ export default function ProductSectionsTabs({
     <div
       role="tablist"
       aria-label="أقسام إدارة المنتجات"
-      className="grid grid-cols-3 gap-2 rounded-xl bg-gray-50 p-1"
+      className={`grid gap-2 rounded-xl bg-gray-50 p-1 ${
+        sectionTabs.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
+      }`}
     >
       {sectionTabs.map((section) => {
         const isActive = activeSection === section.key;

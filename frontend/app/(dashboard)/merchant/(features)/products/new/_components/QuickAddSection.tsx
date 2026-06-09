@@ -37,6 +37,7 @@ type QuickAddSectionProps = {
 	manualImagePreview: string | null;
 	manualImageError: string | null;
 	onManualImageChange: (event: ChangeEvent<HTMLInputElement>) => void;
+	storeType?: string;
 };
 
 export default function QuickAddSection({
@@ -70,6 +71,7 @@ export default function QuickAddSection({
 	manualImagePreview,
 	manualImageError,
 	onManualImageChange,
+	storeType,
 }: QuickAddSectionProps) {
 	const imageActionLabel = manualImagePreview ? "تغيير الصورة" : "إضافة صورة";
 
@@ -168,6 +170,7 @@ export default function QuickAddSection({
 						onWeightPresetsChange={onManualWeightPresetsChange}
 						pricePresets={manualPricePresets}
 						onPricePresetsChange={onManualPricePresetsChange}
+						storeType={storeType}
 					/>
 
 					<CategoryFields

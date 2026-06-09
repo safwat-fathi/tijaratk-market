@@ -42,6 +42,7 @@ type EditProductSheetProps = {
   editImagePreview: string | null;
   editImageError?: string | null;
   onEditImageChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  storeType?: string;
 };
 
 export default function EditProductSheet({
@@ -77,6 +78,7 @@ export default function EditProductSheet({
   editImagePreview,
   editImageError,
   onEditImageChange,
+  storeType,
 }: EditProductSheetProps) {
   const currentImageUrl = editingProduct
     ? editImagePreview || resolveImageUrl(editingProduct.image_url)
@@ -162,6 +164,7 @@ export default function EditProductSheet({
             onWeightPresetsChange={onEditWeightPresetsChange}
             pricePresets={editPricePresets}
             onPricePresetsChange={onEditPricePresetsChange}
+            storeType={storeType}
           />
 
           <CategoryFields

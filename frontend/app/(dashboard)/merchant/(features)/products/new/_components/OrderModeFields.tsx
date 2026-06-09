@@ -1,9 +1,9 @@
-import type { ProductOrderMode } from '@/types/models/product';
+import type { ProductOrderMode } from "@/types/models/product";
 import {
   ORDER_MODE_PRICE,
   ORDER_MODE_QUANTITY,
   ORDER_MODE_WEIGHT,
-} from '../_utils/product-onboarding.constants';
+} from "../_utils/product-onboarding.constants";
 
 type OrderModeFieldsProps = {
   orderMode: ProductOrderMode;
@@ -18,6 +18,7 @@ type OrderModeFieldsProps = {
   onWeightPresetsChange: (value: string) => void;
   pricePresets: string;
   onPricePresetsChange: (value: string) => void;
+  storeType?: string;
 };
 
 export default function OrderModeFields({
@@ -33,45 +34,50 @@ export default function OrderModeFields({
   onWeightPresetsChange,
   pricePresets,
   onPricePresetsChange,
+  storeType,
 }: OrderModeFieldsProps) {
   return (
     <div className="space-y-2 rounded-xl border border-gray-200 p-3">
       <span className="block text-sm text-gray-700">طريقة الطلب</span>
-      <div className="grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          onClick={() => onOrderModeChange(ORDER_MODE_QUANTITY)}
-          className={`rounded-lg px-2 py-2 text-xs font-semibold ${
-            orderMode === ORDER_MODE_QUANTITY
-              ? 'bg-brand-primary text-white'
-              : 'border border-gray-300 text-gray-700'
-          }`}
-        >
-          بالعدد
-        </button>
-        <button
-          type="button"
-          onClick={() => onOrderModeChange(ORDER_MODE_WEIGHT)}
-          className={`rounded-lg px-2 py-2 text-xs font-semibold ${
-            orderMode === ORDER_MODE_WEIGHT
-              ? 'bg-brand-primary text-white'
-              : 'border border-gray-300 text-gray-700'
-          }`}
-        >
-          بالوزن
-        </button>
-        <button
-          type="button"
-          onClick={() => onOrderModeChange(ORDER_MODE_PRICE)}
-          className={`rounded-lg px-2 py-2 text-xs font-semibold ${
-            orderMode === ORDER_MODE_PRICE
-              ? 'bg-brand-primary text-white'
-              : 'border border-gray-300 text-gray-700'
-          }`}
-        >
-          بالمبلغ
-        </button>
-      </div>
+      {storeType !== "pharmacy" && (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => onOrderModeChange(ORDER_MODE_QUANTITY)}
+              className={`rounded-lg px-2 py-2 text-xs font-semibold ${
+                orderMode === ORDER_MODE_QUANTITY
+                  ? "bg-brand-primary text-white"
+                  : "border border-gray-300 text-gray-700"
+              }`}
+            >
+              بالعدد
+            </button>
+            <button
+              type="button"
+              onClick={() => onOrderModeChange(ORDER_MODE_WEIGHT)}
+              className={`rounded-lg px-2 py-2 text-xs font-semibold ${
+                orderMode === ORDER_MODE_WEIGHT
+                  ? "bg-brand-primary text-white"
+                  : "border border-gray-300 text-gray-700"
+              }`}
+            >
+              بالوزن
+            </button>
+            <button
+              type="button"
+              onClick={() => onOrderModeChange(ORDER_MODE_PRICE)}
+              className={`rounded-lg px-2 py-2 text-xs font-semibold ${
+                orderMode === ORDER_MODE_PRICE
+                  ? "bg-brand-primary text-white"
+                  : "border border-gray-300 text-gray-700"
+              }`}
+            >
+              بالمبلغ
+            </button>
+          </div>
+        </>
+      )}
 
       {orderMode === ORDER_MODE_QUANTITY && (
         <div className="space-y-2">
@@ -84,13 +90,17 @@ export default function OrderModeFields({
           <div className="grid grid-cols-2 gap-2">
             <input
               value={secondaryUnitLabel}
-              onChange={(event) => onSecondaryUnitLabelChange(event.target.value)}
-              placeholder="وحدة إضافية (مثال: طبق 30)"
+              onChange={(event) =>
+                onSecondaryUnitLabelChange(event.target.value)
+              }
+              placeholder="وحدة إضافية (مثال: كرتونة)"
               className="w-full rounded-md border border-brand-border px-3 py-2 text-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
             />
             <input
               value={secondaryUnitMultiplier}
-              onChange={(event) => onSecondaryUnitMultiplierChange(event.target.value)}
+              onChange={(event) =>
+                onSecondaryUnitMultiplierChange(event.target.value)
+              }
               inputMode="decimal"
               placeholder="المضاعف (مثال: 30)"
               className="w-full rounded-md border border-brand-border px-3 py-2 text-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
