@@ -346,23 +346,32 @@ export const filterCatalogItemsByCategory = (
 export const buildSectionTabs = (
   catalogItemsLength: number,
   productsLength: number,
-): SectionTab[] => [
-  {
-    key: SECTION_QUICK_ADD,
-    label: 'إضافة منتج',
-    description: 'إضافة منتج يدويًا',
-  },
-  {
-    key: SECTION_CATALOG,
-    label: 'الكتالوج',
-    description: `${catalogItemsLength} منتج جاهز`,
-  },
-  {
+  storeType?: string,
+): SectionTab[] => {
+  const tabs: SectionTab[] = [
+    {
+      key: SECTION_QUICK_ADD,
+      label: 'إضافة منتج',
+      description: 'إضافة منتج يدويًا',
+    },
+  ];
+
+  if (storeType === 'grocery') {
+    tabs.push({
+      key: SECTION_CATALOG,
+      label: 'الكتالوج',
+      description: `${catalogItemsLength} منتج جاهز`,
+    });
+  }
+
+  tabs.push({
     key: SECTION_MY_PRODUCTS,
     label: 'منتجاتك',
     description: `${productsLength} منتج`,
-  },
-];
+  });
+
+  return tabs;
+};
 
 export const buildProductsByNormalizedNameMap = (products: Product[]): Map<string, Product> => {
   const map = new Map<string, Product>();

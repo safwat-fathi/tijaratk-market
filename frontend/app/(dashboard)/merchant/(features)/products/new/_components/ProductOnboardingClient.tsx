@@ -62,6 +62,7 @@ type ProductOnboardingClientProps = {
 	initialCatalogItems: CatalogItem[];
 	initialCatalogMeta: PublicProductsMeta;
 	productCategories: string[];
+	storeType?: string;
 };
 
 const CATALOG_PAGE_LIMIT = 40;
@@ -81,6 +82,7 @@ export default function ProductOnboardingClient({
 	initialCatalogItems,
 	initialCatalogMeta,
 	productCategories,
+	storeType,
 }: ProductOnboardingClientProps) {
 	const router = useRouter();
 	const pathname = usePathname();
@@ -221,8 +223,8 @@ export default function ProductOnboardingClient({
 		: `${formatArabicInteger(products.length) || products.length} منتج`;
 
 	const sectionTabs = useMemo(
-		() => buildSectionTabs(catalogMeta.total, products.length),
-		[catalogMeta.total, products.length],
+		() => buildSectionTabs(catalogMeta.total, products.length, storeType),
+		[catalogMeta.total, products.length, storeType],
 	);
 
 	const activeSectionLabel =
@@ -241,10 +243,16 @@ export default function ProductOnboardingClient({
 		const sectionFromQuery = resolveSectionFromQuery(
 			searchParams.get("section"),
 		);
+		
+		const resolvedSection = 
+			storeType !== 'grocery' && sectionFromQuery === 'catalog'
+				? 'quick-add'
+				: sectionFromQuery;
+
 		setActiveSection(currentSection =>
-			currentSection === sectionFromQuery ? currentSection : sectionFromQuery,
+			currentSection === resolvedSection ? currentSection : resolvedSection,
 		);
-	}, [searchParams]);
+	}, [searchParams, storeType]);
 
 	const replaceSectionInQuery = (section: ProductSection) => {
 		const nextParams = new URLSearchParams(searchParams.toString());
@@ -997,19 +1005,21 @@ export default function ProductOnboardingClient({
 				onManualImageChange={handleManualImageChange}
 			/>
 
-			<CatalogSection
-				active={activeSection === "catalog"}
-				catalogItems={catalogItems}
-				categoryTabs={categoryTabs}
-				activeCategory={activeCategory}
-				onCategoryChange={handleCategoryChange}
-				catalogMeta={catalogMeta}
-				isLoadingCatalog={isLoadingCatalog}
-				catalogError={catalogError}
-				onLoadMore={handleLoadMoreCatalogItems}
-				pendingCatalogIds={pendingCatalogIds}
-				onAddFromCatalog={handleAddFromCatalog}
-			/>
+			{storeType === 'grocery' && (
+				<CatalogSection
+					active={activeSection === "catalog"}
+					catalogItems={catalogItems}
+					categoryTabs={categoryTabs}
+					activeCategory={activeCategory}
+					onCategoryChange={handleCategoryChange}
+					catalogMeta={catalogMeta}
+					isLoadingCatalog={isLoadingCatalog}
+					catalogError={catalogError}
+					onLoadMore={handleLoadMoreCatalogItems}
+					pendingCatalogIds={pendingCatalogIds}
+					onAddFromCatalog={handleAddFromCatalog}
+				/>
+			)}
 
 			<MyProductsSection
 				active={activeSection === "my-products"}

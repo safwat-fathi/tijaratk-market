@@ -3,6 +3,8 @@ import { productsService } from '@/services/api/products.service';
 import { CatalogItemsResponse, Product } from '@/types/models/product';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import { createNoIndexMetadata } from '@/lib/marketing-seo';
+import { tenantsService } from '@/services/api/tenants.service';
+import { Tenant } from '@/types/models/tenant';
 
 export const metadata = createNoIndexMetadata(
 	"إدارة المنتجات",
@@ -82,11 +84,28 @@ async function getProductCategories(): Promise<string[]> {
   }
 }
 
+async function getTenant(): Promise<Tenant | null> {
+  try {
+    const response = await tenantsService.getMyTenant();
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return null;
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Failed to fetch tenant', error);
+    return null;
+  }
+}
+
 export default async function NewProductPage() {
-  const [products, catalogItemsResponse, productCategories] = await Promise.all([
+  const [products, catalogItemsResponse, productCategories, tenant] = await Promise.all([
     getProducts(),
     getCatalogItems(),
     getProductCategories(),
+    getTenant(),
   ]);
 
   return (
@@ -101,6 +120,7 @@ export default async function NewProductPage() {
         initialCatalogItems={catalogItemsResponse.data}
         initialCatalogMeta={catalogItemsResponse.meta}
         productCategories={productCategories}
+        storeType={tenant?.category}
       />
     </div>
   );
