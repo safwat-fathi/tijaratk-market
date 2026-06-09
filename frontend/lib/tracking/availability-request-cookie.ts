@@ -154,6 +154,10 @@ export function getCairoDateKey(date = new Date()): string {
 	return `${year}-${month}-${day}`;
 }
 
+function normalizeRequestedProductName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
 function buildRequestKey(slug: string, productId: number): string {
 	const normalizedSlug = slug.trim();
 	if (!normalizedSlug) {
@@ -165,6 +169,20 @@ function buildRequestKey(slug: string, productId: number): string {
 	}
 
 	return `${normalizedSlug}:${productId}`;
+}
+
+function buildCustomRequestKey(slug: string, requestedProductName: string): string {
+	const normalizedSlug = slug.trim();
+	if (!normalizedSlug) {
+		throw new Error("slug is required");
+	}
+
+	const normalizedName = normalizeRequestedProductName(requestedProductName);
+	if (!normalizedName || normalizedName.length > 120) {
+		throw new Error("requested_product_name is invalid");
+	}
+
+	return `${normalizedSlug}:custom:${normalizedName.toLocaleLowerCase("ar-EG")}`;
 }
 
 export async function readAvailabilityStateCookie(): Promise<AvailabilityStateCookiePayload> {
@@ -237,12 +255,72 @@ export async function prepareAvailabilityCookieState(
 	};
 }
 
+export async function prepareCustomAvailabilityCookieState(
+	slug: string,
+	requestedProductName: string,
+): Promise<{
+	visitorKey: string;
+	dateKey: string;
+	alreadyRequestedToday: boolean;
+	requestedProductName: string;
+}> {
+	const normalizedName = normalizeRequestedProductName(requestedProductName);
+	const requestKey = buildCustomRequestKey(slug, normalizedName);
+	const payload = await readAvailabilityStateCookie();
+	const dateKey = getCairoDateKey();
+
+	const visitorKey = payload.visitor_key || generateVisitorKey();
+	const requestsByKeyMap = new Map(
+		Object.entries(pruneRequestsByKey({ ...payload.requests_by_key })),
+	);
+	const alreadyRequestedToday = requestsByKeyMap.get(requestKey) === dateKey;
+	const requestsByKey = Object.fromEntries(requestsByKeyMap);
+
+	const shouldWrite =
+		payload.visitor_key !== visitorKey ||
+		Object.keys(payload.requests_by_key).length !==
+			Object.keys(requestsByKey).length;
+
+	if (shouldWrite) {
+		await writeAvailabilityStateCookie({
+			v: COOKIE_VERSION,
+			visitor_key: visitorKey,
+			requests_by_key: requestsByKey,
+		});
+	}
+
+	return {
+		visitorKey,
+		dateKey,
+		alreadyRequestedToday,
+		requestedProductName: normalizedName,
+	};
+}
+
 export async function markAvailabilityCookieRequestSent(
 	slug: string,
 	productId: number,
 	dateKey?: string,
 ): Promise<void> {
 	const requestKey = buildRequestKey(slug, productId);
+	const payload = await readAvailabilityStateCookie();
+	const resolvedDateKey = normalizeDateKey(dateKey) || getCairoDateKey();
+	const nextRequestsByKeyMap = new Map(Object.entries(payload.requests_by_key));
+	nextRequestsByKeyMap.set(requestKey, resolvedDateKey);
+
+	await writeAvailabilityStateCookie({
+		v: COOKIE_VERSION,
+		visitor_key: payload.visitor_key || generateVisitorKey(),
+		requests_by_key: Object.fromEntries(nextRequestsByKeyMap),
+	});
+}
+
+export async function markCustomAvailabilityCookieRequestSent(
+	slug: string,
+	requestedProductName: string,
+	dateKey?: string,
+): Promise<void> {
+	const requestKey = buildCustomRequestKey(slug, requestedProductName);
 	const payload = await readAvailabilityStateCookie();
 	const resolvedDateKey = normalizeDateKey(dateKey) || getCairoDateKey();
 	const nextRequestsByKeyMap = new Map(Object.entries(payload.requests_by_key));

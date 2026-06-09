@@ -485,6 +485,7 @@ export class ProductsService {
    * Returns active catalog items, optionally filtered by category.
    */
   async findCatalogItems(
+    search?: string,
     category?: string,
     page = 1,
     limit = 40,
@@ -493,6 +494,41 @@ export class ProductsService {
     const normalizedLimit = Number.isFinite(limit)
       ? Math.min(100, Math.max(1, limit))
       : 40;
+    const normalizedSearch = search ? this.normalizeSearchTerm(search) : '';
+
+    if (normalizedSearch.length >= 2) {
+      const normalizedCategory = this.normalizeOptionalCategory(category);
+      const similarityThreshold = this.resolveSimilarityThreshold(normalizedSearch);
+      const strictMatchThresholds = this.resolveStrictMatchThresholds(normalizedSearch);
+
+      const cacheKey = this.buildCatalogSearchCacheKey(
+        normalizedSearch,
+        normalizedCategory,
+        similarityThreshold,
+        strictMatchThresholds,
+        normalizedPage,
+        normalizedLimit,
+      );
+
+      const cached = await this.cacheManager.get<CatalogItemsResult>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      const result = await this.searchWithinCatalogItems(
+        normalizedSearch,
+        normalizedCategory,
+        similarityThreshold,
+        strictMatchThresholds,
+        normalizedPage,
+        normalizedLimit,
+      );
+
+      await this.cacheManager.set(cacheKey, result, PRODUCT_SEARCH_CACHE_TTL_SECONDS);
+
+      return result;
+    }
+
     const where: Prisma.CatalogItemWhereInput = { is_active: true };
     if (category) {
       where.category = category;
@@ -1256,6 +1292,117 @@ export class ProductsService {
       excludedProductIds.length > 0 ? excludedProductIds.join(',') : 'none';
     const rankingMode = rankAll ? 'rank_all' : 'strict';
     return `merchant:products:search:${tenantId}:${version}:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${rankingMode}:${normalizedExcludedIds}:${page}:${limit}`;
+  }
+
+  private buildCatalogSearchCacheKey(
+    normalizedSearch: string,
+    category: string | undefined,
+    similarityThreshold: number,
+    strictMatchThresholds: StrictMatchThresholds,
+    page: number,
+    limit: number,
+  ): string {
+    const normalizedCategory = category || 'all';
+    return `catalog:search:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${page}:${limit}`;
+  }
+
+  private async searchWithinCatalogItems(
+    normalizedSearch: string,
+    category: string | undefined,
+    similarityThreshold: number,
+    strictMatchThresholds: StrictMatchThresholds,
+    page: number,
+    limit: number,
+  ): Promise<CatalogItemsResult> {
+    const prefixPattern = `${normalizedSearch}%`;
+    const containsPattern = `%${normalizedSearch}%`;
+
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    const addParam = (val: any) => {
+      params.push(val);
+      return `$${params.length}`;
+    };
+
+    conditions.push(`is_active = true`);
+
+    if (category) {
+      conditions.push(`category = ${addParam(category)}`);
+    }
+
+    const searchParam = addParam(normalizedSearch);
+    const prefixParam = addParam(prefixPattern);
+    const containsParam = addParam(containsPattern);
+    const searchTextParam = `${searchParam}::text`;
+    const prefixTextParam = `${prefixParam}::text`;
+    const containsTextParam = `${containsParam}::text`;
+
+    const comparableNameSql = this.buildComparableProductNameExpression('name');
+
+    const rankSql = `(word_similarity(${comparableNameSql}, ${searchTextParam}) * 0.55) + (similarity(${comparableNameSql}, ${searchTextParam}) * 0.30) + (CASE WHEN ${comparableNameSql} LIKE ${prefixTextParam} THEN 1 ELSE 0 END) * 0.15`;
+
+    const strictSimParam = addParam(
+      strictMatchThresholds.strictSimilarityThreshold,
+    );
+    const strictWordSimParam = addParam(
+      strictMatchThresholds.strictWordSimilarityThreshold,
+    );
+
+    conditions.push(`(
+      ${comparableNameSql} LIKE ${prefixTextParam}
+      OR ${comparableNameSql} LIKE ${containsTextParam}
+      OR (
+        similarity(${comparableNameSql}, ${searchTextParam}) >= ${strictSimParam}::double precision
+        AND word_similarity(${comparableNameSql}, ${searchTextParam}) >= ${strictWordSimParam}::double precision
+      )
+    )`);
+
+    const whereClause = conditions.join(' AND ');
+
+    const limitParam = addParam(limit);
+    const offsetParam = addParam((page - 1) * limit);
+
+    const dataQuery = `
+      SELECT *, 
+        ${rankSql} as search_rank,
+        word_similarity(${comparableNameSql}, ${searchTextParam}) as word_sim,
+        similarity(${comparableNameSql}, ${searchTextParam}) as name_similarity,
+        CASE WHEN ${comparableNameSql} LIKE ${containsTextParam} THEN 1 ELSE 0 END as contains_score
+      FROM catalog_items
+      WHERE ${whereClause}
+      ORDER BY search_rank DESC, word_sim DESC, name_similarity DESC, contains_score DESC, created_at DESC, id DESC
+      LIMIT ${limitParam}::int OFFSET ${offsetParam}::int
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*)::int as total
+      FROM catalog_items
+      WHERE ${whereClause}
+    `;
+
+    const data = await this.getPrismaClient().$queryRawUnsafe<CatalogItem[]>(
+      dataQuery,
+      ...params,
+    );
+    const countResult = await this.getPrismaClient().$queryRawUnsafe<{ total: number }[]>(
+      countQuery,
+      ...this.getReferencedRawQueryParams(countQuery, params)
+    );
+    const total = countResult[0]?.total || 0;
+
+    const lastPage = total > 0 ? Math.ceil(total / limit) : 1;
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        last_page: lastPage,
+        has_next: page < lastPage,
+      },
+    };
   }
 
   private normalizeExcludedProductIds(rawIds?: number[]): number[] {

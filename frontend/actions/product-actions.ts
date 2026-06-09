@@ -18,6 +18,7 @@ const UPDATE_PRODUCT_TIMEOUT_MESSAGE =
   'استغرق رفع/معالجة الصورة وقتًا أطول من المتوقع. حاول مرة أخرى.';
 
 type LoadCatalogItemsParams = {
+  search?: string;
   category?: string;
   page?: number;
   limit?: number;

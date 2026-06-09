@@ -32,13 +32,20 @@ type ProductListProps = {
 	onUpdateSelection: (product: Product, selection: ProductCartSelection | null) => void;
 	onAdded?: () => void;
 	onRequestAvailability?: (product: Product) => Promise<AvailabilityRequestOutcome>;
+	onRequestCustomAvailability?: (
+		requestedProductName: string,
+	) => Promise<AvailabilityRequestOutcome>;
 	loadMoreTriggerIndex?: number;
 	setLoadMoreTarget?: (node: HTMLDivElement | null) => void;
 };
 
 type AvailabilitySheetState =
 	| {
+			type: "product";
 			product: Product;
+	  }
+	| {
+			type: "custom";
 	  }
 	| null;
 
@@ -86,6 +93,9 @@ const resolveModeLabel = (mode: SelectionMode) => {
 
 const resolveBaseQuantityUnitLabel = (product: Product) =>
 	product.order_config?.quantity?.unit_label || "قطعة";
+
+const normalizeRequestedProductName = (value: string) =>
+	value.trim().replace(/\s+/g, " ");
 
 export type QuantityOption = {
 	id: string;
@@ -754,6 +764,7 @@ export default function ProductList({
 	onUpdateSelection,
 	onAdded,
 	onRequestAvailability,
+	onRequestCustomAvailability,
 	loadMoreTriggerIndex,
 	setLoadMoreTarget,
 }: ProductListProps) {
@@ -768,9 +779,12 @@ export default function ProductList({
 	const [inlineErrorByKey, setInlineErrorByKey] = useState<Record<string, string>>({});
 	const [availabilitySheet, setAvailabilitySheet] =
 		useState<AvailabilitySheetState>(null);
+	const [customAvailabilityName, setCustomAvailabilityName] = useState("");
+	const [customAvailabilityError, setCustomAvailabilityError] = useState("");
 	const [isAvailabilitySubmitting, setIsAvailabilitySubmitting] = useState(false);
 	useBodyScrollLock(Boolean(availabilitySheet));
-	const selectedAvailabilityProduct = availabilitySheet?.product ?? null;
+	const selectedAvailabilityProduct =
+		availabilitySheet?.type === "product" ? availabilitySheet.product : null;
 
 	const closeAvailabilitySheet = (force = false) => {
 		if (!force && isAvailabilitySubmitting) {
@@ -778,6 +792,7 @@ export default function ProductList({
 		}
 
 		setAvailabilitySheet(null);
+		setCustomAvailabilityError("");
 	};
 
 	const sheetRef = useDragToClose<HTMLDivElement>({
@@ -1035,6 +1050,35 @@ export default function ProductList({
 	};
 
 	const submitAvailabilityRequest = async () => {
+		if (availabilitySheet?.type === "custom") {
+			if (!onRequestCustomAvailability) {
+				return;
+			}
+
+			const requestedProductName = normalizeRequestedProductName(customAvailabilityName);
+			if (!requestedProductName) {
+				setCustomAvailabilityError("اكتب اسم المنتج المطلوب");
+				return;
+			}
+
+			if (requestedProductName.length > 120) {
+				setCustomAvailabilityError("اسم المنتج طويل جداً");
+				return;
+			}
+
+			setIsAvailabilitySubmitting(true);
+			try {
+				const result = await onRequestCustomAvailability(requestedProductName);
+				if (result === "created" || result === "already_requested_today") {
+					setCustomAvailabilityName("");
+					closeAvailabilitySheet(true);
+				}
+			} finally {
+				setIsAvailabilitySubmitting(false);
+			}
+			return;
+		}
+
 		if (!selectedAvailabilityProduct || !onRequestAvailability) {
 			return;
 		}
@@ -1052,7 +1096,22 @@ export default function ProductList({
 
 	return (
 		<>
-				<div className="space-y-4">
+			<div className="space-y-4">
+				{onRequestCustomAvailability && (
+					<div className="rounded-2xl border border-dashed border-brand-accent/70 bg-brand-soft/60 p-4 shadow-soft">
+						<p className="text-sm font-bold text-brand-text">مش لاقي المنتج؟</p>
+						<p className="mt-1 text-sm text-muted-foreground">
+							اكتب اسمه وهنبلغ التاجر إنك محتاجه.
+						</p>
+						<button
+							type="button"
+							onClick={() => setAvailabilitySheet({ type: "custom" })}
+							className="mt-3 min-h-11 w-full rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+						>
+							اطلب منتج غير موجود
+						</button>
+					</div>
+				)}
 					{products.map((product, index) => {
 						const selection = selections[product.id];
 						const shouldAttachLoadMoreRef =
@@ -1080,14 +1139,18 @@ export default function ProductList({
 								onApplyInlineValue={handleApplyInlineValue}
 								onCancelInlineValue={handleCancelInlineValue}
 								onOpenAvailabilitySheet={(selectedProduct) =>
-									setAvailabilitySheet({ product: selectedProduct })
+									setAvailabilitySheet({
+										type: "product",
+										product: selectedProduct,
+									})
 								}
 							/>
 						);
 					})}
 				</div>
 
-			{availabilitySheet && selectedAvailabilityProduct && (
+			{availabilitySheet &&
+				(selectedAvailabilityProduct || availabilitySheet.type === "custom") && (
 				<div
 					className="fixed inset-0 z-75 flex items-end bg-black/40"
 					role="dialog"
@@ -1104,10 +1167,40 @@ export default function ProductList({
 						className="relative max-h-[85dvh] w-full overflow-y-auto overscroll-contain rounded-t-xl bg-white p-4 shadow-float transition-transform [-webkit-overflow-scrolling:touch]"
 					>
 						<div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-brand-border" />
-						<p className="text-base font-bold text-brand-text">العنصر غير متاح حالياً</p>
-						<p className="mt-1 text-sm text-muted-foreground">
-							تحب نبلغ التاجر إنك محتاجه؟
-						</p>
+						{availabilitySheet.type === "custom" ? (
+							<>
+								<p className="text-base font-bold text-brand-text">
+									اطلب منتج غير موجود
+								</p>
+								<label className="mt-3 block text-sm font-semibold text-brand-text">
+									اسم المنتج
+									<input
+										type="text"
+										value={customAvailabilityName}
+										onChange={(event) => {
+											setCustomAvailabilityName(event.target.value);
+											setCustomAvailabilityError("");
+										}}
+										maxLength={120}
+										placeholder="مثلاً: رز بسمتي"
+										className="mt-2 w-full rounded-xl border border-brand-border bg-white px-3 py-3 text-sm font-normal text-brand-text outline-none transition focus:border-brand-primary focus:ring-4 focus:ring-brand-accent/20"
+										disabled={isAvailabilitySubmitting}
+									/>
+								</label>
+								{customAvailabilityError && (
+									<p className="mt-2 text-sm text-red-600">{customAvailabilityError}</p>
+								)}
+							</>
+						) : (
+							<>
+								<p className="text-base font-bold text-brand-text">
+									العنصر غير متاح حالياً
+								</p>
+								<p className="mt-1 text-sm text-muted-foreground">
+									تحب نبلغ التاجر إنك محتاجه؟
+								</p>
+							</>
+						)}
 						<div className="mt-4 grid grid-cols-2 gap-2">
 							<button
 								type="button"

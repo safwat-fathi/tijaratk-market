@@ -10,6 +10,11 @@ type UpdateTenantDeliverySettingsRequest = {
   delivery_ends_at?: string;
 };
 
+type UpdateTenantSettingsRequest = {
+  name: string;
+  category: string;
+};
+
 class TenantsService extends HttpService {
   constructor() {
     super("/tenants");
@@ -32,6 +37,12 @@ class TenantsService extends HttpService {
     payload: UpdateTenantDeliverySettingsRequest,
   ) {
     return this.patch<Tenant>("me/delivery", payload, undefined, {
+      authRequired: true,
+    });
+  }
+
+  public async updateMyGeneralSettings(payload: UpdateTenantSettingsRequest) {
+    return this.patch<Tenant>("me/general", payload, undefined, {
       authRequired: true,
     });
   }

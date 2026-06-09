@@ -4,6 +4,7 @@ import { Prisma, Tenant } from '../../generated/prisma/client';
 import { TENANT_CATEGORIES, TenantCategory } from './constants/tenant-category';
 import { generateUniqueSlug } from '../common/utils/slug.utils';
 import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-settings.dto';
+import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
 
 @Injectable()
 export class TenantsService {
@@ -71,6 +72,22 @@ export class TenantsService {
         delivery_available: dto.delivery_available,
         delivery_starts_at: deliveryStartsAt,
         delivery_ends_at: deliveryEndsAt,
+      },
+    });
+  }
+
+  /**
+   * Updates merchant general settings.
+   */
+  async updateGeneralSettings(
+    id: number,
+    dto: UpdateTenantSettingsDto,
+  ): Promise<Tenant> {
+    return this.prisma.tenant.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        category: dto.category as any, // Cast to any to avoid strict type issues with generated client vs enum
       },
     });
   }

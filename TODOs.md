@@ -1,5 +1,9 @@
 # Todo list
 
+## Testing environment
+
+- Add testing live environment for all features
+
 ## Pricing plans gatting for merchants
 
 - Every merchant should be subscribed to a plan.

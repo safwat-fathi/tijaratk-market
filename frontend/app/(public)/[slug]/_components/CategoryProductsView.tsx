@@ -28,6 +28,9 @@ type CategoryProductsViewProps = {
   onRequestAvailability: (
     product: Product,
   ) => Promise<AvailabilityRequestOutcome>;
+  onRequestCustomAvailability: (
+    requestedProductName: string,
+  ) => Promise<AvailabilityRequestOutcome>;
   setLoadMoreTarget: (node: HTMLDivElement | null) => void;
 };
 
@@ -45,6 +48,7 @@ export default function CategoryProductsView({
   onUpdateSelection,
   onProductAdded,
   onRequestAvailability,
+  onRequestCustomAvailability,
   setLoadMoreTarget,
 }: CategoryProductsViewProps) {
   const activeLabel =
@@ -80,13 +84,14 @@ export default function CategoryProductsView({
         />
       </div>
 
-      {hasProducts && (
+      {(hasProducts || shouldShowEmptyState) && (
         <ProductList
           products={activeProducts}
           selections={cartSelections}
           onUpdateSelection={onUpdateSelection}
           onAdded={onProductAdded}
           onRequestAvailability={onRequestAvailability}
+          onRequestCustomAvailability={onRequestCustomAvailability}
           loadMoreTriggerIndex={
             hasMoreInActiveCategory ? activeLoadMoreIndex : undefined
           }
@@ -120,7 +125,7 @@ export default function CategoryProductsView({
       )}
 
       {shouldShowEmptyState && (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
+        <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
           لا توجد منتجات في هذا القسم حالياً.
         </div>
       )}

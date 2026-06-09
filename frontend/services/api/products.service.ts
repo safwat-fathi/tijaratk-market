@@ -103,11 +103,15 @@ class ProductsService extends HttpService {
   }
 
   public async getCatalogItems(params?: {
+    search?: string;
     category?: string;
     page?: number;
     limit?: number;
   }) {
     const query = new URLSearchParams();
+    if (params?.search) {
+      query.set('search', params.search);
+    }
     if (params?.category) {
       query.set('category', params.category);
     }

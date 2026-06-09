@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { MerchantAvailabilitySummaryResponse } from '@/types/services/availability-requests';
 import { formatArabicInteger } from '@/lib/utils/number';
 
@@ -24,9 +25,14 @@ export default function AvailabilityRequestsCard({
     <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-bold text-gray-900">طلبات توفير المنتجات</h2>
-        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-          {formatArabicInteger(summary.today_total_requests) || summary.today_total_requests} اليوم
-        </span>
+        <div className="flex items-center gap-2">
+          <Link href="/merchant/availability-requests" className="text-xs font-semibold text-amber-800 underline-offset-4 hover:underline">
+            عرض الكل
+          </Link>
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+            {formatArabicInteger(summary.today_total_requests) || summary.today_total_requests} اليوم
+          </span>
+        </div>
       </div>
 
       {summary.top_products.length === 0 ? (
@@ -37,7 +43,7 @@ export default function AvailabilityRequestsCard({
         <ul className="mt-3 space-y-2">
           {summary.top_products.map((item) => (
             <li
-              key={item.product_id}
+              key={item.item_key}
               className="flex items-center justify-between rounded-xl border border-amber-200 bg-white px-3 py-2"
             >
               <div>

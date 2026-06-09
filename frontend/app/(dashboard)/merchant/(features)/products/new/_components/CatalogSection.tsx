@@ -13,6 +13,9 @@ type CatalogSectionProps = {
   categoryTabs: CategoryTab[];
   activeCategory: string;
   onCategoryChange: (category: string) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (value: string) => void;
+  onClearSearchQuery?: () => void;
   catalogMeta: PublicProductsMeta;
   isLoadingCatalog: boolean;
   catalogError: string | null;
@@ -27,6 +30,9 @@ export default function CatalogSection({
   categoryTabs,
   activeCategory,
   onCategoryChange,
+  searchQuery = "",
+  onSearchQueryChange,
+  onClearSearchQuery,
   catalogMeta,
   isLoadingCatalog,
   catalogError,
@@ -35,6 +41,12 @@ export default function CatalogSection({
   onAddFromCatalog,
 }: CatalogSectionProps) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleClearSearch = () => {
+    onClearSearchQuery?.();
+    searchInputRef.current?.focus();
+  };
 
   useEffect(() => {
     if (!active || !catalogMeta.has_next || isLoadingCatalog) {
@@ -76,7 +88,43 @@ export default function CatalogSection({
           قاعدة البيانات.
         </p>
 
-        <ScrollableTabList className="mb-4 mt-3">
+        <div className="mt-4">
+          <div className="relative">
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange?.(event.target.value)}
+              placeholder="ابحث بالاسم في الكتالوج"
+              inputMode="search"
+              className="w-full rounded-md border border-brand-border px-4 py-2.5 pe-10 text-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                aria-label="مسح البحث"
+                className="absolute inset-y-0 end-0 pe-3 text-gray-400 transition-colors hover:text-gray-600"
+              >
+                <svg
+                  className="h-4 w-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <ScrollableTabList className="mb-4 mt-4">
           {categoryTabs.map((category) => (
             <TabButton
               key={category.key}

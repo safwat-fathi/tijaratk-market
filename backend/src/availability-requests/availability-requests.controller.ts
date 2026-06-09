@@ -21,6 +21,7 @@ import { AuthGuard } from '@nestjs/passport';
 import CONSTANTS from 'src/common/constants';
 import { AvailabilityRequestsService } from './availability-requests.service';
 import { CreateAvailabilityRequestDto } from './dto/create-availability-request.dto';
+import { GetAvailabilityRequests } from './dto/get-availability-requests/get-availability-requests';
 import { GetAvailabilitySummaryDto } from './dto/get-availability-summary.dto';
 import { Request } from 'express';
 
@@ -70,6 +71,31 @@ export class AvailabilityRequestsController {
       tenantId,
       query.days,
       query.limit,
+    );
+  }
+
+  @Get('merchant')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'List merchant availability requests',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Availability requests returned successfully',
+  })
+  getMerchantRequests(
+    @Req() req: Request,
+    @Query() query: GetAvailabilityRequests,
+  ) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.availabilityRequestsService.getMerchantRequests(
+      tenantId,
+      query,
     );
   }
 }

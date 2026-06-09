@@ -152,6 +152,7 @@ export class ProductsController {
   @ApiResponse({ status: HttpStatus.OK, description: 'Return catalog items' })
   findCatalogItems(@Query() query: GetCatalogItemsDto) {
     return this.productsService.findCatalogItems(
+      query.search,
       query.category,
       query.page,
       query.limit,

@@ -16,16 +16,24 @@ model AvailabilityRequest {
   deleted_at   DateTime? @db.Timestamp(6)
   tenant_id    Int
   id           Int       @id(map: "PK_availability_requests_id") @default(autoincrement())
-  product_id   Int
-  visitor_key  String    @db.VarChar(64)
-  request_date DateTime  @db.Date
-  product      Product   @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_availability_requests_product")
-  tenant       Tenant    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_availability_requests_tenant")
+  product_id             Int?
+  visitor_key            String    @db.VarChar(64)
+  request_date           DateTime  @db.Date
+  requested_product_name String?   @db.VarChar(120)
+  requested_product_key  String?   @db.VarChar(120)
+  customer_name          String?   @db.VarChar(120)
+  customer_phone         String?   @db.VarChar(32)
+  customer_address       String?
+  customer_notes         String?
+  product                Product?  @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_availability_requests_product")
+  tenant                 Tenant    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_availability_requests_tenant")
 
   @@unique([tenant_id, product_id, visitor_key, request_date], map: "UQ_availability_requests_tenant_product_visitor_date")
+  @@unique([tenant_id, requested_product_key, visitor_key, request_date], map: "UQ_availability_requests_tenant_custom_visitor_date")
   @@index([product_id], map: "IDX_availability_requests_product_id")
   @@index([request_date], map: "IDX_availability_requests_request_date")
   @@index([tenant_id, created_at(sort: Desc)], map: "IDX_availability_requests_tenant_created_at")
+  @@index([tenant_id, requested_product_key, request_date], map: "IDX_availability_requests_tenant_custom_request_date")
   @@index([tenant_id, product_id, request_date], map: "IDX_availability_requests_tenant_product_request_date")
   @@index([visitor_key], map: "IDX_availability_requests_visitor_key")
   @@map("availability_requests")

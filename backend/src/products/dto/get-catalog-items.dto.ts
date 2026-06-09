@@ -23,6 +23,15 @@ export class GetCatalogItemsDto {
   category?: string;
 
   @ApiPropertyOptional({
+    description: 'Search items by name',
+    example: 'جبنة',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  search?: string;
+
+  @ApiPropertyOptional({
     description: 'Page number',
     example: 1,
     default: 1,

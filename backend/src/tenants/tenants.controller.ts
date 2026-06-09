@@ -22,6 +22,7 @@ import { Request } from 'express';
 import CONSTANTS from 'src/common/constants';
 import { TenantsService } from './tenants.service';
 import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-settings.dto';
+import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
 import { TenantStatus } from '../../generated/prisma/client';
 
 @ApiTags('Tenants')
@@ -73,6 +74,28 @@ export class TenantsController {
     }
 
     return this.tenantsService.updateDeliverySettings(tenantId, dto);
+  }
+
+  @Patch('me/general')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Update authenticated tenant general settings' })
+  @ApiBody({ type: UpdateTenantSettingsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'General settings updated successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updateMyGeneralSettings(
+    @Req() req: Request,
+    @Body() dto: UpdateTenantSettingsDto,
+  ) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.tenantsService.updateGeneralSettings(tenantId, dto);
   }
 
   @Get('public/:slug')

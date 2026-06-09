@@ -39,6 +39,7 @@ import {
   SEARCH_DEBOUNCE_MS,
   SEARCH_RESULTS_LIMIT,
   SECTION_MY_PRODUCTS,
+  SECTION_CATALOG,
 } from '../_utils/product-onboarding.constants';
 import {
 	buildAvailableProductCategories,
@@ -165,6 +166,9 @@ export default function ProductOnboardingClient({
 	const [searchError, setSearchError] = useState<string | null>(null);
 	const [searchRefreshKey, setSearchRefreshKey] = useState(0);
 
+	const [catalogSearchQuery, setCatalogSearchQuery] = useState("");
+	const [debouncedCatalogSearchQuery] = useDebounce(catalogSearchQuery, SEARCH_DEBOUNCE_MS);
+
 	const productRowRefs = useRef<Map<number, HTMLLIElement | null>>(new Map());
 	const categoryRequestIdRef = useRef(0);
 
@@ -283,10 +287,12 @@ export default function ProductOnboardingClient({
 	const loadCatalogPage = async ({
 		category,
 		page,
+		search,
 		append,
 	}: {
 		category: string;
 		page: number;
+		search?: string;
 		append: boolean;
 	}) => {
 		if (append && isLoadingCatalog) {
@@ -299,6 +305,7 @@ export default function ProductOnboardingClient({
 		setCatalogError(null);
 
 		const response = await loadCatalogItemsAction({
+			search: search?.trim() || undefined,
 			category: resolveCatalogCategoryParam(category),
 			page,
 			limit: CATALOG_PAGE_LIMIT,
@@ -338,9 +345,27 @@ export default function ProductOnboardingClient({
 		void loadCatalogPage({
 			category,
 			page: 1,
+			search: debouncedCatalogSearchQuery,
 			append: false,
 		});
 	};
+
+	useEffect(() => {
+		setCatalogItems([]);
+		setCatalogMeta({
+			total: 0,
+			page: 1,
+			limit: CATALOG_PAGE_LIMIT,
+			last_page: 1,
+			has_next: false,
+		});
+		void loadCatalogPage({
+			category: activeCategory,
+			page: 1,
+			search: debouncedCatalogSearchQuery,
+			append: false,
+		});
+	}, [debouncedCatalogSearchQuery]);
 
 	const handleLoadMoreCatalogItems = () => {
 		if (isLoadingCatalog || !catalogMeta.has_next) {
@@ -350,6 +375,7 @@ export default function ProductOnboardingClient({
 		void loadCatalogPage({
 			category: activeCategory,
 			page: catalogMeta.page + 1,
+			search: debouncedCatalogSearchQuery,
 			append: true,
 		});
 	};
@@ -1008,11 +1034,14 @@ export default function ProductOnboardingClient({
 
 			{storeType === 'grocery' && (
 				<CatalogSection
-					active={activeSection === "catalog"}
+					active={activeSection === SECTION_CATALOG}
 					catalogItems={catalogItems}
 					categoryTabs={categoryTabs}
 					activeCategory={activeCategory}
 					onCategoryChange={handleCategoryChange}
+					searchQuery={catalogSearchQuery}
+					onSearchQueryChange={setCatalogSearchQuery}
+					onClearSearchQuery={() => setCatalogSearchQuery("")}
 					catalogMeta={catalogMeta}
 					isLoadingCatalog={isLoadingCatalog}
 					catalogError={catalogError}

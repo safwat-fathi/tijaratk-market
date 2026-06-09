@@ -23,16 +23,18 @@ import {
   type CreateOrderState,
 } from "@/actions/order-actions";
 import {
-  markAvailabilityRequestSentAction,
-  prepareAvailabilityRequestAction,
+	markCustomAvailabilityRequestSentAction,
+	markAvailabilityRequestSentAction,
+	prepareCustomAvailabilityRequestAction,
+	prepareAvailabilityRequestAction,
 } from "@/actions/availability-request-cookie-actions";
 import { productsService } from "@/services/api/products.service";
 import { availabilityRequestsService } from "@/services/api/availability-requests.service";
 import { getPublicCustomerByPhoneAction } from "@/actions/customer-actions";
 import { dedupeByNumericId } from "@/lib/utils/collections";
-import {
-  type AvailabilityRequestOutcome,
-  type ProductCartSelection,
+import ProductList, {
+	type AvailabilityRequestOutcome,
+	type ProductCartSelection,
 } from "./ProductList";
 import Toast from "./Toast";
 import CategoryEntryGrid from "./CategoryEntryGrid";
@@ -69,6 +71,11 @@ const DEFAULT_PAGINATION_STATE: PaginationState = {
   lastPage: 1,
   isLoading: false,
   error: null,
+};
+
+const normalizeOptionalRequestText = (value: string) => {
+	const normalized = value.trim().replace(/\s+/g, " ");
+	return normalized || undefined;
 };
 
 type ToastState = {
@@ -712,6 +719,10 @@ export default function OrderForm({
         {
           product_id: product.id,
           visitor_key: prepared.visitor_key,
+					customer_name: normalizeOptionalRequestText(customerName),
+					customer_phone: normalizeOptionalRequestText(customerPhone),
+					customer_address: normalizeOptionalRequestText(deliveryAddress),
+					customer_notes: normalizeOptionalRequestText(notes),
         },
       );
 
@@ -740,8 +751,71 @@ export default function OrderForm({
 
       return response.data.status;
     },
-    [tenantSlug],
+    [customerName, customerPhone, deliveryAddress, notes, tenantSlug],
   );
+
+	const handleRequestCustomAvailability = useCallback(
+		async (requestedProductName: string): Promise<AvailabilityRequestOutcome> => {
+			const prepared = await prepareCustomAvailabilityRequestAction({
+				slug: tenantSlug,
+				requested_product_name: requestedProductName,
+			});
+
+			if (!prepared.success || !prepared.visitor_key) {
+				setToastState({
+					message: prepared.message || "تعذر إرسال الطلب حالياً",
+					type: "error",
+				});
+				return "failed";
+			}
+
+			if (prepared.already_requested_today) {
+				setToastState({
+					message: "سبق وسجلنا طلبك لهذا المنتج اليوم",
+					type: "success",
+				});
+				return "already_requested_today";
+			}
+
+			const response = await availabilityRequestsService.createPublicRequest(
+				tenantSlug,
+				{
+					requested_product_name: prepared.requested_product_name,
+					visitor_key: prepared.visitor_key,
+					customer_name: normalizeOptionalRequestText(customerName),
+					customer_phone: normalizeOptionalRequestText(customerPhone),
+					customer_address: normalizeOptionalRequestText(deliveryAddress),
+					customer_notes: normalizeOptionalRequestText(notes),
+				},
+			);
+
+			if (!response.success || !response.data) {
+				setToastState({
+					message: response.message || "تعذر إرسال الطلب حالياً",
+					type: "error",
+				});
+				return "failed";
+			}
+
+			await markCustomAvailabilityRequestSentAction({
+				slug: tenantSlug,
+				requested_product_name: prepared.requested_product_name,
+				date_key: prepared.date_key,
+			});
+
+			if (response.data.status === "created") {
+				setToastState({ message: "تم إرسال طلبك للتاجر", type: "success" });
+			} else {
+				setToastState({
+					message: "سبق وسجلنا طلبك لهذا المنتج اليوم",
+					type: "success",
+				});
+			}
+
+			return response.data.status;
+		},
+		[customerName, customerPhone, deliveryAddress, notes, tenantSlug],
+	);
 
   const handleReviewSelectionUpdate = useCallback(
     (productId: number, nextSelection: ProductCartSelection | null) => {
@@ -868,12 +942,20 @@ export default function OrderForm({
         {hasMerchantProducts && (
           <div className="mt-4 space-y-4">
             {!isCategoryProductsView && (
-              <CategoryEntryGrid
-                categoryCards={categoryCards}
-                onSelectCategory={handleCategoryEntry}
-                onShowAll={() => handleCategoryEntry(ALL_PRODUCTS_CATEGORY)}
-                onCategoryInView={handleCategoryInViewPrefetch}
-              />
+              <>
+                <CategoryEntryGrid
+                  categoryCards={categoryCards}
+                  onSelectCategory={handleCategoryEntry}
+                  onShowAll={() => handleCategoryEntry(ALL_PRODUCTS_CATEGORY)}
+                  onCategoryInView={handleCategoryInViewPrefetch}
+                />
+                <ProductList
+                  products={[]}
+                  selections={effectiveCartSelections}
+                  onUpdateSelection={handleUpdateSelection}
+                  onRequestCustomAvailability={handleRequestCustomAvailability}
+                />
+              </>
             )}
 
             {isCategoryProductsView && (
@@ -891,11 +973,23 @@ export default function OrderForm({
                 onUpdateSelection={handleUpdateSelection}
                 onProductAdded={handleProductAdded}
                 onRequestAvailability={handleRequestAvailability}
+                onRequestCustomAvailability={handleRequestCustomAvailability}
                 setLoadMoreTarget={setLoadMoreTarget}
               />
             )}
           </div>
         )}
+
+				{!hasMerchantProducts && (
+					<div className="mt-4">
+						<ProductList
+							products={[]}
+							selections={effectiveCartSelections}
+							onUpdateSelection={handleUpdateSelection}
+							onRequestCustomAvailability={handleRequestCustomAvailability}
+						/>
+					</div>
+				)}
 
         <OrderNotesSection
           orderRequest={orderRequest}
