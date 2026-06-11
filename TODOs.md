@@ -2,6 +2,11 @@
 
 ## Testing environment
 
+## Map for stores
+
+- Show nearby stores in homepage map
+- Add settings page in dashboard for store coordinates (latitude, longitude)
+
 - Add testing live environment for all features
 
 ## Pricing plans gatting for merchants
@@ -17,7 +22,13 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 - Add auto backup for live database
 
+## Merchant mobile app
+
+- Add merchant mobile app for managing their store and products (React Native)
+
 ## Issues
+
+- Add a Whatsapp link and phone number to the merchant dashboard to contact support.
 
 ## New Features
 
@@ -25,3 +36,6 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 - Catalog products for supermarkets
 - Add settings page in dashboard for store name, logo, social media links, contact phone number, delivery fees, working hours.
 - Can we let customers order from WhatsApp bot?
+- Can we scrapre pharmacy products?
+- Should we add PostHog for analytics?
+-

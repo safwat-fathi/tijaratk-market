@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/actions/auth-server";
 import { Logo } from "@/components/ui/Logo";
+import { SupportWidget } from "@/components/ui/SupportWidget";
 
 const navigation = [
   {
@@ -358,6 +359,8 @@ export default function MerchantLayout({
           </div>
         </div>
       )}
+      {/* Global Support Widget FAB */}
+      <SupportWidget />
     </div>
   );
 }

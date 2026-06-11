@@ -28,6 +28,19 @@ type AdminPlan = {
 	is_active?: boolean;
 };
 
+type AdminPaginatedResponse<T> = {
+	data: T[];
+	meta: {
+		page: number;
+		limit: number;
+		total: number;
+		totalPages: number;
+	};
+};
+
+type AdminProduct = Record<string, unknown>;
+type AdminOrder = Record<string, unknown>;
+
 class AdminApiService extends HttpService {
 	constructor() {
 		super("/admin");
@@ -87,6 +100,36 @@ class AdminApiService extends HttpService {
 
 	public async getImportErrors(id: number) {
 		return this.get<ImportRowError[]>(`imports/${id}/errors`);
+	}
+
+	public async getProducts(
+		tenantName?: string,
+		productName?: string,
+		page?: number,
+		limit?: number,
+	) {
+		const params = new URLSearchParams();
+		if (tenantName) params.append("tenantName", tenantName);
+		if (productName) params.append("productName", productName);
+		if (page) params.append("page", String(page));
+		if (limit) params.append("limit", String(limit));
+		const qs = params.toString() ? `?${params.toString()}` : '';
+		return this.get<AdminPaginatedResponse<AdminProduct>>(`products${qs}`);
+	}
+
+	public async getOrders(
+		clientName?: string,
+		totalCost?: string,
+		page?: number,
+		limit?: number,
+	) {
+		const params = new URLSearchParams();
+		if (clientName) params.append("clientName", clientName);
+		if (totalCost) params.append("totalCost", totalCost);
+		if (page) params.append("page", String(page));
+		if (limit) params.append("limit", String(limit));
+		const qs = params.toString() ? `?${params.toString()}` : '';
+		return this.get<AdminPaginatedResponse<AdminOrder>>(`orders${qs}`);
 	}
 }
 

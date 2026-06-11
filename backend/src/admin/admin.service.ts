@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AdminLoginDto } from './dto/admin-login.dto';
-import { TenantStatus } from '../../generated/prisma/client';
+import { Prisma, TenantStatus } from '../../generated/prisma/client';
 
 @Injectable()
 export class AdminService {
@@ -47,33 +47,81 @@ export class AdminService {
     };
   }
 
-  // Dashboard Stats
-  async getDashboardStats() {
-    const totalMerchants = await this.prisma.tenant.count();
-    const activeMerchants = await this.prisma.tenant.count({
-      where: { status: TenantStatus.active },
+  private async runWithTenantRls<T>(
+    tenantId: number,
+    callback: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+      return callback(tx);
     });
-    const totalOrders = await this.prisma.order.count();
-    const totalPlans = await this.prisma.subscriptionPlan.count();
+  }
+
+  private getPagination(page = 1, limit = 20) {
+    const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+    const safeLimit =
+      Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 20;
 
     return {
-      totalMerchants,
+      page: safePage,
+      limit: safeLimit,
+      offset: (safePage - 1) * safeLimit,
+      prefetch: safePage * safeLimit,
+    };
+  }
+
+  private paginateItems<T>(
+    items: T[],
+    total: number,
+    page: number,
+    limit: number,
+    offset: number,
+  ) {
+    return {
+      data: items.slice(offset, offset + limit),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  }
+
+  // Dashboard Stats
+  async getDashboardStats() {
+    const [tenants, activeMerchants, totalPlans] = await Promise.all([
+      this.prisma.tenant.findMany({
+        select: { id: true },
+      }),
+      this.prisma.tenant.count({
+        where: { status: TenantStatus.active },
+      }),
+      this.prisma.subscriptionPlan.count(),
+    ]);
+
+    const orderCounts = await Promise.all(
+      tenants.map((tenant) =>
+        this.runWithTenantRls(tenant.id, (tx) =>
+          tx.order.count({
+            where: { tenant_id: tenant.id },
+          }),
+        ),
+      ),
+    );
+
+    return {
+      totalMerchants: tenants.length,
       activeMerchants,
-      totalOrders,
+      totalOrders: orderCounts.reduce((total, count) => total + count, 0),
       totalPlans,
     };
   }
 
   // Tenants Management
   async getTenants() {
-    return this.prisma.tenant.findMany({
+    const tenants = await this.prisma.tenant.findMany({
       include: {
-        _count: {
-          select: {
-            orders: true,
-            customers: true,
-          },
-        },
         tenant_subscriptions: {
           where: { is_active: true },
           include: { plan: true },
@@ -81,6 +129,29 @@ export class AdminService {
       },
       orderBy: { created_at: 'desc' },
     });
+
+    return Promise.all(
+      tenants.map(async (tenant) => {
+        const [orders, customers, products] = await this.runWithTenantRls(
+          tenant.id,
+          (tx) =>
+            Promise.all([
+              tx.order.count({ where: { tenant_id: tenant.id } }),
+              tx.customer.count({ where: { tenant_id: tenant.id } }),
+              tx.product.count({ where: { tenant_id: tenant.id } }),
+            ]),
+        );
+
+        return {
+          ...tenant,
+          _count: {
+            orders,
+            customers,
+            products,
+          },
+        };
+      }),
+    );
   }
 
   async updateTenantStatus(id: number, status: TenantStatus) {
@@ -133,5 +204,121 @@ export class AdminService {
       where: { id },
       data: { is_active },
     });
+  }
+
+  // Products Management
+  async getProducts(
+    tenantName?: string,
+    productName?: string,
+    page = 1,
+    limit = 20,
+  ) {
+    const pagination = this.getPagination(page, limit);
+    const tenants = await this.prisma.tenant.findMany({
+      where: tenantName
+        ? { name: { contains: tenantName, mode: 'insensitive' } }
+        : undefined,
+      orderBy: { created_at: 'desc' },
+    });
+
+    const where: Prisma.ProductWhereInput = {};
+    if (productName) {
+      where.name = { contains: productName, mode: 'insensitive' };
+    }
+
+    const tenantResults = await Promise.all(
+      tenants.map((tenant) =>
+        this.runWithTenantRls(tenant.id, async (tx) => {
+          const tenantWhere = {
+            ...where,
+            tenant_id: tenant.id,
+          };
+          const [data, total] = await Promise.all([
+            tx.product.findMany({
+              where: tenantWhere,
+              include: {
+                tenant: true,
+              },
+              orderBy: { created_at: 'desc' },
+              take: pagination.prefetch,
+            }),
+            tx.product.count({ where: tenantWhere }),
+          ]);
+
+          return { data, total };
+        }),
+      ),
+    );
+
+    const total = tenantResults.reduce((sum, result) => sum + result.total, 0);
+    const items = tenantResults
+      .flatMap((result) => result.data)
+      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+
+    return this.paginateItems(
+      items,
+      total,
+      pagination.page,
+      pagination.limit,
+      pagination.offset,
+    );
+  }
+
+  // Orders Management
+  async getOrders(
+    clientName?: string,
+    totalCost?: number,
+    page = 1,
+    limit = 20,
+  ) {
+    const pagination = this.getPagination(page, limit);
+    const tenants = await this.prisma.tenant.findMany({
+      orderBy: { created_at: 'desc' },
+    });
+
+    const where: Prisma.OrderWhereInput = {};
+    if (clientName) {
+      where.customer_name = { contains: clientName, mode: 'insensitive' };
+    }
+    if (totalCost !== undefined) {
+      where.total = totalCost;
+    }
+
+    const tenantResults = await Promise.all(
+      tenants.map((tenant) =>
+        this.runWithTenantRls(tenant.id, async (tx) => {
+          const tenantWhere = {
+            ...where,
+            tenant_id: tenant.id,
+          };
+          const [data, total] = await Promise.all([
+            tx.order.findMany({
+              where: tenantWhere,
+              include: {
+                tenant: true,
+              },
+              orderBy: { created_at: 'desc' },
+              take: pagination.prefetch,
+            }),
+            tx.order.count({ where: tenantWhere }),
+          ]);
+
+          return { data, total };
+        }),
+      ),
+    );
+
+    const total = tenantResults.reduce((sum, result) => sum + result.total, 0);
+    const items = tenantResults
+      .flatMap((result) => result.data)
+      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+
+    return this.paginateItems(
+      items,
+      total,
+      pagination.page,
+      pagination.limit,
+      pagination.offset,
+    );
   }
 }

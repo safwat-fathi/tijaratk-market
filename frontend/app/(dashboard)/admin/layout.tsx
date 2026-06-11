@@ -24,6 +24,8 @@ export default function AdminLayout({
     { label: "التجار", href: "/admin/merchants" },
     { label: "الباقات", href: "/admin/plans" },
     { label: "الاستيراد", href: "/admin/imports" },
+    { label: "المنتجات", href: "/admin/products" },
+    { label: "الطلبات", href: "/admin/orders" },
   ];
 
   return (

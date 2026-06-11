@@ -32,7 +32,8 @@ export default async function AdminPlans() {
       <h1 className="text-2xl font-bold text-gray-900">إدارة الباقات</h1>
 
       <Card className="overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الباقة</th>
@@ -66,6 +67,7 @@ export default async function AdminPlans() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

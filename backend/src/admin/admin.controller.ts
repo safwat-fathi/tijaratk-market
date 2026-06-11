@@ -8,6 +8,7 @@ import {
   Patch,
   ParseIntPipe,
   Res,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -218,6 +219,58 @@ export class AdminController {
     return this.adminService.togglePlanStatus(
       id,
       togglePlanStatusDto.is_active,
+    );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('products')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Get products',
+    description: 'Retrieve a list of products with optional filters.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Products retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getProducts(
+    @Query('tenantName') tenantName?: string,
+    @Query('productName') productName?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.getProducts(
+      tenantName,
+      productName,
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('orders')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Get completed orders',
+    description: 'Retrieve a list of orders with optional filters.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Orders retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getOrders(
+    @Query('clientName') clientName?: string,
+    @Query('totalCost') totalCost?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.getOrders(
+      clientName,
+      totalCost ? Number(totalCost) : undefined,
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
     );
   }
 }
