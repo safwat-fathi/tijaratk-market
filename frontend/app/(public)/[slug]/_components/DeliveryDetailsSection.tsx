@@ -58,7 +58,7 @@ export default function DeliveryDetailsSection({
   const deliveryFee =
     formatCurrency(deliverySettings.delivery_fee ?? 0) ?? "غير محدد";
 
-  let deliveryTimeWindow: string | undefined = undefined;
+  let deliveryTimeWindow: string = "طوال اليوم";
   if (
     deliverySettings.delivery_starts_at &&
     deliverySettings.delivery_ends_at

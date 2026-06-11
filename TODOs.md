@@ -38,4 +38,6 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 - Can we let customers order from WhatsApp bot?
 - Can we scrapre pharmacy products?
 - Should we add PostHog for analytics?
--
+- How we can make a one qr code for multiple store branches?
+- How we can show avaliable items for a store that has this item in another branch but that branch is not near customer?
+- Merchant default delivery time window should be all day.

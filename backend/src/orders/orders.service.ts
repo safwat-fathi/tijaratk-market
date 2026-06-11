@@ -162,6 +162,8 @@ export class OrdersService {
             return `${h12}:${minutes} ${period}`;
           };
           deliveryTimeWindowSnapshot = `من ${formatTime(tenant.delivery_starts_at)} إلى ${formatTime(tenant.delivery_ends_at)}`;
+        } else {
+          deliveryTimeWindowSnapshot = 'طوال اليوم';
         }
 
         let subtotal: number | undefined;

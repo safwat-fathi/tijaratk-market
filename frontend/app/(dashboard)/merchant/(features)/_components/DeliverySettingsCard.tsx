@@ -19,7 +19,7 @@ export default function DeliverySettingsCard({
 	const deliveryAvailable = tenant?.delivery_available !== false;
 	const deliveryFee = formatCurrency(tenant?.delivery_fee ?? 0) ?? "غير محدد";
 
-	let deliveryTimeWindow = "لم يتم تحديد موعد";
+	let deliveryTimeWindow = "طوال اليوم";
 	if (tenant?.delivery_starts_at && tenant?.delivery_ends_at) {
 		const formatTime = (time: string) => {
 			const [hours, minutes] = time.split(":");

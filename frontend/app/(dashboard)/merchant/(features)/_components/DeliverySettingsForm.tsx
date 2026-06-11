@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useEffect } from "react";
+import { useActionState, useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import {
@@ -16,6 +16,14 @@ const initialState: UpdateDeliverySettingsState = {
 
 const DELIVERY_FEE_PRESETS = [0, 10, 15, 20] as const;
 
+const DELIVERY_TIME_PRESETS = [
+  { label: "طوال اليوم", start: "", end: "" },
+  { label: "وردية 12 ساعة (10 ص - 10 م)", start: "10:00", end: "22:00" },
+  { label: "فترة الصباح (10 ص - 2 م)", start: "10:00", end: "14:00" },
+  { label: "فترة بعد الظهر (2 م - 6 م)", start: "14:00", end: "18:00" },
+  { label: "فترة المساء (6 م - 10 م)", start: "18:00", end: "22:00" },
+] as const;
+
 type DeliverySettingsFormProps = {
   deliverySettings: TenantDeliverySettings;
   onSuccess?: () => void;
@@ -27,9 +35,32 @@ export default function DeliverySettingsForm({ deliverySettings, onSuccess }: De
     initialState,
   );
   const deliveryFeeInputRef = useRef<HTMLInputElement | null>(null);
+  const deliveryStartsAtInputRef = useRef<HTMLInputElement | null>(null);
+  const deliveryEndsAtInputRef = useRef<HTMLInputElement | null>(null);
 
   const deliveryFee = Number(deliverySettings.delivery_fee || 0);
   const deliveryAvailable = deliverySettings.delivery_available !== false;
+
+  const [activePreset, setActivePreset] = useState<string>(() => {
+    if (!deliverySettings.delivery_starts_at && !deliverySettings.delivery_ends_at) {
+      return "طوال اليوم";
+    }
+    const preset = DELIVERY_TIME_PRESETS.find(
+      p => p.start === deliverySettings.delivery_starts_at && p.end === deliverySettings.delivery_ends_at
+    );
+    return preset ? preset.label : "custom";
+  });
+
+  const handleTimeChange = () => {
+    const start = deliveryStartsAtInputRef.current?.value || "";
+    const end = deliveryEndsAtInputRef.current?.value || "";
+    if (!start && !end) {
+      setActivePreset("طوال اليوم");
+    } else {
+      const preset = DELIVERY_TIME_PRESETS.find(p => p.start === start && p.end === end);
+      setActivePreset(preset ? preset.label : "custom");
+    }
+  };
 
   useEffect(() => {
     if (state.success && onSuccess) {
@@ -117,32 +148,66 @@ export default function DeliverySettingsForm({ deliverySettings, onSuccess }: De
           </p>
         </fieldset>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Field
-            label="من الساعة"
-            htmlFor="delivery_starts_at"
-            error={state.errors?.delivery_starts_at?.[0]}
-          >
-            <Input
-              id="delivery_starts_at"
-              name="delivery_starts_at"
-              type="time"
-              defaultValue={deliverySettings.delivery_starts_at || ""}
-            />
-          </Field>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field
+              label="من الساعة"
+              htmlFor="delivery_starts_at"
+              error={state.errors?.delivery_starts_at?.[0]}
+            >
+              <Input
+                id="delivery_starts_at"
+                name="delivery_starts_at"
+                type="time"
+                ref={deliveryStartsAtInputRef}
+                defaultValue={deliverySettings.delivery_starts_at || ""}
+                disabled={activePreset === "طوال اليوم"}
+                onChange={handleTimeChange}
+              />
+            </Field>
 
-          <Field
-            label="إلى الساعة"
-            htmlFor="delivery_ends_at"
-            error={state.errors?.delivery_ends_at?.[0]}
-          >
-            <Input
-              id="delivery_ends_at"
-              name="delivery_ends_at"
-              type="time"
-              defaultValue={deliverySettings.delivery_ends_at || ""}
-            />
-          </Field>
+            <Field
+              label="إلى الساعة"
+              htmlFor="delivery_ends_at"
+              error={state.errors?.delivery_ends_at?.[0]}
+            >
+              <Input
+                id="delivery_ends_at"
+                name="delivery_ends_at"
+                type="time"
+                ref={deliveryEndsAtInputRef}
+                defaultValue={deliverySettings.delivery_ends_at || ""}
+                disabled={activePreset === "طوال اليوم"}
+                onChange={handleTimeChange}
+              />
+            </Field>
+          </div>
+
+          <div className="flex flex-wrap gap-2" aria-label="اختيارات سريعة لمواعيد التوصيل">
+            {DELIVERY_TIME_PRESETS.map((preset) => {
+              const isActive = activePreset === preset.label;
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => {
+                    setActivePreset(preset.label);
+                    if (deliveryStartsAtInputRef.current && deliveryEndsAtInputRef.current) {
+                      deliveryStartsAtInputRef.current.value = preset.start;
+                      deliveryEndsAtInputRef.current.value = preset.end;
+                    }
+                  }}
+                  className={`min-h-9 rounded-md border px-3 py-1 text-xs font-bold transition-[background-color,border-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 ${
+                    isActive 
+                      ? "border-brand-primary bg-brand-soft text-brand-primary" 
+                      : "border-brand-border bg-white text-brand-text hover:border-brand-accent hover:bg-brand-soft/80"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         {(state.errors?.delivery_starts_at || state.errors?.delivery_ends_at) && (
           <p className="text-sm text-status-error mt-2">

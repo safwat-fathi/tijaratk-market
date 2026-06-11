@@ -3,6 +3,15 @@
 import { useActionState, useState } from "react";
 import { Tenant } from "@/types/models/tenant";
 import { updateStoreSettingsAction } from "@/actions/tenant-actions";
+import { useRef } from "react";
+
+const DELIVERY_TIME_PRESETS = [
+  { label: "طوال اليوم", start: "", end: "" },
+  { label: "وردية 12 ساعة (10 ص - 10 م)", start: "10:00", end: "22:00" },
+  { label: "فترة الصباح (10 ص - 2 م)", start: "10:00", end: "14:00" },
+  { label: "فترة بعد الظهر (2 م - 6 م)", start: "14:00", end: "18:00" },
+  { label: "فترة المساء (6 م - 10 م)", start: "18:00", end: "22:00" },
+] as const;
 
 interface SettingsFormProps {
   tenant: Tenant;
@@ -22,6 +31,30 @@ export default function SettingsForm({ tenant }: SettingsFormProps) {
   const [deliveryAvailable, setDeliveryAvailable] = useState(
     tenant.delivery_available
   );
+  
+  const deliveryStartsAtInputRef = useRef<HTMLInputElement | null>(null);
+  const deliveryEndsAtInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [activePreset, setActivePreset] = useState<string>(() => {
+    if (!tenant.delivery_starts_at && !tenant.delivery_ends_at) {
+      return "طوال اليوم";
+    }
+    const preset = DELIVERY_TIME_PRESETS.find(
+      p => p.start === tenant.delivery_starts_at && p.end === tenant.delivery_ends_at
+    );
+    return preset ? preset.label : "custom";
+  });
+
+  const handleTimeChange = () => {
+    const start = deliveryStartsAtInputRef.current?.value || "";
+    const end = deliveryEndsAtInputRef.current?.value || "";
+    if (!start && !end) {
+      setActivePreset("طوال اليوم");
+    } else {
+      const preset = DELIVERY_TIME_PRESETS.find(p => p.start === start && p.end === end);
+      setActivePreset(preset ? preset.label : "custom");
+    }
+  };
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
@@ -121,24 +154,58 @@ export default function SettingsForm({ tenant }: SettingsFormProps) {
                 )}
               </div>
 
-              <div className="flex gap-4">
-                <div className="flex-1 flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-700">من الساعة</label>
-                  <input
-                    name="delivery_starts_at"
-                    type="time"
-                    defaultValue={tenant.delivery_starts_at || ""}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F7F8F6] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/50"
-                  />
+              <div className="space-y-4">
+                <div className="flex gap-4">
+                  <div className="flex-1 flex flex-col gap-2">
+                    <label className="text-sm font-medium text-gray-700">من الساعة</label>
+                    <input
+                      name="delivery_starts_at"
+                      type="time"
+                      ref={deliveryStartsAtInputRef}
+                      defaultValue={tenant.delivery_starts_at || ""}
+                      disabled={activePreset === "طوال اليوم"}
+                      onChange={handleTimeChange}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F7F8F6] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/50 disabled:opacity-50"
+                    />
+                  </div>
+                  <div className="flex-1 flex flex-col gap-2">
+                    <label className="text-sm font-medium text-gray-700">إلى الساعة</label>
+                    <input
+                      name="delivery_ends_at"
+                      type="time"
+                      ref={deliveryEndsAtInputRef}
+                      defaultValue={tenant.delivery_ends_at || ""}
+                      disabled={activePreset === "طوال اليوم"}
+                      onChange={handleTimeChange}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F7F8F6] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/50 disabled:opacity-50"
+                    />
+                  </div>
                 </div>
-                <div className="flex-1 flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-700">إلى الساعة</label>
-                  <input
-                    name="delivery_ends_at"
-                    type="time"
-                    defaultValue={tenant.delivery_ends_at || ""}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F7F8F6] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/50"
-                  />
+
+                <div className="flex flex-wrap gap-2" aria-label="اختيارات سريعة لمواعيد التوصيل">
+                  {DELIVERY_TIME_PRESETS.map((preset) => {
+                    const isActive = activePreset === preset.label;
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          setActivePreset(preset.label);
+                          if (deliveryStartsAtInputRef.current && deliveryEndsAtInputRef.current) {
+                            deliveryStartsAtInputRef.current.value = preset.start;
+                            deliveryEndsAtInputRef.current.value = preset.end;
+                          }
+                        }}
+                        className={`min-h-9 rounded-md border px-3 py-1 text-xs font-bold transition-[background-color,border-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#27AE60]/50 ${
+                          isActive 
+                            ? "border-[#27AE60] bg-green-50 text-[#27AE60]" 
+                            : "border-gray-200 bg-gray-50 text-gray-700 hover:border-[#27AE60] hover:text-[#27AE60]"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               {state.errors?.delivery_ends_at && (
