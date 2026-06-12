@@ -12,6 +12,7 @@ import {
   publicMarketingPages,
   softwareApplicationJsonLd,
 } from "@/lib/marketing-seo";
+import { PublicHeader } from "@/components/layout/PublicHeader";
 
 export const metadata: Metadata = createPublicMetadata(publicMarketingPages[0]);
 
@@ -48,33 +49,7 @@ export default function LandingPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageJsonLd) }}
       />
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <Logo
-              variant="icon"
-              width={32}
-              height={32}
-              className="rounded-md"
-            />
-            <span className="text-xl font-bold text-[#0F5A3D]">تجارتك</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/merchant/login"
-              className="text-sm font-semibold text-[#0F5A3D] transition-colors hover:text-[#27AE60]"
-            >
-              تسجيل الدخول
-            </Link>
-            <Link
-              href="/merchant/register"
-              className="inline-flex h-10 items-center justify-center rounded-full bg-[#0F5A3D] px-5 text-sm font-bold text-white transition-colors hover:bg-[#00412a]"
-            >
-              ابدأ الآن
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicHeader />
 
       <main className="flex-1">
         {/* Hero Section */}

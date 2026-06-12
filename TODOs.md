@@ -28,15 +28,9 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 ## Issues
 
-- Add a Whatsapp link and phone number to the merchant dashboard to contact support.
-
 ## New Features
 
 - Make app ready for multiple store types (supermarket, restaurant, online store, pharmacy, etc.)
-- Catalog products for supermarkets
-- Add settings page in dashboard for store name, logo, social media links, contact phone number, delivery fees, working hours.
-- Can we let customers order from WhatsApp bot?
-- Can we scrapre pharmacy products?
 - Should we add PostHog for analytics?
 - How we can make a one qr code for multiple store branches?
 - How we can show avaliable items for a store that has this item in another branch but that branch is not near customer?
