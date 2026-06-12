@@ -119,8 +119,13 @@ export class ProductsController {
     status: HttpStatus.OK,
     description: 'Return active catalog categories',
   })
-  findCatalogCategories() {
-    return this.productsService.findCatalogCategories();
+  findCatalogCategories(@Req() req: Request) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.productsService.findCatalogCategories(tenantId);
   }
 
   @Get('categories')
@@ -150,8 +155,14 @@ export class ProductsController {
     description: 'Filter items by category',
   })
   @ApiResponse({ status: HttpStatus.OK, description: 'Return catalog items' })
-  findCatalogItems(@Query() query: GetCatalogItemsDto) {
+  findCatalogItems(@Req() req: Request, @Query() query: GetCatalogItemsDto) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
     return this.productsService.findCatalogItems(
+      tenantId,
       query.search,
       query.category,
       query.page,

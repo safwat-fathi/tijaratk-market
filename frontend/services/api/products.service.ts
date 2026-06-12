@@ -89,7 +89,7 @@ class ProductsService extends HttpService {
   }
 
   public async getCatalogCategories() {
-    return this.get<string[]>('catalog/categories', undefined, {
+    return this.get<PublicProductCategory[]>('catalog/categories', undefined, {
       cache: 'no-store',
       authRequired: true,
     });

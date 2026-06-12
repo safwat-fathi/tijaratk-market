@@ -16,6 +16,7 @@ import type {
   CatalogItem,
   Product,
   ProductOrderMode,
+  PublicProductCategory,
   PublicProductsMeta,
 } from '@/types/models/product';
 import CatalogSection from './CatalogSection';
@@ -55,6 +56,7 @@ import {
 	normalizeProductName,
 	parseOptionalPositivePrice,
 	resolveSectionFromQuery,
+	supportsCatalogForStoreType,
 } from "../_utils/product-onboarding";
 import type { CategoryMode, ProductSection } from '../_utils/product-onboarding.types';
 
@@ -62,6 +64,7 @@ type ProductOnboardingClientProps = {
 	initialProducts: Product[];
 	initialCatalogItems: CatalogItem[];
 	initialCatalogMeta: PublicProductsMeta;
+	catalogCategories: PublicProductCategory[];
 	productCategories: string[];
 	storeType?: string;
 };
@@ -82,6 +85,7 @@ export default function ProductOnboardingClient({
 	initialProducts,
 	initialCatalogItems,
 	initialCatalogMeta,
+	catalogCategories,
 	productCategories,
 	storeType,
 }: ProductOnboardingClientProps) {
@@ -192,12 +196,35 @@ export default function ProductOnboardingClient({
 	);
 
 	const categoryTabs = useMemo(() => {
-		const tabs = productCategories.map(category => ({
-			key: category,
-			label: category,
-			count: 0,
-			imageUrl: null,
-		}));
+		const categoryMap = new Map<
+			string,
+			{ key: string; label: string; count: number; imageUrl: string | null }
+		>();
+
+		for (const category of catalogCategories) {
+			const categoryName = category.category.trim();
+			if (!categoryName) {
+				continue;
+			}
+
+			const existingCategory = categoryMap.get(categoryName);
+			if (existingCategory) {
+				existingCategory.count += category.count;
+				if (!existingCategory.imageUrl && category.image_url) {
+					existingCategory.imageUrl = category.image_url;
+				}
+				continue;
+			}
+
+			categoryMap.set(categoryName, {
+				key: categoryName,
+				label: categoryName,
+				count: category.count,
+				imageUrl: category.image_url ?? null,
+			});
+		}
+
+		const tabs = Array.from(categoryMap.values());
 
 		return [
 			{
@@ -208,7 +235,7 @@ export default function ProductOnboardingClient({
 			},
 			...tabs,
 		];
-	}, [catalogMeta.total, productCategories]);
+	}, [catalogCategories, catalogMeta.total]);
 
 	const normalizedSearchInput = searchQuery.trim();
 	const normalizedDebouncedSearch = debouncedSearchQuery.trim();
@@ -230,6 +257,7 @@ export default function ProductOnboardingClient({
 		() => buildSectionTabs(catalogMeta.total, products.length, storeType),
 		[catalogMeta.total, products.length, storeType],
 	);
+	const canUseCatalog = supportsCatalogForStoreType(storeType);
 
 	const activeSectionLabel =
 		sectionTabs.find(section => section.key === activeSection)?.label ||
@@ -247,16 +275,15 @@ export default function ProductOnboardingClient({
 		const sectionFromQuery = resolveSectionFromQuery(
 			searchParams.get("section"),
 		);
-		
 		const resolvedSection = 
-			storeType !== 'grocery' && sectionFromQuery === 'catalog'
+			!canUseCatalog && sectionFromQuery === 'catalog'
 				? 'quick-add'
 				: sectionFromQuery;
 
 		setActiveSection(currentSection =>
 			currentSection === resolvedSection ? currentSection : resolvedSection,
 		);
-	}, [searchParams, storeType]);
+	}, [canUseCatalog, searchParams]);
 
 	const replaceSectionInQuery = (section: ProductSection) => {
 		const nextParams = new URLSearchParams(searchParams.toString());
@@ -1032,7 +1059,7 @@ export default function ProductOnboardingClient({
 				storeType={storeType}
 			/>
 
-			{storeType === 'grocery' && (
+			{canUseCatalog && (
 				<CatalogSection
 					active={activeSection === SECTION_CATALOG}
 					catalogItems={catalogItems}

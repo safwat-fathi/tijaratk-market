@@ -50,7 +50,7 @@ export default async function AdminImportsPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">استيراد الكتالوج</h1>
         <p className="mt-1 text-sm text-gray-500">
-          ارفع ملف CSV لتحديث منتجات الكتالوج العامة. تتم المعالجة في الخلفية بعد الرفع.
+          ارفع ملف CSV من Talabat أو Chefaa لتحديث منتجات الكتالوج العامة. يتم التعرف على الصيغة تلقائيًا وتتم المعالجة في الخلفية بعد الرفع.
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export default async function AdminImportsPage() {
           <div className="grid gap-4 md:grid-cols-[1fr_180px_auto] md:items-end">
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-gray-700">
-                ملف CSV
+                ملف CSV من Talabat أو Chefaa
               </span>
               <input
                 required

@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
+        hostname: "cdn.chefaa.com",
+      },
+      {
+        protocol: "https",
         hostname: "talabat.dhmedia.io",
         pathname: "/image/**",
       },

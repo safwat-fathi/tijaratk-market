@@ -343,6 +343,9 @@ export const filterCatalogItemsByCategory = (
   return catalogItems.filter((item) => item.category === activeCategory);
 };
 
+export const supportsCatalogForStoreType = (storeType?: string): boolean =>
+  storeType === 'grocery' || storeType === 'pharmacy';
+
 export const buildSectionTabs = (
   catalogItemsLength: number,
   productsLength: number,
@@ -356,7 +359,7 @@ export const buildSectionTabs = (
     },
   ];
 
-  if (storeType === 'grocery') {
+  if (supportsCatalogForStoreType(storeType)) {
     tabs.push({
       key: SECTION_CATALOG,
       label: 'الكتالوج',

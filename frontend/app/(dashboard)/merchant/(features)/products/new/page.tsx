@@ -1,10 +1,15 @@
 import ProductOnboardingClient from './_components/ProductOnboardingClient';
 import { productsService } from '@/services/api/products.service';
-import { CatalogItemsResponse, Product } from '@/types/models/product';
+import {
+  CatalogItemsResponse,
+  Product,
+  PublicProductCategory,
+} from '@/types/models/product';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import { createNoIndexMetadata } from '@/lib/marketing-seo';
 import { tenantsService } from '@/services/api/tenants.service';
 import { Tenant } from '@/types/models/tenant';
+import { supportsCatalogForStoreType } from './_utils/product-onboarding';
 
 export const metadata = createNoIndexMetadata(
 	"إدارة المنتجات",
@@ -31,6 +36,17 @@ async function getProducts(): Promise<Product[]> {
 
 const CATALOG_PAGE_LIMIT = 40;
 
+const createEmptyCatalogItemsResponse = (): CatalogItemsResponse => ({
+  data: [],
+  meta: {
+    total: 0,
+    page: 1,
+    limit: CATALOG_PAGE_LIMIT,
+    last_page: 1,
+    has_next: false,
+  },
+});
+
 async function getCatalogItems(): Promise<CatalogItemsResponse> {
   try {
     const response = await productsService.getCatalogItems({
@@ -40,31 +56,13 @@ async function getCatalogItems(): Promise<CatalogItemsResponse> {
     if (response.success && response.data) {
       return response.data;
     }
-    return {
-      data: [],
-      meta: {
-        total: 0,
-        page: 1,
-        limit: CATALOG_PAGE_LIMIT,
-        last_page: 1,
-        has_next: false,
-      },
-    };
+    return createEmptyCatalogItemsResponse();
   } catch (error) {
     if (isNextRedirectError(error)) {
       throw error;
     }
     console.error('Failed to fetch catalog items', error);
-    return {
-      data: [],
-      meta: {
-        total: 0,
-        page: 1,
-        limit: CATALOG_PAGE_LIMIT,
-        last_page: 1,
-        has_next: false,
-      },
-    };
+    return createEmptyCatalogItemsResponse();
   }
 }
 
@@ -80,6 +78,22 @@ async function getProductCategories(): Promise<string[]> {
       throw error;
     }
     console.error('Failed to fetch catalog categories', error);
+    return [];
+  }
+}
+
+async function getCatalogCategories(): Promise<PublicProductCategory[]> {
+  try {
+    const response = await productsService.getCatalogCategories();
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return [];
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Failed to fetch catalog category summaries', error);
     return [];
   }
 }
@@ -101,12 +115,16 @@ async function getTenant(): Promise<Tenant | null> {
 }
 
 export default async function NewProductPage() {
-  const [products, catalogItemsResponse, productCategories, tenant] = await Promise.all([
+  const [products, productCategories, tenant] = await Promise.all([
     getProducts(),
-    getCatalogItems(),
     getProductCategories(),
     getTenant(),
   ]);
+  const [catalogItemsResponse, catalogCategories] = supportsCatalogForStoreType(
+    tenant?.category,
+  )
+    ? await Promise.all([getCatalogItems(), getCatalogCategories()])
+    : [createEmptyCatalogItemsResponse(), []];
 
   return (
     <div className="space-y-4">
@@ -119,6 +137,7 @@ export default async function NewProductPage() {
         initialProducts={products}
         initialCatalogItems={catalogItemsResponse.data}
         initialCatalogMeta={catalogItemsResponse.meta}
+        catalogCategories={catalogCategories}
         productCategories={productCategories}
         storeType={tenant?.category}
       />

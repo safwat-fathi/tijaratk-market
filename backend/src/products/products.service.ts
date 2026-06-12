@@ -15,7 +15,12 @@ import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma, Product, CatalogItem } from '../../generated/prisma/client';
+import {
+  Prisma,
+  Product,
+  CatalogItem,
+  TenantCategory,
+} from '../../generated/prisma/client';
 
 const DEFAULT_PRODUCT_CATEGORY = 'أخرى';
 const DUPLICATE_PRODUCT_NAME_MESSAGE = 'Product with this name already exists';
@@ -24,6 +29,8 @@ const DEFAULT_WEIGHT_PRESET_GRAMS = [250, 500, 1000] as const;
 const DEFAULT_PRICE_PRESET_AMOUNTS = [100, 200, 300] as const;
 const DEFAULT_QUANTITY_UNIT_LABEL = 'قطعة';
 const MAX_ORDER_PRESETS = 6;
+const CATALOG_SOURCE_TALABAT = 'talabat_csv';
+const CATALOG_SOURCE_CHEFAA = 'chefaa_csv';
 
 type QuantityUnitOptionConfig = {
   id: string;
@@ -95,6 +102,8 @@ type StrictMatchThresholds = {
   strictWordSimilarityThreshold: number;
 };
 
+type CatalogSource = typeof CATALOG_SOURCE_TALABAT | typeof CATALOG_SOURCE_CHEFAA;
+
 /**
  * Products service handles product lifecycle for each tenant.
  */
@@ -109,6 +118,41 @@ export class ProductsService {
   private getPrismaClient() {
     const manager = DbTenantContext.getManager() as Prisma.TransactionClient;
     return manager || this.prisma;
+  }
+
+  private async resolveTenantCatalogSource(
+    tenantId: number,
+  ): Promise<CatalogSource | null> {
+    const tenant = await this.getPrismaClient().tenant.findUnique({
+      where: { id: tenantId },
+      select: { category: true },
+    });
+
+    return this.resolveCatalogSourceForTenantCategory(tenant?.category);
+  }
+
+  private resolveCatalogSourceForTenantCategory(
+    category?: TenantCategory | null,
+  ): CatalogSource | null {
+    if (category === TenantCategory.grocery) return CATALOG_SOURCE_TALABAT;
+    if (category === TenantCategory.pharmacy) return CATALOG_SOURCE_CHEFAA;
+    return null;
+  }
+
+  private emptyCatalogItemsResult(
+    page: number,
+    limit: number,
+  ): CatalogItemsResult {
+    return {
+      data: [],
+      meta: {
+        total: 0,
+        page,
+        limit,
+        last_page: 1,
+        has_next: false,
+      },
+    };
   }
 
   /**
@@ -165,8 +209,19 @@ export class ProductsService {
     tenantId: number,
     payload: AddProductFromCatalogDto,
   ): Promise<Product> {
+    const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+    if (!catalogSource) {
+      throw new NotFoundException(
+        `Catalog item with ID ${payload.catalog_item_id} not found`,
+      );
+    }
+
     const catalogItem = await this.getPrismaClient().catalogItem.findFirst({
-      where: { id: payload.catalog_item_id, is_active: true },
+      where: {
+        id: payload.catalog_item_id,
+        is_active: true,
+        source: catalogSource,
+      },
     });
 
     if (!catalogItem) {
@@ -439,24 +494,85 @@ export class ProductsService {
   /**
    * Returns active catalog categories for product onboarding.
    */
-  async findCatalogCategories(): Promise<string[]> {
+  async findCatalogCategories(
+    tenantId: number,
+  ): Promise<PublicProductCategorySummary[]> {
+    const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+    if (!catalogSource) return [];
+
     const rows = await this.getPrismaClient().catalogItem.groupBy({
       by: ['category'],
-      where: { is_active: true },
+      where: { is_active: true, source: catalogSource },
+      _count: { id: true },
       orderBy: { category: 'asc' },
     });
 
-    return rows.map((row) => row.category).filter((c) => c != null);
+    const categories = rows
+      .map((row) => this.normalizeOptionalCategory(row.category ?? undefined))
+      .filter((category): category is string => Boolean(category));
+
+    if (categories.length === 0) {
+      return [];
+    }
+
+    const catalogRows = await this.getPrismaClient().catalogItem.findMany({
+      where: {
+        is_active: true,
+        source: catalogSource,
+        category: { in: categories },
+        image_url: { not: null },
+      },
+      select: {
+        category: true,
+        image_url: true,
+      },
+      orderBy: [{ category: 'asc' }, { id: 'asc' }],
+    });
+
+    const categoryImages = new Map<string, string>();
+    for (const row of catalogRows) {
+      if (row.category && row.image_url && !categoryImages.has(row.category)) {
+        categoryImages.set(row.category, row.image_url);
+      }
+    }
+
+    const summariesByCategory = new Map<string, PublicProductCategorySummary>();
+    for (const row of rows) {
+      const category = this.normalizeOptionalCategory(
+        row.category ?? undefined,
+      );
+      if (!category) continue;
+
+      const existingSummary = summariesByCategory.get(category);
+      if (existingSummary) {
+        existingSummary.count += row._count.id;
+        if (!existingSummary.image_url) {
+          existingSummary.image_url = categoryImages.get(category);
+        }
+        continue;
+      }
+
+      summariesByCategory.set(category, {
+        category,
+        count: row._count.id,
+        image_url: categoryImages.get(category),
+      });
+    }
+
+    return Array.from(summariesByCategory.values());
   }
 
   /**
    * Returns merged catalog + tenant categories for merchant onboarding.
    */
   async findTenantProductCategories(tenantId: number): Promise<string[]> {
+    const catalogSource = await this.resolveTenantCatalogSource(tenantId);
     const [catalogRows, tenantRows] = await Promise.all([
       this.getPrismaClient().catalogItem.groupBy({
         by: ['category'],
-        where: { is_active: true },
+        where: catalogSource
+          ? { is_active: true, source: catalogSource }
+          : { id: -1 },
       }),
       this.getPrismaClient().tenantProductCategory.groupBy({
         by: ['name'],
@@ -485,6 +601,7 @@ export class ProductsService {
    * Returns active catalog items, optionally filtered by category.
    */
   async findCatalogItems(
+    tenantId: number,
     search?: string,
     category?: string,
     page = 1,
@@ -495,6 +612,10 @@ export class ProductsService {
       ? Math.min(100, Math.max(1, limit))
       : 40;
     const normalizedSearch = search ? this.normalizeSearchTerm(search) : '';
+    const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+    if (!catalogSource) {
+      return this.emptyCatalogItemsResult(normalizedPage, normalizedLimit);
+    }
 
     if (normalizedSearch.length >= 2) {
       const normalizedCategory = this.normalizeOptionalCategory(category);
@@ -504,6 +625,7 @@ export class ProductsService {
       const cacheKey = this.buildCatalogSearchCacheKey(
         normalizedSearch,
         normalizedCategory,
+        catalogSource,
         similarityThreshold,
         strictMatchThresholds,
         normalizedPage,
@@ -518,6 +640,7 @@ export class ProductsService {
       const result = await this.searchWithinCatalogItems(
         normalizedSearch,
         normalizedCategory,
+        catalogSource,
         similarityThreshold,
         strictMatchThresholds,
         normalizedPage,
@@ -529,7 +652,10 @@ export class ProductsService {
       return result;
     }
 
-    const where: Prisma.CatalogItemWhereInput = { is_active: true };
+    const where: Prisma.CatalogItemWhereInput = {
+      is_active: true,
+      source: catalogSource,
+    };
     if (category) {
       where.category = category;
     }
@@ -1297,18 +1423,20 @@ export class ProductsService {
   private buildCatalogSearchCacheKey(
     normalizedSearch: string,
     category: string | undefined,
+    source: CatalogSource,
     similarityThreshold: number,
     strictMatchThresholds: StrictMatchThresholds,
     page: number,
     limit: number,
   ): string {
     const normalizedCategory = category || 'all';
-    return `catalog:search:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${page}:${limit}`;
+    return `catalog:search:${source}:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${page}:${limit}`;
   }
 
   private async searchWithinCatalogItems(
     normalizedSearch: string,
     category: string | undefined,
+    source: CatalogSource,
     similarityThreshold: number,
     strictMatchThresholds: StrictMatchThresholds,
     page: number,
@@ -1326,6 +1454,7 @@ export class ProductsService {
     };
 
     conditions.push(`is_active = true`);
+    conditions.push(`source = ${addParam(source)}`);
 
     if (category) {
       conditions.push(`category = ${addParam(category)}`);

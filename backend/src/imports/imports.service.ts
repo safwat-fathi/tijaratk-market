@@ -16,10 +16,14 @@ import {
 import { CreateImportDto } from './dto/create-import.dto';
 import {
   CatalogImportRow,
-  CatalogImportRowSchema,
+  CatalogImportFormat,
+  parseCatalogImportRow,
 } from './schemas/catalog-import-row.schema';
 
-const CATALOG_IMPORT_SOURCE = 'talabat_csv';
+const CATALOG_IMPORT_SOURCES: Record<CatalogImportFormat, string> = {
+  [CatalogImportFormat.talabat]: 'talabat_csv',
+  [CatalogImportFormat.chefaa]: 'chefaa_csv',
+};
 const DEFAULT_CATEGORY = 'أخرى';
 const EXPECTED_CURRENCY = 'EGP';
 const PROGRESS_UPDATE_INTERVAL = 100;
@@ -40,6 +44,7 @@ const SEEDED_CATEGORIES = new Set([
   'عسل ومربى وشوكولاتة',
   'منظفات ومنتجات ورقية',
   'عناية شخصية',
+  'أدوية',
   DEFAULT_CATEGORY,
 ]);
 
@@ -59,6 +64,15 @@ const PARENT_CATEGORY_MAP = {
   'Honey, Jam & Spreads': 'عسل ومربى وشوكولاتة',
   Cleaning: 'منظفات ومنتجات ورقية',
   'Personal Care': 'عناية شخصية',
+  الأدوية: 'أدوية',
+  'العناية بالشعر': 'عناية شخصية',
+  'العناية بالبشرة': 'عناية شخصية',
+  'العناية اليومية': 'عناية شخصية',
+  'الأم والطفل': 'عناية شخصية',
+  'المكياج و الاكسسوارات': 'عناية شخصية',
+  'المستلزمات الطبية': 'أدوية',
+  'الفيتامينات والمكملات': 'أدوية',
+  'الصحة الجنسية': 'عناية شخصية',
 } as const;
 
 type CatalogImportCounters = {
@@ -215,7 +229,7 @@ export class ImportsService {
     mode: ImportMode,
     counters: CatalogImportCounters,
   ) {
-    const parsed = CatalogImportRowSchema.safeParse(row);
+    const parsed = parseCatalogImportRow(row);
     if (!parsed.success) {
       counters.failedRows += 1;
       await this.saveRowError(
@@ -288,20 +302,25 @@ export class ImportsService {
 
   private mapCatalogRow(row: CatalogImportRow): CatalogItemData {
     const currency = (
-      row.currency?.trim().toUpperCase() || EXPECTED_CURRENCY
+      row.data.currency?.trim().toUpperCase() || EXPECTED_CURRENCY
     ).slice(0, 3);
     if (currency !== EXPECTED_CURRENCY) {
       throw new Error(`Unsupported currency: ${currency}`);
     }
 
+    const categorySource =
+      row.format === CatalogImportFormat.chefaa
+        ? row.data.category_path
+        : row.data.category;
+
     return {
-      name: row.name.trim(),
-      price: this.normalizePrice(row.price),
+      name: row.data.name.trim(),
+      price: this.normalizePrice(row.data.price),
       currency,
-      image_url: this.normalizeOptionalText(row.image_url),
-      category: this.mapCategory(row.category),
-      source: CATALOG_IMPORT_SOURCE,
-      external_id: this.normalizeOptionalText(row.product_id),
+      image_url: this.normalizeOptionalText(row.data.image_url),
+      category: this.mapCategory(categorySource),
+      source: CATALOG_IMPORT_SOURCES[row.format],
+      external_id: this.normalizeOptionalText(row.data.product_id),
       last_seen_at: new Date(),
       is_active: true,
     };
