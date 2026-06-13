@@ -12,16 +12,23 @@ import {
   UseGuards,
   ParseIntPipe,
   Query,
+  UploadedFile,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { diskStorage } from 'multer';
+import { randomUUID } from 'node:crypto';
+import { extname, join } from 'node:path';
 import { AuthGuard } from '@nestjs/passport';
 import CONSTANTS from 'src/common/constants';
+import { UploadFile } from 'src/common/decorators/upload-file.decorator';
+import { prescriptionFileFilter } from 'src/common/utils/file-filters';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -120,7 +127,40 @@ export class OrdersController {
 
   @Post(':tenant_slug')
   @ApiOperation({ summary: 'Create a new order (Public)' })
-  @ApiBody({ type: CreateOrderDto })
+  @ApiConsumes('application/json', 'multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['customer'],
+      properties: {
+        customer: { type: 'object' },
+        order_type: { type: 'string' },
+        items: { type: 'array', items: { type: 'object' } },
+        free_text_payload: { type: 'object' },
+        total: { type: 'number', format: 'float' },
+        notes: { type: 'string' },
+        order_source: { type: 'string' },
+        source_metadata: { type: 'object' },
+        prescription_unavailability_action: { type: 'string' },
+        prescription_file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @UploadFile('prescription_file', {
+    dest: join(process.cwd(), 'uploads', 'prescriptions'),
+    storage: diskStorage({
+      destination: join(process.cwd(), 'uploads', 'prescriptions'),
+      filename: (_req, file, callback) => {
+        const extension = extname(file.originalname || '').toLowerCase();
+        callback(
+          null,
+          `prescription-${Date.now()}-${randomUUID()}${extension}`,
+        );
+      },
+    }),
+    fileFilter: prescriptionFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
   @ApiResponse({
     status: HttpStatus.CREATED,
     description: 'Order created successfully',
@@ -128,12 +168,17 @@ export class OrdersController {
   createPublic(
     @Param('tenant_slug') tenantSlug: string,
     @Body() createOrderDto: CreateOrderDto,
+    @UploadedFile() prescriptionFile?: Express.Multer.File,
   ) {
     if (OrdersController.RESERVED_PUBLIC_ORDER_PATHS.has(tenantSlug.trim())) {
       throw new BadRequestException('Invalid tenant slug');
     }
 
-    return this.ordersService.createForTenantSlug(tenantSlug, createOrderDto);
+    return this.ordersService.createForTenantSlug(
+      tenantSlug,
+      createOrderDto,
+      prescriptionFile,
+    );
   }
 
   @Get('tracking/:token')

@@ -6,12 +6,16 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import { basename } from 'node:path';
 import {
   Order,
   OrderItem,
   DayClosure,
   Prisma,
+  OrderSource,
   TenantStatus,
+  TenantCategory,
 } from '../../generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -29,6 +33,7 @@ import { ReplacementDecisionAction } from './dto/decide-replacement.dto';
 import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { OrderItemSelectionMode } from 'src/common/enums/order-item-selection-mode.enum';
 import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
+import { OrderType } from 'src/common/enums/order-type.enum';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -64,6 +69,11 @@ type OrderWithItemsPayload = Order & {
   items?: OrderItem[];
 };
 
+type PrescriptionUpload = Pick<
+  Express.Multer.File,
+  'filename' | 'mimetype' | 'originalname' | 'path'
+>;
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -85,21 +95,39 @@ export class OrdersService {
   async createForTenantSlug(
     tenantSlug: string,
     createOrderDto: CreateOrderDto,
+    prescriptionUpload?: PrescriptionUpload,
   ): Promise<Order> {
     const tenant = await this.tenantsService.findOneBySlug(tenantSlug);
     if (!tenant) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
       throw new NotFoundException(`Tenant with slug ${tenantSlug} not found`);
     }
 
     if (tenant.status === TenantStatus.suspended) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
       throw new ForbiddenException('هذا المتجر غير متاح حاليا');
     }
 
     if (tenant.delivery_available === false) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
       throw new BadRequestException('التوصيل غير متاح حاليا');
     }
 
-    return this.createForTenantId(tenant.id, createOrderDto);
+    if (
+      createOrderDto.prescription_unavailability_action &&
+      !prescriptionUpload
+    ) {
+      throw new BadRequestException('Prescription file is required');
+    }
+
+    if (prescriptionUpload && tenant.category !== TenantCategory.pharmacy) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      throw new BadRequestException(
+        'Prescription uploads are only available for pharmacy stores',
+      );
+    }
+
+    return this.createForTenantId(tenant.id, createOrderDto, prescriptionUpload);
   }
 
   /**
@@ -108,12 +136,13 @@ export class OrdersService {
   async createForTenantId(
     tenantId: number,
     createOrderDto: CreateOrderDto,
+    prescriptionUpload?: PrescriptionUpload,
   ): Promise<Order> {
     let isFirstOrder = false;
 
-    const savedOrder = await this.withTenantManager(
-      tenantId,
-      async (manager) => {
+    let savedOrder: Order;
+    try {
+      savedOrder = await this.withTenantManager(tenantId, async (manager) => {
         const customer = await this.customersService.findOrCreate(
           createOrderDto.customer.phone,
           tenantId,
@@ -124,6 +153,9 @@ export class OrdersService {
 
         const hasItems = Boolean(createOrderDto.items?.length);
         const items = createOrderDto.items || [];
+        const resolvedOrderType =
+          createOrderDto.order_type ??
+          (hasItems ? OrderType.CATALOG : OrderType.FREE_TEXT);
 
         const productIds = Array.from(
           new Set(
@@ -174,7 +206,7 @@ export class OrdersService {
           tenant_id: tenantId,
           customer_id: customer.id,
           public_token: randomUUID(),
-          order_type: createOrderDto.order_type,
+          order_type: resolvedOrderType,
           status: OrderStatus.DRAFT,
           pricing_mode: pricingMode,
           delivery_fee: deliveryFee,
@@ -184,6 +216,19 @@ export class OrdersService {
           delivery_address: createOrderDto.customer.address,
           customer_phone: customer.phone,
           customer_name: createOrderDto.customer.name,
+          order_source: createOrderDto.order_source ?? OrderSource.storefront,
+          source_metadata: createOrderDto.source_metadata
+            ? (createOrderDto.source_metadata as Prisma.InputJsonValue)
+            : undefined,
+          prescription_file_url:
+            this.buildPrescriptionFileUrl(prescriptionUpload),
+          prescription_original_filename:
+            this.normalizePrescriptionOriginalFilename(prescriptionUpload),
+          prescription_mime_type: prescriptionUpload?.mimetype?.slice(0, 120),
+          prescription_unavailability_action:
+            this.normalizePrescriptionUnavailabilityAction(
+              createOrderDto.prescription_unavailability_action,
+            ),
         };
 
         const persistedOrder = await manager.order.create({
@@ -319,8 +364,11 @@ export class OrdersService {
         }
 
         return persistedOrder;
-      },
-    );
+      });
+    } catch (error) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      throw error;
+    }
 
     const completeOrder = await this.findOne(savedOrder.id);
     await this.notifyOrderCreated(completeOrder, isFirstOrder);
@@ -1516,6 +1564,46 @@ export class OrdersService {
     const baseUrl = process.env.APP_URL || 'http://localhost:3000';
     const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
     return `${normalizedBaseUrl}/track-order/${publicToken}`;
+  }
+
+  private buildPrescriptionFileUrl(
+    prescriptionUpload?: PrescriptionUpload,
+  ): string | undefined {
+    if (!prescriptionUpload) {
+      return undefined;
+    }
+
+    const filename =
+      prescriptionUpload.filename || basename(prescriptionUpload.path);
+    return `/uploads/prescriptions/${filename}`;
+  }
+
+  private normalizePrescriptionOriginalFilename(
+    prescriptionUpload?: PrescriptionUpload,
+  ): string | undefined {
+    const originalName = prescriptionUpload?.originalname?.trim();
+    return originalName ? originalName.slice(0, 255) : undefined;
+  }
+
+  private normalizePrescriptionUnavailabilityAction(
+    value?: string,
+  ): string | undefined {
+    const normalized = value?.trim();
+    return normalized ? normalized.slice(0, 64) : undefined;
+  }
+
+  private async deleteUploadedFileQuietly(
+    prescriptionUpload?: PrescriptionUpload,
+  ): Promise<void> {
+    if (!prescriptionUpload?.path) {
+      return;
+    }
+
+    try {
+      await rm(prescriptionUpload.path, { force: true });
+    } catch {
+      // Best effort cleanup only.
+    }
   }
 
   /**

@@ -214,6 +214,12 @@ model Order {
   notes                         String?
   customer_rejection_reason     String?
   customer_rejected_at          DateTime?   @db.Timestamptz(6)
+  order_source                  OrderSource @default(storefront) @map("order_source")
+  source_metadata               Json?       @map("source_metadata")
+  prescription_file_url                  String?
+  prescription_original_filename         String?     @db.VarChar(255)
+  prescription_mime_type                 String?     @db.VarChar(120)
+  prescription_unavailability_action     String?     @db.VarChar(64)
 
   order_items OrderItem[]
   tenant      Tenant      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_527dd6efd5f3402f729c6b3e826")
@@ -311,8 +317,100 @@ model Tenant {
   tenant_product_categories TenantProductCategory[]
   users                     User[]
   tenant_subscriptions      TenantSubscription[]
+  directory_profile         TenantDirectoryProfile?
+  tenant_delivery_areas     TenantDeliveryArea[]
+  directory_events          DirectoryEvent[]
 
   @@map("tenants")
+}
+
+model DirectoryArea {
+  created_at       DateTime  @default(now()) @db.Timestamp(6)
+  updated_at       DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+  deleted_at       DateTime? @db.Timestamp(6)
+  id               Int       @id(map: "PK_directory_areas_id") @default(autoincrement())
+  name_ar          String    @db.VarChar(120)
+  name_en          String?   @db.VarChar(120)
+  slug             String    @unique(map: "UQ_directory_areas_slug") @db.VarChar(120)
+  city             String?   @db.VarChar(120)
+  governorate      String?   @db.VarChar(120)
+  is_active        Boolean   @default(true)
+  sort_order       Int       @default(0)
+  latitude         Decimal?  @db.Decimal(9, 6)
+  longitude        Decimal?  @db.Decimal(9, 6)
+  seo_title        String?   @db.VarChar(180)
+  seo_description  String?   @db.VarChar(300)
+
+  tenant_directory_profiles TenantDirectoryProfile[]
+  tenant_delivery_areas     TenantDeliveryArea[]
+  directory_events          DirectoryEvent[]
+
+  @@index([is_active, sort_order, name_ar], map: "IDX_directory_areas_active_sort_name")
+  @@map("directory_areas")
+}
+
+model TenantDirectoryProfile {
+  created_at               DateTime        @default(now()) @db.Timestamp(6)
+  updated_at               DateTime        @default(now()) @updatedAt @db.Timestamp(6)
+  deleted_at               DateTime?       @db.Timestamp(6)
+  id                       Int             @id(map: "PK_tenant_directory_profiles_id") @default(autoincrement())
+  tenant_id                Int             @unique(map: "UQ_tenant_directory_profiles_tenant_id")
+  area_id                  Int?
+  directory_status         DirectoryStatus @default(draft)
+  display_name             String?         @db.VarChar(120)
+  logo_url                 String?
+  cover_url                String?
+  address                  String?
+  latitude                 Decimal?        @db.Decimal(9, 6)
+  longitude                Decimal?        @db.Decimal(9, 6)
+  seo_title                String?         @db.VarChar(180)
+  seo_description          String?         @db.VarChar(300)
+  profile_completion_score Int             @default(0)
+  missing_fields           Json?
+
+  tenant Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_tenant_directory_profiles_tenant")
+  area   DirectoryArea? @relation(fields: [area_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_tenant_directory_profiles_area")
+
+  @@index([area_id], map: "IDX_tenant_directory_profiles_area_id")
+  @@index([directory_status], map: "IDX_tenant_directory_profiles_status")
+  @@map("tenant_directory_profiles")
+}
+
+model TenantDeliveryArea {
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  id         Int       @id(map: "PK_tenant_delivery_areas_id") @default(autoincrement())
+  tenant_id  Int
+  area_id    Int
+  is_active  Boolean   @default(true)
+
+  tenant Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_tenant_delivery_areas_tenant")
+  area   DirectoryArea @relation(fields: [area_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_tenant_delivery_areas_area")
+
+  @@unique([tenant_id, area_id], map: "UQ_tenant_delivery_areas_tenant_area")
+  @@index([area_id, is_active], map: "IDX_tenant_delivery_areas_area_active")
+  @@index([tenant_id, is_active], map: "IDX_tenant_delivery_areas_tenant_active")
+  @@map("tenant_delivery_areas")
+}
+
+model DirectoryEvent {
+  created_at    DateTime           @default(now()) @db.Timestamp(6)
+  id            Int                @id(map: "PK_directory_events_id") @default(autoincrement())
+  event_type    DirectoryEventType @map("event_type")
+  tenant_id     Int?
+  area_id       Int?
+  category_slug String?            @db.VarChar(64)
+  visitor_key   String?            @db.VarChar(128)
+  metadata      Json?
+
+  tenant Tenant?        @relation(fields: [tenant_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_directory_events_tenant")
+  area   DirectoryArea? @relation(fields: [area_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_directory_events_area")
+
+  @@index([event_type, created_at], map: "IDX_directory_events_type_created")
+  @@index([tenant_id, event_type, created_at], map: "IDX_directory_events_tenant_type_created")
+  @@index([area_id, event_type, created_at], map: "IDX_directory_events_area_type_created")
+  @@map("directory_events")
 }
 
 model User {
@@ -371,6 +469,34 @@ enum OrderStatus {
   rejected_by_customer
 
   @@map("orders_status_enum")
+}
+
+enum OrderSource {
+  storefront
+  directory
+  whatsapp
+  manual
+
+  @@map("orders_source_enum")
+}
+
+enum DirectoryStatus {
+  draft
+  listed
+  hidden
+  suspended
+
+  @@map("tenant_directory_status_enum")
+}
+
+enum DirectoryEventType {
+  area_page_visit
+  category_page_visit
+  store_click
+  whatsapp_click
+  storefront_order_created
+
+  @@map("directory_events_type_enum")
 }
 
 enum ProductOrderMode {

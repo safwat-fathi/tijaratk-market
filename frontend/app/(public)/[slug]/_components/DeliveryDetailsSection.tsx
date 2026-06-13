@@ -42,7 +42,7 @@ export default function DeliveryDetailsSection({
   success,
 }: DeliveryDetailsSectionProps) {
 	const [isAddressSheetOpen, setIsAddressSheetOpen] = useState(false);
-	const deliveryAvailable = deliverySettings.delivery_available !== false;
+	const deliveryAvailable = deliverySettings?.delivery_available !== false;
 	const hasMultipleSavedAddresses = savedAddressOptions.length > 1;
 	const hasSavedCustomerSuggestion = Boolean(suggestedCustomerProfile);
 	const hasSingleSavedAddress = savedAddressOptions.length === 1;
@@ -56,12 +56,12 @@ export default function DeliveryDetailsSection({
 			"يمكنك استخدام البيانات المحفوظة لتعبئة تفاصيل التوصيل.";
 	}
   const deliveryFee =
-    formatCurrency(deliverySettings.delivery_fee ?? 0) ?? "غير محدد";
+    formatCurrency(deliverySettings?.delivery_fee ?? 0) ?? "غير محدد";
 
-  let deliveryTimeWindow: string = "طوال اليوم";
+  let deliveryTimeWindow: string | null = null;
   if (
-    deliverySettings.delivery_starts_at &&
-    deliverySettings.delivery_ends_at
+    deliverySettings?.delivery_starts_at &&
+    deliverySettings?.delivery_ends_at
   ) {
     const formatTime = (time: string) => {
       const [hours, minutes] = time.split(":");
@@ -70,7 +70,7 @@ export default function DeliveryDetailsSection({
       const h12 = h % 12 || 12;
       return `${h12}:${minutes} ${period}`;
     };
-    deliveryTimeWindow = `من ${formatTime(deliverySettings.delivery_starts_at)} إلى ${formatTime(deliverySettings.delivery_ends_at)}`;
+      deliveryTimeWindow = `من ${formatTime(deliverySettings?.delivery_starts_at)} إلى ${formatTime(deliverySettings?.delivery_ends_at)}`;
   }
 
   return (

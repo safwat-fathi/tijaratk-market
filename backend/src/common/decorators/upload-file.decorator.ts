@@ -12,7 +12,8 @@ export function UploadFile(
   fieldName: string = 'file',
   options: Partial<MulterOptions> = {},
 ) {
-  const uploadDir = join(process.cwd(), 'uploads');
+  const uploadDir =
+    typeof options.dest === 'string' ? options.dest : join(process.cwd(), 'uploads');
   mkdirSync(uploadDir, { recursive: true });
 
   return applyDecorators(

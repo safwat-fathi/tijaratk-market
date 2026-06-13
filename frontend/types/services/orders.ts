@@ -23,6 +23,7 @@ export interface CreateOrderRequest {
   notes?: string;
   free_text_payload?: { text: string };
   order_type: OrderType;
+  prescription_unavailability_action?: string;
 }
 
 export interface OrderListResponse {

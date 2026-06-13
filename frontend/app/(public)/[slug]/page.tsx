@@ -158,6 +158,7 @@ export default async function StorePage({ params, searchParams }: Props) {
 
 				<OrderForm
 					tenantSlug={tenant.slug}
+					isPharmacy={tenant.category === "pharmacy"}
 					deliverySettings={tenant}
 					initialCategory={category}
 					initialProducts={products}

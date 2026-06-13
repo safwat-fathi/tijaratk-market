@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
@@ -15,6 +15,19 @@ import {
 import { OrderType } from 'src/common/enums/order-type.enum';
 import { CreateCustomerDto } from 'src/customers/dto/create-customer.dto';
 import { OrderItemSelectionMode } from 'src/common/enums/order-item-selection-mode.enum';
+import { OrderSource } from '../../../generated/prisma/client';
+
+const parseJsonIfString = ({ value }: { value: unknown }) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
 
 export class CreateOrderItemDto {
   @ApiPropertyOptional()
@@ -86,15 +99,18 @@ export class CreateOrderItemDto {
 
 export class CreateOrderDto {
   @ApiProperty()
+  @Transform(parseJsonIfString)
   @ValidateNested()
   @Type(() => CreateCustomerDto)
   customer: CreateCustomerDto;
 
-  @ApiProperty({ enum: OrderType })
+  @ApiPropertyOptional({ enum: OrderType })
+  @IsOptional()
   @IsEnum(OrderType)
-  order_type: OrderType;
+  order_type?: OrderType;
 
   @ApiPropertyOptional({ type: [CreateOrderItemDto] })
+  @Transform(parseJsonIfString)
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -102,6 +118,7 @@ export class CreateOrderDto {
   items?: CreateOrderItemDto[];
 
   @ApiPropertyOptional()
+  @Transform(parseJsonIfString)
   @IsOptional()
   @IsObject()
   free_text_payload?: Record<string, any>;
@@ -123,4 +140,27 @@ export class CreateOrderDto {
   @IsNumber()
   @Min(0)
   delivery_fee?: number;
+
+  @ApiPropertyOptional({ enum: OrderSource, example: OrderSource.directory })
+  @IsOptional()
+  @IsEnum(OrderSource)
+  order_source?: OrderSource;
+
+  @ApiPropertyOptional({
+    type: Object,
+    example: { areaSlug: 'sheikh-zayed', categorySlug: 'supermarkets' },
+  })
+  @Transform(parseJsonIfString)
+  @IsOptional()
+  @IsObject()
+  source_metadata?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    example: 'call',
+    description: 'Customer preference if prescription items are unavailable',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  prescription_unavailability_action?: string;
 }

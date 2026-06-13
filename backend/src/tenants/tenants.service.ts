@@ -47,8 +47,15 @@ export class TenantsService {
     });
   }
 
-  async findOneBySlug(slug: string): Promise<Tenant | null> {
-    return this.prisma.tenant.findUnique({ where: { slug } });
+  async findOneBySlug(slug: string) {
+    return this.prisma.tenant.findUnique({
+      where: { slug },
+      include: {
+        directory_profile: {
+          include: { area: true },
+        },
+      },
+    });
   }
 
   async findOneById(id: number): Promise<Tenant | null> {

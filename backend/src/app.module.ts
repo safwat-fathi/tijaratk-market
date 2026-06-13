@@ -16,6 +16,7 @@ import { AvailabilityRequestsModule } from './availability-requests/availability
 import { PrismaModule } from './prisma/prisma.module';
 import { AdminModule } from './admin/admin.module';
 import { ImportsModule } from './imports/imports.module';
+import { StoresDirectoryModule } from './stores-directory/stores-directory.module';
 
 const ENV = process.env.NODE_ENV;
 
@@ -47,6 +48,7 @@ const ENV = process.env.NODE_ENV;
     WebhooksModule,
     AdminModule,
     ImportsModule,
+    StoresDirectoryModule,
   ],
   controllers: [HealthController],
   providers: [TenantRlsInterceptor],

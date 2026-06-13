@@ -66,6 +66,10 @@ export interface Order {
   delivery_time_window_snapshot?: string | null;
   total?: OrderNumericValue;
   free_text_payload?: { text?: string };
+  prescription_file_url?: string | null;
+  prescription_original_filename?: string | null;
+  prescription_mime_type?: string | null;
+  prescription_unavailability_action?: string | null;
   notes?: string;
   customer_rejection_reason?: string | null;
   customer_rejected_at?: string | null;

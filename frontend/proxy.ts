@@ -6,6 +6,7 @@ export function proxy(request: NextRequest) {
   // We use the raw string "access_token" because we can't import STORAGE_KEYS here easily 
   // without ensuring it's edge-compatible.
   const token = request.cookies.get('access_token');
+  const adminToken = request.cookies.get('admin_access_token');
   const { pathname } = request.nextUrl;
 
   // Define protected routes pattern
@@ -31,10 +32,15 @@ export function proxy(request: NextRequest) {
     }
   }
 
+  if (pathname === '/admin/login' && adminToken) {
+    const adminUrl = new URL('/admin', request.url);
+    return NextResponse.redirect(adminUrl);
+  }
+
   // Allow request to proceed
   return NextResponse.next();
 }
 
 export const config = {
-	matcher: ["/merchant/:path*"],
+	matcher: ["/merchant/:path*", "/admin/:path*"],
 };

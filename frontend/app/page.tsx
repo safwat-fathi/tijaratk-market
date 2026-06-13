@@ -645,8 +645,69 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="mx-auto mt-16 grid max-w-6xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 justify-center">
-              {pricingPlans.map((plan, index) => (
+            <div className="mx-auto mt-16 grid max-w-4xl grid-cols-1 gap-8 md:grid-cols-2 justify-center">
+              {/* الباقة الأساسية - تم تعليقها بناءً على طلب العميل
+              <div
+                className="relative flex flex-col rounded-[2.5rem] p-8 md:p-10 shadow-md transition-all duration-300 hover:-translate-y-2 hover:shadow-xl bg-white text-[#222B2E] border border-[#DDE5E1]"
+              >
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <h3 className="text-2xl font-black text-[#0F5A3D]">الباقة الأساسية</h3>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border transition-colors bg-[#E8F5ED] text-[#0F5A3D] border-[#27AE60]/20">
+                    🎁 أول شهرين مجاناً
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-col">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm line-through font-medium text-[#222B2E]/50">
+                      ١٩٩ جنيه/شهر
+                    </span>
+                    <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-500">
+                      توفير ١٠٠٪
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-x-2">
+                    <span className="text-5xl font-black tracking-tight text-[#0F5A3D]">مجانًا</span>
+                    <span className="text-sm font-extrabold text-[#222B2E]/80">لأول شهرين</span>
+                  </div>
+                  <span className="mt-2 text-xs font-bold leading-relaxed text-[#222B2E]/60">
+                    ثم ١٩٩ جنيه/شهر بعد ذلك
+                  </span>
+                </div>
+                <p className="mt-6 text-sm leading-relaxed text-[#222B2E]/70">
+                  للمتاجر النامية التي تحتاج لمتابعة أفضل
+                </p>
+                <ul role="list" className="mt-8 space-y-4 text-sm leading-6 flex-1 text-[#222B2E]/80">
+                  <li className="flex gap-x-3 items-start">
+                    <SVGCheckCircle className="h-5 w-5 flex-none mt-0.5 text-[#27AE60]" />
+                    <span>عدد منتجات غير محدود</span>
+                  </li>
+                  <li className="flex gap-x-3 items-start">
+                    <SVGCheckCircle className="h-5 w-5 flex-none mt-0.5 text-[#27AE60]" />
+                    <span>عدد طلبات غير محدود</span>
+                  </li>
+                  <li className="flex gap-x-3 items-start">
+                    <SVGCheckCircle className="h-5 w-5 flex-none mt-0.5 text-[#27AE60]" />
+                    <span>تقارير يومية</span>
+                  </li>
+                  <li className="flex gap-x-3 items-start">
+                    <SVGCheckCircle className="h-5 w-5 flex-none mt-0.5 text-[#27AE60]" />
+                    <span>خدمة عملاء سريعة</span>
+                  </li>
+                  <li className="flex gap-x-3 items-start">
+                    <SVGCheckCircle className="h-5 w-5 flex-none mt-0.5 text-[#27AE60]" />
+                    <span>تعديلات واجهة المتجر (ألوان المتجر، شعار المتجر)</span>
+                  </li>
+                </ul>
+                <Link
+                  href="/merchant/register"
+                  className="mt-8 block w-full rounded-2xl px-4 py-4 text-center text-sm font-black transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md bg-[#E8F5ED] text-[#0F5A3D] hover:bg-[#D1EBDC]"
+                >
+                  ابدأ فترة التجربة
+                </Link>
+              </div>
+              */}
+
+              {pricingPlans.filter(p => p.name !== "الباقة الأساسية").map((plan, index) => (
                 <div
                   key={index}
                   className={`relative flex flex-col rounded-[2.5rem] p-8 md:p-10 shadow-md transition-all duration-300 hover:-translate-y-2 hover:shadow-xl ${
@@ -656,12 +717,12 @@ export default function LandingPage() {
                   }`}
                 >
                   {/* Top Badge for Plan Highlight */}
-                  {plan.highlighted && index === 1 && (
+                  {plan.highlighted && plan.name === "الباقة الكاملة" && (
                     <div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 px-5 py-1.5 text-xs font-black text-white shadow-lg tracking-wider animate-pulse">
                       الأكثر طلباً 🔥
                     </div>
                   )}
-                  {plan.highlighted && index === 2 && (
+                  {plan.highlighted && plan.name === "باقة الفروع" && (
                     <div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-[#27AE60] px-5 py-1.5 text-xs font-black text-white shadow-lg tracking-wider">
                       للمتاجر الكبرى 🏢
                     </div>

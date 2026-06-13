@@ -40,6 +40,7 @@ import Toast from "./Toast";
 import CategoryEntryGrid from "./CategoryEntryGrid";
 import CategoryProductsView from "./CategoryProductsView";
 import OrderNotesSection from "./OrderNotesSection";
+import PrescriptionUploadForm from "./PrescriptionUploadForm";
 import DeliveryDetailsSection from "./DeliveryDetailsSection";
 import OrderSubmitBar from "./OrderSubmitBar";
 import OrderReviewSheet from "./OrderReviewSheet";
@@ -85,6 +86,7 @@ type ToastState = {
 
 type OrderFormProps = {
   tenantSlug: string;
+  isPharmacy?: boolean;
   deliverySettings: TenantDeliverySettings;
   initialCategory?: string;
   initialProducts: Product[];
@@ -102,6 +104,7 @@ type OrderFormProps = {
 
 export default function OrderForm({
   tenantSlug,
+  isPharmacy,
   deliverySettings,
   initialCategory,
   initialProducts,
@@ -172,7 +175,7 @@ export default function OrderForm({
         initialProducts.map((product) => [product.id, product]),
       ) as Record<number, Product>,
   );
-  const deliveryAvailable = deliverySettings.delivery_available !== false;
+  const deliveryAvailable = deliverySettings?.delivery_available !== false;
 
   const loadMoreObserver = useRef<IntersectionObserver | null>(null);
   const prefetchTriggeredRef = useRef<Set<string>>(new Set());
@@ -992,10 +995,15 @@ export default function OrderForm({
 				)}
 
         <OrderNotesSection
+          isPharmacy={isPharmacy}
           orderRequest={orderRequest}
           onOrderRequestChange={setOrderRequest}
           error={state.errors?.order_request?.[0]}
         />
+
+        {isPharmacy && (
+          <PrescriptionUploadForm tenantSlug={tenantSlug} />
+        )}
 
         <DeliveryDetailsSection
           deliverySettings={deliverySettings}
