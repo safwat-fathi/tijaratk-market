@@ -194,6 +194,7 @@ export class CustomersService {
     name?: string,
     address?: string,
     manager?: Prisma.TransactionClient,
+    areaId?: number | null,
   ): Promise<Customer> {
     const phone = formatPhoneNumber(rawPhone);
     const scopedManager = manager ?? DbTenantContext.getManager();
@@ -215,6 +216,8 @@ export class CustomersService {
             tenantId,
             name,
             address,
+            undefined,
+            areaId,
           );
         });
       } else {
@@ -225,6 +228,8 @@ export class CustomersService {
           tenantId,
           name,
           address,
+          undefined,
+          areaId,
         );
       }
     }
@@ -243,7 +248,7 @@ export class CustomersService {
     }
 
     if (address) {
-      await this.upsertCustomerAddress(customer.id, tenantId, address);
+      await this.upsertCustomerAddress(customer.id, tenantId, address, areaId);
     }
 
     if (hasUpdates) {
@@ -263,6 +268,7 @@ export class CustomersService {
     name?: string,
     address?: string,
     notes?: string,
+    areaId?: number | null,
   ): Promise<Customer> {
     // Increment counter
     await manager.$executeRaw`UPDATE tenants SET customer_counter = customer_counter + 1 WHERE id = ${tenantId}`;
@@ -285,7 +291,7 @@ export class CustomersService {
     });
 
     if (address) {
-      await this.upsertCustomerAddress(customer.id, tenantId, address);
+      await this.upsertCustomerAddress(customer.id, tenantId, address, areaId);
     }
 
     return customer;
@@ -298,6 +304,7 @@ export class CustomersService {
     customerId: number,
     tenantId: number,
     rawAddress: string,
+    areaId?: number | null,
   ): Promise<void> {
     const address = rawAddress.trim();
     if (!address) {
@@ -313,13 +320,18 @@ export class CustomersService {
         tenant_id: tenantId,
         customer_id: customerId,
         address,
+        area_id: areaId ?? null,
       },
     });
 
     if (existing) {
       await addressDb.update({
         where: { id: existing.id },
-        data: { deleted_at: null, last_used_at: new Date() },
+        data: {
+          deleted_at: null,
+          last_used_at: new Date(),
+          area_id: areaId ?? null,
+        },
       });
       return;
     }
@@ -328,6 +340,7 @@ export class CustomersService {
       data: {
         tenant_id: tenantId,
         customer_id: customerId,
+        area_id: areaId ?? null,
         address,
         last_used_at: new Date(),
       },

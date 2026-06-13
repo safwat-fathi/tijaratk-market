@@ -86,6 +86,7 @@ type ToastState = {
 
 type OrderFormProps = {
   tenantSlug: string;
+  areaSlug?: string;
   isPharmacy?: boolean;
   deliverySettings: TenantDeliverySettings;
   initialCategory?: string;
@@ -104,6 +105,7 @@ type OrderFormProps = {
 
 export default function OrderForm({
   tenantSlug,
+  areaSlug,
   isPharmacy,
   deliverySettings,
   initialCategory,
@@ -941,6 +943,9 @@ export default function OrderForm({
         onInvalidCapture={handleFormInvalidCapture}
       >
         <input type="hidden" name="cart" value={JSON.stringify(cartItems)} />
+        {areaSlug && (
+          <input type="hidden" name="delivery_area_slug" value={areaSlug} />
+        )}
 
         {hasMerchantProducts && (
           <div className="mt-4 space-y-4">

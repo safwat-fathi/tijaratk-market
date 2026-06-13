@@ -23,6 +23,7 @@ export type StoresDirectoryStoreCard = {
   logoUrl: string | null;
   address: string | null;
   areaName: string | null;
+  areaSlug: string | null;
   deliveryAvailable: boolean;
   deliveryFee: number;
   deliveryAvailableNow: boolean;

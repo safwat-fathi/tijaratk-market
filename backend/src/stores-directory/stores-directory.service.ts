@@ -104,6 +104,7 @@ export class StoresDirectoryService {
       featuredStores: this.toStoreCards(
         featuredTenants,
         undefined,
+        undefined,
         activeProducts,
       ),
       seo: {
@@ -164,6 +165,7 @@ export class StoresDirectoryService {
       featuredStores: this.toStoreCards(
         featuredTenants,
         area.name_ar,
+        area.slug,
         activeProducts,
       ),
       seo: {
@@ -252,6 +254,7 @@ export class StoresDirectoryService {
     let stores = this.toStoreCards(
       rows.map((row) => row.tenant),
       area.name_ar,
+      area.slug,
       activeProducts,
     );
 
@@ -679,6 +682,7 @@ export class StoresDirectoryService {
   private toStoreCards(
     tenants: StoreCardTenant[],
     fallbackAreaName?: string,
+    fallbackAreaSlug?: string,
     activeProductCounts = new Map<number, number>(),
   ) {
     return tenants.map((tenant) => {
@@ -697,6 +701,7 @@ export class StoresDirectoryService {
           tenant.directory_profile?.area?.name_ar ||
           fallbackAreaName ||
           null,
+        areaSlug: fallbackAreaSlug || null,
         deliveryAvailable: tenant.delivery_available,
         deliveryFee: Number(tenant.delivery_fee || 0),
         deliveryAvailableNow: this.isDeliveryAvailableNow(tenant),

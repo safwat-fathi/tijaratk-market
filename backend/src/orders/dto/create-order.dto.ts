@@ -3,6 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
+  IsInt,
   IsNumber,
   IsObject,
   IsOptional,
@@ -154,6 +155,19 @@ export class CreateOrderDto {
   @IsOptional()
   @IsObject()
   source_metadata?: Record<string, any>;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  delivery_area_id?: number;
+
+  @ApiPropertyOptional({ example: 'sheikh-zayed' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  delivery_area_slug?: string;
 
   @ApiPropertyOptional({
     example: 'call',

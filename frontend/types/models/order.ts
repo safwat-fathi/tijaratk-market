@@ -63,6 +63,13 @@ export interface Order {
   pricing_mode: PricingMode;
   subtotal?: OrderNumericValue;
   delivery_fee?: OrderNumericValue;
+  delivery_area_id?: number | null;
+  delivery_area?: {
+    id: number;
+    name_ar: string;
+    name_en?: string | null;
+    slug: string;
+  } | null;
   delivery_time_window_snapshot?: string | null;
   total?: OrderNumericValue;
   free_text_payload?: { text?: string };

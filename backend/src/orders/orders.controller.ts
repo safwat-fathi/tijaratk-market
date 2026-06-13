@@ -141,6 +141,8 @@ export class OrdersController {
         notes: { type: 'string' },
         order_source: { type: 'string' },
         source_metadata: { type: 'object' },
+        delivery_area_id: { type: 'number' },
+        delivery_area_slug: { type: 'string' },
         prescription_unavailability_action: { type: 'string' },
         prescription_file: { type: 'string', format: 'binary' },
       },

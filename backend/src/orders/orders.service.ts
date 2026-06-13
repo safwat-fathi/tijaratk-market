@@ -143,12 +143,18 @@ export class OrdersService {
     let savedOrder: Order;
     try {
       savedOrder = await this.withTenantManager(tenantId, async (manager) => {
+        const deliveryAreaId = await this.resolveDeliveryAreaId(
+          manager,
+          tenantId,
+          createOrderDto,
+        );
         const customer = await this.customersService.findOrCreate(
           createOrderDto.customer.phone,
           tenantId,
           createOrderDto.customer.name,
           createOrderDto.customer.address,
           manager,
+          deliveryAreaId,
         );
 
         const hasItems = Boolean(createOrderDto.items?.length);
@@ -210,6 +216,7 @@ export class OrdersService {
           status: OrderStatus.DRAFT,
           pricing_mode: pricingMode,
           delivery_fee: deliveryFee,
+          delivery_area_id: deliveryAreaId,
           delivery_time_window_snapshot: deliveryTimeWindowSnapshot,
           free_text_payload: createOrderDto.free_text_payload,
           notes: createOrderDto.notes,
@@ -394,6 +401,7 @@ export class OrdersService {
             pending_replacement_product: true,
           },
         },
+        delivery_area: true,
       },
       orderBy: { created_at: 'desc' },
     });
@@ -532,6 +540,7 @@ export class OrdersService {
           },
         },
         tenant: true,
+        delivery_area: true,
       },
     });
 
@@ -922,6 +931,7 @@ export class OrdersService {
           },
         },
         tenant: { select: { id: true, name: true, slug: true } },
+        delivery_area: true,
       },
     });
 
@@ -949,6 +959,7 @@ export class OrdersService {
           },
         },
         tenant: { select: { id: true, name: true, slug: true } },
+        delivery_area: true,
       },
     });
 
@@ -1564,6 +1575,55 @@ export class OrdersService {
     const baseUrl = process.env.APP_URL || 'http://localhost:3000';
     const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
     return `${normalizedBaseUrl}/track-order/${publicToken}`;
+  }
+
+  private async resolveDeliveryAreaId(
+    manager: Prisma.TransactionClient,
+    tenantId: number,
+    createOrderDto: CreateOrderDto,
+  ): Promise<number | null> {
+    const areaId = createOrderDto.delivery_area_id;
+    const areaSlug =
+      createOrderDto.delivery_area_slug?.trim() ||
+      this.resolveSourceMetadataAreaSlug(createOrderDto.source_metadata);
+
+    if (!areaId && !areaSlug) {
+      return null;
+    }
+
+    const areaWhere: Prisma.DirectoryAreaWhereInput = {
+      is_active: true,
+      ...(areaId ? { id: areaId } : { slug: areaSlug as string }),
+    };
+
+    const deliveryArea = await manager.tenantDeliveryArea.findFirst({
+      where: {
+        tenant_id: tenantId,
+        is_active: true,
+        area: areaWhere,
+      },
+      include: { area: true },
+    });
+
+    if (!deliveryArea) {
+      throw new BadRequestException(
+        'Selected delivery area is not available for this store',
+      );
+    }
+
+    return deliveryArea.area_id;
+  }
+
+  private resolveSourceMetadataAreaSlug(
+    sourceMetadata?: Record<string, any>,
+  ): string | null {
+    const areaSlug = sourceMetadata?.areaSlug;
+    if (typeof areaSlug !== 'string') {
+      return null;
+    }
+
+    const normalized = areaSlug.trim();
+    return normalized.length > 0 ? normalized : null;
   }
 
   private buildPrescriptionFileUrl(

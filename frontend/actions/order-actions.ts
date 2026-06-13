@@ -174,6 +174,7 @@ type CreateOrderCustomerData = {
   customer_name: string;
   customer_phone: string;
   delivery_address?: string;
+  delivery_area_slug?: string;
   notes?: string;
 };
 
@@ -216,6 +217,7 @@ const buildCreateOrderPayload = ({
   notes: customerData.notes,
   free_text_payload: orderRequest ? { text: orderRequest } : undefined,
   order_type: items.length > 0 ? OrderType.CATALOG : OrderType.FREE_TEXT,
+  delivery_area_slug: customerData.delivery_area_slug || undefined,
 });
 
 const persistCreatedOrderTrackingArtifacts = async ({

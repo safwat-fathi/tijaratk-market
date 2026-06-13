@@ -9,6 +9,7 @@ export const createOrderSchema = z.object({
 	notes: z.string().optional(),
 	order_request: z.string().optional(),
 	cart: z.string().optional(), // We'll parse this manually or refine
+	delivery_area_slug: z.string().optional(),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

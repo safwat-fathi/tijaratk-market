@@ -132,12 +132,15 @@ model CustomerAddress {
   tenant_id    Int
   id           Int       @id(map: "PK_customer_addresses_id") @default(autoincrement())
   customer_id  Int
+  area_id      Int?
   address      String
   last_used_at DateTime? @db.Timestamp(6)
   customer     Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_customer_addresses_customer")
+  area         DirectoryArea? @relation(fields: [area_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_customer_addresses_area")
   tenant       Tenant    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_customer_addresses_tenant")
 
-  @@unique([tenant_id, customer_id, address], map: "UQ_customer_addresses_tenant_customer_address")
+  @@unique([tenant_id, customer_id, address, area_id], map: "UQ_customer_addresses_tenant_customer_address_area")
+  @@index([area_id], map: "IDX_customer_addresses_area_id")
   @@index([customer_id], map: "IDX_customer_addresses_customer_id")
   @@index([tenant_id], map: "IDX_customer_addresses_tenant_id")
   @@map("customer_addresses")
@@ -206,6 +209,7 @@ model Order {
   subtotal                      Decimal?    @db.Decimal(10, 2)
   delivery_fee                  Decimal     @default(0) @db.Decimal(10, 2)
   delivery_address              String?
+  delivery_area_id              Int?
   delivery_time_window_snapshot String?     @db.VarChar(64)
   customer_phone                String?     @db.VarChar
   customer_name                 String?     @db.VarChar
@@ -224,7 +228,9 @@ model Order {
   order_items OrderItem[]
   tenant      Tenant      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_527dd6efd5f3402f729c6b3e826")
   customer    Customer    @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_772d0ce0473ac2ccfa26060dbe9")
+  delivery_area DirectoryArea? @relation(fields: [delivery_area_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_orders_delivery_area")
 
+  @@index([delivery_area_id], map: "IDX_orders_delivery_area_id")
   @@index([tenant_id], map: "IDX_527dd6efd5f3402f729c6b3e82")
   @@map("orders")
 }
@@ -344,6 +350,8 @@ model DirectoryArea {
   tenant_directory_profiles TenantDirectoryProfile[]
   tenant_delivery_areas     TenantDeliveryArea[]
   directory_events          DirectoryEvent[]
+  customer_addresses        CustomerAddress[]
+  orders                    Order[]
 
   @@index([is_active, sort_order, name_ar], map: "IDX_directory_areas_active_sort_name")
   @@map("directory_areas")

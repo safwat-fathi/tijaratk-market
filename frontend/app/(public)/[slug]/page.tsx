@@ -20,7 +20,7 @@ import { getCustomerProfileBySlugFromCookie } from "@/lib/tracking/customer-trac
 
 type Props = {
 	params: Promise<{ slug: string }>;
-	searchParams: Promise<{ reorder?: string; category?: string }>;
+	searchParams: Promise<{ reorder?: string; category?: string; areaSlug?: string }>;
 };
 
 // Fetch data
@@ -128,7 +128,7 @@ export async function generateMetadata(
 
 export default async function StorePage({ params, searchParams }: Props) {
 	const { slug } = await params;
-	const { reorder, category } = await searchParams;
+	const { reorder, category, areaSlug } = await searchParams;
 
 	const tenant = await getTenant(slug);
 	if (!tenant || !tenant.id) {
@@ -158,6 +158,7 @@ export default async function StorePage({ params, searchParams }: Props) {
 
 				<OrderForm
 					tenantSlug={tenant.slug}
+					areaSlug={areaSlug}
 					isPharmacy={tenant.category === "pharmacy"}
 					deliverySettings={tenant}
 					initialCategory={category}
