@@ -1,6 +1,6 @@
 {
   "name": "tijaratk-backend",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "",
   "author": "",
   "private": true,
@@ -22,7 +22,8 @@
     "prisma:migrate:deploy": "NODE_ENV=production prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:reset:dev": "NODE_ENV=development prisma migrate reset",
-    "prisma:reset:prod": "NODE_ENV=production prisma migrate reset"
+    "prisma:reset:prod": "NODE_ENV=production prisma migrate reset",
+    "prisma:studio": "NODE_ENV=development prisma studio"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^3.1.0",
