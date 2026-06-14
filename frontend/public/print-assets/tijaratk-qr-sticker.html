@@ -212,7 +212,23 @@
         margin-top: auto;
         width: 100%;
         display: flex;
-        justify-content: center;
+        flex-direction: column;
+        align-items: center;
+        gap: 5mm;
+      }
+
+      .website-url {
+        font-family: "Poppins", sans-serif;
+        font-size: 18pt;
+        font-weight: 700;
+        color: var(--brand-green-deep);
+        letter-spacing: 0.5px;
+        background: rgba(39, 174, 96, 0.08);
+        border: 0.5mm solid rgba(39, 174, 96, 0.18);
+        padding: 3mm 9mm;
+        border-radius: 6mm;
+        text-align: center;
+        box-shadow: 0 1.5mm 4mm rgba(39, 174, 96, 0.04);
       }
 
       .footer-line {
@@ -272,8 +288,9 @@
           <div class="store-container">
             <div class="store-name">&nbsp;</div>
           </div>
-          <div class="footer" aria-hidden="true">
-            <div class="footer-line"></div>
+          <div class="footer">
+            <div class="website-url">www.tijaratk.com</div>
+            <div class="footer-line" aria-hidden="true"></div>
           </div>
         </div>
       </section>
