@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpStatus,
   Param,
@@ -184,6 +185,19 @@ export class StoresDirectoryController {
     @Body() dto: UpdateDirectoryAreaDto,
   ) {
     return this.storesDirectoryService.adminUpdateArea(id, dto);
+  }
+
+  @Delete('admin/directory/areas/:id')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Delete a directory area' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Directory area deleted successfully',
+  })
+  adminDeleteArea(@Param('id', ParseIntPipe) id: number) {
+    return this.storesDirectoryService.adminDeleteArea(id);
   }
 
   @Patch('admin/tenants/:tenantId/directory-profile')

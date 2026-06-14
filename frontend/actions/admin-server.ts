@@ -83,6 +83,40 @@ export async function updateTenantPlanAction(id: number, plan_id: number): Promi
   }
 }
 
+const parsePositiveInteger = (value: FormDataEntryValue | null) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+export async function updateTenantAreasAction(tenantId: number, formData: FormData): Promise<void> {
+  const areaId = parsePositiveInteger(formData.get("area_id"));
+  if (!areaId) {
+    throw new Error("يجب اختيار المنطقة الأساسية للمتجر");
+  }
+
+  const deliveryAreaIds = formData
+    .getAll("delivery_area_ids")
+    .map(parsePositiveInteger)
+    .filter((value): value is number => typeof value === "number");
+
+  const uniqueDeliveryAreaIds = Array.from(new Set([areaId, ...deliveryAreaIds]));
+
+  const response = await adminService.updateTenantDirectoryProfile(tenantId, {
+    area_id: areaId,
+    delivery_area_ids: uniqueDeliveryAreaIds,
+  });
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر تحديث مناطق المتجر");
+  }
+
+  revalidatePath("/admin/merchants");
+}
+
 export async function togglePlanStatusAction(id: number, currentStatus: boolean): Promise<void> {
   const response = await adminService.togglePlanStatus(id, !currentStatus);
   if (response.success) {
@@ -109,3 +143,30 @@ export async function uploadCatalogImportAction(formData: FormData): Promise<voi
 
   throw new Error(response.message || "تعذر رفع ملف الاستيراد");
 }
+
+import { AdminDirectoryArea } from "@/services/api/admin.service";
+
+export async function createDirectoryAreaAction(payload: Partial<AdminDirectoryArea>): Promise<void> {
+  const response = await adminService.createDirectoryArea(payload);
+  if (!response.success) {
+    throw new Error(response.message || "تعذر إضافة المنطقة");
+  }
+  revalidatePath("/admin/areas");
+}
+
+export async function updateDirectoryAreaAction(id: number, payload: Partial<AdminDirectoryArea>): Promise<void> {
+  const response = await adminService.updateDirectoryArea(id, payload);
+  if (!response.success) {
+    throw new Error(response.message || "تعذر تحديث المنطقة");
+  }
+  revalidatePath("/admin/areas");
+}
+
+export async function deleteDirectoryAreaAction(id: number): Promise<void> {
+  const response = await adminService.deleteDirectoryArea(id);
+  if (!response.success) {
+    throw new Error(response.message || "تعذر حذف المنطقة، قد تكون مستخدمة");
+  }
+  revalidatePath("/admin/areas");
+}
+

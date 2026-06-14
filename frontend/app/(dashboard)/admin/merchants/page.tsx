@@ -5,6 +5,8 @@ import { toggleTenantStatusAction } from '@/actions/admin-server';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import { redirect } from 'next/navigation';
 import { PlanSelect } from './_components/PlanSelect';
+import { TenantAreaForm } from './_components/TenantAreaForm';
+import type { AdminDirectoryArea, AdminPlan, AdminTenant } from '@/services/api/admin.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +14,7 @@ async function getTenants() {
   try {
     const response = await adminService.getTenants();
     if (response.success && response.data) {
-      return Array.isArray(response.data) ? response.data : (response.data as any).data || [];
+      return response.data;
     }
     if (!response.success && response.message === 'Unauthorized') {
       redirect('/admin/login');
@@ -29,7 +31,7 @@ async function getPlansList() {
   try {
     const response = await adminService.getPlans();
     if (response.success && response.data) {
-      return Array.isArray(response.data) ? response.data : (response.data as any).data || [];
+      return response.data;
     }
     return [];
   } catch (error) {
@@ -39,8 +41,23 @@ async function getPlansList() {
   }
 }
 
+async function getDirectoryAreas() {
+  try {
+    const response = await adminService.getDirectoryAreas();
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return [];
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error('Failed to fetch directory areas:', error);
+    return [];
+  }
+}
+
 export default async function AdminMerchants() {
-  const [merchants, plans] = await Promise.all([getTenants(), getPlansList()]);
+  const [merchants, plans, areas]: [AdminTenant[], AdminPlan[], AdminDirectoryArea[]] =
+    await Promise.all([getTenants(), getPlansList(), getDirectoryAreas()]);
 
   return (
     <div className="space-y-6">
@@ -56,13 +73,14 @@ export default async function AdminMerchants() {
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">المنتجات</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الطلبات</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">العملاء</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">المناطق</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الباقة</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحالة</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {merchants.map((merchant: any) => (
+            {merchants.map((merchant) => (
               <tr key={merchant.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {merchant.name}
@@ -72,6 +90,9 @@ export default async function AdminMerchants() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant._count?.products || 0}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant._count?.orders || 0}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant._count?.customers || 0}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  <TenantAreaForm tenant={merchant} areas={areas} />
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <PlanSelect
                     tenantId={merchant.id}

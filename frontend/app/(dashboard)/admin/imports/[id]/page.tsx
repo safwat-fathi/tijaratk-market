@@ -108,6 +108,27 @@ export default async function AdminImportDetailsPage({
         </Card>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="p-5">
+          <p className="text-sm text-gray-500">تم إنشاؤها</p>
+          <p className="mt-2 text-2xl font-bold text-gray-900">
+            {importRun.created_rows}
+          </p>
+        </Card>
+        <Card className="p-5">
+          <p className="text-sm text-gray-500">تم تحديثها</p>
+          <p className="mt-2 text-2xl font-bold text-gray-900">
+            {importRun.updated_rows}
+          </p>
+        </Card>
+        <Card className="p-5">
+          <p className="text-sm text-gray-500">تم تخطيها / تعطيلها</p>
+          <p className="mt-2 text-2xl font-bold text-gray-900">
+            {importRun.skipped_rows}
+          </p>
+        </Card>
+      </div>
+
       <Card className="p-6">
         <dl className="grid gap-4 md:grid-cols-2">
           <div>

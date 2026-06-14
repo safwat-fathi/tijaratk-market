@@ -19,9 +19,53 @@ type AdminDashboardStats = {
 	totalPlans: number;
 };
 
-type AdminTenant = Record<string, unknown>;
+export type AdminDirectoryArea = {
+	id: number;
+	name_ar: string;
+	name_en: string | null;
+	slug: string;
+	city: string | null;
+	governorate: string | null;
+	is_active: boolean;
+};
 
-type AdminPlan = {
+type AdminTenantCount = {
+	orders: number;
+	customers: number;
+	products: number;
+};
+
+type AdminTenantSubscription = {
+	plan_id: number;
+	plan?: {
+		id: number;
+		name: string;
+	};
+};
+
+type AdminTenantDirectoryProfile = {
+	area_id: number | null;
+	area: AdminDirectoryArea | null;
+};
+
+type AdminTenantDeliveryArea = {
+	area_id: number;
+	area: AdminDirectoryArea;
+};
+
+export type AdminTenant = {
+	id: number;
+	name: string;
+	phone: string;
+	slug: string;
+	status: "active" | "inactive" | "suspended";
+	_count?: AdminTenantCount;
+	tenant_subscriptions?: AdminTenantSubscription[];
+	directory_profile?: AdminTenantDirectoryProfile | null;
+	tenant_delivery_areas?: AdminTenantDeliveryArea[];
+};
+
+export type AdminPlan = {
 	id: number;
 	name: string;
 	price?: number | string;
@@ -40,6 +84,11 @@ type AdminPaginatedResponse<T> = {
 
 type AdminProduct = Record<string, unknown>;
 type AdminOrder = Record<string, unknown>;
+
+type UpdateTenantDirectoryProfilePayload = {
+	area_id: number;
+	delivery_area_ids: number[];
+};
 
 class AdminApiService extends HttpService {
 	constructor() {
@@ -68,12 +117,46 @@ class AdminApiService extends HttpService {
 		return this.get<AdminTenant[]>("tenants");
 	}
 
+	public async getDirectoryAreas() {
+		return this.get<AdminDirectoryArea[]>("directory/areas", undefined, {
+			authRequired: true,
+			cache: "no-store",
+		});
+	}
+
+	public async createDirectoryArea(payload: Partial<AdminDirectoryArea>) {
+		return this.post<AdminDirectoryArea>("directory/areas", payload, undefined, {
+			authRequired: true,
+		});
+	}
+
+	public async updateDirectoryArea(id: number, payload: Partial<AdminDirectoryArea>) {
+		return this.patch<AdminDirectoryArea>(`directory/areas/${id}`, payload, undefined, {
+			authRequired: true,
+		});
+	}
+
+	public async deleteDirectoryArea(id: number) {
+		return this.delete<{ success: boolean }>(`directory/areas/${id}`, undefined, {
+			authRequired: true,
+		});
+	}
+
 	public async updateTenantStatus(id: number, status: string) {
 		return this.patch<AdminTenant>(`tenants/${id}/status`, { status });
 	}
 
 	public async updateTenantPlan(id: number, plan_id: number) {
 		return this.patch<AdminTenant>(`tenants/${id}/plan`, { plan_id });
+	}
+
+	public async updateTenantDirectoryProfile(
+		id: number,
+		payload: UpdateTenantDirectoryProfilePayload,
+	) {
+		return this.patch<AdminTenant>(`tenants/${id}/directory-profile`, payload, undefined, {
+			authRequired: true,
+		});
 	}
 
 	public async getPlans() {

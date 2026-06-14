@@ -2,7 +2,12 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsIn, IsOptional } from 'class-validator';
 
 const IMPORT_TYPES = ['catalog_items'] as const;
-const IMPORT_MODES = ['create_only', 'upsert', 'update_only'] as const;
+const IMPORT_MODES = [
+  'create_only',
+  'upsert',
+  'update_only',
+  'replace_source',
+] as const;
 
 export type CreateImportType = (typeof IMPORT_TYPES)[number];
 export type CreateImportMode = (typeof IMPORT_MODES)[number];

@@ -122,6 +122,14 @@ export class AdminService {
   async getTenants() {
     const tenants = await this.prisma.tenant.findMany({
       include: {
+        directory_profile: {
+          include: { area: true },
+        },
+        tenant_delivery_areas: {
+          where: { is_active: true, deleted_at: null },
+          include: { area: true },
+          orderBy: [{ area: { sort_order: 'asc' } }, { area: { name_ar: 'asc' } }],
+        },
         tenant_subscriptions: {
           where: { is_active: true },
           include: { plan: true },

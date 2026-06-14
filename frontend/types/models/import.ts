@@ -1,5 +1,9 @@
 export type ImportType = "catalog_items";
-export type ImportMode = "create_only" | "upsert" | "update_only";
+export type ImportMode =
+  | "create_only"
+  | "upsert"
+  | "update_only"
+  | "replace_source";
 export type ImportStatus =
   | "pending"
   | "processing"

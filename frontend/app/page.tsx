@@ -21,45 +21,6 @@ const DEFAULT_SEO_TITLE = "دليل المتاجر في مصر | سوبر مار
 const DEFAULT_SEO_DESCRIPTION =
   "اكتشف سوبر ماركت وصيدليات بتوصل في منطقتك داخل مصر، وتصفح المتاجر المحلية المتاحة للطلب المباشر من خلال تجارتك.";
 
-const fallbackAreas: StoresDirectoryArea[] = [
-  {
-    id: 1,
-    nameAr: "الشيخ زايد",
-    nameEn: "Sheikh Zayed",
-    slug: "sheikh-zayed",
-    city: "Giza",
-    governorate: "Giza",
-    storesCount: 0,
-  },
-  {
-    id: 2,
-    nameAr: "6 أكتوبر",
-    nameEn: "6th of October",
-    slug: "6th-of-october",
-    city: "Giza",
-    governorate: "Giza",
-    storesCount: 0,
-  },
-  {
-    id: 3,
-    nameAr: "التجمع الخامس",
-    nameEn: "New Cairo",
-    slug: "new-cairo",
-    city: "Cairo",
-    governorate: "Cairo",
-    storesCount: 0,
-  },
-  {
-    id: 4,
-    nameAr: "المعادي",
-    nameEn: "Maadi",
-    slug: "maadi",
-    city: "Cairo",
-    governorate: "Cairo",
-    storesCount: 0,
-  },
-];
-
 const fallbackCategories: StoresDirectoryCategory[] = [
   {
     slug: "supermarkets",
@@ -301,7 +262,7 @@ const StoreCard = ({ store }: { store: StoresDirectoryStoreCard }) => (
 
 export default async function StoresDirectoryPage() {
   const landing = await getStoresLanding();
-  const areas = landing?.areas?.length ? landing.areas : fallbackAreas;
+  const areas = landing?.areas ?? [];
   const categories = landing?.categories?.length
     ? landing.categories
     : fallbackCategories;
@@ -366,20 +327,22 @@ export default async function StoresDirectoryPage() {
               />
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              <span className="ml-2 text-sm font-semibold text-gray-500">
-                الأكثر بحثاً:
-              </span>
-              {searchedAreas.map((area) => (
-                <Link
-                  key={area.slug}
-                  href={`/?area=${encodeURIComponent(area.slug)}`}
-                  className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-semibold text-[#0F5A3D] transition-colors hover:border-[#27AE60]/30 hover:bg-[#E8F5ED]"
-                >
-                  {area.nameAr}
-                </Link>
-              ))}
-            </div>
+            {searchedAreas.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <span className="ml-2 text-sm font-semibold text-gray-500">
+                  الأكثر بحثاً:
+                </span>
+                {searchedAreas.map((area) => (
+                  <Link
+                    key={area.slug}
+                    href={`/?area=${encodeURIComponent(area.slug)}`}
+                    className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-semibold text-[#0F5A3D] transition-colors hover:border-[#27AE60]/30 hover:bg-[#E8F5ED]"
+                  >
+                    {area.nameAr}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -393,63 +356,65 @@ export default async function StoresDirectoryPage() {
             <CategoryGrid categories={categoryCards} areas={areaOptions} />
           </section>
 
-          <section id="areas">
-            <div className="mb-4 flex flex-col gap-3">
-              <h2 className="text-3xl font-bold text-[#222B2E]">
-                تصفح حسب المنطقة
-              </h2>
-              <Link
-                href="#areas"
-                className="group flex items-center gap-1 text-sm font-bold text-[#27AE60] transition-colors hover:text-[#0F5A3D]"
-              >
-                <span>عرض المناطق المتاحة</span>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4 transition-transform group-hover:-translate-x-1"
-                >
-                  <path d="m15 18-6-6 6-6" />
-                </svg>
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6">
-              {topAreas.map((area) => (
+          {topAreas.length > 0 && (
+            <section id="areas">
+              <div className="mb-4 flex flex-col gap-3">
+                <h2 className="text-3xl font-bold text-[#222B2E]">
+                  تصفح حسب المنطقة
+                </h2>
                 <Link
-                  key={area.slug}
-                  href={`/?area=${encodeURIComponent(area.slug)}`}
-                  className="group flex flex-col items-center rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-sm transition-all hover:border-[#27AE60]/30 hover:shadow-md"
+                  href="#areas"
+                  className="group flex items-center gap-1 text-sm font-bold text-[#27AE60] transition-colors hover:text-[#0F5A3D]"
                 >
-                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#F7F8F6] text-[#0F5A3D] transition-colors group-hover:bg-[#27AE60] group-hover:text-white">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-6 w-6"
-                    >
-                      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-                      <circle cx="12" cy="10" r="3" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-bold text-[#222B2E]">
-                    {area.nameAr}
-                  </h3>
-                  <p className="mt-1 text-sm font-medium text-gray-500">
-                    {area.storesCount} متجر
-                  </p>
+                  <span>عرض المناطق المتاحة</span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-4 w-4 transition-transform group-hover:-translate-x-1"
+                  >
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
                 </Link>
-              ))}
-            </div>
-          </section>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6">
+                {topAreas.map((area) => (
+                  <Link
+                    key={area.slug}
+                    href={`/?area=${encodeURIComponent(area.slug)}`}
+                    className="group flex flex-col items-center rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-sm transition-all hover:border-[#27AE60]/30 hover:shadow-md"
+                  >
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#F7F8F6] text-[#0F5A3D] transition-colors group-hover:bg-[#27AE60] group-hover:text-white">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-6 w-6"
+                      >
+                        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-bold text-[#222B2E]">
+                      {area.nameAr}
+                    </h3>
+                    <p className="mt-1 text-sm font-medium text-gray-500">
+                      {area.storesCount} متجر
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           {featuredStores.length > 0 && (
             <section>

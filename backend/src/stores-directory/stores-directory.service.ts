@@ -69,13 +69,7 @@ export class StoresDirectoryService {
    * Returns active areas, category counts, and featured stores for the directory landing.
    */
   async getStoresLanding() {
-    const [areas, deliveryAreas] = await Promise.all([
-      this.prisma.directoryArea.findMany({
-        where: { is_active: true, deleted_at: null },
-        orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
-      }),
-      this.findPublicDeliveryAreas(),
-    ]);
+    const deliveryAreas = await this.findPublicDeliveryAreas();
 
     const uniqueTenants = this.getUniqueTenantsFromDeliveryAreas(deliveryAreas);
     const categoryCounts = this.buildCategoryCounts(uniqueTenants);
@@ -85,16 +79,7 @@ export class StoresDirectoryService {
     );
 
     return {
-      areas: areas.map((area) => ({
-        id: area.id,
-        nameAr: area.name_ar,
-        nameEn: area.name_en,
-        slug: area.slug,
-        city: area.city,
-        governorate: area.governorate,
-        storesCount: deliveryAreas.filter((item) => item.area_id === area.id)
-          .length,
-      })),
+      areas: this.toPublicAreaSummaries(deliveryAreas),
       categories: CATEGORY_DEFINITIONS.map((category) => ({
         slug: category.slug,
         label: category.label,
@@ -120,28 +105,22 @@ export class StoresDirectoryService {
    */
   async findAreas(search?: string) {
     const normalizedSearch = search?.trim();
+    const deliveryAreas = await this.findPublicDeliveryAreas();
+    const publicAreas = this.toPublicAreaRows(deliveryAreas);
 
-    return this.prisma.directoryArea.findMany({
-      where: {
-        is_active: true,
-        deleted_at: null,
-        ...(normalizedSearch
-          ? {
-              OR: [
-                {
-                  name_ar: { contains: normalizedSearch, mode: 'insensitive' },
-                },
-                {
-                  name_en: { contains: normalizedSearch, mode: 'insensitive' },
-                },
-                { slug: { contains: normalizedSearch, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
-      take: 20,
-    });
+    if (!normalizedSearch) {
+      return publicAreas.slice(0, 20);
+    }
+
+    const lowerSearch = normalizedSearch.toLowerCase();
+
+    return publicAreas
+      .filter((area) =>
+        [area.name_ar, area.name_en, area.slug].some((value) =>
+          value?.toLowerCase().includes(lowerSearch),
+        ),
+      )
+      .slice(0, 20);
   }
 
   /**
@@ -383,6 +362,32 @@ export class StoresDirectoryService {
     dto: UpdateDirectoryProfileDto,
   ) {
     return this.updateDirectoryProfile(tenantId, dto);
+  }
+
+  /**
+   * Deletes a directory area.
+   */
+  async adminDeleteArea(id: number) {
+    await this.ensureAreaExists(id);
+
+    const [profileCount, deliveryAreaCount] = await Promise.all([
+      this.prisma.tenantDirectoryProfile.count({
+        where: { area_id: id },
+      }),
+      this.prisma.tenantDeliveryArea.count({
+        where: { area_id: id },
+      }),
+    ]);
+
+    if (profileCount > 0 || deliveryAreaCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete area currently in use by a tenant',
+      );
+    }
+
+    return this.prisma.directoryArea.delete({
+      where: { id },
+    });
   }
 
   private async ensureDirectoryProfile(tenantId: number) {
@@ -659,6 +664,69 @@ export class StoresDirectoryService {
         ).length,
       };
     });
+  }
+
+  private toPublicAreaSummaries(
+    deliveryAreas: Awaited<
+      ReturnType<StoresDirectoryService['findPublicDeliveryAreas']>
+    >,
+  ) {
+    const areasById = new Map<
+      number,
+      {
+        id: number;
+        nameAr: string;
+        nameEn: string | null;
+        slug: string;
+        city: string | null;
+        governorate: string | null;
+        storesCount: number;
+      }
+    >();
+
+    for (const deliveryArea of deliveryAreas) {
+      const existing = areasById.get(deliveryArea.area_id);
+      if (existing) {
+        existing.storesCount += 1;
+        continue;
+      }
+
+      areasById.set(deliveryArea.area_id, {
+        id: deliveryArea.area.id,
+        nameAr: deliveryArea.area.name_ar,
+        nameEn: deliveryArea.area.name_en,
+        slug: deliveryArea.area.slug,
+        city: deliveryArea.area.city,
+        governorate: deliveryArea.area.governorate,
+        storesCount: 1,
+      });
+    }
+
+    return Array.from(areasById.values());
+  }
+
+  private toPublicAreaRows(
+    deliveryAreas: Awaited<
+      ReturnType<StoresDirectoryService['findPublicDeliveryAreas']>
+    >,
+  ) {
+    const storesCountByAreaId = new Map<number, number>();
+    const areasById = new Map<number, (typeof deliveryAreas)[number]['area']>();
+
+    for (const deliveryArea of deliveryAreas) {
+      storesCountByAreaId.set(
+        deliveryArea.area_id,
+        (storesCountByAreaId.get(deliveryArea.area_id) ?? 0) + 1,
+      );
+      if (!areasById.has(deliveryArea.area_id)) {
+        areasById.set(deliveryArea.area_id, deliveryArea.area);
+      }
+    }
+
+    return Array.from(areasById.entries()).map(([areaId, area]) => ({
+      ...area,
+      storesCount: storesCountByAreaId.get(areaId) ?? 0,
+    }));
   }
 
   private async countActiveProducts(tenantIds: number[]) {

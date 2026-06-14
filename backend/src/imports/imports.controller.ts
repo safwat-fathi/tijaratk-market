@@ -60,7 +60,7 @@ export class ImportsController {
         type: { type: 'string', enum: ['catalog_items'] },
         mode: {
           type: 'string',
-          enum: ['create_only', 'upsert', 'update_only'],
+          enum: ['create_only', 'upsert', 'update_only', 'replace_source'],
         },
       },
     },

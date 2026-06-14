@@ -23,6 +23,7 @@ import {
 const CATALOG_IMPORT_SOURCES: Record<CatalogImportFormat, string> = {
   [CatalogImportFormat.talabat]: 'talabat_csv',
   [CatalogImportFormat.chefaa]: 'chefaa_csv',
+  [CatalogImportFormat.carrefour]: 'talabat_csv',
 };
 const DEFAULT_CATEGORY = 'أخرى';
 const EXPECTED_CURRENCY = 'EGP';
@@ -64,6 +65,15 @@ const PARENT_CATEGORY_MAP = {
   'Honey, Jam & Spreads': 'عسل ومربى وشوكولاتة',
   Cleaning: 'منظفات ومنتجات ورقية',
   'Personal Care': 'عناية شخصية',
+  'Biscuits, Crackers & Cakes': 'سناكس و حلويات',
+  'Chocolate & Confectionery': 'سناكس و حلويات',
+  'Chips & Snacks': 'سناكس و حلويات',
+  'Jam, Honey & Spreads': 'عسل ومربى وشوكولاتة',
+  'Sugar & Home Baking': 'سكر و دقيق',
+  'Spices, Sauces & Vinegar': 'صلصات و خل',
+  'Breakfast Food': 'مخبوزات',
+  'Nuts, Dates & Dried Fruits': 'سناكس و حلويات',
+  'World Foods': DEFAULT_CATEGORY,
   الأدوية: 'أدوية',
   'العناية بالشعر': 'عناية شخصية',
   'العناية بالبشرة': 'عناية شخصية',
@@ -73,6 +83,16 @@ const PARENT_CATEGORY_MAP = {
   'المستلزمات الطبية': 'أدوية',
   'الفيتامينات والمكملات': 'أدوية',
   'الصحة الجنسية': 'عناية شخصية',
+  'بسكويت، كراكرز وكيك': 'سناكس و حلويات',
+  'الشوكولاته والمعجنات': 'سناكس و حلويات',
+  'شيبس ومقبلات': 'سناكس و حلويات',
+  'أرز , مكرونة والبقوليات': 'أرز ومكرونة',
+  'مربي، عسل وغيرها': 'عسل ومربى وشوكولاتة',
+  'السكر و مستلزمات الخبز': 'سكر و دقيق',
+  'توابل، صلصات و خل': 'صلصات و خل',
+  'منتجات الفطور الغذائية': 'مخبوزات',
+  'المكسرات والتمور والفواكه المجففة': 'سناكس و حلويات',
+  'منتجات من كل أنحاء العالم': DEFAULT_CATEGORY,
 } as const;
 
 type CatalogImportCounters = {
@@ -94,6 +114,11 @@ type CatalogItemData = {
   external_id: string | null;
   last_seen_at: Date;
   is_active: boolean;
+};
+
+type CatalogReplacementState = {
+  source: string | null;
+  externalIds: Set<string>;
 };
 
 /**
@@ -182,6 +207,10 @@ export class ImportsService {
       updatedRows: 0,
       skippedRows: 0,
     };
+    const replacementState: CatalogReplacementState = {
+      source: null,
+      externalIds: new Set<string>(),
+    };
 
     await this.prisma.importRun.update({
       where: { id: importRunId },
@@ -201,11 +230,19 @@ export class ImportsService {
           row as Record<string, unknown>,
           importRun.mode,
           counters,
+          replacementState,
         );
 
         if (counters.totalRows % PROGRESS_UPDATE_INTERVAL === 0) {
           await this.updateImportProgress(importRunId, counters);
         }
+      }
+
+      if (
+        importRun.mode === ImportMode.replace_source &&
+        counters.failedRows === 0
+      ) {
+        await this.deactivateMissingSourceItems(replacementState, counters);
       }
 
       await this.finishImport(importRunId, counters);
@@ -228,7 +265,14 @@ export class ImportsService {
     row: Record<string, unknown>,
     mode: ImportMode,
     counters: CatalogImportCounters,
+    replacementState: CatalogReplacementState,
   ) {
+    if (this.isDuplicateHeaderRow(row)) {
+      counters.skippedRows += 1;
+      counters.successRows += 1;
+      return;
+    }
+
     const parsed = parseCatalogImportRow(row);
     if (!parsed.success) {
       counters.failedRows += 1;
@@ -244,6 +288,7 @@ export class ImportsService {
 
     try {
       const itemData = this.mapCatalogRow(parsed.data);
+      this.trackReplacementSource(mode, itemData, replacementState);
       const existingItem = await this.findExistingCatalogItem(itemData);
 
       if (mode === ImportMode.create_only && existingItem) {
@@ -282,6 +327,28 @@ export class ImportsService {
     }
   }
 
+  private trackReplacementSource(
+    mode: ImportMode,
+    itemData: CatalogItemData,
+    replacementState: CatalogReplacementState,
+  ) {
+    if (mode !== ImportMode.replace_source) return;
+
+    if (!itemData.external_id) {
+      throw new Error('Replacement imports require product_id for every row');
+    }
+
+    if (!replacementState.source) {
+      replacementState.source = itemData.source;
+    } else if (replacementState.source !== itemData.source) {
+      throw new Error(
+        `Replacement imports must contain a single catalog source. Found ${replacementState.source} and ${itemData.source}`,
+      );
+    }
+
+    replacementState.externalIds.add(itemData.external_id);
+  }
+
   private async findExistingCatalogItem(itemData: CatalogItemData) {
     if (itemData.external_id) {
       return this.prisma.catalogItem.findUnique({
@@ -308,10 +375,7 @@ export class ImportsService {
       throw new Error(`Unsupported currency: ${currency}`);
     }
 
-    const categorySource =
-      row.format === CatalogImportFormat.chefaa
-        ? row.data.category_path
-        : row.data.category;
+    const categorySource = this.resolveCategorySource(row);
 
     return {
       name: row.data.name.trim(),
@@ -324,6 +388,46 @@ export class ImportsService {
       last_seen_at: new Date(),
       is_active: true,
     };
+  }
+
+  private resolveCategorySource(row: CatalogImportRow): string | undefined {
+    if (row.format === CatalogImportFormat.chefaa) {
+      return row.data.category_path;
+    }
+
+    if (row.format === CatalogImportFormat.carrefour) {
+      return (
+        row.data.category_path_ar ||
+        row.data.category_title_ar ||
+        row.data.category_path ||
+        row.data.category_title
+      );
+    }
+
+    return row.data.category;
+  }
+
+  private isDuplicateHeaderRow(row: Record<string, unknown>): boolean {
+    const name = typeof row.name === 'string' ? row.name.trim() : '';
+    if (name.toLowerCase() !== 'name') return false;
+
+    const headerLikeFields = [
+      'price',
+      'currency',
+      'image_url',
+      'product_id',
+      'category',
+      'category_title',
+      'category_path',
+    ];
+
+    return headerLikeFields.some((fieldName) => {
+      const value = row[fieldName];
+      return (
+        typeof value === 'string' &&
+        value.trim().toLowerCase() === fieldName.toLowerCase()
+      );
+    });
   }
 
   private normalizePrice(value: string | undefined): string | null {
@@ -346,6 +450,10 @@ export class ImportsService {
   private mapCategory(value: string | undefined): string {
     const parentCategory = value?.split('>')[0]?.trim();
     if (!parentCategory) return DEFAULT_CATEGORY;
+
+    if (SEEDED_CATEGORIES.has(parentCategory)) {
+      return parentCategory;
+    }
 
     const mappedCategory =
       PARENT_CATEGORY_MAP[parentCategory as keyof typeof PARENT_CATEGORY_MAP] ??
@@ -403,6 +511,32 @@ export class ImportsService {
         finished_at: new Date(),
       },
     });
+  }
+
+  private async deactivateMissingSourceItems(
+    replacementState: CatalogReplacementState,
+    counters: CatalogImportCounters,
+  ) {
+    if (!replacementState.source) {
+      throw new Error('Replacement import did not contain any valid rows');
+    }
+
+    const result = await this.prisma.catalogItem.updateMany({
+      where: {
+        source: replacementState.source,
+        is_active: true,
+        OR: [
+          { external_id: null },
+          { external_id: { notIn: Array.from(replacementState.externalIds) } },
+        ],
+      },
+      data: {
+        is_active: false,
+        updated_at: new Date(),
+      },
+    });
+
+    counters.skippedRows += result.count;
   }
 
   private toImportProgressData(counters: CatalogImportCounters) {

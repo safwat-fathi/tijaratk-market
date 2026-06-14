@@ -540,6 +540,7 @@ enum ImportMode {
   create_only
   upsert
   update_only
+  replace_source
 
   @@map("import_runs_mode_enum")
 }
