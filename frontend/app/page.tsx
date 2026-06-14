@@ -16,6 +16,12 @@ import CategoryGrid, {
 } from "@/components/stores-directory/CategoryGrid";
 import { AppHeader } from "@/components/layout/AppHeader";
 
+type StoresDirectoryPageProps = {
+  searchParams: Promise<{
+    area?: string;
+  }>;
+};
+
 const STORES_PATH = "/";
 const DEFAULT_SEO_TITLE = "دليل المتاجر في مصر | سوبر ماركت وصيدليات قريبة";
 const DEFAULT_SEO_DESCRIPTION =
@@ -261,7 +267,11 @@ const StoreCard = ({ store }: { store: StoresDirectoryStoreCard }) => (
   </Link>
 );
 
-export default async function StoresDirectoryPage() {
+export default async function StoresDirectoryPage({
+  searchParams,
+}: StoresDirectoryPageProps) {
+  const { area } = await searchParams;
+  const selectedAreaSlug = area?.trim() || undefined;
   const landing = await getStoresLanding();
   const areas = landing?.areas ?? [];
   const categories = landing?.categories?.length
@@ -354,7 +364,11 @@ export default async function StoresDirectoryPage() {
                 بتدور على إيه؟
               </h2>
             </div>
-            <CategoryGrid categories={categoryCards} areas={areaOptions} />
+            <CategoryGrid
+              categories={categoryCards}
+              areas={areaOptions}
+              selectedAreaSlug={selectedAreaSlug}
+            />
           </section>
 
           {topAreas.length > 0 && (

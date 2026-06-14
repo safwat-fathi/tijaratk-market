@@ -22,9 +22,14 @@ export type DirectoryAreaOption = {
 type Props = {
   categories: DirectoryCategoryCard[];
   areas: DirectoryAreaOption[];
+  selectedAreaSlug?: string;
 };
 
-export default function CategoryGrid({ categories, areas }: Props) {
+export default function CategoryGrid({
+  categories,
+  areas,
+  selectedAreaSlug,
+}: Props) {
   const [selectedCategory, setSelectedCategory] =
     useState<DirectoryCategoryCard | null>(null);
   const selectedCategoryAreas = selectedCategory
@@ -39,42 +44,62 @@ export default function CategoryGrid({ categories, areas }: Props) {
   return (
     <>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        {categories.map((cat) => (
-          <button
-            key={cat.slug}
-            type="button"
-            onClick={() => setSelectedCategory(cat)}
-            className="group flex w-full items-center rounded-2xl border border-gray-100 bg-white p-6 text-right shadow-sm transition-all hover:border-[#27AE60]/30 hover:shadow-md"
-          >
-            <div
-              className={`ml-6 flex h-20 w-20 flex-none items-center justify-center rounded-2xl ${cat.color} transition-transform group-hover:scale-105`}
-            >
-              {cat.icon}
-            </div>
-            <div className="flex-1">
-              <h3 className="mb-2 text-xl font-bold text-[#222B2E]">
-                {cat.name}
-              </h3>
-              <p className="text-base font-medium text-gray-500">
-                {cat.stores} متجر متوفر
-              </p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-400 transition-colors group-hover:bg-[#E8F5ED] group-hover:text-[#27AE60]">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-5 w-5"
+        {categories.map((cat) => {
+          const cardContent = (
+            <>
+              <div
+                className={`ml-6 flex h-20 w-20 flex-none items-center justify-center rounded-2xl ${cat.color} transition-transform group-hover:scale-105`}
               >
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </div>
-          </button>
-        ))}
+                {cat.icon}
+              </div>
+              <div className="flex-1">
+                <h3 className="mb-2 text-xl font-bold text-[#222B2E]">
+                  {cat.name}
+                </h3>
+                <p className="text-base font-medium text-gray-500">
+                  {cat.stores} متجر متوفر
+                </p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-400 transition-colors group-hover:bg-[#E8F5ED] group-hover:text-[#27AE60]">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5"
+                >
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+              </div>
+            </>
+          );
+
+          if (selectedAreaSlug) {
+            return (
+              <Link
+                key={cat.slug}
+                href={`/stores/${encodeURIComponent(selectedAreaSlug)}/${encodeURIComponent(cat.slug)}`}
+                className="group flex w-full items-center rounded-2xl border border-gray-100 bg-white p-6 text-right shadow-sm transition-all hover:border-[#27AE60]/30 hover:shadow-md"
+              >
+                {cardContent}
+              </Link>
+            );
+          }
+
+          return (
+            <button
+              key={cat.slug}
+              type="button"
+              onClick={() => setSelectedCategory(cat)}
+              className="group flex w-full items-center rounded-2xl border border-gray-100 bg-white p-6 text-right shadow-sm transition-all hover:border-[#27AE60]/30 hover:shadow-md"
+            >
+              {cardContent}
+            </button>
+          );
+        })}
       </div>
 
       <BottomSheet
