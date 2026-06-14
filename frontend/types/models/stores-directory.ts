@@ -6,6 +6,7 @@ export type StoresDirectoryArea = {
   city: string | null;
   governorate: string | null;
   storesCount: number;
+  categoryCounts: Record<string, number>;
 };
 
 export type StoresDirectoryCategory = {

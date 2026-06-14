@@ -695,13 +695,20 @@ export class StoresDirectoryService {
         city: string | null;
         governorate: string | null;
         storesCount: number;
+        categoryCounts: Record<DirectoryCategorySlug, number>;
       }
     >();
 
     for (const deliveryArea of deliveryAreas) {
+      const category = CATEGORY_DEFINITIONS.find(
+        (item) => item.tenantCategory === deliveryArea.tenant.category,
+      );
       const existing = areasById.get(deliveryArea.area_id);
       if (existing) {
         existing.storesCount += 1;
+        if (category) {
+          existing.categoryCounts[category.slug] += 1;
+        }
         continue;
       }
 
@@ -713,6 +720,10 @@ export class StoresDirectoryService {
         city: deliveryArea.area.city,
         governorate: deliveryArea.area.governorate,
         storesCount: 1,
+        categoryCounts: {
+          supermarkets: category?.slug === 'supermarkets' ? 1 : 0,
+          pharmacies: category?.slug === 'pharmacies' ? 1 : 0,
+        },
       });
     }
 

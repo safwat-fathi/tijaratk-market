@@ -151,6 +151,7 @@ const toAreaOptions = (areas: StoresDirectoryArea[]): DirectoryAreaOption[] =>
     name: area.nameAr,
     slug: area.slug,
     stores: area.storesCount,
+    categoryCounts: area.categoryCounts ?? {},
   }));
 
 const buildJsonLd = (params: {

@@ -16,6 +16,7 @@ export type DirectoryAreaOption = {
   name: string;
   slug: string;
   stores: number;
+  categoryCounts: Record<string, number>;
 };
 
 type Props = {
@@ -26,6 +27,14 @@ type Props = {
 export default function CategoryGrid({ categories, areas }: Props) {
   const [selectedCategory, setSelectedCategory] =
     useState<DirectoryCategoryCard | null>(null);
+  const selectedCategoryAreas = selectedCategory
+    ? areas
+        .map((area) => ({
+          ...area,
+          selectedStores: area.categoryCounts[selectedCategory.slug] ?? 0,
+        }))
+        .filter((area) => area.selectedStores > 0)
+    : [];
 
   return (
     <>
@@ -98,7 +107,7 @@ export default function CategoryGrid({ categories, areas }: Props) {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {areas.map((area) => (
+            {selectedCategoryAreas.map((area) => (
               <Link
                 key={area.slug}
                 href={`/stores/${encodeURIComponent(area.slug)}/${encodeURIComponent(selectedCategory?.slug ?? "")}`}
@@ -106,7 +115,7 @@ export default function CategoryGrid({ categories, areas }: Props) {
               >
                 {area.name}
                 <span className="mr-1 text-xs text-gray-500">
-                  ({area.stores})
+                  ({area.selectedStores})
                 </span>
               </Link>
             ))}
