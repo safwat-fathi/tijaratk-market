@@ -30,6 +30,13 @@ export class CreateDirectoryAreaDto {
   @MaxLength(120)
   slug: string;
 
+  @ApiPropertyOptional({ example: null })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  parent_area_id?: number;
+
   @ApiPropertyOptional({ example: 'Giza' })
   @IsOptional()
   @IsString()

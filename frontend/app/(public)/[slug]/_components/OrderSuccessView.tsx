@@ -44,8 +44,8 @@ export default function OrderSuccessView({
   }, [orderToken]);
 
   return (
-    <div className="fixed inset-0 z-50 flex animate-fade-in flex-col items-center justify-center bg-white p-6 text-center">
-      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-status-success/15 text-status-success">
+    <div className="fixed inset-0 z-50 flex animate-fade-in flex-col items-center justify-start sm:justify-center overflow-y-auto bg-white p-6 py-10 text-center">
+      <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-status-success/15 text-status-success shrink-0">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="40"
@@ -63,12 +63,35 @@ export default function OrderSuccessView({
       <h2 className="mb-2 text-3xl font-bold text-brand-text">
         تم إرسال الطلب!
       </h2>
-      <p className="mb-8 max-w-sm text-muted-foreground">
+      <p className="mb-4 max-w-sm text-muted-foreground">
         سيتواصل معك صاحب المتجر للتأكيد. <br />
         احفظ رابط التتبع لمتابعة الحالة.
       </p>
 
-      <div className="mb-8 flex w-full max-w-sm items-center justify-between gap-4 rounded-lg border border-brand-border bg-brand-soft/50 p-4">
+      <div className="mb-4 flex w-full max-w-sm items-start gap-2.5 rounded-lg border border-brand-border bg-brand-soft/30 p-3 text-right text-xs text-muted-foreground dark:bg-brand-soft/5">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="mt-0.5 shrink-0 text-brand-primary/70"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+        <p className="leading-relaxed">
+          <strong className="text-brand-text">تنويه:</strong> المنصة غير مسؤولة
+          عن أي منتج تالف، منتهي الصلاحية أو غير صالح للاستخدام الآدمي.
+        </p>
+      </div>
+
+      <div className="mb-6 flex w-full max-w-sm items-center justify-between gap-4 rounded-lg border border-brand-border bg-brand-soft/50 p-4">
         <div className="flex flex-col items-start overflow-hidden">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             رابط التتبع

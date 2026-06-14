@@ -24,6 +24,7 @@ export type AdminDirectoryArea = {
 	name_ar: string;
 	name_en: string | null;
 	slug: string;
+	parent_area_id: number | null;
 	city: string | null;
 	governorate: string | null;
 	is_active: boolean;

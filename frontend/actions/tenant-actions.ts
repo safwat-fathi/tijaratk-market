@@ -112,7 +112,13 @@ const updateStoreSettingsSchema = z.object({
     .optional()
     .or(z.literal(""))
     .transform(value => value || undefined),
-  area_id: z.coerce.number().optional().nullable(),
+  area_id: z.preprocess(
+    value =>
+      value === "" || value === undefined || value === null
+        ? undefined
+        : value,
+    z.coerce.number().int().min(1).optional(),
+  ),
   delivery_area_ids: z.array(z.coerce.number()).optional(),
 }).refine(
   (data) => {
@@ -162,6 +168,23 @@ export async function updateStoreSettingsAction(
   }
 
   const { name, category, area_id, delivery_area_ids, ...deliveryData } = validatedFields.data;
+  const deliveryAreaValidation = await validateDeliveryAreasInsideMainArea(
+    area_id,
+    delivery_area_ids ?? [],
+  );
+
+  if (!deliveryAreaValidation.success) {
+    return {
+      success: false,
+      message: "يرجى تصحيح الأخطاء قبل الحفظ.",
+      errors: {
+        delivery_area_ids: [
+          deliveryAreaValidation.message ||
+            "مناطق التوصيل يجب أن تكون داخل المنطقة الأساسية.",
+        ],
+      },
+    };
+  }
 
   // 1. Update general settings
   const generalRes = await tenantsService.updateMyGeneralSettings({
@@ -210,4 +233,47 @@ export async function updateStoreSettingsAction(
     success: true,
     message: "تم حفظ التغييرات بنجاح.",
   };
+}
+
+async function validateDeliveryAreasInsideMainArea(
+  areaId: number | undefined,
+  deliveryAreaIds: number[],
+) {
+  const uniqueDeliveryAreaIds = Array.from(new Set(deliveryAreaIds));
+
+  if (uniqueDeliveryAreaIds.length === 0) {
+    return { success: true };
+  }
+
+  if (!areaId) {
+    return {
+      success: false,
+      message: "اختر المنطقة الأساسية أولاً.",
+    };
+  }
+
+  const areasResponse = await merchantDirectoryService.getActiveAreas();
+
+  if (!areasResponse.success || !areasResponse.data) {
+    return {
+      success: false,
+      message: "تعذر التحقق من مناطق التوصيل. حاول مرة أخرى.",
+    };
+  }
+
+  const allowedAreaIds = new Set(
+    areasResponse.data
+      .filter(area => area.id === areaId || area.parent_area_id === areaId)
+      .map(area => area.id),
+  );
+  const allDeliveryAreasAllowed = uniqueDeliveryAreaIds.every(areaId =>
+    allowedAreaIds.has(areaId),
+  );
+
+  return allDeliveryAreasAllowed
+    ? { success: true }
+    : {
+        success: false,
+        message: "مناطق التوصيل يجب أن تكون داخل المنطقة الأساسية.",
+      };
 }

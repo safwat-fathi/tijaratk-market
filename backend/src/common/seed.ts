@@ -481,7 +481,52 @@ async function seedDirectoryAreas(prisma: PrismaClient) {
     });
   }
 
+  await assignDirectoryAreaParents(prisma);
+
   logger.log(`Seeded ${EGYPT_DIRECTORY_AREAS.length} directory areas.`);
+}
+
+async function assignDirectoryAreaParents(prisma: PrismaClient) {
+  const parentAssignments = {
+    'sheikh-zayed': ['al-khamayel'],
+    '6th-of-october': [
+      'october-1st-district',
+      'october-2nd-district',
+      'october-3rd-district',
+      'october-4th-district',
+      'october-5th-district',
+      'october-6th-district',
+      'october-7th-district',
+      'october-8th-district',
+      'october-9th-district',
+      'october-10th-district',
+      'october-11th-district',
+      'october-12th-district',
+      'october-al-motamayez',
+      'october-gharb-somid',
+      'hadayek-october',
+      'october-northern-expansions',
+    ],
+  } as const;
+
+  await prisma.directoryArea.updateMany({
+    where: { slug: { in: Object.keys(parentAssignments) } },
+    data: { parent_area_id: null },
+  });
+
+  for (const [parentSlug, childSlugs] of Object.entries(parentAssignments)) {
+    const parent = await prisma.directoryArea.findUnique({
+      where: { slug: parentSlug },
+      select: { id: true },
+    });
+
+    if (!parent) continue;
+
+    await prisma.directoryArea.updateMany({
+      where: { slug: { in: [...childSlugs] } },
+      data: { parent_area_id: parent.id },
+    });
+  }
 }
 
 /**

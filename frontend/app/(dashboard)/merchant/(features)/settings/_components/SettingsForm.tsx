@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import type { ChangeEvent } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Tenant, DirectoryArea } from "@/types/models/tenant";
 import { updateStoreSettingsAction } from "@/actions/tenant-actions";
 import { useRef } from "react";
@@ -19,6 +21,7 @@ interface SettingsFormProps {
 }
 
 export default function SettingsForm({ tenant, activeAreas }: SettingsFormProps) {
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState(
     updateStoreSettingsAction,
     {
@@ -39,7 +42,49 @@ export default function SettingsForm({ tenant, activeAreas }: SettingsFormProps)
   const [selectedZones, setSelectedZones] = useState<Set<number>>(() => {
     return new Set(tenant.tenant_delivery_areas?.map(d => d.area_id) || []);
   });
+  const [selectedMainAreaId, setSelectedMainAreaId] = useState(
+    tenant.directory_profile?.area_id ?? 0,
+  );
   const [isZonesOpen, setIsZonesOpen] = useState(false);
+  const availableDeliveryAreas = useMemo(
+    () =>
+      selectedMainAreaId
+        ? activeAreas.filter(
+            area =>
+              area.id === selectedMainAreaId ||
+              area.parent_area_id === selectedMainAreaId,
+          )
+        : [],
+    [activeAreas, selectedMainAreaId],
+  );
+  const availableDeliveryAreaIds = useMemo(
+    () => new Set(availableDeliveryAreas.map(area => area.id)),
+    [availableDeliveryAreas],
+  );
+  const selectedAvailableZonesCount = [...selectedZones].filter(areaId =>
+    availableDeliveryAreaIds.has(areaId),
+  ).length;
+  const deliveryZonesEmptyMessage = !selectedMainAreaId
+    ? "اختر المنطقة الأساسية أولاً"
+    : "لا توجد مناطق متاحة حالياً";
+
+  const handleMainAreaChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextMainAreaId = Number(event.target.value) || 0;
+    setSelectedMainAreaId(nextMainAreaId);
+    setSelectedZones(prev => {
+      const allowedAreaIds = new Set(
+        activeAreas
+          .filter(
+            area =>
+              area.id === nextMainAreaId ||
+              area.parent_area_id === nextMainAreaId,
+          )
+          .map(area => area.id),
+      );
+
+      return new Set([...prev].filter(areaId => allowedAreaIds.has(areaId)));
+    });
+  };
 
   const toggleZone = (areaId: number) => {
     setSelectedZones(prev => {
@@ -70,6 +115,12 @@ export default function SettingsForm({ tenant, activeAreas }: SettingsFormProps)
       setActivePreset(preset ? preset.label : "custom");
     }
   };
+
+  useEffect(() => {
+    if (state.success) {
+      router.refresh();
+    }
+  }, [router, state.success]);
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
@@ -114,7 +165,8 @@ export default function SettingsForm({ tenant, activeAreas }: SettingsFormProps)
             <label className="text-sm font-medium text-gray-700">المنطقة الأساسية</label>
             <select
               name="area_id"
-              defaultValue={tenant.directory_profile?.area_id || ""}
+              value={selectedMainAreaId || ""}
+              onChange={handleMainAreaChange}
               className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F7F8F6] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/50"
             >
               <option value="">اختر المنطقة الأساسية</option>
@@ -199,7 +251,7 @@ export default function SettingsForm({ tenant, activeAreas }: SettingsFormProps)
                     className="w-full flex items-center justify-between px-4 py-3 bg-[#F7F8F6] hover:bg-gray-50 transition-colors"
                   >
                     <span className="text-sm font-medium text-gray-700">
-                      مناطق التوصيل ({selectedZones.size})
+                      مناطق التوصيل ({selectedAvailableZonesCount})
                     </span>
                     <svg
                       className={`w-5 h-5 text-gray-500 transition-transform ${isZonesOpen ? 'rotate-180' : ''}`}
@@ -213,10 +265,10 @@ export default function SettingsForm({ tenant, activeAreas }: SettingsFormProps)
                   
                   {isZonesOpen && (
                     <div className="flex flex-col max-h-60 overflow-y-auto p-2">
-                      {activeAreas.length === 0 ? (
-                        <span className="text-sm text-gray-500 p-2">لا توجد مناطق متاحة حالياً</span>
+                      {!selectedMainAreaId || availableDeliveryAreas.length === 0 ? (
+                        <span className="text-sm text-gray-500 p-2">{deliveryZonesEmptyMessage}</span>
                       ) : (
-                        activeAreas.map(area => {
+                        availableDeliveryAreas.map(area => {
                           const parts = Array.from(new Set([area.name_ar, area.city, area.name_en].filter(Boolean)));
                           const isSelected = selectedZones.has(area.id);
                           return (

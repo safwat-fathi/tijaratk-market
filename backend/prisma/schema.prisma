@@ -338,6 +338,7 @@ model DirectoryArea {
   name_ar          String    @db.VarChar(120)
   name_en          String?   @db.VarChar(120)
   slug             String    @unique(map: "UQ_directory_areas_slug") @db.VarChar(120)
+  parent_area_id   Int?
   city             String?   @db.VarChar(120)
   governorate      String?   @db.VarChar(120)
   is_active        Boolean   @default(true)
@@ -347,12 +348,15 @@ model DirectoryArea {
   seo_title        String?   @db.VarChar(180)
   seo_description  String?   @db.VarChar(300)
 
+  parent_area              DirectoryArea?  @relation("DirectoryAreaChildren", fields: [parent_area_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_directory_areas_parent_area")
+  child_areas              DirectoryArea[] @relation("DirectoryAreaChildren")
   tenant_directory_profiles TenantDirectoryProfile[]
   tenant_delivery_areas     TenantDeliveryArea[]
   directory_events          DirectoryEvent[]
   customer_addresses        CustomerAddress[]
   orders                    Order[]
 
+  @@index([parent_area_id], map: "IDX_directory_areas_parent_area_id")
   @@index([is_active, sort_order, name_ar], map: "IDX_directory_areas_active_sort_name")
   @@map("directory_areas")
 }

@@ -26,13 +26,12 @@ export default async function SettingsPage() {
   const tenant = tenantResponse.data;
   if (profileResponse.success && profileResponse.data) {
     tenant.directory_profile = profileResponse.data;
-    
-    // The backend ensureDirectoryProfile returns a nested tenant object with tenant_delivery_areas
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const profileTenant = (profileResponse.data as any).tenant;
-    if (profileTenant?.tenant_delivery_areas) {
-      tenant.tenant_delivery_areas = profileTenant.tenant_delivery_areas;
-    }
+    tenant.tenant_delivery_areas =
+      profileResponse.data.tenant?.tenant_delivery_areas ??
+      profileResponse.data.delivery_area_ids?.map((areaId) => ({
+        area_id: areaId,
+      })) ??
+      [];
   }
 
   return (

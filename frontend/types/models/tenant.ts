@@ -20,6 +20,7 @@ export interface DirectoryArea {
   name_ar: string;
   name_en: string | null;
   slug: string;
+  parent_area_id: number | null;
   city: string | null;
   governorate: string | null;
   is_active: boolean;
@@ -41,6 +42,10 @@ export interface TenantDirectoryProfile {
   seo_description: string | null;
   profile_completion_score: number;
   area?: DirectoryArea | null;
+  delivery_area_ids?: number[];
+  tenant?: {
+    tenant_delivery_areas?: TenantDeliveryArea[];
+  };
 }
 
 export interface TenantDeliveryArea {

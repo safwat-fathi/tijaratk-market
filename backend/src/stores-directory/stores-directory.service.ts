@@ -7,7 +7,6 @@ import {
   DirectoryEventType,
   DirectoryStatus,
   Prisma,
-  ProductStatus,
   TenantCategory,
   TenantStatus,
 } from '../../generated/prisma/client';
@@ -84,11 +83,7 @@ export class StoresDirectoryService {
         tenantCategory: category.tenantCategory,
         storesCount: categoryCounts.get(category.slug) ?? 0,
       })),
-      featuredStores: this.toStoreCards(
-        featuredTenants,
-        undefined,
-        undefined,
-      ),
+      featuredStores: this.toStoreCards(featuredTenants),
       seo: {
         title: 'Stores Directory | Tijaratk',
         description:
@@ -397,7 +392,7 @@ export class StoresDirectoryService {
       throw new NotFoundException('Tenant not found');
     }
 
-    return this.prisma.tenantDirectoryProfile.upsert({
+    const profile = await this.prisma.tenantDirectoryProfile.upsert({
       where: { tenant_id: tenantId },
       update: {},
       create: {
@@ -413,27 +408,10 @@ export class StoresDirectoryService {
           longitude: null,
         }),
       },
-      include: {
-        area: true,
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            phone: true,
-            category: true,
-            delivery_available: true,
-            delivery_fee: true,
-            delivery_starts_at: true,
-            delivery_ends_at: true,
-            tenant_delivery_areas: {
-              where: { is_active: true, deleted_at: null },
-              select: { area_id: true },
-            },
-          },
-        },
-      },
+      include: this.merchantProfileInclude(),
     });
+
+    return this.withDeliveryAreaIds(profile);
   }
 
   private async updateDirectoryProfile(
@@ -454,6 +432,10 @@ export class StoresDirectoryService {
 
     if (dto.delivery_area_ids) {
       await this.ensureAreasExist(dto.delivery_area_ids);
+      await this.ensureDeliveryAreasInsideMainArea(
+        areaId,
+        dto.delivery_area_ids,
+      );
     }
 
     const profileData = this.toProfileData(dto);
@@ -466,8 +448,8 @@ export class StoresDirectoryService {
       longitude: dto.longitude ?? null,
     });
 
-    return this.prisma.$transaction(async (tx) => {
-      const profile = await tx.tenantDirectoryProfile.upsert({
+    const profile = await this.prisma.$transaction(async (tx) => {
+      await tx.tenantDirectoryProfile.upsert({
         where: { tenant_id: tenantId },
         update: {
           ...profileData,
@@ -488,7 +470,6 @@ export class StoresDirectoryService {
           seo_description: this.normalizeOptionalText(dto.seo_description, 300),
           ...completion,
         },
-        include: { area: true },
       });
 
       if (dto.delivery_area_ids) {
@@ -517,8 +498,50 @@ export class StoresDirectoryService {
         }
       }
 
-      return profile;
+      return tx.tenantDirectoryProfile.findUniqueOrThrow({
+        where: { tenant_id: tenantId },
+        include: this.merchantProfileInclude(),
+      });
     });
+
+    return this.withDeliveryAreaIds(profile);
+  }
+
+  private merchantProfileInclude() {
+    return {
+      area: true,
+      tenant: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          phone: true,
+          category: true,
+          delivery_available: true,
+          delivery_fee: true,
+          delivery_starts_at: true,
+          delivery_ends_at: true,
+          tenant_delivery_areas: {
+            where: { is_active: true, deleted_at: null },
+            select: { area_id: true },
+            orderBy: { area_id: 'asc' },
+          },
+        },
+      },
+    } satisfies Prisma.TenantDirectoryProfileInclude;
+  }
+
+  private withDeliveryAreaIds<
+    T extends {
+      tenant?: { tenant_delivery_areas?: { area_id: number }[] } | null;
+    },
+  >(profile: T) {
+    return {
+      ...profile,
+      delivery_area_ids:
+        profile.tenant?.tenant_delivery_areas?.map((area) => area.area_id) ??
+        [],
+    };
   }
 
   private async findActiveArea(slug: string) {
@@ -552,6 +575,37 @@ export class StoresDirectoryService {
 
     if (count !== uniqueIds.length) {
       throw new BadRequestException('One or more directory areas are invalid');
+    }
+  }
+
+  private async ensureDeliveryAreasInsideMainArea(
+    areaId: number | null,
+    deliveryAreaIds: number[],
+  ) {
+    const uniqueDeliveryAreaIds = Array.from(new Set(deliveryAreaIds));
+
+    if (uniqueDeliveryAreaIds.length === 0) {
+      return;
+    }
+
+    if (!areaId) {
+      throw new BadRequestException(
+        'مناطق التوصيل يجب أن تكون داخل المنطقة الأساسية',
+      );
+    }
+
+    const allowedAreasCount = await this.prisma.directoryArea.count({
+      where: {
+        id: { in: uniqueDeliveryAreaIds },
+        deleted_at: null,
+        OR: [{ id: areaId }, { parent_area_id: areaId }],
+      },
+    });
+
+    if (allowedAreasCount !== uniqueDeliveryAreaIds.length) {
+      throw new BadRequestException(
+        'مناطق التوصيل يجب أن تكون داخل المنطقة الأساسية',
+      );
     }
   }
 
@@ -807,6 +861,7 @@ export class StoresDirectoryService {
     name_ar: string;
     name_en: string | null;
     slug: string;
+    parent_area_id: number | null;
     city: string | null;
     governorate: string | null;
     latitude: Prisma.Decimal | null;
@@ -819,6 +874,7 @@ export class StoresDirectoryService {
       nameAr: area.name_ar,
       nameEn: area.name_en,
       slug: area.slug,
+      parentAreaId: area.parent_area_id,
       city: area.city,
       governorate: area.governorate,
       latitude: area.latitude == null ? null : Number(area.latitude),
@@ -833,6 +889,7 @@ export class StoresDirectoryService {
       name_ar: dto.name_ar.trim(),
       name_en: this.normalizeOptionalText(dto.name_en, 120),
       slug: dto.slug.trim(),
+      parent_area_id: dto.parent_area_id,
       city: this.normalizeOptionalText(dto.city, 120),
       governorate: this.normalizeOptionalText(dto.governorate, 120),
       is_active: dto.is_active ?? true,
@@ -852,6 +909,9 @@ export class StoresDirectoryService {
       data.name_en = this.normalizeOptionalText(dto.name_en, 120);
     }
     if (dto.slug !== undefined) data.slug = dto.slug.trim();
+    if (dto.parent_area_id !== undefined) {
+      data.parent_area_id = dto.parent_area_id;
+    }
     if (dto.city !== undefined) {
       data.city = this.normalizeOptionalText(dto.city, 120);
     }

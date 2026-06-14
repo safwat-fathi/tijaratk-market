@@ -3,6 +3,7 @@ export type StoresDirectoryArea = {
   nameAr: string;
   nameEn: string | null;
   slug: string;
+  parentAreaId?: number | null;
   city: string | null;
   governorate: string | null;
   storesCount: number;
