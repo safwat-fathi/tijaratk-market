@@ -4,138 +4,166 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 
 type OrderSuccessViewProps = {
-	tenantSlug: string;
-	orderToken: string;
+  tenantSlug: string;
+  orderToken: string;
 };
 
 const TrackingOrdersIcon = () => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		width="18"
-		height="18"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-		className="shrink-0 opacity-90"
-		aria-hidden="true"
-	>
-		<path d="M3 7h13" />
-		<path d="M3 12h9" />
-		<path d="M3 17h6" />
-		<circle cx="17" cy="17" r="4" />
-		<path d="m19 19-2-2V15" />
-	</svg>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="shrink-0 opacity-90"
+    aria-hidden="true"
+  >
+    <path d="M3 7h13" />
+    <path d="M3 12h9" />
+    <path d="M3 17h6" />
+    <circle cx="17" cy="17" r="4" />
+    <path d="m19 19-2-2V15" />
+  </svg>
 );
 
 export default function OrderSuccessView({
-	tenantSlug,
-	orderToken,
+  tenantSlug,
+  orderToken,
 }: OrderSuccessViewProps) {
-	const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-	const handleCopyToken = useCallback(() => {
-		const url = `${window.location.origin}/track-order/${orderToken}`;
-		navigator.clipboard.writeText(url);
-		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
-	}, [orderToken]);
+  const handleCopyToken = useCallback(() => {
+    const url = `${window.location.origin}/track-order/${orderToken}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [orderToken]);
 
-	return (
-		<div className="fixed inset-0 z-50 flex animate-fade-in flex-col items-center justify-center bg-white p-6 text-center">
-			<div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-status-success/15 text-status-success">
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="40"
-					height="40"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					strokeWidth="3"
-					strokeLinecap="round"
-					strokeLinejoin="round"
-				>
-					<path d="M20 6 9 17l-5-5" />
-				</svg>
-			</div>
-			<h2 className="mb-2 text-3xl font-bold text-brand-text">تم إرسال الطلب!</h2>
-			<p className="mb-8 max-w-sm text-muted-foreground">
-				سيتواصل معك صاحب المتجر للتأكيد. <br />
-				احفظ رابط التتبع لمتابعة الحالة.
-			</p>
+  return (
+    <div className="fixed inset-0 z-50 flex animate-fade-in flex-col items-center justify-center bg-white p-6 text-center">
+      <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-status-success/15 text-status-success">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      </div>
+      <h2 className="mb-2 text-3xl font-bold text-brand-text">
+        تم إرسال الطلب!
+      </h2>
+      <p className="mb-8 max-w-sm text-muted-foreground">
+        سيتواصل معك صاحب المتجر للتأكيد. <br />
+        احفظ رابط التتبع لمتابعة الحالة.
+      </p>
 
-			<div className="mb-8 flex w-full max-w-sm items-center justify-between gap-4 rounded-lg border border-brand-border bg-brand-soft/50 p-4">
-				<div className="flex flex-col items-start overflow-hidden">
-					<span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-						رابط التتبع
-					</span>
-					<div className="flex w-full items-center gap-1 text-brand-text">
-						<span className="w-full truncate font-mono text-sm text-muted-foreground">
-							{typeof window !== "undefined" ? window.location.origin : ""}
-							/track-order/
-						</span>
-						<span className="text-sm font-mono font-bold">
-							{orderToken.slice(0, 8)}...
-						</span>
-					</div>
-				</div>
-				<button
-					id="copy-btn"
-					type="button"
-					onClick={handleCopyToken}
-					aria-label="نسخ رابط التتبع"
-					className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-white hover:text-brand-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
-					title="نسخ الرابط"
-				>
-					{copied ? (
-						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-status-success"><path d="M20 6 9 17l-5-5"/></svg>
-					) : (
-						<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-					)}
-				</button>
-			</div>
+      <div className="mb-8 flex w-full max-w-sm items-center justify-between gap-4 rounded-lg border border-brand-border bg-brand-soft/50 p-4">
+        <div className="flex flex-col items-start overflow-hidden">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            رابط التتبع
+          </span>
+          <div className="flex w-full items-center gap-1 text-brand-text">
+            <span className="w-full truncate font-mono text-sm text-muted-foreground">
+              {typeof window !== "undefined" ? window.location.origin : ""}
+              /track-order/
+            </span>
+            <span className="text-sm font-mono font-bold">
+              {orderToken.slice(0, 8)}...
+            </span>
+          </div>
+        </div>
+        <button
+          id="copy-btn"
+          type="button"
+          onClick={handleCopyToken}
+          aria-label="نسخ رابط التتبع"
+          className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-white hover:text-brand-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+          title="نسخ الرابط"
+        >
+          {copied ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-status-success"
+            >
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+              <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+            </svg>
+          )}
+        </button>
+      </div>
 
-			<div className="flex w-full max-w-xs flex-col gap-3">
-				<Link
-					href={`/track-order/${orderToken}`}
-					prefetch={true}
-					className="flex w-full items-center justify-center gap-2 rounded-md bg-brand-primary py-3.5 text-lg font-bold text-white shadow-soft transition-colors hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
-				>
-						<span>تتبع الطلب</span>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="20"
-							height="20"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-						>
-							<path d="m12 19-7-7 7-7" />
-							<path d="M19 12H5" />
-						</svg>
-				</Link>
-				<Link
-					href="/track-orders"
-					prefetch={true}
-					className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-brand-border bg-white py-3.5 text-center font-semibold text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
-				>
-					<TrackingOrdersIcon />
-					عرض كل طلباتي
-				</Link>
+      <div className="flex w-full max-w-xs flex-col gap-3">
+        <Link
+          href={`/track-order/${orderToken}`}
+          prefetch={true}
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-brand-primary py-3.5 text-lg font-bold text-white shadow-soft transition-colors hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+        >
+          <span>تتبع الطلب</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m12 19-7-7 7-7" />
+            <path d="M19 12H5" />
+          </svg>
+        </Link>
+        <Link
+          href="/track-orders"
+          prefetch={true}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-brand-border bg-white py-3.5 text-center font-semibold text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+        >
+          <TrackingOrdersIcon />
+          عرض كل طلباتي
+        </Link>
 
-				<Link
-					href={`/${tenantSlug}`}
-					prefetch={true}
-					className="w-full rounded-md py-3.5 font-semibold text-muted-foreground transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
-				>
-					عمل طلب جديد
-				</Link>
-			</div>
-		</div>
-	);
+        <Link
+          href={`/${tenantSlug}`}
+          prefetch={true}
+          className="w-full rounded-md py-3.5 font-semibold text-muted-foreground transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+        >
+          عمل طلب جديد من نفس المتجر
+        </Link>
+      </div>
+    </div>
+  );
 }

@@ -76,7 +76,7 @@ export default function OrdersView({ initialOrders, selectedDate }: OrdersViewPr
       <OrderStats count={totalCount} selectedDate={selectedDate} />
 
       {/* 2. Status Tabs */}
-      <div className="sticky top-[57px] z-10 bg-white shadow-soft">
+      <div className="sticky top-[57px] z-10 bg-white shadow-soft mb-3">
         <StatusTabs 
           currentStatus={activeStatus} 
           counts={statusCounts} 
