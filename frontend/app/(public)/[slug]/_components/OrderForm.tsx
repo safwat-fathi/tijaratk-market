@@ -137,6 +137,7 @@ export default function OrderForm({
   const [orderRequest, setOrderRequest] = useState(
     initialOrder?.free_text_payload?.text || "",
   );
+  const [hasPrescription, setHasPrescription] = useState(false);
   const [state, formAction, isPending] = useActionState(
     createOrderAction.bind(null, tenantSlug),
     initialState,
@@ -1007,7 +1008,10 @@ export default function OrderForm({
         />
 
         {isPharmacy && (
-          <PrescriptionUploadForm tenantSlug={tenantSlug} />
+          <PrescriptionUploadForm 
+            tenantSlug={tenantSlug} 
+            onFileChange={setHasPrescription}
+          />
         )}
 
         <DeliveryDetailsSection
@@ -1036,6 +1040,7 @@ export default function OrderForm({
           orderRequest={orderRequest}
           isPending={isPending}
           deliveryAvailable={deliveryAvailable}
+          hasPrescription={hasPrescription}
           onSubmitClick={openReviewSheet}
           triggerButtonRef={reviewTriggerButtonRef}
         />
@@ -1048,6 +1053,7 @@ export default function OrderForm({
           hasPricedItems={hasPricedItems}
           orderRequest={orderRequest}
           deliveryAvailable={deliveryAvailable}
+          hasPrescription={hasPrescription}
           selections={effectiveCartSelections}
           knownProductsById={knownProductsById}
           onClose={() => closeReviewSheet(true)}

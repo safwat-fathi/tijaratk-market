@@ -18,6 +18,8 @@ import { CreateCustomerDto } from 'src/customers/dto/create-customer.dto';
 import { OrderItemSelectionMode } from 'src/common/enums/order-item-selection-mode.enum';
 import { OrderSource } from '../../../generated/prisma/client';
 
+import { plainToInstance } from 'class-transformer';
+
 const parseJsonIfString = ({ value }: { value: unknown }) => {
   if (typeof value !== 'string') {
     return value;
@@ -28,6 +30,16 @@ const parseJsonIfString = ({ value }: { value: unknown }) => {
   } catch {
     return value;
   }
+};
+
+const parseCustomer = ({ value }: { value: unknown }) => {
+  const parsed = parseJsonIfString({ value });
+  return plainToInstance(CreateCustomerDto, parsed);
+};
+
+const parseItems = ({ value }: { value: unknown }) => {
+  const parsed = parseJsonIfString({ value });
+  return plainToInstance(CreateOrderItemDto, parsed);
 };
 
 export class CreateOrderItemDto {
@@ -100,7 +112,7 @@ export class CreateOrderItemDto {
 
 export class CreateOrderDto {
   @ApiProperty()
-  @Transform(parseJsonIfString)
+  @Transform(parseCustomer)
   @ValidateNested()
   @Type(() => CreateCustomerDto)
   customer: CreateCustomerDto;
@@ -111,7 +123,7 @@ export class CreateOrderDto {
   order_type?: OrderType;
 
   @ApiPropertyOptional({ type: [CreateOrderItemDto] })
-  @Transform(parseJsonIfString)
+  @Transform(parseItems)
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -126,6 +138,7 @@ export class CreateOrderDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   total?: number;
@@ -138,6 +151,7 @@ export class CreateOrderDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   delivery_fee?: number;

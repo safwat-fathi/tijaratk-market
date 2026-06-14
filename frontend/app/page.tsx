@@ -143,14 +143,19 @@ const getCategoryIcon = (category: StoresDirectoryCategory) => {
 
 const toCategoryCards = (
   categories: StoresDirectoryCategory[],
+  selectedArea?: StoresDirectoryArea,
 ): DirectoryCategoryCard[] =>
-  categories.map((category) => ({
-    slug: category.slug,
-    name: getCategoryName(category),
-    stores: category.storesCount,
-    color: getCategoryColor(category),
-    icon: getCategoryIcon(category),
-  }));
+  categories
+    .map((category) => ({
+      slug: category.slug,
+      name: getCategoryName(category),
+      stores: selectedArea
+        ? (selectedArea.categoryCounts?.[category.slug] ?? 0)
+        : category.storesCount,
+      color: getCategoryColor(category),
+      icon: getCategoryIcon(category),
+    }))
+    .filter((category) => !selectedArea || category.stores > 0);
 
 const toAreaOptions = (areas: StoresDirectoryArea[]): DirectoryAreaOption[] =>
   areas.map((area) => ({
@@ -274,13 +279,16 @@ export default async function StoresDirectoryPage({
   const selectedAreaSlug = area?.trim() || undefined;
   const landing = await getStoresLanding();
   const areas = landing?.areas ?? [];
+  const selectedArea = selectedAreaSlug
+    ? areas.find((item) => item.slug === selectedAreaSlug)
+    : undefined;
   const categories = landing?.categories?.length
     ? landing.categories
     : fallbackCategories;
   const featuredStores = landing?.featuredStores ?? [];
   const seo = resolveSeo(landing);
   const jsonLd = buildJsonLd({ seo, areas, categories });
-  const categoryCards = toCategoryCards(categories);
+  const categoryCards = toCategoryCards(categories, selectedArea);
   const areaOptions = toAreaOptions(areas);
   const topAreas = areas.slice(0, 8);
   const searchedAreas = areas.slice(0, 4);

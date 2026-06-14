@@ -287,8 +287,32 @@ export async function createOrderAction(
     orderRequest: order_request,
   });
 
+  const formDataPayload = new FormData();
+  formDataPayload.append('customer', JSON.stringify(payload.customer));
+  
+  if (payload.order_type) formDataPayload.append('order_type', payload.order_type);
+  if (payload.items && payload.items.length > 0) formDataPayload.append('items', JSON.stringify(payload.items));
+  if (payload.free_text_payload) formDataPayload.append('free_text_payload', JSON.stringify(payload.free_text_payload));
+  if (payload.total !== undefined) formDataPayload.append('total', payload.total.toString());
+  if (payload.notes) formDataPayload.append('notes', payload.notes);
+  if (payload.delivery_fee !== undefined) formDataPayload.append('delivery_fee', payload.delivery_fee.toString());
+  if (payload.order_source) formDataPayload.append('order_source', payload.order_source);
+  if (payload.source_metadata) formDataPayload.append('source_metadata', JSON.stringify(payload.source_metadata));
+  if (payload.delivery_area_id !== undefined) formDataPayload.append('delivery_area_id', payload.delivery_area_id.toString());
+  if (payload.delivery_area_slug) formDataPayload.append('delivery_area_slug', payload.delivery_area_slug);
+  
+  const unavailabilityOption = formData.get('unavailabilityOption');
+  if (typeof unavailabilityOption === 'string' && unavailabilityOption) {
+    formDataPayload.append('prescription_unavailability_action', unavailabilityOption);
+  }
+
+  const prescriptionFile = formData.get('prescription_file');
+  if (prescriptionFile instanceof File && prescriptionFile.size > 0) {
+    formDataPayload.append('prescription_file', prescriptionFile);
+  }
+
   try {
-    const response = await ordersService.createPublicOrder(tenantSlug, payload);
+    const response = await ordersService.createPublicOrder(tenantSlug, formDataPayload);
 
     if (response.success) {
       await persistCreatedOrderTrackingArtifacts({

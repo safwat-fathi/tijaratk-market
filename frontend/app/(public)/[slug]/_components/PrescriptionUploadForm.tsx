@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   UploadCloud,
   CheckCircle2,
@@ -11,35 +11,38 @@ import {
 
 interface PrescriptionUploadFormProps {
   tenantSlug: string;
+  onFileChange?: (hasFile: boolean) => void;
 }
 
 export default function PrescriptionUploadForm({
   tenantSlug,
+  onFileChange,
 }: PrescriptionUploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [isSuccess, setIsSuccess] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
+      onFileChange?.(true);
+    } else {
+      setFile(null);
+      onFileChange?.(false);
     }
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       setFile(e.dataTransfer.files[0]);
+      onFileChange?.(true);
+      if (fileInputRef.current) {
+        fileInputRef.current.files = e.dataTransfer.files;
+      }
     }
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!file) return;
-
-    setIsSuccess(true);
   };
 
   const [isOpen, setIsOpen] = useState(false);
@@ -72,33 +75,10 @@ export default function PrescriptionUploadForm({
 
       {isOpen && (
         <div className="mt-6 border-t border-brand-border pt-6 animate-in fade-in slide-in-from-top-4 duration-300">
-          {isSuccess ? (
-            <div className="flex flex-col items-center justify-center rounded-[20px] bg-white p-8 text-center shadow-soft animate-in fade-in zoom-in duration-300">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-(--brand-soft)/50">
-                <CheckCircle2 className="h-8 w-8 text-(--brand-accent)" />
-              </div>
-              <h3 className="mb-2 text-xl font-bold text-(--brand-text)">
-                تم رفع وصفتك الطبية بنجاح
-              </h3>
-              <p className="mb-8 text-muted-foreground">
-                سيقوم الصيادلة لدينا بمراجعتها وسنتواصل معك قريباً لترتيب
-                التوصيل.
-              </p>
-              <button
-                onClick={() => {
-                  setIsSuccess(false);
-                  setFile(null);
-                }}
-                className="w-full rounded-xl bg-(--brand-primary) text-white h-12 font-semibold hover:bg-(--brand-primary-hover) active:scale-[0.98] transition-all"
-              >
-                رفع وصفة أخرى
-              </button>
-            </div>
-          ) : (
             <div className="mb-8 animate-in fade-in duration-300">
               {/* Form Container */}
               <div className="bg-white rounded-[20px] p-6 shadow-soft border border-brand-border/40">
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-6">
                   {/* Dropdown */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground px-1">
@@ -119,7 +99,7 @@ export default function PrescriptionUploadForm({
                     <label className="text-sm font-medium text-muted-foreground px-1">
                       تحميل الوصفة الطبية
                     </label>
-                    <div
+                    <label
                       onDragOver={(e) => {
                         e.preventDefault();
                         setIsDragOver(true);
@@ -133,7 +113,10 @@ export default function PrescriptionUploadForm({
                       }`}
                     >
                       <input
+                        ref={fileInputRef}
+                        name="prescription_file"
                         accept="image/*,.pdf"
+                        capture="environment"
                         className="hidden"
                         type="file"
                         onChange={handleFileChange}
@@ -142,12 +125,12 @@ export default function PrescriptionUploadForm({
                       <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 transition-transform">
                         <UploadCloud className="text-(--brand-accent) h-8 w-8" />
                       </div>
-                      <p className="text-base font-semibold text-(--brand-text) mb-1">
-                        {file ? file.name : "اضغط للتحميل أو اسحب الملف هنا"}
+                      <p className="text-base font-semibold text-(--brand-text) mb-1 text-center">
+                        {file ? file.name : "اضغط لالتقاط صورة أو تحميل ملف"}
                       </p>
                       {!file && (
-                        <p className="text-xs text-muted-foreground">
-                          صورة (JPG, PNG) أو ملف PDF
+                        <p className="text-xs text-muted-foreground text-center px-2">
+                          استخدم كاميرا الهاتف أو ارفع صورة (JPG, PNG) أو PDF
                         </p>
                       )}
                       {file && (
@@ -156,14 +139,13 @@ export default function PrescriptionUploadForm({
                           <span>تم اختيار الملف</span>
                         </div>
                       )}
-                    </div>
+                    </label>
                   </div>
-                </form>
+                </div>
               </div>
 
               {/* Extra Help Card */}
             </div>
-          )}
         </div>
       )}
     </div>

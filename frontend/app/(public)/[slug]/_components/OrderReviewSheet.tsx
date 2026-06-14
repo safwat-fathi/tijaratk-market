@@ -17,6 +17,7 @@ type OrderReviewSheetProps = {
 	hasPricedItems: boolean;
 	orderRequest: string;
 	deliveryAvailable?: boolean;
+	hasPrescription?: boolean;
 	selections: Record<number, ProductCartSelection>;
 	knownProductsById: Record<number, Product>;
 	onClose: () => void;
@@ -339,6 +340,7 @@ export default function OrderReviewSheet({
 	hasPricedItems,
 	orderRequest,
 	deliveryAvailable = true,
+	hasPrescription = false,
 	selections,
 	knownProductsById,
 	onClose,
@@ -364,7 +366,7 @@ export default function OrderReviewSheet({
 	);
 
 	const hasOrderRequest = orderRequest.trim().length > 0;
-	const canSubmit = deliveryAvailable && (selectionEntries.length > 0 || hasOrderRequest);
+	const canSubmit = deliveryAvailable && (selectionEntries.length > 0 || hasOrderRequest || hasPrescription);
 
 	useEffect(() => {
 		if (!isOpen) {
@@ -473,6 +475,14 @@ export default function OrderReviewSheet({
 								>
 									{orderRequest}
 								</p>
+							</div>
+						)}
+
+						{hasPrescription && (
+							<div className="rounded-2xl border border-brand-accent/30 bg-brand-soft/30 p-3">
+								<div className="flex items-center gap-2">
+									<p className="text-sm font-bold text-brand-text">وصفة طبية مرفقة</p>
+								</div>
 							</div>
 						)}
 

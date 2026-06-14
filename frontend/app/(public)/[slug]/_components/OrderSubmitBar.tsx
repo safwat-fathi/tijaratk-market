@@ -9,6 +9,7 @@ type OrderSubmitBarProps = {
 	orderRequest: string;
 	isPending: boolean;
 	deliveryAvailable?: boolean;
+	hasPrescription?: boolean;
 	onSubmitClick?: () => void;
 	triggerButtonRef?: Ref<HTMLButtonElement>;
 };
@@ -20,14 +21,15 @@ export default function OrderSubmitBar({
 	orderRequest,
 	isPending,
 	deliveryAvailable = true,
+	hasPrescription = false,
 	onSubmitClick,
 	triggerButtonRef,
 }: OrderSubmitBarProps) {
-	if (!(totalItems > 0 || orderRequest.trim())) {
+	if (!(totalItems > 0 || orderRequest.trim() || hasPrescription)) {
 		return null;
 	}
 
-	const isDisabled = isPending || !deliveryAvailable || (totalItems === 0 && !orderRequest.trim());
+	const isDisabled = isPending || !deliveryAvailable || (totalItems === 0 && !orderRequest.trim() && !hasPrescription);
 
 	return (
 		<>

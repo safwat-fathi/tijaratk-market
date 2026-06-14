@@ -60,7 +60,7 @@ class OrdersService extends HttpService {
 
 	public async createPublicOrder(
 		tenantSlug: string,
-		payload: CreateOrderRequest,
+		payload: CreateOrderRequest | FormData,
 	) {
 		return this.post<Order>(`${tenantSlug}`, payload);
 	}
