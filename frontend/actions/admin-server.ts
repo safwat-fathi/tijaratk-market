@@ -14,6 +14,11 @@ export type ActionState = {
   timestamp?: number;
 };
 
+export type DirectoryStatusActionState = {
+  success: boolean;
+  message?: string;
+};
+
 export async function adminLoginAction(prevState: ActionState, formData: FormData): Promise<ActionState> {
   const rawData = Object.fromEntries(formData.entries());
   
@@ -92,6 +97,16 @@ const parsePositiveInteger = (value: FormDataEntryValue | null) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
+const DIRECTORY_STATUSES = new Set(["draft", "listed", "hidden", "suspended"]);
+
+const parseDirectoryStatus = (value: FormDataEntryValue | null) => {
+  if (typeof value !== "string" || !DIRECTORY_STATUSES.has(value)) {
+    return undefined;
+  }
+
+  return value as "draft" | "listed" | "hidden" | "suspended";
+};
+
 export async function updateTenantAreasAction(tenantId: number, formData: FormData): Promise<void> {
   const areaId = parsePositiveInteger(formData.get("area_id"));
   if (!areaId) {
@@ -104,10 +119,12 @@ export async function updateTenantAreasAction(tenantId: number, formData: FormDa
     .filter((value): value is number => typeof value === "number");
 
   const uniqueDeliveryAreaIds = Array.from(new Set([areaId, ...deliveryAreaIds]));
+  const directoryStatus = parseDirectoryStatus(formData.get("directory_status"));
 
   const response = await adminService.updateTenantDirectoryProfile(tenantId, {
     area_id: areaId,
     delivery_area_ids: uniqueDeliveryAreaIds,
+    directory_status: directoryStatus,
   });
 
   if (!response.success) {
@@ -115,6 +132,37 @@ export async function updateTenantAreasAction(tenantId: number, formData: FormDa
   }
 
   revalidatePath("/admin/merchants");
+}
+
+export async function updateTenantDirectoryStatusAction(
+  tenantId: number,
+  _prevState: DirectoryStatusActionState,
+  formData: FormData,
+): Promise<DirectoryStatusActionState> {
+  const directoryStatus = parseDirectoryStatus(formData.get("directory_status"));
+  if (!directoryStatus) {
+    return {
+      success: false,
+      message: "حالة الدليل غير صحيحة",
+    };
+  }
+
+  const response = await adminService.updateTenantDirectoryProfile(tenantId, {
+    directory_status: directoryStatus,
+  });
+
+  if (!response.success) {
+    return {
+      success: false,
+      message: response.message || "تعذر تحديث حالة الدليل",
+    };
+  }
+
+  revalidatePath("/admin/merchants");
+
+  return {
+    success: true,
+  };
 }
 
 export async function togglePlanStatusAction(id: number, currentStatus: boolean): Promise<void> {
@@ -169,4 +217,3 @@ export async function deleteDirectoryAreaAction(id: number): Promise<void> {
   }
   revalidatePath("/admin/areas");
 }
-

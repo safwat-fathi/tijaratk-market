@@ -425,7 +425,12 @@ export class StoresDirectoryService {
       throw new NotFoundException('Tenant not found');
     }
 
-    const areaId = dto.area_id ?? null;
+    const existingProfile = await this.prisma.tenantDirectoryProfile.findUnique(
+      {
+        where: { tenant_id: tenantId },
+      },
+    );
+    const areaId = dto.area_id ?? existingProfile?.area_id ?? null;
     if (areaId) {
       await this.ensureAreaExists(areaId);
     }
@@ -440,12 +445,14 @@ export class StoresDirectoryService {
 
     const profileData = this.toProfileData(dto);
     const completion = this.calculateProfileCompletion({
-      display_name: dto.display_name ?? tenant.name,
-      address: dto.address,
-      logo_url: dto.logo_url,
+      display_name:
+        dto.display_name ?? existingProfile?.display_name ?? tenant.name,
+      address: dto.address ?? existingProfile?.address,
+      logo_url: dto.logo_url ?? existingProfile?.logo_url,
       area_id: areaId,
-      latitude: dto.latitude ?? null,
-      longitude: dto.longitude ?? null,
+      latitude: dto.latitude ?? existingProfile?.latitude?.toNumber() ?? null,
+      longitude:
+        dto.longitude ?? existingProfile?.longitude?.toNumber() ?? null,
     });
 
     const profile = await this.prisma.$transaction(async (tx) => {

@@ -6,6 +6,7 @@ import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import { redirect } from 'next/navigation';
 import { PlanSelect } from './_components/PlanSelect';
 import { TenantAreaForm } from './_components/TenantAreaForm';
+import { DirectoryStatusForm } from './_components/DirectoryStatusForm';
 import type { AdminDirectoryArea, AdminPlan, AdminTenant } from '@/services/api/admin.service';
 
 export const dynamic = 'force-dynamic';
@@ -74,6 +75,7 @@ export default async function AdminMerchants() {
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الطلبات</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">العملاء</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">المناطق</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">حالة الدليل</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الباقة</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحالة</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
@@ -92,6 +94,9 @@ export default async function AdminMerchants() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant._count?.customers || 0}</td>
                 <td className="px-6 py-4 text-sm text-gray-500">
                   <TenantAreaForm tenant={merchant} areas={areas} />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <DirectoryStatusForm tenant={merchant} />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <PlanSelect

@@ -46,6 +46,7 @@ type AdminTenantSubscription = {
 
 type AdminTenantDirectoryProfile = {
 	area_id: number | null;
+	directory_status: "draft" | "listed" | "hidden" | "suspended";
 	area: AdminDirectoryArea | null;
 };
 
@@ -87,8 +88,9 @@ type AdminProduct = Record<string, unknown>;
 type AdminOrder = Record<string, unknown>;
 
 type UpdateTenantDirectoryProfilePayload = {
-	area_id: number;
-	delivery_area_ids: number[];
+	area_id?: number;
+	delivery_area_ids?: number[];
+	directory_status?: "draft" | "listed" | "hidden" | "suspended";
 };
 
 class AdminApiService extends HttpService {
