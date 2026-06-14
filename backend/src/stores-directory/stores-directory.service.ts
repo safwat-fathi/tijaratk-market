@@ -7,6 +7,7 @@ import {
   DirectoryEventType,
   DirectoryStatus,
   Prisma,
+  ProductStatus,
   TenantCategory,
   TenantStatus,
 } from '../../generated/prisma/client';
@@ -228,7 +229,7 @@ export class StoresDirectoryService {
     ]);
 
     const activeProducts = await this.countActiveProducts(
-      rows.map((row) => row.tenant_id),
+      rows.map((row) => row.tenant.id),
     );
     let stores = this.toStoreCards(
       rows.map((row) => row.tenant),
@@ -763,7 +764,7 @@ export class StoresDirectoryService {
       by: ['tenant_id'],
       where: {
         tenant_id: { in: tenantIds },
-        status: 'active',
+        status: ProductStatus.active,
         deleted_at: null,
       },
       _count: { _all: true },

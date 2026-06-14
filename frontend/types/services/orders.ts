@@ -1,5 +1,5 @@
 import { Order } from '../models/order';
-import { OrderType } from '../enums';
+import { OrderSource, OrderType } from '../enums';
 
 export interface CreateOrderRequest {
   customer: {
@@ -23,6 +23,10 @@ export interface CreateOrderRequest {
   notes?: string;
   free_text_payload?: { text: string };
   order_type: OrderType;
+  total?: number;
+  delivery_fee?: number;
+  order_source?: OrderSource;
+  source_metadata?: Record<string, unknown>;
   delivery_area_id?: number;
   delivery_area_slug?: string;
   prescription_unavailability_action?: string;

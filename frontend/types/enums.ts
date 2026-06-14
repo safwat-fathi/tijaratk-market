@@ -19,6 +19,13 @@ export enum OrderType {
   FREE_TEXT = 'free_text',
 }
 
+export enum OrderSource {
+  STOREFRONT = 'storefront',
+  DIRECTORY = 'directory',
+  WHATSAPP = 'whatsapp',
+  MANUAL = 'manual',
+}
+
 export enum PricingMode {
   AUTO = 'auto',
   MANUAL = 'manual',
