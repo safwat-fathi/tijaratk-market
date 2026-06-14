@@ -324,6 +324,16 @@ export class StoresDirectoryService {
   }
 
   /**
+   * Lists active directory areas for merchant selection.
+   */
+  async merchantFindAreas() {
+    return this.prisma.directoryArea.findMany({
+      where: { is_active: true, deleted_at: null },
+      orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
+    });
+  }
+
+  /**
    * Lists directory areas for admin management.
    */
   async adminFindAreas() {
@@ -427,6 +437,10 @@ export class StoresDirectoryService {
             delivery_fee: true,
             delivery_starts_at: true,
             delivery_ends_at: true,
+            tenant_delivery_areas: {
+              where: { is_active: true, deleted_at: null },
+              select: { area_id: true },
+            },
           },
         },
       },

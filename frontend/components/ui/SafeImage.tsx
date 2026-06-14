@@ -51,6 +51,9 @@ export default function SafeImage({
     );
   }
 
+  const isAkamaiProtected = typeof normalizedSrc === 'string' && normalizedSrc.includes('cdn.mafrservices.com');
+  const shouldUnoptimize = unoptimized || isAkamaiProtected;
+
   return (
     <Image
       src={normalizedSrc}
@@ -58,7 +61,7 @@ export default function SafeImage({
       width={width}
       height={height}
       className={imageClassName}
-      unoptimized={unoptimized}
+      unoptimized={shouldUnoptimize}
       priority={priority}
       sizes={sizes}
       loading={loading}

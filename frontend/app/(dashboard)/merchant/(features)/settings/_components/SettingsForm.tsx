@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Tenant } from "@/types/models/tenant";
+import { Tenant, DirectoryArea } from "@/types/models/tenant";
 import { updateStoreSettingsAction } from "@/actions/tenant-actions";
 import { useRef } from "react";
 
@@ -15,9 +15,10 @@ const DELIVERY_TIME_PRESETS = [
 
 interface SettingsFormProps {
   tenant: Tenant;
+  activeAreas: DirectoryArea[];
 }
 
-export default function SettingsForm({ tenant }: SettingsFormProps) {
+export default function SettingsForm({ tenant, activeAreas }: SettingsFormProps) {
   const [state, formAction, isPending] = useActionState(
     updateStoreSettingsAction,
     {
@@ -34,6 +35,20 @@ export default function SettingsForm({ tenant }: SettingsFormProps) {
   
   const deliveryStartsAtInputRef = useRef<HTMLInputElement | null>(null);
   const deliveryEndsAtInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [selectedZones, setSelectedZones] = useState<Set<number>>(() => {
+    return new Set(tenant.tenant_delivery_areas?.map(d => d.area_id) || []);
+  });
+  const [isZonesOpen, setIsZonesOpen] = useState(false);
+
+  const toggleZone = (areaId: number) => {
+    setSelectedZones(prev => {
+      const next = new Set(prev);
+      if (next.has(areaId)) next.delete(areaId);
+      else next.add(areaId);
+      return next;
+    });
+  };
 
   const [activePreset, setActivePreset] = useState<string>(() => {
     if (!tenant.delivery_starts_at && !tenant.delivery_ends_at) {
@@ -96,6 +111,28 @@ export default function SettingsForm({ tenant }: SettingsFormProps) {
           </div>
 
           <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-700">المنطقة الأساسية</label>
+            <select
+              name="area_id"
+              defaultValue={tenant.directory_profile?.area_id || ""}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F7F8F6] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/50"
+            >
+              <option value="">اختر المنطقة الأساسية</option>
+              {activeAreas.map(area => {
+                const parts = Array.from(new Set([area.name_ar, area.city, area.name_en].filter(Boolean)));
+                return (
+                  <option key={area.id} value={area.id}>
+                    {parts.join(" - ")}
+                  </option>
+                );
+              })}
+            </select>
+            {state.errors?.area_id && (
+              <span className="text-red-500 text-sm">{state.errors.area_id[0]}</span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-700">رقم الهاتف <span className="text-xs text-gray-400">(للقراءة فقط)</span></label>
             <input
               type="text"
@@ -151,6 +188,57 @@ export default function SettingsForm({ tenant }: SettingsFormProps) {
                 />
                 {state.errors?.delivery_fee && (
                   <span className="text-red-500 text-sm">{state.errors.delivery_fee[0]}</span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsZonesOpen(!isZonesOpen)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-[#F7F8F6] hover:bg-gray-50 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-gray-700">
+                      مناطق التوصيل ({selectedZones.size})
+                    </span>
+                    <svg
+                      className={`w-5 h-5 text-gray-500 transition-transform ${isZonesOpen ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {isZonesOpen && (
+                    <div className="flex flex-col max-h-60 overflow-y-auto p-2">
+                      {activeAreas.length === 0 ? (
+                        <span className="text-sm text-gray-500 p-2">لا توجد مناطق متاحة حالياً</span>
+                      ) : (
+                        activeAreas.map(area => {
+                          const parts = Array.from(new Set([area.name_ar, area.city, area.name_en].filter(Boolean)));
+                          const isSelected = selectedZones.has(area.id);
+                          return (
+                            <label key={area.id} className="flex items-center justify-end flex-row-reverse gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg">
+                              <span className="text-sm text-gray-700 flex-1 text-right" dir="ltr">{parts.join(" - ")}</span>
+                              <input
+                                type="checkbox"
+                                name="delivery_area_ids"
+                                value={area.id}
+                                checked={isSelected}
+                                onChange={() => toggleZone(area.id)}
+                                className="w-5 h-5 text-[#27AE60] bg-white border-gray-300 rounded focus:ring-[#27AE60]"
+                              />
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+                {state.errors?.delivery_area_ids && (
+                  <span className="text-red-500 text-sm">{state.errors.delivery_area_ids[0]}</span>
                 )}
               </div>
 

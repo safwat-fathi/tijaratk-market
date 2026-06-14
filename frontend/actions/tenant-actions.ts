@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { tenantsService } from "@/services/api/tenants.service";
+import { merchantDirectoryService } from "@/services/api/stores-directory.service";
 
 export type UpdateDeliverySettingsState = {
   success: boolean;
@@ -111,6 +112,8 @@ const updateStoreSettingsSchema = z.object({
     .optional()
     .or(z.literal(""))
     .transform(value => value || undefined),
+  area_id: z.coerce.number().optional().nullable(),
+  delivery_area_ids: z.array(z.coerce.number()).optional(),
 }).refine(
   (data) => {
     if (!data.delivery_available) return true;
@@ -137,7 +140,11 @@ export async function updateStoreSettingsAction(
   _prevState: UpdateStoreSettingsState,
   formData: FormData,
 ): Promise<UpdateStoreSettingsState> {
-  const data = Object.fromEntries(formData.entries());
+  const data: Record<string, unknown> = Object.fromEntries(formData.entries());
+  
+  // Extract all delivery_area_ids since formData.entries() only gets the last value for multiple inputs
+  data.delivery_area_ids = formData.getAll("delivery_area_ids");
+
   // If a checkbox is not checked, it might not be included in FormData, 
   // so we ensure delivery_available defaults to off if absent
   if (!data.delivery_available) {
@@ -154,7 +161,7 @@ export async function updateStoreSettingsAction(
     };
   }
 
-  const { name, category, ...deliveryData } = validatedFields.data;
+  const { name, category, area_id, delivery_area_ids, ...deliveryData } = validatedFields.data;
 
   // 1. Update general settings
   const generalRes = await tenantsService.updateMyGeneralSettings({
@@ -176,6 +183,19 @@ export async function updateStoreSettingsAction(
     return {
       success: false,
       message: deliveryRes.message || "تعذر حفظ إعدادات التوصيل.",
+    };
+  }
+
+  // 3. Update directory profile
+  const profileRes = await merchantDirectoryService.updateProfile({
+    area_id: area_id ?? undefined,
+    delivery_area_ids: delivery_area_ids,
+  });
+
+  if (!profileRes.success) {
+    return {
+      success: false,
+      message: profileRes.message || "تعذر حفظ إعدادات المناطق.",
     };
   }
 

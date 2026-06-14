@@ -1,0 +1,37 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img "دليل المتاجر" [ref=e7]
+        - heading "دليل المتاجر" [level=1] [ref=e9]
+      - link "تتبع طلباتي" [ref=e10] [cursor=pointer]:
+        - /url: /track-orders
+    - main [ref=e11]:
+      - generic [ref=e13]:
+        - link "العودة لدليل المتاجر" [ref=e14] [cursor=pointer]:
+          - /url: /
+        - heading "سوبر ماركت في الحي الثالث" [level=1] [ref=e15]
+        - paragraph [ref=e16]: تصفح المتاجر المتاحة للطلب والتوصيل في منطقتك مباشرة من خلال تجارتك.
+        - generic [ref=e17]:
+          - generic [ref=e18]: 0 متجر
+          - generic [ref=e19]: 6th of October
+      - generic [ref=e21]:
+        - heading "لا توجد متاجر متاحة حالياً" [level=2] [ref=e22]
+        - paragraph [ref=e23]: لا يوجد سوبر ماركت متاح في الحي الثالث الآن. جرّب منطقة أخرى من دليل المتاجر.
+        - link "عرض المناطق المتاحة" [ref=e24] [cursor=pointer]:
+          - /url: /
+    - contentinfo [ref=e25]:
+      - generic [ref=e26]:
+        - img "تجارتك أسهل. تجارتك أونلاين." [ref=e28]
+        - paragraph [ref=e29]: © 2026 جميع الحقوق محفوظة لـ تجارتك.
+        - generic [ref=e30]:
+          - link "فيسبوك" [ref=e31] [cursor=pointer]:
+            - /url: https://www.facebook.com/profile.php?id=61589320905109
+            - generic [ref=e32]: فيسبوك
+            - img [ref=e33]
+          - link "واتساب" [ref=e35] [cursor=pointer]:
+            - /url: https://wa.me/201037007345
+            - generic [ref=e36]: واتساب
+            - img [ref=e37]
+  - button "Open Next.js Dev Tools" [ref=e46] [cursor=pointer]:
+    - img [ref=e47]

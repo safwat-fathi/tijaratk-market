@@ -101,7 +101,7 @@ export default function CategoryGrid({ categories, areas }: Props) {
             {areas.map((area) => (
               <Link
                 key={area.slug}
-                href={`/stores?area=${encodeURIComponent(area.slug)}&category=${encodeURIComponent(selectedCategory?.slug ?? "")}`}
+                href={`/stores/${encodeURIComponent(area.slug)}/${encodeURIComponent(selectedCategory?.slug ?? "")}`}
                 className="rounded-full border border-gray-200 bg-[#F7F8F6] px-4 py-2 text-sm font-semibold text-[#0F5A3D] transition-colors hover:border-[#27AE60]/30 hover:bg-[#E8F5ED]"
               >
                 {area.name}

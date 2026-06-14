@@ -35,11 +35,27 @@ export type StoresDirectoryStoreCard = {
 export type StoresDirectorySeo = {
   title: string;
   description: string;
+  canonicalUrl?: string;
 };
 
 export type StoresDirectoryLanding = {
   areas: StoresDirectoryArea[];
   categories: StoresDirectoryCategory[];
   featuredStores: StoresDirectoryStoreCard[];
+  seo: StoresDirectorySeo;
+};
+
+export type StoresDirectoryPagination = {
+  page: number;
+  limit: number;
+  total: number;
+  lastPage: number;
+};
+
+export type StoresDirectoryCategoryPage = {
+  area: StoresDirectoryArea;
+  category: Omit<StoresDirectoryCategory, "storesCount">;
+  stores: StoresDirectoryStoreCard[];
+  pagination: StoresDirectoryPagination;
   seo: StoresDirectorySeo;
 };

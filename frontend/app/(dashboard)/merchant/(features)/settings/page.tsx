@@ -1,4 +1,5 @@
 import { tenantsService } from "@/services/api/tenants.service";
+import { merchantDirectoryService } from "@/services/api/stores-directory.service";
 import SettingsForm from "./_components/SettingsForm";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
@@ -8,7 +9,11 @@ export const metadata = createNoIndexMetadata(
 );
 
 export default async function SettingsPage() {
-  const tenantResponse = await tenantsService.getMyTenant();
+  const [tenantResponse, profileResponse, areasResponse] = await Promise.all([
+    tenantsService.getMyTenant(),
+    merchantDirectoryService.getProfile(),
+    merchantDirectoryService.getActiveAreas(),
+  ]);
 
   if (!tenantResponse.success || !tenantResponse.data) {
     return (
@@ -16,6 +21,18 @@ export default async function SettingsPage() {
         <p className="text-gray-500 mb-4">تعذر تحميل بيانات المتجر.</p>
       </div>
     );
+  }
+
+  const tenant = tenantResponse.data;
+  if (profileResponse.success && profileResponse.data) {
+    tenant.directory_profile = profileResponse.data;
+    
+    // The backend ensureDirectoryProfile returns a nested tenant object with tenant_delivery_areas
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const profileTenant = (profileResponse.data as any).tenant;
+    if (profileTenant?.tenant_delivery_areas) {
+      tenant.tenant_delivery_areas = profileTenant.tenant_delivery_areas;
+    }
   }
 
   return (
@@ -26,7 +43,10 @@ export default async function SettingsPage() {
         </h1>
       </div>
 
-      <SettingsForm tenant={tenantResponse.data} />
+      <SettingsForm 
+        tenant={tenant} 
+        activeAreas={areasResponse.data || []} 
+      />
     </div>
   );
 }

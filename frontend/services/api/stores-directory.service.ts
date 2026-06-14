@@ -1,5 +1,10 @@
 import HttpService from "@/services/base/http.service";
-import { StoresDirectoryLanding } from "@/types/models/stores-directory";
+import {
+  StoresDirectoryCategoryPage,
+  StoresDirectoryLanding,
+} from "@/types/models/stores-directory";
+import { TenantDirectoryProfile, DirectoryArea } from "@/types/models/tenant";
+import { IParams } from "@/types/services/base";
 
 const STORES_DIRECTORY_REVALIDATE_SECONDS = 300;
 
@@ -13,6 +18,49 @@ class StoresDirectoryService extends HttpService {
       next: { revalidate: STORES_DIRECTORY_REVALIDATE_SECONDS },
     });
   }
+
+  public async getCategoryPage(
+    areaSlug: string,
+    categorySlug: string,
+    params?: IParams,
+  ) {
+    return this.get<StoresDirectoryCategoryPage>(
+      `areas/${areaSlug}/categories/${categorySlug}`,
+      params,
+      {
+        next: { revalidate: STORES_DIRECTORY_REVALIDATE_SECONDS },
+      },
+    );
+  }
+}
+class MerchantDirectoryService extends HttpService {
+  constructor() {
+    super("/merchant");
+  }
+
+  public async getProfile() {
+    return this.get<TenantDirectoryProfile>("directory-profile", undefined, {
+      authRequired: true,
+      cache: "no-store",
+    });
+  }
+
+  public async updateProfile(payload: {
+    area_id?: number;
+    delivery_area_ids?: number[];
+  }) {
+    return this.patch<TenantDirectoryProfile>("directory-profile", payload, undefined, {
+      authRequired: true,
+    });
+  }
+
+  public async getActiveAreas() {
+    return this.getList<DirectoryArea[]>("areas", undefined, {
+      authRequired: true,
+      cache: "no-store",
+    });
+  }
 }
 
 export const storesDirectoryService = new StoresDirectoryService();
+export const merchantDirectoryService = new MerchantDirectoryService();

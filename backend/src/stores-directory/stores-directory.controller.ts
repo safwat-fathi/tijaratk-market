@@ -145,6 +145,18 @@ export class StoresDirectoryController {
     );
   }
 
+  @Get('merchant/areas')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Get active directory areas for merchant selection' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Directory areas returned successfully',
+  })
+  merchantFindAreas() {
+    return this.storesDirectoryService.merchantFindAreas();
+  }
+
   @Get('admin/directory/areas')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
