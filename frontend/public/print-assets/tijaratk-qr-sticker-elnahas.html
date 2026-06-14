@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tijaratk QR Sticker - صيدليات النحاس</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;700&display=swap");
+
+      @page {
+        size: 206mm 306mm;
+        margin: 0;
+      }
+
+      :root {
+        color-scheme: only light;
+        --brand-green: #27ae60;
+        --brand-green-dark: #0f5a3d;
+        --brand-green-deep: #0b4a32;
+        --paper: #f7f8f6;
+      }
+
+      @font-face {
+        font-family: "IBM Plex Sans Arabic";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("/_next/static/media/c9a0d344f313d307-s.p.2e3b0be0.woff2")
+          format("woff2");
+      }
+
+      @font-face {
+        font-family: "IBM Plex Sans Arabic";
+        font-style: normal;
+        font-weight: 700;
+        font-display: swap;
+        src: url("/_next/static/media/5ad8fdb5805e9b4a-s.p.a7af9cce.woff2")
+          format("woff2");
+      }
+
+      @font-face {
+        font-family: "IBM Plex Sans Arabic Fallback";
+        src: local(Arial);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 206mm;
+        height: 306mm;
+        margin: 0;
+        padding: 0;
+        background: var(--brand-green);
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      body {
+        font-family:
+          "IBM Plex Sans Arabic", "IBM Plex Sans Arabic Fallback", "Poppins",
+          Arial, sans-serif;
+        color: var(--brand-green-dark);
+      }
+
+      .sheet {
+        position: relative;
+        width: 206mm;
+        height: 306mm;
+        overflow: hidden;
+        background:
+          radial-gradient(
+            circle at 50% 12%,
+            rgba(255, 255, 255, 0.11),
+            transparent 30%
+          ),
+          linear-gradient(180deg, #27ae60 0%, #24a457 100%);
+      }
+
+      .bleed-note {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .frame {
+        position: absolute;
+        inset: 9mm;
+        border-radius: 14mm;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.99),
+          rgba(247, 248, 246, 0.99)
+        );
+        box-shadow: 0 5mm 14mm rgba(11, 74, 50, 0.16);
+        overflow: hidden;
+      }
+
+      .frame::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(
+            circle at 50% 0%,
+            rgba(39, 174, 96, 0.12),
+            transparent 36%
+          ),
+          linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.94),
+            rgba(255, 255, 255, 0.98)
+          );
+        pointer-events: none;
+      }
+
+      .content {
+        position: relative;
+        background: #fefdfe;
+        z-index: 1;
+        height: 100%;
+        padding: 15mm 14mm 11mm;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .logo {
+        width: 120mm;
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin-top: 2mm;
+        margin-bottom: 15mm;
+        user-select: none;
+        border-radius: 10mm;
+      }
+
+      .divider {
+        width: 94mm;
+        height: 1mm;
+        margin: 10mm 0 7mm;
+        border-radius: 999px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(39, 174, 96, 0.88),
+          transparent
+        );
+      }
+
+      .qr-card {
+        width: 114mm;
+        border-radius: 10mm;
+        background: #ffffff;
+        border: 0.8mm solid rgba(15, 90, 61, 0.12);
+        box-shadow: 0 2mm 7mm rgba(11, 74, 50, 0.08);
+        padding: 7mm 7mm 6mm;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .qr {
+        width: 92mm;
+        height: 92mm;
+        position: relative;
+        display: grid;
+        place-items: center;
+      }
+
+      .qr svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .copy {
+        width: 174mm;
+        margin-top: 10mm;
+        margin-bottom: 2mm;
+        color: var(--brand-green-deep);
+        text-align: center;
+        line-height: 1.4;
+        font-size: 24pt;
+        font-weight: 700;
+        letter-spacing: 0;
+        font-family: "IBM Plex Sans Arabic", sans-serif;
+        text-wrap: balance;
+      }
+
+      .store-container {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        background-color: var(--brand-green-deep);
+        padding: 5mm 16mm;
+        border-radius: 8mm;
+        margin-top: 4mm;
+        text-align: center;
+        min-width: 120mm;
+        max-width: 170mm;
+        box-shadow: 0 3mm 8mm rgba(11, 74, 50, 0.15);
+      }
+
+      .store-name {
+        font-family: "IBM Plex Sans Arabic", sans-serif;
+        font-size: 34pt;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0;
+        line-height: 1.2;
+        text-wrap: balance;
+      }
+
+      .footer {
+        margin-top: auto;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5mm;
+      }
+
+      .website-url {
+        font-family: "Poppins", sans-serif;
+        font-size: 18pt;
+        font-weight: 700;
+        color: var(--brand-green-deep);
+        letter-spacing: 0.5px;
+        background: rgba(39, 174, 96, 0.08);
+        border: 0.5mm solid rgba(39, 174, 96, 0.18);
+        padding: 3mm 9mm;
+        border-radius: 6mm;
+        text-align: center;
+        box-shadow: 0 1.5mm 4mm rgba(39, 174, 96, 0.04);
+      }
+
+      .footer-line {
+        width: 78mm;
+        height: 0.8mm;
+        border-radius: 999px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(39, 174, 96, 0.5),
+          transparent
+        );
+      }
+
+      @media screen {
+        body {
+          display: grid;
+          place-items: center;
+          min-height: 100vh;
+        }
+
+        .sheet {
+          box-shadow: 0 24px 64px rgba(11, 74, 50, 0.18);
+        }
+      }
+
+      @media print {
+        body {
+          display: block;
+          min-height: auto;
+        }
+
+        .sheet,
+        .frame,
+        .qr-card,
+        .store-container {
+          box-shadow: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="sheet">
+      <section class="frame" aria-label="Tijaratk QR sticker master">
+        <div class="content">
+          <img
+            class="logo"
+            src="../tijaratk-logo-suite/horizontal-logo-dark.png"
+          />
+
+          <section class="qr-card" aria-label="QR code block">
+            <div class="qr">
+              <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 185 185" width="100%" height="100%" aria-hidden="true" shape-rendering="crispEdges">
+	<!-- Created with https://api.qrserver.com (QR Code API, see goQR.me/api for information) -->
+	<title>QR Code</title>
+	<desc>https://www.tijaratk.com/elnahas-pharmacy</desc>
+	<rect style="fill:rgb(255, 255, 255);fill-opacity:1" x="0" y="0" width="185" height="185" />
+	<g id="elements">
+		<path style="fill:rgb(15, 90, 61)" d="M 20,20 l 5,0 0,5 -5,0 z M 25,20 l 5,0 0,5 -5,0 z M 30,20 l 5,0 0,5 -5,0 z M 35,20 l 5,0 0,5 -5,0 z M 40,20 l 5,0 0,5 -5,0 z M 45,20 l 5,0 0,5 -5,0 z M 50,20 l 5,0 0,5 -5,0 z M 65,20 l 5,0 0,5 -5,0 z M 90,20 l 5,0 0,5 -5,0 z M 100,20 l 5,0 0,5 -5,0 z M 105,20 l 5,0 0,5 -5,0 z M 110,20 l 5,0 0,5 -5,0 z M 115,20 l 5,0 0,5 -5,0 z M 120,20 l 5,0 0,5 -5,0 z M 130,20 l 5,0 0,5 -5,0 z M 135,20 l 5,0 0,5 -5,0 z M 140,20 l 5,0 0,5 -5,0 z M 145,20 l 5,0 0,5 -5,0 z M 150,20 l 5,0 0,5 -5,0 z M 155,20 l 5,0 0,5 -5,0 z M 160,20 l 5,0 0,5 -5,0 z M 20,25 l 5,0 0,5 -5,0 z M 50,25 l 5,0 0,5 -5,0 z M 60,25 l 5,0 0,5 -5,0 z M 65,25 l 5,0 0,5 -5,0 z M 75,25 l 5,0 0,5 -5,0 z M 80,25 l 5,0 0,5 -5,0 z M 85,25 l 5,0 0,5 -5,0 z M 95,25 l 5,0 0,5 -5,0 z M 100,25 l 5,0 0,5 -5,0 z M 105,25 l 5,0 0,5 -5,0 z M 120,25 l 5,0 0,5 -5,0 z M 130,25 l 5,0 0,5 -5,0 z M 160,25 l 5,0 0,5 -5,0 z M 20,30 l 5,0 0,5 -5,0 z M 30,30 l 5,0 0,5 -5,0 z M 35,30 l 5,0 0,5 -5,0 z M 40,30 l 5,0 0,5 -5,0 z M 50,30 l 5,0 0,5 -5,0 z M 65,30 l 5,0 0,5 -5,0 z M 70,30 l 5,0 0,5 -5,0 z M 75,30 l 5,0 0,5 -5,0 z M 95,30 l 5,0 0,5 -5,0 z M 115,30 l 5,0 0,5 -5,0 z M 130,30 l 5,0 0,5 -5,0 z M 140,30 l 5,0 0,5 -5,0 z M 145,30 l 5,0 0,5 -5,0 z M 150,30 l 5,0 0,5 -5,0 z M 160,30 l 5,0 0,5 -5,0 z M 20,35 l 5,0 0,5 -5,0 z M 30,35 l 5,0 0,5 -5,0 z M 35,35 l 5,0 0,5 -5,0 z M 40,35 l 5,0 0,5 -5,0 z M 50,35 l 5,0 0,5 -5,0 z M 60,35 l 5,0 0,5 -5,0 z M 65,35 l 5,0 0,5 -5,0 z M 75,35 l 5,0 0,5 -5,0 z M 85,35 l 5,0 0,5 -5,0 z M 90,35 l 5,0 0,5 -5,0 z M 95,35 l 5,0 0,5 -5,0 z M 105,35 l 5,0 0,5 -5,0 z M 130,35 l 5,0 0,5 -5,0 z M 140,35 l 5,0 0,5 -5,0 z M 145,35 l 5,0 0,5 -5,0 z M 150,35 l 5,0 0,5 -5,0 z M 160,35 l 5,0 0,5 -5,0 z M 20,40 l 5,0 0,5 -5,0 z M 30,40 l 5,0 0,5 -5,0 z M 35,40 l 5,0 0,5 -5,0 z M 40,40 l 5,0 0,5 -5,0 z M 50,40 l 5,0 0,5 -5,0 z M 70,40 l 5,0 0,5 -5,0 z M 80,40 l 5,0 0,5 -5,0 z M 85,40 l 5,0 0,5 -5,0 z M 100,40 l 5,0 0,5 -5,0 z M 105,40 l 5,0 0,5 -5,0 z M 110,40 l 5,0 0,5 -5,0 z M 115,40 l 5,0 0,5 -5,0 z M 120,40 l 5,0 0,5 -5,0 z M 130,40 l 5,0 0,5 -5,0 z M 140,40 l 5,0 0,5 -5,0 z M 145,40 l 5,0 0,5 -5,0 z M 150,40 l 5,0 0,5 -5,0 z M 160,40 l 5,0 0,5 -5,0 z M 20,45 l 5,0 0,5 -5,0 z M 50,45 l 5,0 0,5 -5,0 z M 60,45 l 5,0 0,5 -5,0 z M 70,45 l 5,0 0,5 -5,0 z M 90,45 l 5,0 0,5 -5,0 z M 95,45 l 5,0 0,5 -5,0 z M 130,45 l 5,0 0,5 -5,0 z M 160,45 l 5,0 0,5 -5,0 z M 20,50 l 5,0 0,5 -5,0 z M 25,50 l 5,0 0,5 -5,0 z M 30,50 l 5,0 0,5 -5,0 z M 35,50 l 5,0 0,5 -5,0 z M 40,50 l 5,0 0,5 -5,0 z M 45,50 l 5,0 0,5 -5,0 z M 50,50 l 5,0 0,5 -5,0 z M 60,50 l 5,0 0,5 -5,0 z M 70,50 l 5,0 0,5 -5,0 z M 80,50 l 5,0 0,5 -5,0 z M 90,50 l 5,0 0,5 -5,0 z M 100,50 l 5,0 0,5 -5,0 z M 110,50 l 5,0 0,5 -5,0 z M 120,50 l 5,0 0,5 -5,0 z M 130,50 l 5,0 0,5 -5,0 z M 135,50 l 5,0 0,5 -5,0 z M 140,50 l 5,0 0,5 -5,0 z M 145,50 l 5,0 0,5 -5,0 z M 150,50 l 5,0 0,5 -5,0 z M 155,50 l 5,0 0,5 -5,0 z M 160,50 l 5,0 0,5 -5,0 z M 80,55 l 5,0 0,5 -5,0 z M 90,55 l 5,0 0,5 -5,0 z M 95,55 l 5,0 0,5 -5,0 z M 115,55 l 5,0 0,5 -5,0 z M 120,55 l 5,0 0,5 -5,0 z M 20,60 l 5,0 0,5 -5,0 z M 25,60 l 5,0 0,5 -5,0 z M 30,60 l 5,0 0,5 -5,0 z M 35,60 l 5,0 0,5 -5,0 z M 40,60 l 5,0 0,5 -5,0 z M 50,60 l 5,0 0,5 -5,0 z M 55,60 l 5,0 0,5 -5,0 z M 60,60 l 5,0 0,5 -5,0 z M 65,60 l 5,0 0,5 -5,0 z M 70,60 l 5,0 0,5 -5,0 z M 80,60 l 5,0 0,5 -5,0 z M 85,60 l 5,0 0,5 -5,0 z M 90,60 l 5,0 0,5 -5,0 z M 105,60 l 5,0 0,5 -5,0 z M 110,60 l 5,0 0,5 -5,0 z M 115,60 l 5,0 0,5 -5,0 z M 125,60 l 5,0 0,5 -5,0 z M 135,60 l 5,0 0,5 -5,0 z M 145,60 l 5,0 0,5 -5,0 z M 155,60 l 5,0 0,5 -5,0 z M 20,65 l 5,0 0,5 -5,0 z M 25,65 l 5,0 0,5 -5,0 z M 55,65 l 5,0 0,5 -5,0 z M 65,65 l 5,0 0,5 -5,0 z M 100,65 l 5,0 0,5 -5,0 z M 105,65 l 5,0 0,5 -5,0 z M 110,65 l 5,0 0,5 -5,0 z M 115,65 l 5,0 0,5 -5,0 z M 130,65 l 5,0 0,5 -5,0 z M 135,65 l 5,0 0,5 -5,0 z M 140,65 l 5,0 0,5 -5,0 z M 160,65 l 5,0 0,5 -5,0 z M 20,70 l 5,0 0,5 -5,0 z M 30,70 l 5,0 0,5 -5,0 z M 35,70 l 5,0 0,5 -5,0 z M 40,70 l 5,0 0,5 -5,0 z M 45,70 l 5,0 0,5 -5,0 z M 50,70 l 5,0 0,5 -5,0 z M 55,70 l 5,0 0,5 -5,0 z M 60,70 l 5,0 0,5 -5,0 z M 65,70 l 5,0 0,5 -5,0 z M 75,70 l 5,0 0,5 -5,0 z M 80,70 l 5,0 0,5 -5,0 z M 95,70 l 5,0 0,5 -5,0 z M 105,70 l 5,0 0,5 -5,0 z M 120,70 l 5,0 0,5 -5,0 z M 20,75 l 5,0 0,5 -5,0 z M 35,75 l 5,0 0,5 -5,0 z M 40,75 l 5,0 0,5 -5,0 z M 45,75 l 5,0 0,5 -5,0 z M 55,75 l 5,0 0,5 -5,0 z M 65,75 l 5,0 0,5 -5,0 z M 70,75 l 5,0 0,5 -5,0 z M 75,75 l 5,0 0,5 -5,0 z M 90,75 l 5,0 0,5 -5,0 z M 95,75 l 5,0 0,5 -5,0 z M 115,75 l 5,0 0,5 -5,0 z M 125,75 l 5,0 0,5 -5,0 z M 135,75 l 5,0 0,5 -5,0 z M 145,75 l 5,0 0,5 -5,0 z M 155,75 l 5,0 0,5 -5,0 z M 20,80 l 5,0 0,5 -5,0 z M 30,80 l 5,0 0,5 -5,0 z M 35,80 l 5,0 0,5 -5,0 z M 50,80 l 5,0 0,5 -5,0 z M 60,80 l 5,0 0,5 -5,0 z M 65,80 l 5,0 0,5 -5,0 z M 75,80 l 5,0 0,5 -5,0 z M 85,80 l 5,0 0,5 -5,0 z M 90,80 l 5,0 0,5 -5,0 z M 95,80 l 5,0 0,5 -5,0 z M 100,80 l 5,0 0,5 -5,0 z M 105,80 l 5,0 0,5 -5,0 z M 115,80 l 5,0 0,5 -5,0 z M 145,80 l 5,0 0,5 -5,0 z M 150,80 l 5,0 0,5 -5,0 z M 30,85 l 5,0 0,5 -5,0 z M 40,85 l 5,0 0,5 -5,0 z M 55,85 l 5,0 0,5 -5,0 z M 70,85 l 5,0 0,5 -5,0 z M 80,85 l 5,0 0,5 -5,0 z M 100,85 l 5,0 0,5 -5,0 z M 110,85 l 5,0 0,5 -5,0 z M 115,85 l 5,0 0,5 -5,0 z M 120,85 l 5,0 0,5 -5,0 z M 125,85 l 5,0 0,5 -5,0 z M 130,85 l 5,0 0,5 -5,0 z M 140,85 l 5,0 0,5 -5,0 z M 160,85 l 5,0 0,5 -5,0 z M 20,90 l 5,0 0,5 -5,0 z M 30,90 l 5,0 0,5 -5,0 z M 40,90 l 5,0 0,5 -5,0 z M 45,90 l 5,0 0,5 -5,0 z M 50,90 l 5,0 0,5 -5,0 z M 55,90 l 5,0 0,5 -5,0 z M 60,90 l 5,0 0,5 -5,0 z M 70,90 l 5,0 0,5 -5,0 z M 85,90 l 5,0 0,5 -5,0 z M 95,90 l 5,0 0,5 -5,0 z M 100,90 l 5,0 0,5 -5,0 z M 125,90 l 5,0 0,5 -5,0 z M 130,90 l 5,0 0,5 -5,0 z M 135,90 l 5,0 0,5 -5,0 z M 145,90 l 5,0 0,5 -5,0 z M 150,90 l 5,0 0,5 -5,0 z M 20,95 l 5,0 0,5 -5,0 z M 35,95 l 5,0 0,5 -5,0 z M 40,95 l 5,0 0,5 -5,0 z M 55,95 l 5,0 0,5 -5,0 z M 60,95 l 5,0 0,5 -5,0 z M 70,95 l 5,0 0,5 -5,0 z M 80,95 l 5,0 0,5 -5,0 z M 90,95 l 5,0 0,5 -5,0 z M 95,95 l 5,0 0,5 -5,0 z M 100,95 l 5,0 0,5 -5,0 z M 120,95 l 5,0 0,5 -5,0 z M 135,95 l 5,0 0,5 -5,0 z M 140,95 l 5,0 0,5 -5,0 z M 155,95 l 5,0 0,5 -5,0 z M 20,100 l 5,0 0,5 -5,0 z M 50,100 l 5,0 0,5 -5,0 z M 55,100 l 5,0 0,5 -5,0 z M 70,100 l 5,0 0,5 -5,0 z M 80,100 l 5,0 0,5 -5,0 z M 85,100 l 5,0 0,5 -5,0 z M 90,100 l 5,0 0,5 -5,0 z M 105,100 l 5,0 0,5 -5,0 z M 120,100 l 5,0 0,5 -5,0 z M 135,100 l 5,0 0,5 -5,0 z M 145,100 l 5,0 0,5 -5,0 z M 150,100 l 5,0 0,5 -5,0 z M 20,105 l 5,0 0,5 -5,0 z M 35,105 l 5,0 0,5 -5,0 z M 40,105 l 5,0 0,5 -5,0 z M 45,105 l 5,0 0,5 -5,0 z M 70,105 l 5,0 0,5 -5,0 z M 85,105 l 5,0 0,5 -5,0 z M 90,105 l 5,0 0,5 -5,0 z M 105,105 l 5,0 0,5 -5,0 z M 110,105 l 5,0 0,5 -5,0 z M 115,105 l 5,0 0,5 -5,0 z M 120,105 l 5,0 0,5 -5,0 z M 125,105 l 5,0 0,5 -5,0 z M 130,105 l 5,0 0,5 -5,0 z M 135,105 l 5,0 0,5 -5,0 z M 140,105 l 5,0 0,5 -5,0 z M 150,105 l 5,0 0,5 -5,0 z M 160,105 l 5,0 0,5 -5,0 z M 20,110 l 5,0 0,5 -5,0 z M 40,110 l 5,0 0,5 -5,0 z M 45,110 l 5,0 0,5 -5,0 z M 50,110 l 5,0 0,5 -5,0 z M 60,110 l 5,0 0,5 -5,0 z M 70,110 l 5,0 0,5 -5,0 z M 75,110 l 5,0 0,5 -5,0 z M 80,110 l 5,0 0,5 -5,0 z M 95,110 l 5,0 0,5 -5,0 z M 100,110 l 5,0 0,5 -5,0 z M 120,110 l 5,0 0,5 -5,0 z M 125,110 l 5,0 0,5 -5,0 z M 130,110 l 5,0 0,5 -5,0 z M 135,110 l 5,0 0,5 -5,0 z M 150,110 l 5,0 0,5 -5,0 z M 20,115 l 5,0 0,5 -5,0 z M 30,115 l 5,0 0,5 -5,0 z M 45,115 l 5,0 0,5 -5,0 z M 60,115 l 5,0 0,5 -5,0 z M 75,115 l 5,0 0,5 -5,0 z M 90,115 l 5,0 0,5 -5,0 z M 110,115 l 5,0 0,5 -5,0 z M 125,115 l 5,0 0,5 -5,0 z M 130,115 l 5,0 0,5 -5,0 z M 135,115 l 5,0 0,5 -5,0 z M 140,115 l 5,0 0,5 -5,0 z M 155,115 l 5,0 0,5 -5,0 z M 20,120 l 5,0 0,5 -5,0 z M 30,120 l 5,0 0,5 -5,0 z M 35,120 l 5,0 0,5 -5,0 z M 50,120 l 5,0 0,5 -5,0 z M 55,120 l 5,0 0,5 -5,0 z M 60,120 l 5,0 0,5 -5,0 z M 65,120 l 5,0 0,5 -5,0 z M 75,120 l 5,0 0,5 -5,0 z M 95,120 l 5,0 0,5 -5,0 z M 100,120 l 5,0 0,5 -5,0 z M 105,120 l 5,0 0,5 -5,0 z M 120,120 l 5,0 0,5 -5,0 z M 125,120 l 5,0 0,5 -5,0 z M 130,120 l 5,0 0,5 -5,0 z M 135,120 l 5,0 0,5 -5,0 z M 140,120 l 5,0 0,5 -5,0 z M 150,120 l 5,0 0,5 -5,0 z M 155,120 l 5,0 0,5 -5,0 z M 160,120 l 5,0 0,5 -5,0 z M 60,125 l 5,0 0,5 -5,0 z M 65,125 l 5,0 0,5 -5,0 z M 80,125 l 5,0 0,5 -5,0 z M 85,125 l 5,0 0,5 -5,0 z M 100,125 l 5,0 0,5 -5,0 z M 105,125 l 5,0 0,5 -5,0 z M 110,125 l 5,0 0,5 -5,0 z M 120,125 l 5,0 0,5 -5,0 z M 140,125 l 5,0 0,5 -5,0 z M 145,125 l 5,0 0,5 -5,0 z M 150,125 l 5,0 0,5 -5,0 z M 155,125 l 5,0 0,5 -5,0 z M 160,125 l 5,0 0,5 -5,0 z M 20,130 l 5,0 0,5 -5,0 z M 25,130 l 5,0 0,5 -5,0 z M 30,130 l 5,0 0,5 -5,0 z M 35,130 l 5,0 0,5 -5,0 z M 40,130 l 5,0 0,5 -5,0 z M 45,130 l 5,0 0,5 -5,0 z M 50,130 l 5,0 0,5 -5,0 z M 60,130 l 5,0 0,5 -5,0 z M 65,130 l 5,0 0,5 -5,0 z M 85,130 l 5,0 0,5 -5,0 z M 90,130 l 5,0 0,5 -5,0 z M 95,130 l 5,0 0,5 -5,0 z M 100,130 l 5,0 0,5 -5,0 z M 105,130 l 5,0 0,5 -5,0 z M 115,130 l 5,0 0,5 -5,0 z M 120,130 l 5,0 0,5 -5,0 z M 130,130 l 5,0 0,5 -5,0 z M 140,130 l 5,0 0,5 -5,0 z M 145,130 l 5,0 0,5 -5,0 z M 150,130 l 5,0 0,5 -5,0 z M 20,135 l 5,0 0,5 -5,0 z M 50,135 l 5,0 0,5 -5,0 z M 65,135 l 5,0 0,5 -5,0 z M 70,135 l 5,0 0,5 -5,0 z M 80,135 l 5,0 0,5 -5,0 z M 85,135 l 5,0 0,5 -5,0 z M 95,135 l 5,0 0,5 -5,0 z M 110,135 l 5,0 0,5 -5,0 z M 115,135 l 5,0 0,5 -5,0 z M 120,135 l 5,0 0,5 -5,0 z M 140,135 l 5,0 0,5 -5,0 z M 20,140 l 5,0 0,5 -5,0 z M 30,140 l 5,0 0,5 -5,0 z M 35,140 l 5,0 0,5 -5,0 z M 40,140 l 5,0 0,5 -5,0 z M 50,140 l 5,0 0,5 -5,0 z M 60,140 l 5,0 0,5 -5,0 z M 80,140 l 5,0 0,5 -5,0 z M 90,140 l 5,0 0,5 -5,0 z M 95,140 l 5,0 0,5 -5,0 z M 105,140 l 5,0 0,5 -5,0 z M 120,140 l 5,0 0,5 -5,0 z M 125,140 l 5,0 0,5 -5,0 z M 130,140 l 5,0 0,5 -5,0 z M 135,140 l 5,0 0,5 -5,0 z M 140,140 l 5,0 0,5 -5,0 z M 150,140 l 5,0 0,5 -5,0 z M 155,140 l 5,0 0,5 -5,0 z M 160,140 l 5,0 0,5 -5,0 z M 20,145 l 5,0 0,5 -5,0 z M 30,145 l 5,0 0,5 -5,0 z M 35,145 l 5,0 0,5 -5,0 z M 40,145 l 5,0 0,5 -5,0 z M 50,145 l 5,0 0,5 -5,0 z M 60,145 l 5,0 0,5 -5,0 z M 70,145 l 5,0 0,5 -5,0 z M 100,145 l 5,0 0,5 -5,0 z M 110,145 l 5,0 0,5 -5,0 z M 120,145 l 5,0 0,5 -5,0 z M 135,145 l 5,0 0,5 -5,0 z M 145,145 l 5,0 0,5 -5,0 z M 150,145 l 5,0 0,5 -5,0 z M 155,145 l 5,0 0,5 -5,0 z M 160,145 l 5,0 0,5 -5,0 z M 20,150 l 5,0 0,5 -5,0 z M 30,150 l 5,0 0,5 -5,0 z M 35,150 l 5,0 0,5 -5,0 z M 40,150 l 5,0 0,5 -5,0 z M 50,150 l 5,0 0,5 -5,0 z M 60,150 l 5,0 0,5 -5,0 z M 75,150 l 5,0 0,5 -5,0 z M 80,150 l 5,0 0,5 -5,0 z M 95,150 l 5,0 0,5 -5,0 z M 110,150 l 5,0 0,5 -5,0 z M 125,150 l 5,0 0,5 -5,0 z M 130,150 l 5,0 0,5 -5,0 z M 135,150 l 5,0 0,5 -5,0 z M 140,150 l 5,0 0,5 -5,0 z M 145,150 l 5,0 0,5 -5,0 z M 150,150 l 5,0 0,5 -5,0 z M 155,150 l 5,0 0,5 -5,0 z M 20,155 l 5,0 0,5 -5,0 z M 50,155 l 5,0 0,5 -5,0 z M 60,155 l 5,0 0,5 -5,0 z M 65,155 l 5,0 0,5 -5,0 z M 75,155 l 5,0 0,5 -5,0 z M 90,155 l 5,0 0,5 -5,0 z M 95,155 l 5,0 0,5 -5,0 z M 115,155 l 5,0 0,5 -5,0 z M 120,155 l 5,0 0,5 -5,0 z M 125,155 l 5,0 0,5 -5,0 z M 135,155 l 5,0 0,5 -5,0 z M 145,155 l 5,0 0,5 -5,0 z M 155,155 l 5,0 0,5 -5,0 z M 20,160 l 5,0 0,5 -5,0 z M 25,160 l 5,0 0,5 -5,0 z M 30,160 l 5,0 0,5 -5,0 z M 35,160 l 5,0 0,5 -5,0 z M 40,160 l 5,0 0,5 -5,0 z M 45,160 l 5,0 0,5 -5,0 z M 50,160 l 5,0 0,5 -5,0 z M 60,160 l 5,0 0,5 -5,0 z M 70,160 l 5,0 0,5 -5,0 z M 75,160 l 5,0 0,5 -5,0 z M 105,160 l 5,0 0,5 -5,0 z M 115,160 l 5,0 0,5 -5,0 z M 135,160 l 5,0 0,5 -5,0 z M 140,160 l 5,0 0,5 -5,0 z M 145,160 l 5,0 0,5 -5,0 z M 150,160 l 5,0 0,5 -5,0 z " />
+	</g>
+</svg>
+            </div>
+          </section>
+          <p class="copy">امسح الكود وأطلب من</p>
+          <div class="store-container">
+            <div class="store-name">صيدليات النحاس</div>
+          </div>
+          <div class="footer">
+            <div class="website-url">www.tijaratk.com</div>
+            <div class="footer-line" aria-hidden="true"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

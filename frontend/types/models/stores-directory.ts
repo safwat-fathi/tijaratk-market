@@ -28,7 +28,6 @@ export type StoresDirectoryStoreCard = {
   deliveryAvailable: boolean;
   deliveryFee: number;
   deliveryAvailableNow: boolean;
-  activeProductsCount: number;
   storefrontUrl: string;
   whatsappUrl: string | null;
 };

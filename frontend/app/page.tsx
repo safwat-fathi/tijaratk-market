@@ -265,9 +265,6 @@ const StoreCard = ({ store }: { store: StoresDirectoryStoreCard }) => (
       <p className="mt-1 line-clamp-1 text-sm text-gray-500">
         {store.areaName || store.address || "متجر محلي على تجارتك"}
       </p>
-      <p className="mt-1 text-xs font-semibold text-[#0F5A3D]">
-        {store.activeProductsCount} منتج متاح
-      </p>
     </div>
   </Link>
 );

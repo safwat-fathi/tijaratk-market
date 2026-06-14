@@ -75,9 +75,6 @@ export class StoresDirectoryService {
     const uniqueTenants = this.getUniqueTenantsFromDeliveryAreas(deliveryAreas);
     const categoryCounts = this.buildCategoryCounts(uniqueTenants);
     const featuredTenants = uniqueTenants.slice(0, 8);
-    const activeProducts = await this.countActiveProducts(
-      featuredTenants.map((tenant) => tenant.id),
-    );
 
     return {
       areas: this.toPublicAreaSummaries(deliveryAreas),
@@ -91,7 +88,6 @@ export class StoresDirectoryService {
         featuredTenants,
         undefined,
         undefined,
-        activeProducts,
       ),
       seo: {
         title: 'Stores Directory | Tijaratk',
@@ -135,9 +131,6 @@ export class StoresDirectoryService {
     const featuredTenants = deliveryAreas
       .slice(0, 6)
       .map((item) => item.tenant);
-    const activeProducts = await this.countActiveProducts(
-      featuredTenants.map((tenant) => tenant.id),
-    );
 
     return {
       area: this.toAreaDto(area),
@@ -146,7 +139,6 @@ export class StoresDirectoryService {
         featuredTenants,
         area.name_ar,
         area.slug,
-        activeProducts,
       ),
       seo: {
         title:
@@ -228,14 +220,10 @@ export class StoresDirectoryService {
       this.prisma.tenantDeliveryArea.count({ where: baseWhere }),
     ]);
 
-    const activeProducts = await this.countActiveProducts(
-      rows.map((row) => row.tenant.id),
-    );
     let stores = this.toStoreCards(
       rows.map((row) => row.tenant),
       area.name_ar,
       area.slug,
-      activeProducts,
     );
 
     if (options.openNow) {
@@ -755,29 +743,10 @@ export class StoresDirectoryService {
     }));
   }
 
-  private async countActiveProducts(tenantIds: number[]) {
-    if (tenantIds.length === 0) {
-      return new Map<number, number>();
-    }
-
-    const rows = await this.prisma.product.groupBy({
-      by: ['tenant_id'],
-      where: {
-        tenant_id: { in: tenantIds },
-        status: ProductStatus.active,
-        deleted_at: null,
-      },
-      _count: { _all: true },
-    });
-
-    return new Map(rows.map((row) => [row.tenant_id, row._count._all]));
-  }
-
   private toStoreCards(
     tenants: StoreCardTenant[],
     fallbackAreaName?: string,
     fallbackAreaSlug?: string,
-    activeProductCounts = new Map<number, number>(),
   ) {
     return tenants.map((tenant) => {
       const displayName = tenant.directory_profile?.display_name || tenant.name;
@@ -799,7 +768,6 @@ export class StoresDirectoryService {
         deliveryAvailable: tenant.delivery_available,
         deliveryFee: Number(tenant.delivery_fee || 0),
         deliveryAvailableNow: this.isDeliveryAvailableNow(tenant),
-        activeProductsCount: activeProductCounts.get(tenant.id) ?? 0,
         storefrontUrl: `/${tenant.slug}`,
         whatsappUrl: whatsappNumber ? `https://wa.me/${whatsappNumber}` : null,
       };
