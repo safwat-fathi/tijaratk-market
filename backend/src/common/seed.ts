@@ -1,7 +1,13 @@
 import { Logger } from '@nestjs/common';
 import { config } from 'dotenv';
-import { seedSupermarketMerchant } from './seeders/supermarket-merchant.seeder';
-import { seedPharmacyMerchant } from './seeders/pharmacy-merchant.seeder';
+import {
+  seedSupermarketMerchant,
+  SUPERMARKET_RANKING_MERCHANTS,
+} from './seeders/supermarket-merchant.seeder';
+import {
+  seedPharmacyMerchant,
+  PHARMACY_RANKING_MERCHANTS,
+} from './seeders/pharmacy-merchant.seeder';
 import { seedAdmin } from './seeders/admin.seeder';
 import { DirectoryStatus, PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -75,7 +81,7 @@ const EGYPT_DIRECTORY_AREAS = [
     city: '6th of October',
     governorate: 'Giza',
     sort_order: 240,
-    latitude: 29.970,
+    latitude: 29.97,
     longitude: 30.967,
   },
   {
@@ -125,8 +131,8 @@ const EGYPT_DIRECTORY_AREAS = [
     city: '6th of October',
     governorate: 'Giza',
     sort_order: 290,
-    latitude: 29.960,
-    longitude: 30.950,
+    latitude: 29.96,
+    longitude: 30.95,
   },
   {
     name_ar: 'الحي العاشر',
@@ -135,8 +141,8 @@ const EGYPT_DIRECTORY_AREAS = [
     city: '6th of October',
     governorate: 'Giza',
     sort_order: 300,
-    latitude: 29.940,
-    longitude: 30.930,
+    latitude: 29.94,
+    longitude: 30.93,
   },
   {
     name_ar: 'الحي الحادي عشر',
@@ -146,7 +152,7 @@ const EGYPT_DIRECTORY_AREAS = [
     governorate: 'Giza',
     sort_order: 310,
     latitude: 29.945,
-    longitude: 30.940,
+    longitude: 30.94,
   },
   {
     name_ar: 'الحي الثاني عشر',
@@ -366,8 +372,8 @@ const EGYPT_DIRECTORY_AREAS = [
     city: 'Cairo',
     governorate: 'Cairo',
     sort_order: 2000,
-    latitude: 30.1000,
-    longitude: 31.3330,
+    latitude: 30.1,
+    longitude: 31.333,
   },
   {
     name_ar: 'شبرا',
@@ -542,129 +548,126 @@ async function seedDirectoryProfiles(prisma: PrismaClient) {
     where: { slug: '6th-of-october' },
   });
 
-  // 1. Supermarket Merchant (Sheikh Zayed primary, delivers to Zayed and October)
-  const supermarket = await prisma.tenant.findUnique({
-    where: { slug: 'khair-supermarket' },
-  });
-
-  if (supermarket && zayedArea) {
-    await prisma.tenantDirectoryProfile.upsert({
-      where: { tenant_id: supermarket.id },
-      update: {
-        area_id: zayedArea.id,
-        directory_status: DirectoryStatus.listed,
-        display_name: supermarket.name,
-        address: 'Sheikh Zayed, Giza',
-        latitude: zayedArea.latitude,
-        longitude: zayedArea.longitude,
-        seo_title: `${supermarket.name} | Supermarket delivering in Sheikh Zayed`,
-        seo_description:
-          'Order groceries and supermarket essentials from Super Market El Khair through Tijaratk.',
-        profile_completion_score: 80,
-        missing_fields: ['logo_url'],
-      },
-      create: {
-        tenant_id: supermarket.id,
-        area_id: zayedArea.id,
-        directory_status: DirectoryStatus.listed,
-        display_name: supermarket.name,
-        address: 'Sheikh Zayed, Giza',
-        latitude: zayedArea.latitude,
-        longitude: zayedArea.longitude,
-        seo_title: `${supermarket.name} | Supermarket delivering in Sheikh Zayed`,
-        seo_description:
-          'Order groceries and supermarket essentials from Super Market El Khair through Tijaratk.',
-        profile_completion_score: 80,
-        missing_fields: ['logo_url'],
-      },
-    });
-
-    const deliveryAreaIds = [zayedArea.id, octoberArea?.id].filter(
-      (areaId): areaId is number => typeof areaId === 'number',
+  if (!zayedArea || !octoberArea) {
+    logger.warn(
+      'Skipping ranking directory profile seed because required areas are missing.',
     );
-
-    for (const areaId of deliveryAreaIds) {
-      await prisma.tenantDeliveryArea.upsert({
-        where: {
-          tenant_id_area_id: {
-            tenant_id: supermarket.id,
-            area_id: areaId,
-          },
-        },
-        update: { is_active: true, deleted_at: null },
-        create: {
-          tenant_id: supermarket.id,
-          area_id: areaId,
-          is_active: true,
-        },
-      });
-    }
-
-    logger.log(`Seeded directory profile for ${supermarket.slug}.`);
-  } else {
-    logger.warn('Skipping supermarket directory profile seed because tenant or area is missing.');
+    return;
   }
 
-  // 2. Pharmacy Merchant (6th of October primary, delivers to October and Zayed)
-  const pharmacy = await prisma.tenant.findUnique({
-    where: { slug: 'el-shifaa-pharmacy' },
+  for (const merchant of SUPERMARKET_RANKING_MERCHANTS) {
+    await seedRankingDirectoryProfile(prisma, {
+      slug: merchant.slug,
+      primaryArea: zayedArea,
+      deliveryAreas: [zayedArea, octoberArea],
+      address: 'Sheikh Zayed, Giza',
+      description:
+        'Order groceries and supermarket essentials through Tijaratk.',
+      missingLocation: merchant.variant === 'missing_location',
+    });
+  }
+
+  for (const merchant of PHARMACY_RANKING_MERCHANTS) {
+    await seedRankingDirectoryProfile(prisma, {
+      slug: merchant.slug,
+      primaryArea: octoberArea,
+      deliveryAreas: [octoberArea, zayedArea],
+      address: '6th of October City, Giza',
+      description: 'Order medicines, vitamins and cosmetics through Tijaratk.',
+      missingLocation: merchant.variant === 'missing_location',
+    });
+  }
+}
+
+async function seedRankingDirectoryProfile(
+  prisma: PrismaClient,
+  input: {
+    slug: string;
+    primaryArea: NonNullable<
+      Awaited<ReturnType<PrismaClient['directoryArea']['findUnique']>>
+    >;
+    deliveryAreas: NonNullable<
+      Awaited<ReturnType<PrismaClient['directoryArea']['findUnique']>>
+    >[];
+    address: string;
+    description: string;
+    missingLocation: boolean;
+  },
+) {
+  const logger = new Logger('DirectoryProfilesSeeder');
+  const tenant = await prisma.tenant.findUnique({
+    where: { slug: input.slug },
   });
 
-  if (pharmacy && octoberArea) {
-    await prisma.tenantDirectoryProfile.upsert({
-      where: { tenant_id: pharmacy.id },
-      update: {
-        area_id: octoberArea.id,
-        directory_status: DirectoryStatus.listed,
-        display_name: pharmacy.name,
-        address: '6th of October City, Giza',
-        latitude: octoberArea.latitude,
-        longitude: octoberArea.longitude,
-        seo_title: `${pharmacy.name} | Pharmacy delivering in 6th of October`,
-        seo_description:
-          'Order medicines, vitamins and cosmetics from El Shifaa Pharmacy through Tijaratk.',
-        profile_completion_score: 80,
-        missing_fields: ['logo_url'],
+  if (!tenant) {
+    logger.warn(
+      `Skipping directory profile seed for missing tenant ${input.slug}.`,
+    );
+    return;
+  }
+
+  const profileData = input.missingLocation
+    ? {
+        area_id: null,
+        address: null,
+        latitude: null,
+        longitude: null,
+        profile_completion_score: 55,
+        missing_fields: ['missing_logo', 'missing_area'],
+      }
+    : {
+        area_id: input.primaryArea.id,
+        address: input.address,
+        latitude: input.primaryArea.latitude,
+        longitude: input.primaryArea.longitude,
+        profile_completion_score: 90,
+        missing_fields: ['missing_logo'],
+      };
+
+  await prisma.tenantDirectoryProfile.upsert({
+    where: { tenant_id: tenant.id },
+    update: {
+      ...profileData,
+      directory_status: DirectoryStatus.listed,
+      display_name: tenant.name,
+      seo_title: `${tenant.name} | Directory ranking test store`,
+      seo_description: input.description,
+    },
+    create: {
+      tenant_id: tenant.id,
+      ...profileData,
+      directory_status: DirectoryStatus.listed,
+      display_name: tenant.name,
+      seo_title: `${tenant.name} | Directory ranking test store`,
+      seo_description: input.description,
+    },
+  });
+
+  if (input.missingLocation) {
+    await prisma.tenantDeliveryArea.updateMany({
+      where: { tenant_id: tenant.id },
+      data: { is_active: false },
+    });
+    logger.log(`Seeded missing-location directory profile for ${tenant.slug}.`);
+    return;
+  }
+
+  for (const area of input.deliveryAreas) {
+    await prisma.tenantDeliveryArea.upsert({
+      where: {
+        tenant_id_area_id: {
+          tenant_id: tenant.id,
+          area_id: area.id,
+        },
       },
+      update: { is_active: true, deleted_at: null },
       create: {
-        tenant_id: pharmacy.id,
-        area_id: octoberArea.id,
-        directory_status: DirectoryStatus.listed,
-        display_name: pharmacy.name,
-        address: '6th of October City, Giza',
-        latitude: octoberArea.latitude,
-        longitude: octoberArea.longitude,
-        seo_title: `${pharmacy.name} | Pharmacy delivering in 6th of October`,
-        seo_description:
-          'Order medicines, vitamins and cosmetics from El Shifaa Pharmacy through Tijaratk.',
-        profile_completion_score: 80,
-        missing_fields: ['logo_url'],
+        tenant_id: tenant.id,
+        area_id: area.id,
+        is_active: true,
       },
     });
-
-    const deliveryAreaIds = [octoberArea.id, zayedArea?.id].filter(
-      (areaId): areaId is number => typeof areaId === 'number',
-    );
-
-    for (const areaId of deliveryAreaIds) {
-      await prisma.tenantDeliveryArea.upsert({
-        where: {
-          tenant_id_area_id: {
-            tenant_id: pharmacy.id,
-            area_id: areaId,
-          },
-        },
-        update: { is_active: true, deleted_at: null },
-        create: {
-          tenant_id: pharmacy.id,
-          area_id: areaId,
-          is_active: true,
-        },
-      });
-    }
-
-    logger.log(`Seeded directory profile for ${pharmacy.slug}.`);
-  } else {
-    logger.warn('Skipping pharmacy directory profile seed because tenant or area is missing.');
   }
+
+  logger.log(`Seeded directory profile for ${tenant.slug}.`);
 }
