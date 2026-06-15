@@ -5,10 +5,14 @@ import { TENANT_CATEGORIES, TenantCategory } from './constants/tenant-category';
 import { generateUniqueSlug } from '../common/utils/slug.utils';
 import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-settings.dto';
 import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
+import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
 
 @Injectable()
 export class TenantsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storesDirectoryService: StoresDirectoryService,
+  ) {}
 
   async create(
     storeName: string,
@@ -72,7 +76,7 @@ export class TenantsService {
     const deliveryStartsAt = dto.delivery_starts_at?.trim() || null;
     const deliveryEndsAt = dto.delivery_ends_at?.trim() || null;
 
-    return this.prisma.tenant.update({
+    const tenant = await this.prisma.tenant.update({
       where: { id },
       data: {
         delivery_fee: dto.delivery_fee,
@@ -81,6 +85,10 @@ export class TenantsService {
         delivery_ends_at: deliveryEndsAt,
       },
     });
+
+    await this.storesDirectoryService.recalculateTenantReadiness(id);
+
+    return tenant;
   }
 
   /**

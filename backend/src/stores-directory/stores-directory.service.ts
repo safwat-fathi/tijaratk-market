@@ -3,10 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import crypto from 'node:crypto';
 import {
   DirectoryEventType,
   DirectoryStatus,
   Prisma,
+  ProductStatus,
   TenantCategory,
   TenantStatus,
 } from '../../generated/prisma/client';
@@ -38,6 +40,11 @@ const PUBLIC_DIRECTORY_EVENT_TYPES = new Set<DirectoryEventType>([
   DirectoryEventType.whatsapp_click,
 ]);
 
+const MIN_ACTIVE_PRODUCTS_FOR_READINESS = 25;
+const MIN_PRODUCT_CATEGORIES_FOR_READINESS = 5;
+const COMPLETE_READINESS_SCORE = 70;
+const PARTIAL_READINESS_SCORE = 40;
+
 type DirectoryCategorySlug = (typeof CATEGORY_DEFINITIONS)[number]['slug'];
 
 type StoreCardTenant = {
@@ -46,6 +53,7 @@ type StoreCardTenant = {
   slug: string;
   phone: string;
   category: TenantCategory;
+  status: TenantStatus;
   delivery_available: boolean;
   delivery_fee: Prisma.Decimal;
   delivery_starts_at: string | null;
@@ -54,8 +62,35 @@ type StoreCardTenant = {
     display_name: string | null;
     logo_url: string | null;
     address: string | null;
+    area_id: number | null;
+    profile_completion_score: number;
     area?: { name_ar: string; name_en: string | null } | null;
   } | null;
+};
+
+type StoreProductStats = {
+  activeProductsCount: number;
+  availableProductsCount: number;
+  productsCategoriesCount: number;
+};
+
+type StoreReadinessLevel = 'complete' | 'partial' | 'poor';
+
+type StoreBadge =
+  | 'open_now'
+  | 'new_store'
+  | 'complete_profile'
+  | 'delivery_available';
+
+type ReadinessInput = {
+  logoUrl?: string | null;
+  activeProductsCount: number;
+  availableProductsCount: number;
+  productsCategoriesCount: number;
+  deliveryAvailable: boolean;
+  areaId?: number | null;
+  deliveryStartsAt?: string | null;
+  deliveryEndsAt?: string | null;
 };
 
 /**
@@ -204,26 +239,86 @@ export class StoresDirectoryService {
       },
     };
 
-    const [rows, total] = await Promise.all([
-      this.prisma.tenantDeliveryArea.findMany({
-        where: baseWhere,
-        include: this.publicDeliveryAreaInclude(),
-        orderBy: [{ tenant: { name: 'asc' } }],
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      this.prisma.tenantDeliveryArea.count({ where: baseWhere }),
-    ]);
+    const rows = await this.prisma.tenantDeliveryArea.findMany({
+      where: baseWhere,
+      include: this.publicDeliveryAreaInclude(),
+      orderBy: [{ tenant: { id: 'asc' } }],
+    });
 
-    let stores = this.toStoreCards(
-      rows.map((row) => row.tenant),
+    const tenantIds = rows.map((row) => row.tenant.id);
+    const productStats = await this.getProductStatsByTenantIds(tenantIds);
+    const rankingDate = this.formatRankingDate(new Date());
+
+    const rankedRows = rows
+      .map((row) => {
+        const stats = this.getStatsForTenant(productStats, row.tenant.id);
+        const readinessScore = this.calculateReadinessScore({
+          logoUrl: row.tenant.directory_profile?.logo_url,
+          activeProductsCount: stats.activeProductsCount,
+          availableProductsCount: stats.availableProductsCount,
+          productsCategoriesCount: stats.productsCategoriesCount,
+          deliveryAvailable: row.tenant.delivery_available,
+          areaId: row.tenant.directory_profile?.area_id,
+          deliveryStartsAt: row.tenant.delivery_starts_at,
+          deliveryEndsAt: row.tenant.delivery_ends_at,
+        }).score;
+        const isOpenNow = this.isDeliveryAvailableNow(row.tenant);
+        const readinessLevel = this.getReadinessLevel(readinessScore);
+
+        return {
+          row,
+          stats,
+          readinessScore,
+          readinessLevel,
+          isOpenNow,
+          bucketPriority: this.getBucketPriority({
+            isDirectoryVisible: true,
+            status: row.tenant.status,
+            availableProductsCount: stats.availableProductsCount,
+            readinessScore,
+            isOpenNow,
+            deliveryAvailable: row.tenant.delivery_available,
+          }),
+          dailyRotationScore: this.getDailyRotationScore({
+            tenantId: row.tenant.id,
+            areaSlug: area.slug,
+            categorySlug: category.slug,
+            date: rankingDate,
+          }),
+        };
+      })
+      .filter((item) => item.bucketPriority < 99)
+      .filter((item) => !options.openNow || item.isOpenNow)
+      .sort(
+        (a, b) =>
+          a.bucketPriority - b.bucketPriority ||
+          this.readinessRank(b.readinessLevel) -
+            this.readinessRank(a.readinessLevel) ||
+          a.dailyRotationScore - b.dailyRotationScore ||
+          a.row.tenant.id - b.row.tenant.id,
+      );
+
+    const total = rankedRows.length;
+    const paginatedRows = rankedRows.slice((page - 1) * limit, page * limit);
+    const stores = this.toStoreCards(
+      paginatedRows.map((item) => item.row.tenant),
       area.name_ar,
       area.slug,
+      new Map(
+        paginatedRows.map((item) => [
+          item.row.tenant.id,
+          {
+            readinessLevel: item.readinessLevel,
+            productsCategoriesCount: item.stats.productsCategoriesCount,
+            badges: this.buildStoreBadges(
+              item.isOpenNow,
+              item.row.tenant.delivery_available,
+              item.readinessLevel,
+            ),
+          },
+        ]),
+      ),
     );
-
-    if (options.openNow) {
-      stores = stores.filter((store) => store.deliveryAvailableNow);
-    }
 
     return {
       area: this.toAreaDto(area),
@@ -236,7 +331,7 @@ export class StoresDirectoryService {
       pagination: {
         page,
         limit,
-        total: options.openNow ? stores.length : total,
+        total,
         lastPage: Math.max(1, Math.ceil(total / limit)),
       },
       seo: {
@@ -384,6 +479,58 @@ export class StoresDirectoryService {
     });
   }
 
+  async recalculateTenantReadiness(tenantId: number) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        id: true,
+        name: true,
+        delivery_available: true,
+        delivery_starts_at: true,
+        delivery_ends_at: true,
+        directory_profile: {
+          select: {
+            logo_url: true,
+            area_id: true,
+          },
+        },
+      },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    const stats = await this.getProductStatsForTenant(tenantId);
+    const readiness = this.calculateReadinessScore({
+      logoUrl: tenant.directory_profile?.logo_url,
+      activeProductsCount: stats.activeProductsCount,
+      availableProductsCount: stats.availableProductsCount,
+      productsCategoriesCount: stats.productsCategoriesCount,
+      deliveryAvailable: tenant.delivery_available,
+      areaId: tenant.directory_profile?.area_id,
+      deliveryStartsAt: tenant.delivery_starts_at,
+      deliveryEndsAt: tenant.delivery_ends_at,
+    });
+
+    await this.prisma.tenantDirectoryProfile.upsert({
+      where: { tenant_id: tenantId },
+      update: {
+        profile_completion_score: readiness.score,
+        missing_fields: readiness.missingFields as Prisma.InputJsonValue,
+      },
+      create: {
+        tenant_id: tenantId,
+        display_name: tenant.name,
+        directory_status: DirectoryStatus.draft,
+        profile_completion_score: readiness.score,
+        missing_fields: readiness.missingFields as Prisma.InputJsonValue,
+      },
+    });
+
+    return readiness;
+  }
+
   private async ensureDirectoryProfile(tenantId: number) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
@@ -399,14 +546,10 @@ export class StoresDirectoryService {
         tenant_id: tenantId,
         display_name: tenant.name,
         directory_status: DirectoryStatus.draft,
-        ...this.calculateProfileCompletion({
-          display_name: tenant.name,
-          address: null,
-          logo_url: null,
-          area_id: null,
-          latitude: null,
-          longitude: null,
-        }),
+        ...(await this.calculateReadinessForTenantInput(tenantId, {
+          logoUrl: null,
+          areaId: null,
+        })),
       },
       include: this.merchantProfileInclude(),
     });
@@ -444,15 +587,9 @@ export class StoresDirectoryService {
     }
 
     const profileData = this.toProfileData(dto);
-    const completion = this.calculateProfileCompletion({
-      display_name:
-        dto.display_name ?? existingProfile?.display_name ?? tenant.name,
-      address: dto.address ?? existingProfile?.address,
-      logo_url: dto.logo_url ?? existingProfile?.logo_url,
-      area_id: areaId,
-      latitude: dto.latitude ?? existingProfile?.latitude?.toNumber() ?? null,
-      longitude:
-        dto.longitude ?? existingProfile?.longitude?.toNumber() ?? null,
+    const completion = await this.calculateReadinessForTenantInput(tenantId, {
+      logoUrl: dto.logo_url ?? existingProfile?.logo_url,
+      areaId,
     });
 
     const profile = await this.prisma.$transaction(async (tx) => {
@@ -524,6 +661,7 @@ export class StoresDirectoryService {
           slug: true,
           phone: true,
           category: true,
+          status: true,
           delivery_available: true,
           delivery_fee: true,
           delivery_starts_at: true,
@@ -660,6 +798,7 @@ export class StoresDirectoryService {
           slug: true,
           phone: true,
           category: true,
+          status: true,
           delivery_available: true,
           delivery_fee: true,
           delivery_starts_at: true,
@@ -669,6 +808,8 @@ export class StoresDirectoryService {
               display_name: true,
               logo_url: true,
               address: true,
+              area_id: true,
+              profile_completion_score: true,
               area: { select: { name_ar: true, name_en: true } },
             },
           },
@@ -808,10 +949,19 @@ export class StoresDirectoryService {
     tenants: StoreCardTenant[],
     fallbackAreaName?: string,
     fallbackAreaSlug?: string,
+    rankingMeta?: Map<
+      number,
+      {
+        readinessLevel: StoreReadinessLevel;
+        productsCategoriesCount: number;
+        badges: StoreBadge[];
+      }
+    >,
   ) {
     return tenants.map((tenant) => {
       const displayName = tenant.directory_profile?.display_name || tenant.name;
       const whatsappNumber = tenant.phone.replace(/[^\d]/g, '');
+      const meta = rankingMeta?.get(tenant.id);
 
       return {
         id: tenant.id,
@@ -829,6 +979,21 @@ export class StoresDirectoryService {
         deliveryAvailable: tenant.delivery_available,
         deliveryFee: Number(tenant.delivery_fee || 0),
         deliveryAvailableNow: this.isDeliveryAvailableNow(tenant),
+        readinessLevel:
+          meta?.readinessLevel ??
+          this.getReadinessLevel(
+            tenant.directory_profile?.profile_completion_score ?? 0,
+          ),
+        badges:
+          meta?.badges ??
+          this.buildStoreBadges(
+            this.isDeliveryAvailableNow(tenant),
+            tenant.delivery_available,
+            this.getReadinessLevel(
+              tenant.directory_profile?.profile_completion_score ?? 0,
+            ),
+          ),
+        productsCategoriesCount: meta?.productsCategoriesCount,
         storefrontUrl: `/${tenant.slug}`,
         whatsappUrl: whatsappNumber ? `https://wa.me/${whatsappNumber}` : null,
       };
@@ -849,18 +1014,38 @@ export class StoresDirectoryService {
       return true;
     }
 
-    const now = new Date();
+    return this.isWithinDeliveryWindow(
+      tenant.delivery_starts_at,
+      tenant.delivery_ends_at,
+      new Date(),
+    );
+  }
+
+  private isWithinDeliveryWindow(
+    startsAt: string,
+    endsAt: string,
+    now: Date,
+  ) {
     const cairoTime = new Intl.DateTimeFormat('en-GB', {
       timeZone: 'Africa/Cairo',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
     }).format(now);
+    const currentMinutes = this.parseHHMM(cairoTime);
+    const startMinutes = this.parseHHMM(startsAt);
+    const endMinutes = this.parseHHMM(endsAt);
 
-    return (
-      cairoTime >= tenant.delivery_starts_at &&
-      cairoTime <= tenant.delivery_ends_at
-    );
+    if (startMinutes <= endMinutes) {
+      return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+    }
+
+    return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+  }
+
+  private parseHHMM(value: string) {
+    const [hours = '0', minutes = '0'] = value.split(':');
+    return Number(hours) * 60 + Number(minutes);
   }
 
   private toAreaDto(area: {
@@ -976,32 +1161,203 @@ export class StoresDirectoryService {
     return data;
   }
 
-  private calculateProfileCompletion(profile: {
-    display_name?: string | null;
-    logo_url?: string | null;
-    address?: string | null;
-    area_id?: number | null;
-    latitude?: number | null;
-    longitude?: number | null;
-  }) {
-    const missingFields: string[] = [];
-    if (!profile.display_name) missingFields.push('display_name');
-    if (!profile.logo_url) missingFields.push('logo_url');
-    if (!profile.address) missingFields.push('address');
-    if (!profile.area_id) missingFields.push('area_id');
-    if (profile.latitude == null || profile.longitude == null) {
-      missingFields.push('coordinates');
-    }
-
-    const totalFields = 5;
-    const completedFields = totalFields - missingFields.length;
+  private async calculateReadinessForTenantInput(
+    tenantId: number,
+    overrides: {
+      logoUrl?: string | null;
+      areaId?: number | null;
+    },
+  ) {
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: {
+        delivery_available: true,
+        delivery_starts_at: true,
+        delivery_ends_at: true,
+      },
+    });
+    const stats = await this.getProductStatsForTenant(tenantId);
+    const readiness = this.calculateReadinessScore({
+      logoUrl: overrides.logoUrl,
+      activeProductsCount: stats.activeProductsCount,
+      availableProductsCount: stats.availableProductsCount,
+      productsCategoriesCount: stats.productsCategoriesCount,
+      deliveryAvailable: tenant.delivery_available,
+      areaId: overrides.areaId,
+      deliveryStartsAt: tenant.delivery_starts_at,
+      deliveryEndsAt: tenant.delivery_ends_at,
+    });
 
     return {
-      profile_completion_score: Math.round(
-        (completedFields / totalFields) * 100,
-      ),
-      missing_fields: missingFields as Prisma.InputJsonValue,
+      profile_completion_score: readiness.score,
+      missing_fields: readiness.missingFields as Prisma.InputJsonValue,
     };
+  }
+
+  private calculateReadinessScore(input: ReadinessInput) {
+    const missingFields: string[] = [];
+    let score = 0;
+
+    if (input.logoUrl) {
+      score += 10;
+    } else {
+      missingFields.push('missing_logo');
+    }
+
+    if (input.activeProductsCount >= MIN_ACTIVE_PRODUCTS_FOR_READINESS) {
+      score += 25;
+    } else {
+      missingFields.push('less_than_25_products');
+    }
+
+    if (input.deliveryAvailable) {
+      score += 20;
+    } else {
+      missingFields.push('delivery_disabled');
+    }
+
+    if (input.areaId) {
+      score += 15;
+    } else {
+      missingFields.push('missing_area');
+    }
+
+    if (input.deliveryStartsAt && input.deliveryEndsAt) {
+      score += 10;
+    } else {
+      missingFields.push('missing_delivery_hours');
+    }
+
+    if (
+      input.productsCategoriesCount >= MIN_PRODUCT_CATEGORIES_FOR_READINESS
+    ) {
+      score += 20;
+    } else {
+      missingFields.push('less_than_5_product_categories');
+    }
+
+    return { score, missingFields };
+  }
+
+  private getReadinessLevel(score: number): StoreReadinessLevel {
+    if (score >= COMPLETE_READINESS_SCORE) return 'complete';
+    if (score >= PARTIAL_READINESS_SCORE) return 'partial';
+    return 'poor';
+  }
+
+  private readinessRank(level: StoreReadinessLevel) {
+    if (level === 'complete') return 3;
+    if (level === 'partial') return 2;
+    return 1;
+  }
+
+  private getBucketPriority(input: {
+    isDirectoryVisible: boolean;
+    status: TenantStatus;
+    availableProductsCount: number;
+    readinessScore: number;
+    isOpenNow: boolean;
+    deliveryAvailable: boolean;
+  }) {
+    if (!input.isDirectoryVisible) return 99;
+    if (input.status !== TenantStatus.active) return 99;
+    if (input.availableProductsCount <= 0) return 40;
+
+    const isComplete = input.readinessScore >= COMPLETE_READINESS_SCORE;
+    if (input.isOpenNow && input.deliveryAvailable && isComplete) return 10;
+    if (!input.isOpenNow && input.deliveryAvailable && isComplete) return 20;
+    if (input.readinessScore >= PARTIAL_READINESS_SCORE) return 30;
+
+    return 40;
+  }
+
+  private getDailyRotationScore(input: {
+    tenantId: number;
+    areaSlug: string;
+    categorySlug: string;
+    date: string;
+  }) {
+    const raw = `${input.areaSlug}:${input.categorySlug}:${input.date}:${input.tenantId}`;
+    const hash = crypto.createHash('sha256').update(raw).digest('hex');
+    return parseInt(hash.slice(0, 8), 16);
+  }
+
+  private buildStoreBadges(
+    isOpenNow: boolean,
+    deliveryAvailable: boolean,
+    readinessLevel: StoreReadinessLevel,
+  ): StoreBadge[] {
+    const badges: StoreBadge[] = [];
+    if (isOpenNow) badges.push('open_now');
+    if (deliveryAvailable) badges.push('delivery_available');
+    if (readinessLevel === 'complete') badges.push('complete_profile');
+    return badges;
+  }
+
+  private formatRankingDate(date: Date) {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Cairo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  }
+
+  private async getProductStatsForTenant(
+    tenantId: number,
+  ): Promise<StoreProductStats> {
+    const stats = await this.getProductStatsByTenantIds([tenantId]);
+    return this.getStatsForTenant(stats, tenantId);
+  }
+
+  private async getProductStatsByTenantIds(tenantIds: number[]) {
+    if (tenantIds.length === 0) {
+      return new Map<number, StoreProductStats>();
+    }
+
+    const rows = await this.prisma.$queryRaw<
+      {
+        tenant_id: number;
+        active_products_count: number;
+        available_products_count: number;
+        products_categories_count: number;
+      }[]
+    >`
+      SELECT
+        tenant_id,
+        COUNT(*)::int AS active_products_count,
+        COUNT(*) FILTER (WHERE is_available = true)::int AS available_products_count,
+        COUNT(DISTINCT NULLIF(TRIM(category), ''))::int AS products_categories_count
+      FROM products
+      WHERE tenant_id IN (${Prisma.join(tenantIds)})
+        AND status = ${ProductStatus.active}::products_status_enum
+        AND deleted_at IS NULL
+      GROUP BY tenant_id
+    `;
+
+    return new Map(
+      rows.map((row) => [
+        row.tenant_id,
+        {
+          activeProductsCount: row.active_products_count,
+          availableProductsCount: row.available_products_count,
+          productsCategoriesCount: row.products_categories_count,
+        },
+      ]),
+    );
+  }
+
+  private getStatsForTenant(
+    stats: Map<number, StoreProductStats>,
+    tenantId: number,
+  ): StoreProductStats {
+    return (
+      stats.get(tenantId) ?? {
+        activeProductsCount: 0,
+        availableProductsCount: 0,
+        productsCategoriesCount: 0,
+      }
+    );
   }
 
   private normalizeOptionalText(value?: string | null, maxLength?: number) {

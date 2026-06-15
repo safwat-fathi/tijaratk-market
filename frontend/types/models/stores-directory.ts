@@ -29,6 +29,11 @@ export type StoresDirectoryStoreCard = {
   deliveryAvailable: boolean;
   deliveryFee: number;
   deliveryAvailableNow: boolean;
+  readinessLevel: "complete" | "partial" | "poor";
+  badges: Array<
+    "open_now" | "new_store" | "complete_profile" | "delivery_available"
+  >;
+  productsCategoriesCount?: number;
   storefrontUrl: string;
   whatsappUrl: string | null;
 };

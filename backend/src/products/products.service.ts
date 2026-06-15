@@ -15,6 +15,7 @@ import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
 import {
   Prisma,
   Product,
@@ -112,6 +113,7 @@ export class ProductsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly imageProcessorService: ImageProcessorService,
+    private readonly storesDirectoryService: StoresDirectoryService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -199,6 +201,7 @@ export class ProductsService {
 
     await this.storeTenantProductCategory(tenantId, product.category);
     await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
     return product;
   }
 
@@ -258,6 +261,7 @@ export class ProductsService {
 
     await this.storeTenantProductCategory(tenantId, product.category);
     await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
     return product;
   }
 
@@ -774,6 +778,7 @@ export class ProductsService {
       await this.storeTenantProductCategory(tenantId, updatedProduct.category);
     }
     await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
 
     if (previousImageUrl && previousImageUrl !== updatedProduct.image_url) {
       await this.imageProcessorService.deleteManagedProductImage(
@@ -794,6 +799,7 @@ export class ProductsService {
       data: { status: ProductStatus.ARCHIVED },
     });
     await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
   }
 
   private async searchWithinTenantProducts(
