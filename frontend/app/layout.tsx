@@ -52,8 +52,8 @@ export const metadata: Metadata = {
 		description: SITE_DESCRIPTION,
 		images: [
 			{
-				url: "/logo.png",
-				width: 800,
+				url: "/og-image.jpg",
+				width: 1200,
 				height: 600,
 				alt: "تجارتك",
 			},
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
 		card: "summary_large_image",
 		title: "تجارتك | نظام بسيط لإدارة طلبات المحلات أونلاين",
 		description: SITE_DESCRIPTION,
-		images: ["/logo.png"],
+		images: ["/og-image.jpg"],
 	},
 	robots: {
 		index: true,

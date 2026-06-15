@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import SafeImage from "@/components/ui/SafeImage";
+import AreaAutocomplete from "@/components/stores-directory/AreaAutocomplete";
 import { createPublicMetadata, SITE_URL } from "@/lib/marketing-seo";
 import { storesDirectoryService } from "@/services/api/stores-directory.service";
 import {
@@ -160,6 +161,7 @@ const toCategoryCards = (
 const toAreaOptions = (areas: StoresDirectoryArea[]): DirectoryAreaOption[] =>
   areas.map((area) => ({
     name: area.nameAr,
+    nameEn: area.nameEn,
     slug: area.slug,
     stores: area.storesCount,
     categoryCounts: area.categoryCounts ?? {},
@@ -320,28 +322,10 @@ export default async function StoresDirectoryPage({
 
         <section className="sticky top-16 z-40 border-b border-gray-200/50 bg-[#F7F8F6]/90 px-4 py-6 shadow-sm backdrop-blur-md transition-all">
           <div className="mx-auto max-w-3xl">
-            <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-6 w-6 text-gray-400"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="ابحث عن منطقتك..."
-                className="w-full rounded-full border border-gray-300 bg-white py-4 pl-6 pr-14 text-lg font-medium text-[#222B2E] shadow-sm placeholder-gray-400 focus:border-[#27AE60] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/20"
-              />
-            </div>
+            <AreaAutocomplete
+              areas={areaOptions}
+              destination={{ type: "landing" }}
+            />
 
             {searchedAreas.length > 0 && (
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">

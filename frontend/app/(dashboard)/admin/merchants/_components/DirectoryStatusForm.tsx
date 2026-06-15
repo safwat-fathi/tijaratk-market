@@ -56,7 +56,7 @@ export function DirectoryStatusForm({ tenant }: DirectoryStatusFormProps) {
 					setSelectedStatus(nextStatus);
 					event.currentTarget.form?.requestSubmit();
 				}}
-				className="block min-h-9 w-40 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-primary focus:outline-none focus:ring-primary"
+				className="block min-h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:w-40"
 			>
 				{DIRECTORY_STATUS_OPTIONS.map((status) => (
 					<option key={status.value} value={status.value}>

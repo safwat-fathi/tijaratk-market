@@ -110,18 +110,18 @@ export async function generateMetadata(
 			siteName: "تجارتك",
 			images: [
 				{
-					url: "/logo.png",
-					width: 800,
-					height: 600,
+					url: tenant.directory_profile?.logo_url || "/og-image.jpg",
+					width: tenant.directory_profile?.logo_url ? 400 : 1200,
+					height: tenant.directory_profile?.logo_url ? 400 : 600,
 					alt: tenant.name,
 				},
 			],
 		},
 		twitter: {
-			card: "summary_large_image",
+			card: tenant.directory_profile?.logo_url ? "summary" : "summary_large_image",
 			title,
 			description,
-			images: ["/logo.png"],
+			images: [tenant.directory_profile?.logo_url || "/og-image.jpg"],
 		},
 	};
 }

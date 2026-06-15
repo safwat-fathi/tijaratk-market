@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export function PublicFooter() {
   return (
@@ -22,10 +23,18 @@ export function PublicFooter() {
             loading="lazy"
           />
         </div>
-        <p className="text-sm font-medium text-[#222B2E]/60">
-          © {new Date().getFullYear()} جميع الحقوق محفوظة لـ{" "}
-          <span className="text-[#0F5A3D] font-bold">تجارتك</span>.
-        </p>
+        <div className="flex flex-col items-center gap-3">
+          <Link
+            href="/about"
+            className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"
+          >
+            عن تجارتك
+          </Link>
+          <p className="text-sm font-medium text-[#222B2E]/60">
+            © {new Date().getFullYear()} جميع الحقوق محفوظة لـ{" "}
+            <span className="text-brand-primary font-bold">تجارتك</span>.
+          </p>
+        </div>
         <div className="flex items-center gap-4 text-[#222B2E]/60">
           <a
             href="https://www.facebook.com/profile.php?id=61589320905109"

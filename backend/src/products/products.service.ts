@@ -16,12 +16,14 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
+import { Prisma, Product, CatalogItem } from '../../generated/prisma/client';
 import {
-  Prisma,
-  Product,
-  CatalogItem,
-  TenantCategory,
-} from '../../generated/prisma/client';
+  buildAllowedCatalogCategoryWhere,
+  CatalogSource,
+  getAllowedCatalogCategoriesForSource,
+  isCatalogCategoryAllowedForSource,
+  resolveCatalogSourceForTenantCategory,
+} from './catalog-source-policy';
 
 const DEFAULT_PRODUCT_CATEGORY = 'أخرى';
 const DUPLICATE_PRODUCT_NAME_MESSAGE = 'Product with this name already exists';
@@ -30,8 +32,6 @@ const DEFAULT_WEIGHT_PRESET_GRAMS = [250, 500, 1000] as const;
 const DEFAULT_PRICE_PRESET_AMOUNTS = [100, 200, 300] as const;
 const DEFAULT_QUANTITY_UNIT_LABEL = 'قطعة';
 const MAX_ORDER_PRESETS = 6;
-const CATALOG_SOURCE_TALABAT = 'talabat_csv';
-const CATALOG_SOURCE_CHEFAA = 'chefaa_csv';
 
 type QuantityUnitOptionConfig = {
   id: string;
@@ -103,8 +103,6 @@ type StrictMatchThresholds = {
   strictWordSimilarityThreshold: number;
 };
 
-type CatalogSource = typeof CATALOG_SOURCE_TALABAT | typeof CATALOG_SOURCE_CHEFAA;
-
 /**
  * Products service handles product lifecycle for each tenant.
  */
@@ -130,15 +128,7 @@ export class ProductsService {
       select: { category: true },
     });
 
-    return this.resolveCatalogSourceForTenantCategory(tenant?.category);
-  }
-
-  private resolveCatalogSourceForTenantCategory(
-    category?: TenantCategory | null,
-  ): CatalogSource | null {
-    if (category === TenantCategory.grocery) return CATALOG_SOURCE_TALABAT;
-    if (category === TenantCategory.pharmacy) return CATALOG_SOURCE_CHEFAA;
-    return null;
+    return resolveCatalogSourceForTenantCategory(tenant?.category);
   }
 
   private emptyCatalogItemsResult(
@@ -506,7 +496,11 @@ export class ProductsService {
 
     const rows = await this.getPrismaClient().catalogItem.groupBy({
       by: ['category'],
-      where: { is_active: true, source: catalogSource },
+      where: {
+        is_active: true,
+        source: catalogSource,
+        category: buildAllowedCatalogCategoryWhere(catalogSource),
+      },
       _count: { id: true },
       orderBy: { category: 'asc' },
     });
@@ -523,7 +517,11 @@ export class ProductsService {
       where: {
         is_active: true,
         source: catalogSource,
-        category: { in: categories },
+        category: {
+          in: categories.filter((category) =>
+            isCatalogCategoryAllowedForSource(catalogSource, category),
+          ),
+        },
         image_url: { not: null },
       },
       select: {
@@ -575,7 +573,11 @@ export class ProductsService {
       this.getPrismaClient().catalogItem.groupBy({
         by: ['category'],
         where: catalogSource
-          ? { is_active: true, source: catalogSource }
+          ? {
+              is_active: true,
+              source: catalogSource,
+              category: buildAllowedCatalogCategoryWhere(catalogSource),
+            }
           : { id: -1 },
       }),
       this.getPrismaClient().tenantProductCategory.groupBy({
@@ -623,8 +625,10 @@ export class ProductsService {
 
     if (normalizedSearch.length >= 2) {
       const normalizedCategory = this.normalizeOptionalCategory(category);
-      const similarityThreshold = this.resolveSimilarityThreshold(normalizedSearch);
-      const strictMatchThresholds = this.resolveStrictMatchThresholds(normalizedSearch);
+      const similarityThreshold =
+        this.resolveSimilarityThreshold(normalizedSearch);
+      const strictMatchThresholds =
+        this.resolveStrictMatchThresholds(normalizedSearch);
 
       const cacheKey = this.buildCatalogSearchCacheKey(
         normalizedSearch,
@@ -651,7 +655,11 @@ export class ProductsService {
         normalizedLimit,
       );
 
-      await this.cacheManager.set(cacheKey, result, PRODUCT_SEARCH_CACHE_TTL_SECONDS);
+      await this.cacheManager.set(
+        cacheKey,
+        result,
+        PRODUCT_SEARCH_CACHE_TTL_SECONDS,
+      );
 
       return result;
     }
@@ -659,9 +667,15 @@ export class ProductsService {
     const where: Prisma.CatalogItemWhereInput = {
       is_active: true,
       source: catalogSource,
+      category: buildAllowedCatalogCategoryWhere(catalogSource),
     };
     if (category) {
-      where.category = category;
+      where.category = isCatalogCategoryAllowedForSource(
+        catalogSource,
+        category,
+      )
+        ? category
+        : { in: [] };
     }
 
     const [data, total] = await Promise.all([
@@ -1462,8 +1476,17 @@ export class ProductsService {
     conditions.push(`is_active = true`);
     conditions.push(`source = ${addParam(source)}`);
 
+    const allowedCategories = getAllowedCatalogCategoriesForSource(source);
+    if (allowedCategories.length > 0) {
+      conditions.push(`category = ANY(${addParam(allowedCategories)}::text[])`);
+    }
+
     if (category) {
-      conditions.push(`category = ${addParam(category)}`);
+      conditions.push(
+        isCatalogCategoryAllowedForSource(source, category)
+          ? `category = ${addParam(category)}`
+          : 'false',
+      );
     }
 
     const searchParam = addParam(normalizedSearch);
@@ -1520,10 +1543,9 @@ export class ProductsService {
       dataQuery,
       ...params,
     );
-    const countResult = await this.getPrismaClient().$queryRawUnsafe<{ total: number }[]>(
-      countQuery,
-      ...this.getReferencedRawQueryParams(countQuery, params)
-    );
+    const countResult = await this.getPrismaClient().$queryRawUnsafe<
+      { total: number }[]
+    >(countQuery, ...this.getReferencedRawQueryParams(countQuery, params));
     const total = countResult[0]?.total || 0;
 
     const lastPage = total > 0 ? Math.ceil(total / limit) : 1;

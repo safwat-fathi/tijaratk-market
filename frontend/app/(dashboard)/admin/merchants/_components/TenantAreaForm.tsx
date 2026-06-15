@@ -23,7 +23,7 @@ export function TenantAreaForm({ tenant, areas }: TenantAreaFormProps) {
 	return (
 		<form
 			action={updateTenantAreasAction.bind(null, tenant.id)}
-			className="flex min-w-64 flex-col gap-2"
+			className="flex w-full flex-col gap-2 sm:min-w-64"
 		>
 			<label className="text-xs font-semibold text-gray-600" htmlFor={`tenant-${tenant.id}-area`}>
 				المنطقة الأساسية

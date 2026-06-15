@@ -2,6 +2,7 @@
 
 import { ReactNode, useState } from "react";
 import Link from "next/link";
+import AreaAutocomplete from "@/components/stores-directory/AreaAutocomplete";
 import BottomSheet from "@/components/ui/BottomSheet";
 
 export type DirectoryCategoryCard = {
@@ -14,6 +15,7 @@ export type DirectoryCategoryCard = {
 
 export type DirectoryAreaOption = {
   name: string;
+  nameEn?: string | null;
   slug: string;
   stores: number;
   categoryCounts: Record<string, number>;
@@ -108,28 +110,20 @@ export default function CategoryGrid({
         title="اختر منطقتك أولاً"
       >
         <div className="flex flex-col gap-6 pb-4 pt-2">
-          <div className="relative">
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-5 w-5 text-gray-400"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              placeholder="ابحث عن منطقتك..."
-              className="w-full rounded-full border border-gray-300 bg-white py-3 pl-6 pr-12 text-base font-medium text-[#222B2E] placeholder-gray-400 shadow-sm focus:border-[#27AE60] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/20"
-            />
-          </div>
+          <AreaAutocomplete
+            areas={selectedCategoryAreas.map((area) => ({
+              name: area.name,
+              nameEn: area.nameEn,
+              slug: area.slug,
+              stores: area.selectedStores,
+            }))}
+            destination={{
+              type: "category",
+              categorySlug: selectedCategory?.slug ?? "",
+            }}
+            inputClassName="w-full rounded-full border border-gray-300 bg-white py-3 pl-6 pr-12 text-base font-medium text-[#222B2E] placeholder-gray-400 shadow-sm focus:border-[#27AE60] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/20"
+            iconClassName="h-5 w-5 text-gray-400"
+          />
 
           <div className="flex flex-wrap gap-2">
             {selectedCategoryAreas.map((area) => (

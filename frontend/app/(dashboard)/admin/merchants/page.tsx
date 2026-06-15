@@ -56,6 +56,29 @@ async function getDirectoryAreas() {
   }
 }
 
+function MerchantStatusBadge({ status }: { status: AdminTenant['status'] }) {
+  return (
+    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+      {status === 'active' ? 'نشط' : 'موقوف'}
+    </span>
+  );
+}
+
+function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
+  return (
+    <form action={toggleTenantStatusAction.bind(null, merchant.id, merchant.status)}>
+      <Button
+        type="submit"
+        variant={merchant.status === 'active' ? 'outline' : 'primary'}
+        size="sm"
+        className="w-full md:w-auto"
+      >
+        {merchant.status === 'active' ? 'إيقاف' : 'تفعيل'}
+      </Button>
+    </form>
+  );
+}
+
 export default async function AdminMerchants() {
   const [merchants, plans, areas]: [AdminTenant[], AdminPlan[], AdminDirectoryArea[]] =
     await Promise.all([getTenants(), getPlansList(), getDirectoryAreas()]);
@@ -64,7 +87,75 @@ export default async function AdminMerchants() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">إدارة التجار</h1>
 
-      <Card className="overflow-hidden">
+      <div className="space-y-4 md:hidden">
+        {merchants.length === 0 ? (
+          <Card className="p-6 text-center text-sm text-gray-500">
+            لا يوجد تجار
+          </Card>
+        ) : (
+          merchants.map((merchant) => (
+            <Card key={merchant.id} className="space-y-5 p-4">
+              <div className="space-y-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="break-words text-base font-bold text-gray-900">
+                      {merchant.name}
+                    </h2>
+                    <div className="break-all text-xs text-gray-500">
+                      /{merchant.slug}
+                    </div>
+                  </div>
+                  <MerchantStatusBadge status={merchant.status} />
+                </div>
+                <p className="break-all text-sm text-gray-600">{merchant.phone}</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md bg-gray-50 px-2 py-3">
+                  <div className="text-xs font-medium text-gray-500">المنتجات</div>
+                  <div className="mt-1 text-sm font-bold text-gray-900">
+                    {merchant._count?.products || 0}
+                  </div>
+                </div>
+                <div className="rounded-md bg-gray-50 px-2 py-3">
+                  <div className="text-xs font-medium text-gray-500">الطلبات</div>
+                  <div className="mt-1 text-sm font-bold text-gray-900">
+                    {merchant._count?.orders || 0}
+                  </div>
+                </div>
+                <div className="rounded-md bg-gray-50 px-2 py-3">
+                  <div className="text-xs font-medium text-gray-500">العملاء</div>
+                  <div className="mt-1 text-sm font-bold text-gray-900">
+                    {merchant._count?.customers || 0}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <TenantAreaForm tenant={merchant} areas={areas} />
+
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-gray-600">حالة الدليل</div>
+                  <DirectoryStatusForm tenant={merchant} />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-gray-600">الباقة</div>
+                  <PlanSelect
+                    tenantId={merchant.id}
+                    currentPlanId={merchant.tenant_subscriptions?.[0]?.plan_id}
+                    plans={plans}
+                  />
+                </div>
+
+                <ToggleTenantStatusForm merchant={merchant} />
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      <Card className="hidden overflow-hidden md:block">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -106,20 +197,10 @@ export default async function AdminMerchants() {
                   />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${merchant.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {merchant.status === 'active' ? 'نشط' : 'موقوف'}
-                  </span>
+                  <MerchantStatusBadge status={merchant.status} />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <form action={toggleTenantStatusAction.bind(null, merchant.id, merchant.status)}>
-                    <Button 
-                      type="submit"
-                      variant={merchant.status === 'active' ? 'outline' : 'primary'}
-                      size="sm"
-                    >
-                      {merchant.status === 'active' ? 'إيقاف' : 'تفعيل'}
-                    </Button>
-                  </form>
+                  <ToggleTenantStatusForm merchant={merchant} />
                 </td>
               </tr>
             ))}

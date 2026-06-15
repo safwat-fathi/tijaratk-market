@@ -19,6 +19,8 @@
     "lint:ci": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "seed:dev": "NODE_ENV=development ts-node -r tsconfig-paths/register ./src/common/seed.ts",
     "seed:prod": "NODE_ENV=production ts-node -r tsconfig-paths/register ./src/common/seed.ts",
+    "catalog:cleanup:dev": "NODE_ENV=development ts-node -r tsconfig-paths/register ./src/common/scripts/deactivate-contaminated-catalog-items.ts",
+    "catalog:cleanup:prod": "NODE_ENV=production ts-node -r tsconfig-paths/register ./src/common/scripts/deactivate-contaminated-catalog-items.ts",
     "prisma:migrate:dev": "NODE_ENV=development prisma migrate dev",
     "prisma:migrate:deploy": "NODE_ENV=production prisma migrate deploy",
     "prisma:generate": "prisma generate",

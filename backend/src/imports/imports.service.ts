@@ -19,11 +19,16 @@ import {
   CatalogImportFormat,
   parseCatalogImportRow,
 } from './schemas/catalog-import-row.schema';
+import {
+  CATALOG_SOURCE_CHEFAA,
+  CATALOG_SOURCE_TALABAT,
+  isCatalogCategoryAllowedForSource,
+} from 'src/products/catalog-source-policy';
 
 const CATALOG_IMPORT_SOURCES: Record<CatalogImportFormat, string> = {
-  [CatalogImportFormat.talabat]: 'talabat_csv',
-  [CatalogImportFormat.chefaa]: 'chefaa_csv',
-  [CatalogImportFormat.carrefour]: 'talabat_csv',
+  [CatalogImportFormat.talabat]: CATALOG_SOURCE_TALABAT,
+  [CatalogImportFormat.chefaa]: CATALOG_SOURCE_CHEFAA,
+  [CatalogImportFormat.carrefour]: CATALOG_SOURCE_TALABAT,
 };
 const DEFAULT_CATEGORY = 'أخرى';
 const EXPECTED_CURRENCY = 'EGP';
@@ -377,13 +382,19 @@ export class ImportsService {
 
     const categorySource = this.resolveCategorySource(row);
 
+    const source = CATALOG_IMPORT_SOURCES[row.format];
+    const category = this.mapCategory(categorySource);
+    if (!isCatalogCategoryAllowedForSource(source, category)) {
+      throw new Error(`Category ${category} is not allowed for ${source}`);
+    }
+
     return {
       name: row.data.name.trim(),
       price: this.normalizePrice(row.data.price),
       currency,
       image_url: this.normalizeOptionalText(row.data.image_url),
-      category: this.mapCategory(categorySource),
-      source: CATALOG_IMPORT_SOURCES[row.format],
+      category,
+      source,
       external_id: this.normalizeOptionalText(row.data.product_id),
       last_seen_at: new Date(),
       is_active: true,

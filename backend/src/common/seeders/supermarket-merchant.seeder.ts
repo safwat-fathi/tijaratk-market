@@ -4,8 +4,10 @@ import { ProductSource } from 'src/common/enums/product-source.enum';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { Prisma, PrismaClient } from '../../../generated/prisma/client';
 import { TENANT_CATEGORIES } from 'src/tenants/constants/tenant-category';
-
-const CATALOG_SOURCE_TALABAT = 'talabat_csv';
+import {
+  buildAllowedCatalogCategoryWhere,
+  CATALOG_SOURCE_TALABAT,
+} from 'src/products/catalog-source-policy';
 
 type MerchantVariant =
   | 'complete_100_products'
@@ -208,7 +210,11 @@ async function findCatalogProducts(
   preferredSource: string,
 ): Promise<CatalogSeedProduct[]> {
   const preferredProducts = await tx.catalogItem.findMany({
-    where: { is_active: true, source: preferredSource },
+    where: {
+      is_active: true,
+      source: preferredSource,
+      category: buildAllowedCatalogCategoryWhere(preferredSource),
+    },
     select: {
       name: true,
       image_url: true,
@@ -222,16 +228,7 @@ async function findCatalogProducts(
     return preferredProducts;
   }
 
-  return tx.catalogItem.findMany({
-    where: { is_active: true },
-    select: {
-      name: true,
-      image_url: true,
-      category: true,
-      price: true,
-    },
-    orderBy: [{ category: 'asc' }, { name: 'asc' }, { id: 'asc' }],
-  });
+  return [];
 }
 
 function selectProductsForVariant(

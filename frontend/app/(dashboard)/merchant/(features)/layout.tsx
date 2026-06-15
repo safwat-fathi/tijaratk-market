@@ -254,8 +254,8 @@ export default function MerchantLayout({
       </div>
 
       {/* Main content */}
-      <main className="pt-24 pb-10 lg:py-10 lg:ps-72">
-        <div className="px-4 sm:px-6 lg:px-8">{children}</div>
+      <main className="pt-24 pb-10 lg:py-10 lg:ps-72 w-full min-w-0 max-w-full">
+        <div className="px-4 sm:px-6 lg:px-8 w-full min-w-0">{children}</div>
       </main>
 
       {/* Mobile Sidebar Overlay (Simple implementation) */}

@@ -30,7 +30,7 @@ export default function AdminLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden" dir="rtl">
       {/* Mobile sidebar placeholder/trigger */}
       <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-x-6 border-b border-gray-200 bg-white px-4 py-4 shadow-sm sm:px-6 md:hidden">
         <button
@@ -181,8 +181,8 @@ export default function AdminLayout({
       )}
 
       {/* Main Content */}
-      <main className="pt-20 pb-10 md:py-0 md:ps-64 min-h-screen flex flex-col">
-        <div className="p-4 sm:p-8 flex-1">{children}</div>
+      <main className="pt-20 pb-10 md:py-0 md:ps-64 min-h-screen flex flex-col min-w-0 w-full">
+        <div className="p-4 sm:p-8 flex-1 min-w-0 w-full">{children}</div>
       </main>
     </div>
   );

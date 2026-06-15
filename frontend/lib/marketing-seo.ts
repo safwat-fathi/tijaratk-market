@@ -218,8 +218,8 @@ export function createPublicMetadata({
 			description,
 			images: [
 				{
-					url: `${SITE_URL}/logo.png`,
-					width: 800,
+					url: `${SITE_URL}/og-image.jpg`,
+					width: 1200,
 					height: 600,
 					alt: "شعار تجارتك",
 				},
@@ -229,7 +229,7 @@ export function createPublicMetadata({
 			card: "summary_large_image",
 			title,
 			description,
-			images: [`${SITE_URL}/logo.png`],
+			images: [`${SITE_URL}/og-image.jpg`],
 		},
 		robots: {
 			index: true,
