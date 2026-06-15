@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: "tijaratk-backend",
-      script: "dist/main.js", // PM2 cluster mode requires pointing directly to the compiled JS file
+      script: "dist/src/main.js", // PM2 cluster mode requires pointing directly to the compiled JS file
       cwd: "./backend",
       exec_mode: "cluster",
       instances: 3,
