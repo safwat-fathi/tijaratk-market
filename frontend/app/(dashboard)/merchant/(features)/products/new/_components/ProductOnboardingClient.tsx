@@ -276,6 +276,20 @@ export default function ProductOnboardingClient({
 	);
 
 	useEffect(() => {
+		if (!message) {
+			return;
+		}
+
+		const timeoutId = window.setTimeout(() => {
+			setMessage(null);
+		}, 3000);
+
+		return () => {
+			window.clearTimeout(timeoutId);
+		};
+	}, [message]);
+
+	useEffect(() => {
 		const sectionFromQuery = resolveSectionFromQuery(
 			searchParams.get("section"),
 		);
@@ -312,8 +326,14 @@ export default function ProductOnboardingClient({
 		replaceSectionInQuery(section);
 	};
 
-	const resolveCatalogCategoryParam = (category: string) =>
-		category === ALL_CATALOG_ITEMS ? undefined : category;
+	const resolveCatalogCategoryParam = (category: string, search?: string) => {
+		const normalizedSearch = search?.trim() || "";
+		if (normalizedSearch.length >= MIN_SEARCH_CHARS) {
+			return undefined;
+		}
+
+		return category === ALL_CATALOG_ITEMS ? undefined : category;
+	};
 
 	const loadCatalogPage = async ({
 		category,
@@ -338,7 +358,7 @@ export default function ProductOnboardingClient({
 		const loadAction = isShowingHidden ? loadHiddenCatalogItemsAction : loadCatalogItemsAction;
 		const response = await loadAction({
 			search: search?.trim() || undefined,
-			category: resolveCatalogCategoryParam(category),
+			category: resolveCatalogCategoryParam(category, search),
 			page,
 			limit: CATALOG_PAGE_LIMIT,
 		});

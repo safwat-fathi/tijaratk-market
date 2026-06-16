@@ -1262,8 +1262,8 @@ export class ProductsService {
         .replace(/\d+\s*(?:جم|جرام|كجم|كيلو|ك|g|kg)/gi, ' ')
         .replace(/(?:جم|جرام|كجم|كيلو|ك|g|kg)\s*\d+/gi, ' ')
         .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-        // Strip Arabic definite article "ال" at word boundaries
-        .replace(/\bال/g, '')
+        // Strip Arabic definite article "ال" at Unicode-aware word starts.
+        .replace(/(^|\s)ال(?=\p{L})/gu, '$1')
         .replace(/\s+/g, ' ')
         .trim()
     );
@@ -1305,8 +1305,8 @@ export class ProductsService {
               ' ',
               'gi'
             ),
-            '\\mال',
-            '',
+            '(^|\\\\s)ال([[:alpha:]])',
+            '\\\\1\\\\2',
             'g'
           ),
           '\\\\s+',
