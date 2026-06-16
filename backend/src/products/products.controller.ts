@@ -170,6 +170,54 @@ export class ProductsController {
     );
   }
 
+  @Get('catalog/hidden')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Get hidden catalog items' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Return hidden catalog items' })
+  findHiddenCatalogItems(@Req() req: Request, @Query() query: GetCatalogItemsDto) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.productsService.findHiddenCatalogItems(
+      tenantId,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @Post('catalog/:id/hide')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Hide a catalog item' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Catalog item hidden successfully' })
+  async hideCatalogItem(@Req() req: Request, @Param('id') id: string) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    await this.productsService.hideCatalogItem(tenantId, +id);
+    return { success: true };
+  }
+
+  @Post('catalog/:id/unhide')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Unhide a catalog item' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Catalog item unhidden successfully' })
+  async unhideCatalogItem(@Req() req: Request, @Param('id') id: string) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    await this.productsService.unhideCatalogItem(tenantId, +id);
+    return { success: true };
+  }
+
   @Get()
   @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)

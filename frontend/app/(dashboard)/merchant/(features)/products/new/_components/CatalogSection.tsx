@@ -22,6 +22,10 @@ type CatalogSectionProps = {
   onLoadMore: () => void;
   pendingCatalogIds: Record<number, boolean>;
   onAddFromCatalog: (item: CatalogItem) => void;
+  isShowingHidden?: boolean;
+  onToggleShowingHidden?: () => void;
+  onHideCatalogItem?: (item: CatalogItem) => void;
+  onUnhideCatalogItem?: (item: CatalogItem) => void;
 };
 
 export default function CatalogSection({
@@ -39,6 +43,10 @@ export default function CatalogSection({
   onLoadMore,
   pendingCatalogIds,
   onAddFromCatalog,
+  isShowingHidden = false,
+  onToggleShowingHidden,
+  onHideCatalogItem,
+  onUnhideCatalogItem,
 }: CatalogSectionProps) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -83,13 +91,14 @@ export default function CatalogSection({
           اختار من منتجات جاهزة
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          اضغط إضافة ويتم حفظ المنتج فوراً. متاح الآن{" "}
-          {formatArabicInteger(catalogMeta.total) || catalogMeta.total} منتج من
-          قاعدة البيانات.
+          {isShowingHidden 
+            ? `المنتجات التي قمت بإخفائها. (${formatArabicInteger(catalogMeta.total) || catalogMeta.total}) منتج.`
+            : `اضغط إضافة ويتم حفظ المنتج فوراً. متاح الآن ${formatArabicInteger(catalogMeta.total) || catalogMeta.total} منتج من قاعدة البيانات.`
+          }
         </p>
 
-        <div className="mt-4">
-          <div className="relative">
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="relative flex-1">
             <input
               ref={searchInputRef}
               value={searchQuery}
@@ -122,9 +131,19 @@ export default function CatalogSection({
               </button>
             )}
           </div>
+          {onToggleShowingHidden && (
+            <button
+              type="button"
+              onClick={onToggleShowingHidden}
+              className="text-sm font-medium text-gray-600 hover:text-gray-900 underline underline-offset-2"
+            >
+              {isShowingHidden ? "الرجوع للكتالوج" : "عرض المنتجات المخفية"}
+            </button>
+          )}
         </div>
 
-        <ScrollableTabList className="mb-4 mt-4">
+        {!isShowingHidden && (
+          <ScrollableTabList className="mb-4 mt-4">
           {categoryTabs.map((category) => (
             <TabButton
               key={category.key}
@@ -159,6 +178,7 @@ export default function CatalogSection({
             </TabButton>
           ))}
         </ScrollableTabList>
+        )}
 
         <div className="lg:max-h-[58vh] lg:overflow-y-auto lg:pe-1">
           {catalogItems.length === 0 && !isLoadingCatalog ? (
@@ -217,14 +237,37 @@ export default function CatalogSection({
                           </div>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onAddFromCatalog(item)}
-                        disabled={Boolean(pendingCatalogIds[item.id])}
-                        className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                      >
-                        {pendingCatalogIds[item.id] ? "...جاري" : "إضافة"}
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        {isShowingHidden ? (
+                          <button
+                            type="button"
+                            onClick={() => onUnhideCatalogItem?.(item)}
+                            disabled={Boolean(pendingCatalogIds[item.id])}
+                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 disabled:opacity-60"
+                          >
+                            {pendingCatalogIds[item.id] ? "...جاري" : "إظهار"}
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => onAddFromCatalog(item)}
+                              disabled={Boolean(pendingCatalogIds[item.id])}
+                              className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                            >
+                              {pendingCatalogIds[item.id] ? "...جاري" : "إضافة"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onHideCatalogItem?.(item)}
+                              disabled={Boolean(pendingCatalogIds[item.id])}
+                              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 disabled:opacity-60"
+                            >
+                              {pendingCatalogIds[item.id] ? "...جاري" : "إخفاء"}
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

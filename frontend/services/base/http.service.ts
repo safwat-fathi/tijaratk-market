@@ -164,7 +164,7 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 	private async _handleUnauthorized(): Promise<void> {
 		if (typeof window === "undefined") {
 			const { redirect } = await import("next/navigation");
-			redirect(REVOKE_ROUTE);
+			redirect(this._unauthorizedRedirectRoute);
 			return;
 		}
 
@@ -205,6 +205,7 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 	}
 
 	protected _tokenKey: string = STORAGE_KEYS.ACCESS_TOKEN;
+	protected _unauthorizedRedirectRoute: string = REVOKE_ROUTE;
 
 	private async _getAuthHeaders(): Promise<HeadersInit> {
 		if (typeof window !== "undefined") {

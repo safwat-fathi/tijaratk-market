@@ -129,6 +129,38 @@ class ProductsService extends HttpService {
       authRequired: true,
     });
   }
+
+  public async getHiddenCatalogItems(params?: {
+    page?: number;
+    limit?: number;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.page) {
+      query.set('page', String(params.page));
+    }
+    if (params?.limit) {
+      query.set('limit', String(params.limit));
+    }
+    const search = query.toString();
+    const route = search ? `catalog/hidden?${search}` : 'catalog/hidden';
+
+    return this.get<CatalogItemsResponse>(route, undefined, {
+      cache: 'no-store',
+      authRequired: true,
+    });
+  }
+
+  public async hideCatalogItem(catalogItemId: number) {
+    return this.post<{ success: boolean }>(`catalog/${catalogItemId}/hide`, undefined, undefined, {
+      authRequired: true,
+    });
+  }
+
+  public async unhideCatalogItem(catalogItemId: number) {
+    return this.post<{ success: boolean }>(`catalog/${catalogItemId}/unhide`, undefined, undefined, {
+      authRequired: true,
+    });
+  }
 }
 
 export const productsService = new ProductsService();

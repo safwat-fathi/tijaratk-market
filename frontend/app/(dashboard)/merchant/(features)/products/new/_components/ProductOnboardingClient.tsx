@@ -7,6 +7,9 @@ import {
   addProductFromCatalogAction,
   createProductAction,
   loadCatalogItemsAction,
+  loadHiddenCatalogItemsAction,
+  hideCatalogItemAction,
+  unhideCatalogItemAction,
   removeProductAction,
   searchTenantProductsAction,
   updateProductAction,
@@ -101,6 +104,7 @@ export default function ProductOnboardingClient({
 		useState<PublicProductsMeta>(initialCatalogMeta);
 	const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
 	const [catalogError, setCatalogError] = useState<string | null>(null);
+	const [isShowingHidden, setIsShowingHidden] = useState(false);
 
 	const [manualName, setManualName] = useState("");
 	const [manualPrice, setManualPrice] = useState("");
@@ -331,7 +335,8 @@ export default function ProductOnboardingClient({
 		setIsLoadingCatalog(true);
 		setCatalogError(null);
 
-		const response = await loadCatalogItemsAction({
+		const loadAction = isShowingHidden ? loadHiddenCatalogItemsAction : loadCatalogItemsAction;
+		const response = await loadAction({
 			search: search?.trim() || undefined,
 			category: resolveCatalogCategoryParam(category),
 			page,
@@ -392,7 +397,7 @@ export default function ProductOnboardingClient({
 			search: debouncedCatalogSearchQuery,
 			append: false,
 		});
-	}, [debouncedCatalogSearchQuery]);
+	}, [debouncedCatalogSearchQuery, isShowingHidden]);
 
 	const handleLoadMoreCatalogItems = () => {
 		if (isLoadingCatalog || !catalogMeta.has_next) {
@@ -703,6 +708,48 @@ export default function ProductOnboardingClient({
 				}));
 			}
 		})();
+	};
+
+	const handleHideCatalogItem = (item: CatalogItem) => {
+		const catalogItemId = item.id;
+		setPendingCatalogIds(prev => ({ ...prev, [catalogItemId]: true }));
+		void (async () => {
+			try {
+				const response = await hideCatalogItemAction(catalogItemId);
+				if (response.success) {
+					setCatalogItems(prev => prev.filter(i => i.id !== catalogItemId));
+					setCatalogMeta(prev => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+					setMessage("تم إخفاء المنتج بنجاح");
+				} else {
+					setMessage(response.message || "تعذر إخفاء المنتج");
+				}
+			} finally {
+				setPendingCatalogIds(prev => ({ ...prev, [catalogItemId]: false }));
+			}
+		})();
+	};
+
+	const handleUnhideCatalogItem = (item: CatalogItem) => {
+		const catalogItemId = item.id;
+		setPendingCatalogIds(prev => ({ ...prev, [catalogItemId]: true }));
+		void (async () => {
+			try {
+				const response = await unhideCatalogItemAction(catalogItemId);
+				if (response.success) {
+					setCatalogItems(prev => prev.filter(i => i.id !== catalogItemId));
+					setCatalogMeta(prev => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+					setMessage("تم إظهار المنتج بنجاح");
+				} else {
+					setMessage(response.message || "تعذر إظهار المنتج");
+				}
+			} finally {
+				setPendingCatalogIds(prev => ({ ...prev, [catalogItemId]: false }));
+			}
+		})();
+	};
+
+	const handleToggleShowingHidden = () => {
+		setIsShowingHidden(prev => !prev);
 	};
 
 	const handleStartEdit = (product: Product) => {
@@ -1075,6 +1122,10 @@ export default function ProductOnboardingClient({
 					onLoadMore={handleLoadMoreCatalogItems}
 					pendingCatalogIds={pendingCatalogIds}
 					onAddFromCatalog={handleAddFromCatalog}
+					isShowingHidden={isShowingHidden}
+					onToggleShowingHidden={handleToggleShowingHidden}
+					onHideCatalogItem={handleHideCatalogItem}
+					onUnhideCatalogItem={handleUnhideCatalogItem}
 				/>
 			)}
 

@@ -93,10 +93,16 @@ type UpdateTenantDirectoryProfilePayload = {
 	directory_status?: "draft" | "listed" | "hidden" | "suspended";
 };
 
+const ADMIN_AUTH_OPTIONS = {
+	authRequired: true,
+	cache: "no-store" as const,
+};
+
 class AdminApiService extends HttpService {
 	constructor() {
 		super("/admin");
 		this._tokenKey = STORAGE_KEYS.ADMIN_ACCESS_TOKEN;
+		this._unauthorizedRedirectRoute = `/api/auth/admin/revoke?redirect=${encodeURIComponent("/admin/login")}`;
 	}
 
 	public async login(payload: AdminLoginPayload) {
@@ -105,7 +111,7 @@ class AdminApiService extends HttpService {
 
 	public async logout() {
 		try {
-			await this.post("logout", {});
+			await this.post("logout", {}, undefined, ADMIN_AUTH_OPTIONS);
 		} catch (error) {
 			console.error("Admin logout API call failed:", error);
 		}
@@ -113,79 +119,69 @@ class AdminApiService extends HttpService {
 	}
 
 	public async getDashboardStats() {
-		return this.get<AdminDashboardStats>("dashboard-stats");
+		return this.get<AdminDashboardStats>("dashboard-stats", undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async getTenants() {
-		return this.get<AdminTenant[]>("tenants");
+		return this.get<AdminTenant[]>("tenants", undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async getDirectoryAreas() {
-		return this.get<AdminDirectoryArea[]>("directory/areas", undefined, {
-			authRequired: true,
-			cache: "no-store",
-		});
+		return this.get<AdminDirectoryArea[]>("directory/areas", undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async createDirectoryArea(payload: Partial<AdminDirectoryArea>) {
-		return this.post<AdminDirectoryArea>("directory/areas", payload, undefined, {
-			authRequired: true,
-		});
+		return this.post<AdminDirectoryArea>("directory/areas", payload, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async updateDirectoryArea(id: number, payload: Partial<AdminDirectoryArea>) {
-		return this.patch<AdminDirectoryArea>(`directory/areas/${id}`, payload, undefined, {
-			authRequired: true,
-		});
+		return this.patch<AdminDirectoryArea>(`directory/areas/${id}`, payload, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async deleteDirectoryArea(id: number) {
-		return this.delete<{ success: boolean }>(`directory/areas/${id}`, undefined, {
-			authRequired: true,
-		});
+		return this.delete<{ success: boolean }>(`directory/areas/${id}`, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async updateTenantStatus(id: number, status: string) {
-		return this.patch<AdminTenant>(`tenants/${id}/status`, { status });
+		return this.patch<AdminTenant>(`tenants/${id}/status`, { status }, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async updateTenantPlan(id: number, plan_id: number) {
-		return this.patch<AdminTenant>(`tenants/${id}/plan`, { plan_id });
+		return this.patch<AdminTenant>(`tenants/${id}/plan`, { plan_id }, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async updateTenantDirectoryProfile(
 		id: number,
 		payload: UpdateTenantDirectoryProfilePayload,
 	) {
-		return this.patch<AdminTenant>(`tenants/${id}/directory-profile`, payload, undefined, {
-			authRequired: true,
-		});
+		return this.patch<AdminTenant>(`tenants/${id}/directory-profile`, payload, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async getPlans() {
-		return this.get<AdminPlan[]>("plans");
+		return this.get<AdminPlan[]>("plans", undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async togglePlanStatus(id: number, is_active: boolean) {
-		return this.patch<AdminPlan>(`plans/${id}/status`, { is_active });
+		return this.patch<AdminPlan>(`plans/${id}/status`, { is_active }, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async createImport(formData: FormData) {
 		return this.post<ImportRun>("imports", formData, undefined, {
+			...ADMIN_AUTH_OPTIONS,
 			timeoutMs: 30000,
 		});
 	}
 
 	public async getImports() {
-		return this.get<ImportRun[]>("imports");
+		return this.get<ImportRun[]>("imports", undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async getImport(id: number) {
-		return this.get<ImportRun>(`imports/${id}`);
+		return this.get<ImportRun>(`imports/${id}`, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async getImportErrors(id: number) {
-		return this.get<ImportRowError[]>(`imports/${id}/errors`);
+		return this.get<ImportRowError[]>(`imports/${id}/errors`, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async getProducts(
@@ -200,7 +196,7 @@ class AdminApiService extends HttpService {
 		if (page) params.append("page", String(page));
 		if (limit) params.append("limit", String(limit));
 		const qs = params.toString() ? `?${params.toString()}` : '';
-		return this.get<AdminPaginatedResponse<AdminProduct>>(`products${qs}`);
+		return this.get<AdminPaginatedResponse<AdminProduct>>(`products${qs}`, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async getOrders(
@@ -215,7 +211,7 @@ class AdminApiService extends HttpService {
 		if (page) params.append("page", String(page));
 		if (limit) params.append("limit", String(limit));
 		const qs = params.toString() ? `?${params.toString()}` : '';
-		return this.get<AdminPaginatedResponse<AdminOrder>>(`orders${qs}`);
+		return this.get<AdminPaginatedResponse<AdminOrder>>(`orders${qs}`, undefined, ADMIN_AUTH_OPTIONS);
 	}
 }
 

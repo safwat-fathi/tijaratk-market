@@ -623,6 +623,12 @@ export class ProductsService {
       return this.emptyCatalogItemsResult(normalizedPage, normalizedLimit);
     }
 
+    const hiddenItems = await this.getPrismaClient().tenantHiddenCatalogItem.findMany({
+      where: { tenant_id: tenantId },
+      select: { catalog_item_id: true }
+    });
+    const hiddenItemIds = hiddenItems.map(h => h.catalog_item_id);
+
     if (normalizedSearch.length >= 2) {
       const normalizedCategory = this.normalizeOptionalCategory(category);
       const similarityThreshold =
@@ -631,6 +637,7 @@ export class ProductsService {
         this.resolveStrictMatchThresholds(normalizedSearch);
 
       const cacheKey = this.buildCatalogSearchCacheKey(
+        tenantId,
         normalizedSearch,
         normalizedCategory,
         catalogSource,
@@ -646,6 +653,7 @@ export class ProductsService {
       }
 
       const result = await this.searchWithinCatalogItems(
+        tenantId,
         normalizedSearch,
         normalizedCategory,
         catalogSource,
@@ -669,6 +677,11 @@ export class ProductsService {
       source: catalogSource,
       category: buildAllowedCatalogCategoryWhere(catalogSource),
     };
+    
+    if (hiddenItemIds.length > 0) {
+      where.id = { notIn: hiddenItemIds };
+    }
+
     if (category) {
       where.category = isCatalogCategoryAllowedForSource(
         catalogSource,
@@ -677,6 +690,95 @@ export class ProductsService {
         ? category
         : { in: [] };
     }
+
+    const [data, total] = await Promise.all([
+      this.getPrismaClient().catalogItem.findMany({
+        where,
+        orderBy: [{ category: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+        skip: (normalizedPage - 1) * normalizedLimit,
+        take: normalizedLimit,
+      }),
+      this.getPrismaClient().catalogItem.count({ where }),
+    ]);
+
+    const lastPage = total > 0 ? Math.ceil(total / normalizedLimit) : 1;
+
+    return {
+      data,
+      meta: {
+        total,
+        page: normalizedPage,
+        limit: normalizedLimit,
+        last_page: lastPage,
+        has_next: normalizedPage < lastPage,
+      },
+    };
+  }
+
+  /**
+   * Hides a catalog item from a tenant's view.
+   */
+  async hideCatalogItem(tenantId: number, catalogItemId: number): Promise<void> {
+    await this.getPrismaClient().tenantHiddenCatalogItem.upsert({
+      where: {
+        tenant_id_catalog_item_id: {
+          tenant_id: tenantId,
+          catalog_item_id: catalogItemId,
+        },
+      },
+      create: {
+        tenant_id: tenantId,
+        catalog_item_id: catalogItemId,
+      },
+      update: {},
+    });
+  }
+
+  /**
+   * Unhides a catalog item for a tenant.
+   */
+  async unhideCatalogItem(tenantId: number, catalogItemId: number): Promise<void> {
+    try {
+      await this.getPrismaClient().tenantHiddenCatalogItem.delete({
+        where: {
+          tenant_id_catalog_item_id: {
+            tenant_id: tenantId,
+            catalog_item_id: catalogItemId,
+          },
+        },
+      });
+    } catch (error) {
+      // Ignore if it's already deleted/doesn't exist
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Returns hidden catalog items for the tenant.
+   */
+  async findHiddenCatalogItems(
+    tenantId: number,
+    page = 1,
+    limit = 40,
+  ): Promise<CatalogItemsResult> {
+    const normalizedPage = Number.isFinite(page) ? Math.max(1, page) : 1;
+    const normalizedLimit = Number.isFinite(limit)
+      ? Math.min(100, Math.max(1, limit))
+      : 40;
+
+    const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+    if (!catalogSource) {
+      return this.emptyCatalogItemsResult(normalizedPage, normalizedLimit);
+    }
+
+    const where: Prisma.CatalogItemWhereInput = {
+      tenant_hidden_catalog_items: {
+        some: { tenant_id: tenantId },
+      },
+    };
 
     const [data, total] = await Promise.all([
       this.getPrismaClient().catalogItem.findMany({
@@ -1441,6 +1543,7 @@ export class ProductsService {
   }
 
   private buildCatalogSearchCacheKey(
+    tenantId: number,
     normalizedSearch: string,
     category: string | undefined,
     source: CatalogSource,
@@ -1450,10 +1553,11 @@ export class ProductsService {
     limit: number,
   ): string {
     const normalizedCategory = category || 'all';
-    return `catalog:search:${source}:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${page}:${limit}`;
+    return `catalog:search:tenant:${tenantId}:${source}:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${page}:${limit}`;
   }
 
   private async searchWithinCatalogItems(
+    tenantId: number,
     normalizedSearch: string,
     category: string | undefined,
     source: CatalogSource,
@@ -1475,6 +1579,7 @@ export class ProductsService {
 
     conditions.push(`is_active = true`);
     conditions.push(`source = ${addParam(source)}`);
+    conditions.push(`id NOT IN (SELECT catalog_item_id FROM tenant_hidden_catalog_items WHERE tenant_id = ${addParam(tenantId)})`);
 
     const allowedCategories = getAllowedCatalogCategoriesForSource(source);
     if (allowedCategories.length > 0) {

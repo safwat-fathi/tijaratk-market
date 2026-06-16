@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import { productsService } from '@/services/api/products.service';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import {
@@ -423,6 +425,95 @@ export async function searchTenantProductsAction(
     return {
       success: false,
       message: 'تعذر تحميل نتائج البحث',
+    };
+  }
+}
+
+export async function loadHiddenCatalogItemsAction(
+  params: { page?: number; limit?: number },
+): Promise<{
+  success: boolean;
+  data?: CatalogItemsResponse;
+  message?: string;
+}> {
+  try {
+    const response = await productsService.getHiddenCatalogItems(params);
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || 'تعذر تحميل المنتجات المخفية',
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Load hidden catalog items failed:', error);
+    return {
+      success: false,
+      message: 'تعذر تحميل المنتجات المخفية',
+    };
+  }
+}
+
+export async function hideCatalogItemAction(catalogItemId: number) {
+  try {
+    const response = await productsService.hideCatalogItem(catalogItemId);
+
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || 'تعذر إخفاء المنتج',
+      };
+    }
+
+    revalidatePath('/merchant/products/new');
+    return {
+      success: true,
+      message: 'تم إخفاء المنتج بنجاح',
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Hide catalog item failed:', error);
+    return {
+      success: false,
+      message: 'تعذر إخفاء المنتج',
+    };
+  }
+}
+
+export async function unhideCatalogItemAction(catalogItemId: number) {
+  try {
+    const response = await productsService.unhideCatalogItem(catalogItemId);
+
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || 'تعذر إظهار المنتج',
+      };
+    }
+
+    revalidatePath('/merchant/products/new');
+    return {
+      success: true,
+      message: 'تم إظهار المنتج بنجاح',
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Unhide catalog item failed:', error);
+    return {
+      success: false,
+      message: 'تعذر إظهار المنتج',
     };
   }
 }
