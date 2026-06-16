@@ -22,6 +22,7 @@ import {
   createOrderAction,
   type CreateOrderState,
 } from "@/actions/order-actions";
+import { useRouter } from "next/navigation";
 import {
 	markCustomAvailabilityRequestSentAction,
 	markAvailabilityRequestSentAction,
@@ -84,6 +85,15 @@ type ToastState = {
   type: "success" | "error";
 };
 
+const getCreatedOrderPublicToken = (data: unknown) => {
+  if (!data || typeof data !== "object" || !("public_token" in data)) {
+    return "";
+  }
+
+  const publicToken = (data as { public_token?: unknown }).public_token;
+  return typeof publicToken === "string" ? publicToken.trim() : "";
+};
+
 type OrderFormProps = {
   tenantSlug: string;
   areaSlug?: string;
@@ -115,6 +125,7 @@ export default function OrderForm({
   initialOrder,
   savedCustomerProfile,
 }: OrderFormProps) {
+  const router = useRouter();
   const [cartSelections, setCartSelections] = useState<
     Record<number, ProductCartSelection>
   >(() => buildInitialCartSelections(initialOrder));
@@ -186,6 +197,7 @@ export default function OrderForm({
   const hasHandledInvalidRef = useRef(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const reviewTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const hasNavigatedToSuccessRef = useRef(false);
 
   const categoryTabs = useMemo(
     () =>
@@ -431,6 +443,24 @@ export default function OrderForm({
       loadMoreObserver.current?.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (!state.success || hasNavigatedToSuccessRef.current) {
+      return;
+    }
+
+    const publicToken = getCreatedOrderPublicToken(state.data);
+    if (!publicToken) {
+      return;
+    }
+
+    hasNavigatedToSuccessRef.current = true;
+    router.replace(
+      `/${encodeURIComponent(tenantSlug)}/success?token=${encodeURIComponent(
+        publicToken,
+      )}`,
+    );
+  }, [router, state.data, state.success, tenantSlug]);
 
   useEffect(() => {
     if (!isCategoryProductsView) {

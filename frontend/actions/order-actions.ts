@@ -4,12 +4,10 @@ import { ordersService } from '@/services/api/orders.service';
 import { OrderStatus, OrderType } from '@/types/enums';
 import { CloseDayResponse, CreateOrderRequest } from '@/types/services/orders';
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { createOrderSchema } from '@/lib/validations/order';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import {
-  appendTrackedOrderToCookie,
-  upsertCustomerProfileBySlugInCookie,
+  persistCreatedOrderCustomerTracking,
 } from '@/lib/tracking/customer-tracking-cookie';
 
 export async function updateOrderStatus(orderId: number, status: OrderStatus) {
@@ -220,6 +218,62 @@ const buildCreateOrderPayload = ({
   delivery_area_slug: customerData.delivery_area_slug || undefined,
 });
 
+const buildCreateOrderFormData = (
+  payload: CreateOrderRequest,
+  sourceFormData: FormData,
+) => {
+  const formDataPayload = new FormData();
+  formDataPayload.append('customer', JSON.stringify(payload.customer));
+
+  if (payload.order_type) formDataPayload.append('order_type', payload.order_type);
+  if (payload.items && payload.items.length > 0) {
+    formDataPayload.append('items', JSON.stringify(payload.items));
+  }
+  if (payload.free_text_payload) {
+    formDataPayload.append(
+      'free_text_payload',
+      JSON.stringify(payload.free_text_payload),
+    );
+  }
+  if (payload.total !== undefined) {
+    formDataPayload.append('total', payload.total.toString());
+  }
+  if (payload.notes) formDataPayload.append('notes', payload.notes);
+  if (payload.delivery_fee !== undefined) {
+    formDataPayload.append('delivery_fee', payload.delivery_fee.toString());
+  }
+  if (payload.order_source) {
+    formDataPayload.append('order_source', payload.order_source);
+  }
+  if (payload.source_metadata) {
+    formDataPayload.append(
+      'source_metadata',
+      JSON.stringify(payload.source_metadata),
+    );
+  }
+  if (payload.delivery_area_id !== undefined) {
+    formDataPayload.append(
+      'delivery_area_id',
+      payload.delivery_area_id.toString(),
+    );
+  }
+  if (payload.delivery_area_slug) {
+    formDataPayload.append('delivery_area_slug', payload.delivery_area_slug);
+  }
+
+  const unavailabilityOption = sourceFormData.get('unavailabilityOption');
+  if (typeof unavailabilityOption === 'string' && unavailabilityOption) {
+    formDataPayload.append('prescription_unavailability_action', unavailabilityOption);
+  }
+
+  const prescriptionFile = sourceFormData.get('prescription_file');
+  if (prescriptionFile instanceof File && prescriptionFile.size > 0) {
+    formDataPayload.append('prescription_file', prescriptionFile);
+  }
+
+  return formDataPayload;
+};
+
 const persistCreatedOrderTrackingArtifacts = async ({
   tenantSlug,
   responseData,
@@ -237,28 +291,41 @@ const persistCreatedOrderTrackingArtifacts = async ({
 
   if (publicToken) {
     try {
-      await appendTrackedOrderToCookie({
-        token: publicToken,
+      await persistCreatedOrderCustomerTracking({
+        trackedOrder: {
+          token: publicToken,
+          slug: tenantSlug,
+          created_at:
+            typeof createdOrder?.created_at === 'string'
+              ? createdOrder.created_at
+              : new Date().toISOString(),
+        },
         slug: tenantSlug,
-        created_at:
-          typeof createdOrder?.created_at === 'string'
-            ? createdOrder.created_at
-            : new Date().toISOString(),
+        profile: {
+          name: customerData.customer_name,
+          phone: customerData.customer_phone,
+          address: customerData.delivery_address,
+          notes: customerData.notes,
+        },
       });
     } catch (cookieError) {
-      console.error('Failed to persist tracked order cookie:', cookieError);
+      console.error('Failed to persist order tracking cookie:', cookieError);
     }
+    return;
   }
 
   try {
-    await upsertCustomerProfileBySlugInCookie(tenantSlug, {
-      name: customerData.customer_name,
-      phone: customerData.customer_phone,
-      address: customerData.delivery_address,
-      notes: customerData.notes,
+    await persistCreatedOrderCustomerTracking({
+      slug: tenantSlug,
+      profile: {
+        name: customerData.customer_name,
+        phone: customerData.customer_phone,
+        address: customerData.delivery_address,
+        notes: customerData.notes,
+      },
     });
   } catch (cookieError) {
-    console.error('Failed to persist customer profile cookie:', cookieError);
+    console.error('Failed to persist customer profile tracking cookie:', cookieError);
   }
 };
 
@@ -286,30 +353,7 @@ export async function createOrderAction(
     items,
     orderRequest: order_request,
   });
-
-  const formDataPayload = new FormData();
-  formDataPayload.append('customer', JSON.stringify(payload.customer));
-  
-  if (payload.order_type) formDataPayload.append('order_type', payload.order_type);
-  if (payload.items && payload.items.length > 0) formDataPayload.append('items', JSON.stringify(payload.items));
-  if (payload.free_text_payload) formDataPayload.append('free_text_payload', JSON.stringify(payload.free_text_payload));
-  if (payload.total !== undefined) formDataPayload.append('total', payload.total.toString());
-  if (payload.notes) formDataPayload.append('notes', payload.notes);
-  if (payload.delivery_fee !== undefined) formDataPayload.append('delivery_fee', payload.delivery_fee.toString());
-  if (payload.order_source) formDataPayload.append('order_source', payload.order_source);
-  if (payload.source_metadata) formDataPayload.append('source_metadata', JSON.stringify(payload.source_metadata));
-  if (payload.delivery_area_id !== undefined) formDataPayload.append('delivery_area_id', payload.delivery_area_id.toString());
-  if (payload.delivery_area_slug) formDataPayload.append('delivery_area_slug', payload.delivery_area_slug);
-  
-  const unavailabilityOption = formData.get('unavailabilityOption');
-  if (typeof unavailabilityOption === 'string' && unavailabilityOption) {
-    formDataPayload.append('prescription_unavailability_action', unavailabilityOption);
-  }
-
-  const prescriptionFile = formData.get('prescription_file');
-  if (prescriptionFile instanceof File && prescriptionFile.size > 0) {
-    formDataPayload.append('prescription_file', prescriptionFile);
-  }
+  const formDataPayload = buildCreateOrderFormData(payload, formData);
 
   try {
     const response = await ordersService.createPublicOrder(tenantSlug, formDataPayload);
@@ -326,14 +370,10 @@ export async function createOrderAction(
           ? ((response.data as CreatedOrderMeta).public_token as string).trim()
           : '';
 
-      if (publicToken) {
-        redirect(`/${tenantSlug}/success?token=${publicToken}`);
-      }
-
       return {
         success: true,
         message: 'Order created successfully',
-        data: response.data,
+        data: publicToken ? { public_token: publicToken } : response.data,
       };
     }
 

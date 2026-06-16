@@ -4,6 +4,8 @@ import { STORAGE_KEYS } from "@/constants";
 
 const COOKIE_VERSION = 1;
 const MAX_TRACKED_ORDER_ITEMS = 15;
+const MAX_CUSTOMER_PROFILE_ITEMS = 8;
+const MAX_TRACKING_COOKIE_VALUE_BYTES = 3200;
 const TRACKING_COOKIE_TTL_DAYS = 90;
 
 export type TrackedOrderCookieItem = {
@@ -157,6 +159,69 @@ function normalizeCustomerProfilesBySlug(
 	return Object.fromEntries(nextProfilesEntries);
 }
 
+function sortCustomerProfileEntriesByNewest(
+	profilesBySlug: Record<string, CustomerProfileCookieItem>,
+): Array<[string, CustomerProfileCookieItem]> {
+	return Object.entries(profilesBySlug).sort(([, profileA], [, profileB]) => {
+		const timeA = Date.parse(profileA.updated_at);
+		const timeB = Date.parse(profileB.updated_at);
+
+		return (Number.isNaN(timeB) ? 0 : timeB) - (Number.isNaN(timeA) ? 0 : timeA);
+	});
+}
+
+function limitCustomerProfilesBySlug(
+	profilesBySlug: Record<string, CustomerProfileCookieItem>,
+	limit = MAX_CUSTOMER_PROFILE_ITEMS,
+): Record<string, CustomerProfileCookieItem> {
+	return Object.fromEntries(
+		sortCustomerProfileEntriesByNewest(profilesBySlug).slice(0, limit),
+	);
+}
+
+function getEncodedCookiePayloadSize(payload: TrackedOrdersCookiePayload) {
+	return encodeURIComponent(JSON.stringify(payload)).length;
+}
+
+function normalizeTrackedOrdersCookiePayload(
+	payload: TrackedOrdersCookiePayload,
+): TrackedOrdersCookiePayload {
+	let normalizedPayload: TrackedOrdersCookiePayload = {
+		v: COOKIE_VERSION,
+		items: normalizeTrackedOrderItems(payload.items),
+		customer_profiles_by_slug: limitCustomerProfilesBySlug(
+			payload.customer_profiles_by_slug,
+		),
+	};
+
+	while (
+		getEncodedCookiePayloadSize(normalizedPayload) >
+			MAX_TRACKING_COOKIE_VALUE_BYTES &&
+		Object.keys(normalizedPayload.customer_profiles_by_slug).length > 0
+	) {
+		normalizedPayload = {
+			...normalizedPayload,
+			customer_profiles_by_slug: limitCustomerProfilesBySlug(
+				normalizedPayload.customer_profiles_by_slug,
+				Object.keys(normalizedPayload.customer_profiles_by_slug).length - 1,
+			),
+		};
+	}
+
+	while (
+		getEncodedCookiePayloadSize(normalizedPayload) >
+			MAX_TRACKING_COOKIE_VALUE_BYTES &&
+		normalizedPayload.items.length > 1
+	) {
+		normalizedPayload = {
+			...normalizedPayload,
+			items: normalizedPayload.items.slice(0, -1),
+		};
+	}
+
+	return normalizedPayload;
+}
+
 function parseTrackedOrdersCookie(
 	rawCookie?: string,
 ): TrackedOrdersCookiePayload {
@@ -180,7 +245,9 @@ function parseTrackedOrdersCookie(
 		return {
 			v: COOKIE_VERSION,
 			items: normalizeTrackedOrderItems(items),
-			customer_profiles_by_slug: customerProfilesBySlug,
+			customer_profiles_by_slug: limitCustomerProfilesBySlug(
+				customerProfilesBySlug,
+			),
 		};
 	} catch {
 		return { v: COOKIE_VERSION, items: [], customer_profiles_by_slug: {} };
@@ -197,17 +264,22 @@ async function writeTrackedOrdersCookie(
 	payload: TrackedOrdersCookiePayload,
 ): Promise<void> {
 	const cookieStore = await cookies();
+	const normalizedPayload = normalizeTrackedOrdersCookiePayload(payload);
 	const expiresAt = new Date(
 		Date.now() + TRACKING_COOKIE_TTL_DAYS * 24 * 60 * 60 * 1000,
 	);
 
-	cookieStore.set(STORAGE_KEYS.CUSTOMER_TRACKED_ORDERS, JSON.stringify(payload), {
-		httpOnly: true,
-		secure: process.env.NODE_ENV === "production",
-		sameSite: "lax",
-		path: "/",
-		expires: expiresAt,
-	});
+	cookieStore.set(
+		STORAGE_KEYS.CUSTOMER_TRACKED_ORDERS,
+		JSON.stringify(normalizedPayload),
+		{
+			httpOnly: true,
+			secure: process.env.NODE_ENV === "production",
+			sameSite: "lax",
+			path: "/",
+			expires: expiresAt,
+		},
+	);
 }
 
 export async function listTrackedOrdersFromCookie(): Promise<
@@ -232,6 +304,45 @@ export async function appendTrackedOrderToCookie(
 		v: COOKIE_VERSION,
 		items: nextItems,
 		customer_profiles_by_slug: payload.customer_profiles_by_slug,
+	});
+
+	return nextItems;
+}
+
+export async function persistCreatedOrderCustomerTracking({
+	trackedOrder,
+	slug,
+	profile,
+}: {
+	trackedOrder?: TrackedOrderCookieItem;
+	slug: string;
+	profile: CustomerProfileCookieInput;
+}): Promise<TrackedOrderCookieItem[]> {
+	const normalizedSlug = normalizeSlugKey(slug);
+	const normalizedPhone = profile.phone.trim();
+	const payload = await readTrackedOrdersCookiePayload();
+	const nextItems =
+		trackedOrder && isValidTrackedOrderItem(trackedOrder)
+			? normalizeTrackedOrderItems([trackedOrder, ...payload.items])
+			: payload.items;
+	const nextProfilesMap = new Map(
+		Object.entries(payload.customer_profiles_by_slug),
+	);
+
+	if (normalizedSlug && normalizedPhone) {
+		nextProfilesMap.set(normalizedSlug, {
+			phone: normalizedPhone,
+			name: normalizeOptionalText(profile.name),
+			address: normalizeOptionalText(profile.address),
+			notes: normalizeOptionalText(profile.notes),
+			updated_at: new Date().toISOString(),
+		});
+	}
+
+	await writeTrackedOrdersCookie({
+		v: COOKIE_VERSION,
+		items: nextItems,
+		customer_profiles_by_slug: Object.fromEntries(nextProfilesMap),
 	});
 
 	return nextItems;
@@ -278,7 +389,9 @@ export async function upsertCustomerProfileBySlugInCookie(
 	await writeTrackedOrdersCookie({
 		v: COOKIE_VERSION,
 		items: payload.items,
-		customer_profiles_by_slug: Object.fromEntries(nextProfilesMap),
+		customer_profiles_by_slug: limitCustomerProfilesBySlug(
+			Object.fromEntries(nextProfilesMap),
+		),
 	});
 }
 
