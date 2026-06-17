@@ -157,6 +157,11 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
                   ملاحظة: {order.notes}
                </span>
             )}
+            {order.card_on_delivery_requested && (
+              <span className="mt-1 block text-xs font-bold text-brand-primary">
+                طلب الدفع بالكارت مع التوصيل
+              </span>
+            )}
           </p>
         </div>
         </Link>

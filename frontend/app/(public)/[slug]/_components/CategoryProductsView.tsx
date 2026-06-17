@@ -9,6 +9,7 @@ import type { CategoryTab, PaginationState } from "../_utils/order-form";
 type CategoryProductsViewProps = {
   categoryTabs: CategoryTab[];
   activeCategory: string;
+  searchTerm?: string;
   activeProducts: Product[];
   activePagination: PaginationState;
   hasMoreInActiveCategory: boolean;
@@ -37,6 +38,7 @@ type CategoryProductsViewProps = {
 export default function CategoryProductsView({
   categoryTabs,
   activeCategory,
+  searchTerm = "",
   activeProducts,
   activePagination,
   hasMoreInActiveCategory,
@@ -55,9 +57,16 @@ export default function CategoryProductsView({
     categoryTabs.find((item) => item.key === activeCategory)?.label ||
     "المنتجات";
   const hasProducts = activeProducts.length > 0;
-  const isInitialCategoryLoading = activePagination.isLoading && !hasProducts;
+  const isInitialCategoryLoading =
+    !hasProducts && (activePagination.isLoading || !activePagination.hasLoaded);
   const shouldShowEmptyState =
-    !activePagination.isLoading && !activePagination.error && !hasProducts;
+    activePagination.hasLoaded &&
+    !activePagination.isLoading &&
+    !activePagination.error &&
+    !hasProducts;
+  const emptyStateMessage = searchTerm
+    ? "لا توجد نتائج لهذا البحث."
+    : "لا توجد منتجات في هذا القسم حالياً.";
 
   return (
     <div className="w-full min-w-0 rounded-lg border border-brand-border bg-white p-4 shadow-soft">
@@ -126,7 +135,7 @@ export default function CategoryProductsView({
 
       {shouldShowEmptyState && (
         <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
-          لا توجد منتجات في هذا القسم حالياً.
+          {emptyStateMessage}
         </div>
       )}
 

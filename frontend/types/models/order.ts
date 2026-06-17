@@ -78,6 +78,7 @@ export interface Order {
   prescription_mime_type?: string | null;
   prescription_unavailability_action?: string | null;
   notes?: string;
+  card_on_delivery_requested?: boolean;
   customer_rejection_reason?: string | null;
   customer_rejected_at?: string | null;
   created_at: string;

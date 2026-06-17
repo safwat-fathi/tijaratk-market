@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNumber,
@@ -26,7 +27,8 @@ const parseJsonIfString = ({ value }: { value: unknown }) => {
   }
 
   try {
-    return JSON.parse(value);
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return value;
   }
@@ -34,12 +36,12 @@ const parseJsonIfString = ({ value }: { value: unknown }) => {
 
 const parseCustomer = ({ value }: { value: unknown }) => {
   const parsed = parseJsonIfString({ value });
-  return plainToInstance(CreateCustomerDto, parsed);
+  return plainToInstance(CreateCustomerDto, parsed as object);
 };
 
 const parseItems = ({ value }: { value: unknown }) => {
   const parsed = parseJsonIfString({ value });
-  return plainToInstance(CreateOrderItemDto, parsed);
+  return plainToInstance(CreateOrderItemDto, parsed as object);
 };
 
 export class CreateOrderItemDto {
@@ -182,6 +184,15 @@ export class CreateOrderDto {
   @IsString()
   @MaxLength(120)
   delivery_area_slug?: string;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Customer requested card payment with delivery',
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === true || value === 'true')
+  card_on_delivery_requested?: boolean;
 
   @ApiPropertyOptional({
     example: 'call',

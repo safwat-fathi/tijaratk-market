@@ -128,6 +128,31 @@ export type UpdateStoreSettingsState = {
 const updateStoreSettingsSchema = z.object({
   name: z.string().min(2, "الاسم يجب أن يكون أكثر من حرفين"),
   category: z.string().min(1, "يرجى اختيار النشاط"),
+  instapay_account_name: z
+    .string()
+    .max(120, "اسم حساب إنستاباي طويل جداً")
+    .optional()
+    .or(z.literal(""))
+    .transform(value => value?.trim() || undefined),
+  instapay_account_number: z
+    .string()
+    .max(120, "رقم أو حساب إنستاباي طويل جداً")
+    .optional()
+    .or(z.literal(""))
+    .transform(value => value?.trim() || undefined),
+  ewallet_account_name: z
+    .string()
+    .max(120, "اسم المحفظة طويل جداً")
+    .optional()
+    .or(z.literal(""))
+    .transform(value => value?.trim() || undefined),
+
+  ewallet_account_number: z
+    .string()
+    .max(120, "رقم المحفظة طويل جداً")
+    .optional()
+    .or(z.literal(""))
+    .transform(value => value?.trim() || undefined),
   delivery_fee: z.coerce
     .number({ error: "أدخل قيمة رقمية صحيحة" })
     .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر"),
@@ -153,6 +178,22 @@ const updateStoreSettingsSchema = z.object({
   ),
   delivery_area_ids: z.array(z.coerce.number()).optional(),
 }).refine(
+  data => Boolean(data.instapay_account_name) === Boolean(data.instapay_account_number),
+  {
+    message: "أدخل اسم ورقم حساب إنستاباي معاً",
+    path: ["instapay_account_number"],
+  },
+).refine(
+  data =>
+    !data.ewallet_account_name && !data.ewallet_account_number
+      ? true
+      : Boolean(data.ewallet_account_name) &&
+        Boolean(data.ewallet_account_number),
+  {
+    message: "أدخل الاسم ورقم المحفظة معاً",
+    path: ["ewallet_account_number"],
+  },
+).refine(
   (data) => {
     if (!data.delivery_available) return true;
     const hasStart = !!data.delivery_starts_at;
@@ -199,7 +240,18 @@ export async function updateStoreSettingsAction(
     };
   }
 
-  const { name, category, area_id, delivery_area_ids, ...deliveryData } = validatedFields.data;
+  const {
+    name,
+    category,
+    instapay_account_name,
+    instapay_account_number,
+    ewallet_account_name,
+    ewallet_account_number,
+    area_id,
+    delivery_area_ids,
+    ...deliveryData
+  } = validatedFields.data;
+
   const deliveryAreaValidation = await validateDeliveryAreasInsideMainArea(
     area_id,
     delivery_area_ids ?? [],
@@ -222,6 +274,11 @@ export async function updateStoreSettingsAction(
   const generalRes = await tenantsService.updateMyGeneralSettings({
     name,
     category,
+    instapay_account_name,
+    instapay_account_number,
+
+    ewallet_account_name,
+    ewallet_account_number,
   });
 
   if (!generalRes.success) {

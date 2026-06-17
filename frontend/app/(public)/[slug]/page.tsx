@@ -164,17 +164,11 @@ export default async function StorePage({ params, searchParams }: Props) {
       {/* <WriteOrderFAB /> */}
 
       <div className="min-w-0">
-        {products.length === 0 && (
-          <div className="my-6 rounded-lg border border-brand-border bg-white p-4 text-center text-muted-foreground shadow-soft">
-            <p className="font-medium text-brand-text">لا توجد منتجات بعد.</p>
-            <p className="text-sm">فقط اكتب طلبك بالأسفل.</p>
-          </div>
-        )}
-
         <OrderForm
           tenantSlug={tenant.slug}
           areaSlug={areaSlug}
           isPharmacy={tenant.category === "pharmacy"}
+          tenantCategory={tenant.category}
           deliverySettings={tenant}
           initialCategory={category}
           initialProducts={products}

@@ -220,6 +220,8 @@ export class OrdersService {
           delivery_time_window_snapshot: deliveryTimeWindowSnapshot,
           free_text_payload: createOrderDto.free_text_payload,
           notes: createOrderDto.notes,
+          card_on_delivery_requested:
+            createOrderDto.card_on_delivery_requested ?? false,
           delivery_address: createOrderDto.customer.address,
           customer_phone: customer.phone,
           customer_name: createOrderDto.customer.name,

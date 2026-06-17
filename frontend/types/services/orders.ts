@@ -29,6 +29,7 @@ export interface CreateOrderRequest {
   source_metadata?: Record<string, unknown>;
   delivery_area_id?: number;
   delivery_area_slug?: string;
+  card_on_delivery_requested?: boolean;
   prescription_unavailability_action?: string;
 }
 

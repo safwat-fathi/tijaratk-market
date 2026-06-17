@@ -6,7 +6,7 @@ const createService = (prisma: any) =>
   new ProductsService(
     prisma,
     {} as any,
-    {} as any,
+    { recalculateTenantReadiness: jest.fn() } as any,
     {
       get: jest.fn(),
       set: jest.fn(),
@@ -115,5 +115,141 @@ describe('ProductsService catalog source isolation', () => {
     const result = await service.findCatalogCategories(1);
 
     expect(result.map((item) => item.category)).not.toContain('أرز ومكرونة');
+  });
+
+  it('creates pharmacy catalog products with box unit label', async () => {
+    const prisma = {
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.pharmacy }),
+      },
+      catalogItem: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 10,
+          name: 'بنادول',
+          image_url: null,
+          category: 'أدوية',
+          price: 25,
+        }),
+      },
+      product: {
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({ id: 1, ...data }),
+        ),
+      },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ count: 0 }]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+    };
+    const service = createService(prisma);
+
+    await service.createFromCatalog(1, { catalog_item_id: 10 });
+
+    expect(prisma.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          order_config: { quantity: { unit_label: 'علبة' } },
+        }),
+      }),
+    );
+  });
+
+  it('creates grocery catalog products with piece unit label', async () => {
+    const prisma = {
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.grocery }),
+      },
+      catalogItem: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 10,
+          name: 'سكر',
+          image_url: null,
+          category: 'أساسيات',
+          price: 40,
+        }),
+      },
+      product: {
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({ id: 1, ...data }),
+        ),
+      },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ count: 0 }]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+    };
+    const service = createService(prisma);
+
+    await service.createFromCatalog(1, { catalog_item_id: 10 });
+
+    expect(prisma.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          order_config: { quantity: { unit_label: 'قطعة' } },
+        }),
+      }),
+    );
+  });
+
+  it('defaults manual pharmacy products to box unit label', async () => {
+    const prisma = {
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.pharmacy }),
+      },
+      product: {
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({ id: 1, ...data }),
+        ),
+      },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ count: 0 }]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+    };
+    const service = createService(prisma);
+
+    await service.create(1, {
+      name: 'فيتامين سي',
+      order_config: { quantity: { unit_label: '' } },
+    } as any);
+
+    expect(prisma.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          order_config: { quantity: { unit_label: 'علبة' } },
+        }),
+      }),
+    );
+  });
+
+  it('preserves explicit manual pharmacy unit label', async () => {
+    const prisma = {
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.pharmacy }),
+      },
+      product: {
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({ id: 1, ...data }),
+        ),
+      },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ count: 0 }]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+    };
+    const service = createService(prisma);
+
+    await service.create(1, {
+      name: 'دواء شراب',
+      order_config: { quantity: { unit_label: 'زجاجة' } },
+    } as any);
+
+    expect(prisma.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          order_config: { quantity: { unit_label: 'زجاجة' } },
+        }),
+      }),
+    );
   });
 });

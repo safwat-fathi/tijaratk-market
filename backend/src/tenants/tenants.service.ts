@@ -98,11 +98,24 @@ export class TenantsService {
     id: number,
     dto: UpdateTenantSettingsDto,
   ): Promise<Tenant> {
+    const normalizeOptionalText = (value?: string) => {
+      const normalized = value?.trim();
+      return normalized || null;
+    };
+
     return this.prisma.tenant.update({
       where: { id },
       data: {
         name: dto.name,
-        category: dto.category as any, // Cast to any to avoid strict type issues with generated client vs enum
+        category: dto.category,
+        instapay_account_name: normalizeOptionalText(dto.instapay_account_name),
+        instapay_account_number: normalizeOptionalText(
+          dto.instapay_account_number,
+        ),
+        ewallet_account_name: normalizeOptionalText(dto.ewallet_account_name),
+        ewallet_account_number: normalizeOptionalText(
+          dto.ewallet_account_number,
+        ),
       },
     });
   }

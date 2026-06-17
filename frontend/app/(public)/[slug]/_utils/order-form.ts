@@ -11,6 +11,7 @@ export type PaginationState = {
 	page: number;
 	lastPage: number;
 	isLoading: boolean;
+	hasLoaded: boolean;
 	error: string | null;
 };
 

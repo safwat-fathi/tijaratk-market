@@ -16,9 +16,15 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
-import { Prisma, Product, CatalogItem } from '../../generated/prisma/client';
+import {
+  Prisma,
+  Product,
+  CatalogItem,
+  TenantCategory,
+} from '../../generated/prisma/client';
 import {
   buildAllowedCatalogCategoryWhere,
+  CATALOG_SOURCE_CHEFAA,
   CatalogSource,
   getAllowedCatalogCategoriesForSource,
   isCatalogCategoryAllowedForSource,
@@ -31,6 +37,7 @@ const PRODUCT_SEARCH_CACHE_TTL_SECONDS = 60;
 const DEFAULT_WEIGHT_PRESET_GRAMS = [250, 500, 1000] as const;
 const DEFAULT_PRICE_PRESET_AMOUNTS = [100, 200, 300] as const;
 const DEFAULT_QUANTITY_UNIT_LABEL = 'قطعة';
+const DEFAULT_PHARMACY_QUANTITY_UNIT_LABEL = 'علبة';
 const MAX_ORDER_PRESETS = 6;
 
 type QuantityUnitOptionConfig = {
@@ -162,11 +169,8 @@ export class ProductsService {
 
     await this.ensureUniqueActiveProductName(tenantId, normalizedName);
 
-    const tenant = await this.getPrismaClient().tenant.findUnique({
-      where: { id: tenantId },
-      select: { category: true },
-    });
-    const defaultUnitLabel = tenant?.category === 'pharmacy' ? 'علبة' : 'قطعة';
+    const defaultUnitLabel =
+      await this.resolveDefaultQuantityUnitLabel(tenantId);
 
     const orderMode = this.resolveProductOrderMode(createProductDto.order_mode);
     const orderConfig = this.normalizeProductOrderConfig(
@@ -252,7 +256,7 @@ export class ProductsService {
         order_config: this.normalizeProductOrderConfig(
           ProductOrderMode.QUANTITY,
           undefined,
-          catalogSource === 'chefaa_csv' ? 'علبة' : 'قطعة',
+          this.resolveDefaultQuantityUnitLabelForCatalogSource(catalogSource),
         ) as Prisma.InputJsonValue,
         is_available: true,
       },
@@ -874,11 +878,8 @@ export class ProductsService {
       updateProductDto.order_mode !== undefined ||
       updateProductDto.order_config !== undefined
     ) {
-      const tenant = await this.getPrismaClient().tenant.findUnique({
-        where: { id: tenantId },
-        select: { category: true },
-      });
-      const defaultUnitLabel = tenant?.category === 'pharmacy' ? 'علبة' : 'قطعة';
+      const defaultUnitLabel =
+        await this.resolveDefaultQuantityUnitLabel(tenantId);
 
       const nextOrderMode = this.resolveProductOrderMode(
         updateProductDto.order_mode ?? (product.order_mode as ProductOrderMode),
@@ -1349,6 +1350,27 @@ export class ProductsService {
     return mode;
   }
 
+  private async resolveDefaultQuantityUnitLabel(
+    tenantId: number,
+  ): Promise<string> {
+    const tenant = await this.getPrismaClient().tenant.findUnique({
+      where: { id: tenantId },
+      select: { category: true },
+    });
+
+    return tenant?.category === TenantCategory.pharmacy
+      ? DEFAULT_PHARMACY_QUANTITY_UNIT_LABEL
+      : DEFAULT_QUANTITY_UNIT_LABEL;
+  }
+
+  private resolveDefaultQuantityUnitLabelForCatalogSource(
+    source: CatalogSource,
+  ): string {
+    return source === CATALOG_SOURCE_CHEFAA
+      ? DEFAULT_PHARMACY_QUANTITY_UNIT_LABEL
+      : DEFAULT_QUANTITY_UNIT_LABEL;
+  }
+
   private normalizeProductOrderConfig(
     mode: ProductOrderMode,
     rawConfig?: unknown,
@@ -1366,11 +1388,17 @@ export class ProductsService {
         return this.normalizePriceOrderConfig(config.price);
       case ProductOrderMode.QUANTITY:
       default:
-        return this.normalizeQuantityOrderConfig(config.quantity, defaultUnitLabel);
+        return this.normalizeQuantityOrderConfig(
+          config.quantity,
+          defaultUnitLabel,
+        );
     }
   }
 
-  private normalizeQuantityOrderConfig(rawValue: unknown, defaultUnitLabel: string): ProductOrderConfig {
+  private normalizeQuantityOrderConfig(
+    rawValue: unknown,
+    defaultUnitLabel: string,
+  ): ProductOrderConfig {
     const quantityConfig =
       rawValue && typeof rawValue === 'object'
         ? (rawValue as Record<string, unknown>)

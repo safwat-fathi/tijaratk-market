@@ -194,6 +194,14 @@ export default async function OrderDetailsPage({
 					</section>
 				)}
 
+				{order.card_on_delivery_requested && (
+					<section className="rounded-lg border border-brand-accent/30 bg-brand-soft p-4 shadow-soft">
+						<p className="text-sm font-semibold text-brand-primary">
+							العميل طلب الدفع بالكارت مع التوصيل.
+						</p>
+					</section>
+				)}
+
 				<Card className="p-4">
 					<div className="space-y-2">
 						<div className="flex justify-between text-sm text-muted-foreground">

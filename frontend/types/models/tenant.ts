@@ -11,9 +11,14 @@ export interface Tenant {
   delivery_available?: boolean;
   delivery_starts_at?: string | null;
   delivery_ends_at?: string | null;
+  instapay_account_name?: string | null;
+  instapay_account_number?: string | null;
+  ewallet_account_name?: string | null;
+  ewallet_account_number?: string | null;
   directory_profile?: TenantDirectoryProfile | null;
   tenant_delivery_areas?: TenantDeliveryArea[];
 }
+
 
 export interface DirectoryArea {
   id: number;
@@ -57,5 +62,12 @@ export interface TenantDeliveryArea {
 
 export type TenantDeliverySettings = Pick<
   Tenant,
-  "delivery_fee" | "delivery_available" | "delivery_starts_at" | "delivery_ends_at"
+  | "delivery_fee"
+  | "delivery_available"
+  | "delivery_starts_at"
+  | "delivery_ends_at"
+  | "instapay_account_name"
+  | "instapay_account_number"
+  | "ewallet_account_name"
+  | "ewallet_account_number"
 >;

@@ -1,6 +1,17 @@
 "use client";
 
 import {
+  Copy,
+  Clock3,
+  CreditCard,
+  Search,
+  Store,
+  WalletCards,
+  X,
+} from "lucide-react";
+import { useDebounce } from "use-debounce";
+import Image from "next/image";
+import {
   useActionState,
   useCallback,
   useDeferredValue,
@@ -17,6 +28,7 @@ import type {
 } from "@/types/models/product";
 import type { Order } from "@/types/models/order";
 import type { TenantDeliverySettings } from "@/types/models/tenant";
+import type { TenantCategory } from "@/constants";
 import type { PublicCustomerProfile } from "@/services/api/customers.service";
 import {
   createOrderAction,
@@ -53,6 +65,9 @@ import {
   calculateCartSummary,
   type PaginationState,
 } from "../_utils/order-form";
+import {
+  INSTAPAY_PROVIDER,
+} from "@/constants/payment-providers";
 
 const initialState: CreateOrderState = {
   success: false,
@@ -63,6 +78,7 @@ const initialState: CreateOrderState = {
 
 const PAGE_SIZE = 20;
 const PRELOAD_THRESHOLD_ITEMS = 5;
+const SEARCH_DEBOUNCE_MS = 300;
 const STICKY_HEADER_SELECTOR = "[data-store-header]";
 const SUBMIT_BAR_SELECTOR = "[data-order-submit-bar]";
 const VIEWPORT_SCROLL_MARGIN = 16;
@@ -72,12 +88,27 @@ const DEFAULT_PAGINATION_STATE: PaginationState = {
   page: 1,
   lastPage: 1,
   isLoading: false,
+  hasLoaded: false,
   error: null,
 };
 
 const normalizeOptionalRequestText = (value: string) => {
 	const normalized = value.trim().replace(/\s+/g, " ");
 	return normalized || undefined;
+};
+
+const normalizeProductSearch = (value: string) => value.trim().replace(/\s+/g, " ");
+
+const buildProductsStateKey = (categoryKey: string, searchTerm: string) =>
+  `${categoryKey}::${searchTerm}`;
+
+type PaymentMethod = {
+  id: "instapay" | "ewallet";
+  label: string;
+  providerLabel: string;
+  logoSrc: string | null;
+  accountName: string;
+  accountNumber: string;
 };
 
 type ToastState = {
@@ -98,6 +129,7 @@ type OrderFormProps = {
   tenantSlug: string;
   areaSlug?: string;
   isPharmacy?: boolean;
+  tenantCategory?: TenantCategory;
   deliverySettings: TenantDeliverySettings;
   initialCategory?: string;
   initialProducts: Product[];
@@ -117,6 +149,7 @@ export default function OrderForm({
   tenantSlug,
   areaSlug,
   isPharmacy,
+  tenantCategory,
   deliverySettings,
   initialCategory,
   initialProducts,
@@ -148,6 +181,14 @@ export default function OrderForm({
   const [orderRequest, setOrderRequest] = useState(
     initialOrder?.free_text_payload?.text || "",
   );
+  const [productSearch, setProductSearch] = useState("");
+  const [debouncedProductSearch] = useDebounce(
+    normalizeProductSearch(productSearch),
+    SEARCH_DEBOUNCE_MS,
+  );
+  const [isPaymentSheetOpen, setIsPaymentSheetOpen] = useState(false);
+  const [cardOnDeliveryRequested, setCardOnDeliveryRequested] =
+    useState(false);
   const [hasPrescription, setHasPrescription] = useState(false);
   const [state, formAction, isPending] = useActionState(
     createOrderAction.bind(null, tenantSlug),
@@ -159,6 +200,10 @@ export default function OrderForm({
     initialCategories.some((c) => c.category === initialCategory)
       ? initialCategory
       : ALL_PRODUCTS_CATEGORY;
+  const initialProductsStateKey = buildProductsStateKey(
+    resolvedInitialCategory,
+    "",
+  );
 
   const [activeCategory, setActiveCategory] = useState(resolvedInitialCategory);
   const [isCategoryProductsView, setIsCategoryProductsView] = useState(
@@ -169,15 +214,16 @@ export default function OrderForm({
   const [productsByCategory, setProductsByCategory] = useState<
     Record<string, Product[]>
   >({
-    [resolvedInitialCategory]: initialProducts,
+    [initialProductsStateKey]: initialProducts,
   });
   const [paginationByCategory, setPaginationByCategory] = useState<
     Record<string, PaginationState>
   >({
-    [resolvedInitialCategory]: {
+    [initialProductsStateKey]: {
       page: initialProductsMeta.page,
       lastPage: initialProductsMeta.last_page,
       isLoading: false,
+      hasLoaded: true,
       error: null,
     },
   });
@@ -190,6 +236,54 @@ export default function OrderForm({
       ) as Record<number, Product>,
   );
   const deliveryAvailable = deliverySettings?.delivery_available !== false;
+  const storeOpen = deliveryAvailable;
+  let searchPlaceholder = "ابحث عن منتج";
+  if (isPharmacy) {
+    searchPlaceholder = "ابحث عن دواء أو مستحضرات تجميل";
+  } else if (tenantCategory === "grocery") {
+    searchPlaceholder = "ابحث عن منتجات غذائية";
+  }
+  const activeProductsStateKey = buildProductsStateKey(
+    activeCategory,
+    debouncedProductSearch,
+  );
+  const paymentMethods = useMemo<PaymentMethod[]>(() => {
+    const methods: PaymentMethod[] = [];
+    const instapayName = deliverySettings.instapay_account_name?.trim();
+    const instapayNumber = deliverySettings.instapay_account_number?.trim();
+    const ewalletName = deliverySettings.ewallet_account_name?.trim();
+    const ewalletNumber = deliverySettings.ewallet_account_number?.trim();
+
+    if (instapayName && instapayNumber) {
+      methods.push({
+        id: "instapay",
+        label: "إنستاباي",
+        providerLabel: INSTAPAY_PROVIDER.labelAr,
+        logoSrc: INSTAPAY_PROVIDER.logoSrc,
+        accountName: instapayName,
+        accountNumber: instapayNumber,
+      });
+    }
+
+    if (ewalletName && ewalletNumber) {
+      methods.push({
+        id: "ewallet",
+        label: "محفظة إلكترونية",
+        providerLabel: "محفظة إلكترونية",
+        logoSrc: null,
+        accountName: ewalletName,
+        accountNumber: ewalletNumber,
+      });
+    }
+
+    return methods;
+  }, [
+    deliverySettings.ewallet_account_name,
+    deliverySettings.ewallet_account_number,
+
+    deliverySettings.instapay_account_name,
+    deliverySettings.instapay_account_number,
+  ]);
 
   const loadMoreObserver = useRef<IntersectionObserver | null>(null);
   const prefetchTriggeredRef = useRef<Set<string>>(new Set());
@@ -198,6 +292,7 @@ export default function OrderForm({
   const formRef = useRef<HTMLFormElement | null>(null);
   const reviewTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const hasNavigatedToSuccessRef = useRef(false);
+  const lastProcessedStateRef = useRef<CreateOrderState | null>(null);
 
   const categoryTabs = useMemo(
     () =>
@@ -228,9 +323,10 @@ export default function OrderForm({
     [paginationByCategory],
   );
 
-  const activeProducts = productsByCategoryMap.get(activeCategory) || [];
+  const activeProducts = productsByCategoryMap.get(activeProductsStateKey) || [];
   const activePagination =
-    paginationByCategoryMap.get(activeCategory) || DEFAULT_PAGINATION_STATE;
+    paginationByCategoryMap.get(activeProductsStateKey) ||
+    DEFAULT_PAGINATION_STATE;
   const hasMoreInActiveCategory =
     activePagination.page < activePagination.lastPage;
   const activeLoadMoreIndex =
@@ -239,9 +335,15 @@ export default function OrderForm({
       : Math.max(0, activeProducts.length - (PRELOAD_THRESHOLD_ITEMS + 1));
 
   const fetchProductsPage = useCallback(
-    async (categoryKey: string, page: number, replace: boolean) => {
+    async (
+      categoryKey: string,
+      page: number,
+      replace: boolean,
+      searchTerm = debouncedProductSearch,
+    ) => {
+      const stateKey = buildProductsStateKey(categoryKey, searchTerm);
       const currentState =
-        paginationByCategoryMap.get(categoryKey) || DEFAULT_PAGINATION_STATE;
+        paginationByCategoryMap.get(stateKey) || DEFAULT_PAGINATION_STATE;
       if (currentState.isLoading) {
         return;
       }
@@ -249,8 +351,8 @@ export default function OrderForm({
       setPaginationByCategory((prev) => {
         const prevMap = new Map(Object.entries(prev));
         const previousState =
-          prevMap.get(categoryKey) || DEFAULT_PAGINATION_STATE;
-        prevMap.set(categoryKey, {
+          prevMap.get(stateKey) || DEFAULT_PAGINATION_STATE;
+        prevMap.set(stateKey, {
           ...previousState,
           isLoading: true,
           error: null,
@@ -259,6 +361,7 @@ export default function OrderForm({
       });
 
       const response = await productsService.getPublicProducts(tenantSlug, {
+        search: searchTerm || undefined,
         category:
           categoryKey === ALL_PRODUCTS_CATEGORY ? undefined : categoryKey,
         page,
@@ -269,10 +372,11 @@ export default function OrderForm({
         setPaginationByCategory((prev) => {
           const prevMap = new Map(Object.entries(prev));
           const previousState =
-            prevMap.get(categoryKey) || DEFAULT_PAGINATION_STATE;
-          prevMap.set(categoryKey, {
+            prevMap.get(stateKey) || DEFAULT_PAGINATION_STATE;
+          prevMap.set(stateKey, {
             ...previousState,
             isLoading: false,
+            hasLoaded: true,
             error: "تعذر تحميل المنتجات حالياً",
           });
           return Object.fromEntries(prevMap);
@@ -285,9 +389,9 @@ export default function OrderForm({
 
       setProductsByCategory((prev) => {
         const prevMap = new Map(Object.entries(prev));
-        const previousProducts = prevMap.get(categoryKey) || [];
+        const previousProducts = prevMap.get(stateKey) || [];
         prevMap.set(
-          categoryKey,
+          stateKey,
           replace
             ? nextProducts
             : dedupeByNumericId([...previousProducts, ...nextProducts]),
@@ -310,31 +414,39 @@ export default function OrderForm({
 
       setPaginationByCategory((prev) => {
         const prevMap = new Map(Object.entries(prev));
-        prevMap.set(categoryKey, {
+        prevMap.set(stateKey, {
           page: nextMeta.page,
           lastPage: nextMeta.last_page,
           isLoading: false,
+          hasLoaded: true,
           error: null,
         });
         return Object.fromEntries(prevMap);
       });
     },
-    [paginationByCategoryMap, tenantSlug],
+    [debouncedProductSearch, paginationByCategoryMap, tenantSlug],
   );
 
   const handleCategoryChange = useCallback(
     (categoryKey: string) => {
       setActiveCategory(categoryKey);
 
-      const hasData = (productsByCategoryMap.get(categoryKey) || []).length > 0;
+      const stateKey = buildProductsStateKey(
+        categoryKey,
+        debouncedProductSearch,
+      );
       const categoryState =
-        paginationByCategoryMap.get(categoryKey) || DEFAULT_PAGINATION_STATE;
+        paginationByCategoryMap.get(stateKey) || DEFAULT_PAGINATION_STATE;
 
-      if (!hasData && !categoryState.isLoading) {
-        void fetchProductsPage(categoryKey, 1, true);
+      if (!categoryState.hasLoaded && !categoryState.isLoading) {
+        void fetchProductsPage(categoryKey, 1, true, debouncedProductSearch);
       }
     },
-    [fetchProductsPage, paginationByCategoryMap, productsByCategoryMap],
+    [
+      debouncedProductSearch,
+      fetchProductsPage,
+      paginationByCategoryMap,
+    ],
   );
 
   const handleCategoryEntry = useCallback(
@@ -347,7 +459,7 @@ export default function OrderForm({
 
   const handleCategoryInViewPrefetch = useCallback(
     (categoryKey: string) => {
-      if (categoryKey === ALL_PRODUCTS_CATEGORY) {
+      if (categoryKey === ALL_PRODUCTS_CATEGORY || debouncedProductSearch) {
         return;
       }
 
@@ -355,17 +467,24 @@ export default function OrderForm({
         return;
       }
 
-      const hasData = (productsByCategoryMap.get(categoryKey) || []).length > 0;
+      const stateKey = buildProductsStateKey(
+        categoryKey,
+        debouncedProductSearch,
+      );
       const categoryState =
-        paginationByCategoryMap.get(categoryKey) || DEFAULT_PAGINATION_STATE;
-      if (hasData || categoryState.isLoading) {
+        paginationByCategoryMap.get(stateKey) || DEFAULT_PAGINATION_STATE;
+      if (categoryState.hasLoaded || categoryState.isLoading) {
         return;
       }
 
       prefetchTriggeredRef.current.add(categoryKey);
-      void fetchProductsPage(categoryKey, 1, true);
+      void fetchProductsPage(categoryKey, 1, true, debouncedProductSearch);
     },
-    [fetchProductsPage, paginationByCategoryMap, productsByCategoryMap],
+    [
+      debouncedProductSearch,
+      fetchProductsPage,
+      paginationByCategoryMap,
+    ],
   );
 
   const scrollActiveCategoryPillIntoView = useCallback(
@@ -386,7 +505,8 @@ export default function OrderForm({
 
   const loadNextPage = useCallback(() => {
     const categoryState =
-      paginationByCategoryMap.get(activeCategory) || DEFAULT_PAGINATION_STATE;
+      paginationByCategoryMap.get(activeProductsStateKey) ||
+      DEFAULT_PAGINATION_STATE;
 
     if (
       categoryState.isLoading ||
@@ -395,8 +515,19 @@ export default function OrderForm({
       return;
     }
 
-    void fetchProductsPage(activeCategory, categoryState.page + 1, false);
-  }, [activeCategory, fetchProductsPage, paginationByCategoryMap]);
+    void fetchProductsPage(
+      activeCategory,
+      categoryState.page + 1,
+      false,
+      debouncedProductSearch,
+    );
+  }, [
+    activeCategory,
+    activeProductsStateKey,
+    debouncedProductSearch,
+    fetchProductsPage,
+    paginationByCategoryMap,
+  ]);
 
   const setLoadMoreTarget = useCallback(
     (node: HTMLDivElement | null) => {
@@ -445,6 +576,38 @@ export default function OrderForm({
   }, []);
 
   useEffect(() => {
+    if (!hasMerchantProducts) {
+      return;
+    }
+
+    const stateKey = buildProductsStateKey(
+      activeCategory,
+      debouncedProductSearch,
+    );
+    const categoryState =
+      paginationByCategoryMap.get(stateKey) || DEFAULT_PAGINATION_STATE;
+
+    if (!categoryState.hasLoaded && !categoryState.isLoading) {
+      const timeoutId = window.setTimeout(() => {
+        void fetchProductsPage(
+          activeCategory,
+          1,
+          true,
+          debouncedProductSearch,
+        );
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
+    }
+  }, [
+    activeCategory,
+    debouncedProductSearch,
+    fetchProductsPage,
+    hasMerchantProducts,
+    paginationByCategoryMap,
+  ]);
+
+  useEffect(() => {
     if (!state.success || hasNavigatedToSuccessRef.current) {
       return;
     }
@@ -461,6 +624,7 @@ export default function OrderForm({
       )}`,
     );
   }, [router, state.data, state.success, tenantSlug]);
+
 
   useEffect(() => {
     if (!isCategoryProductsView) {
@@ -613,6 +777,15 @@ export default function OrderForm({
       navigator.vibrate(10);
     }
   };
+
+  const handleCopyPaymentNumber = useCallback(async (method: PaymentMethod) => {
+    try {
+      await navigator.clipboard.writeText(method.accountNumber);
+      setToastState({ message: "تم نسخ الرقم", type: "success" });
+    } catch {
+      setToastState({ message: "تعذر نسخ الرقم", type: "error" });
+    }
+  }, []);
 
   const getViewportOffsets = useCallback(() => {
     const stickyHeader = document.querySelector<HTMLElement>(
@@ -956,6 +1129,47 @@ export default function OrderForm({
     });
   }, [closeReviewSheet, getViewportOffsets, keepElementVisibleInViewport]);
 
+  useEffect(() => {
+    if (isPending) {
+      hasHandledInvalidRef.current = false;
+      return;
+    }
+
+    if (!state.success && (state.errors || state.message)) {
+      if (lastProcessedStateRef.current === state) {
+        return;
+      }
+      lastProcessedStateRef.current = state;
+
+      closeReviewSheet(false);
+
+      if (state.errors) {
+        setToastState({
+          message: "يرجى تصحيح الأخطاء في البيانات المدخلة",
+          type: "error",
+        });
+
+        const firstErrorField = Object.keys(state.errors)[0];
+        if (firstErrorField) {
+          requestAnimationFrame(() => {
+            const inputNode = document.querySelector(
+              `[name="${firstErrorField}"]`,
+            );
+            if (inputNode instanceof HTMLElement) {
+              inputNode.focus({ preventScroll: true });
+              keepElementVisibleInViewport(inputNode, "smooth");
+            }
+          });
+        }
+      } else if (state.message) {
+        setToastState({
+          message: state.message,
+          type: "error",
+        });
+      }
+    }
+  }, [state, isPending, closeReviewSheet, keepElementVisibleInViewport]);
+
   return (
     <>
       {toastState && (
@@ -977,6 +1191,63 @@ export default function OrderForm({
         {areaSlug && (
           <input type="hidden" name="delivery_area_slug" value={areaSlug} />
         )}
+        {cardOnDeliveryRequested && (
+          <input type="hidden" name="card_on_delivery_requested" value="true" />
+        )}
+
+        <div className="px-4 pt-4">
+          <label className="relative block">
+            <span className="sr-only">البحث عن منتج</span>
+            <Search
+              className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={productSearch}
+              onChange={(event) => {
+                const nextSearch = event.target.value;
+                setProductSearch(nextSearch);
+                if (normalizeProductSearch(nextSearch)) {
+                  setIsCategoryProductsView(true);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                }
+              }}
+              placeholder={searchPlaceholder}
+              className="h-14 w-full rounded-full border border-brand-border bg-white pr-12 pl-4 text-right text-base text-brand-text shadow-soft outline-none transition-shadow placeholder:text-muted-foreground focus:ring-4 focus:ring-brand-accent/20"
+              dir="rtl"
+            />
+          </label>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold ${
+                storeOpen
+                  ? "border-emerald-200 bg-emerald-50 text-brand-primary"
+                  : "border-status-error/20 bg-status-error/10 text-status-error"
+              }`}
+            >
+              <Store className="h-4 w-4" aria-hidden="true" />
+              {storeOpen ? "مفتوح الآن" : "مغلق حالياً"}
+            </span>
+            <span className="inline-flex min-h-10 items-center gap-2 rounded-full border border-brand-border bg-white px-3 py-2 text-sm font-semibold text-brand-text">
+              <Clock3 className="h-4 w-4" aria-hidden="true" />
+              {deliveryAvailable ? "التوصيل خلال 30-45 دقيقة" : "التوصيل غير متاح"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsPaymentSheetOpen(true)}
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-brand-border bg-white px-3 py-2 text-sm font-semibold text-brand-text shadow-sm transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+            >
+              <WalletCards className="h-4 w-4" aria-hidden="true" />
+              طرق الدفع
+            </button>
+          </div>
+        </div>
 
         {hasMerchantProducts && (
           <div className="mt-4 space-y-4">
@@ -1001,6 +1272,7 @@ export default function OrderForm({
               <CategoryProductsView
                 categoryTabs={categoryTabs}
                 activeCategory={activeCategory}
+                searchTerm={debouncedProductSearch}
                 activeProducts={activeProducts}
                 activePagination={activePagination}
                 hasMoreInActiveCategory={hasMoreInActiveCategory}
@@ -1091,6 +1363,139 @@ export default function OrderForm({
           onUpdateSelection={handleReviewSelectionUpdate}
         />
       </form>
+
+      {isPaymentSheetOpen && (
+        <div
+          className="fixed inset-0 z-75 flex items-end bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payment-method-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            aria-label="إغلاق تفاصيل الدفع"
+            onClick={() => setIsPaymentSheetOpen(false)}
+          />
+          <div className="relative max-h-[88vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl">
+            <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-gray-200" />
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p
+                  id="payment-method-title"
+                  className="text-lg font-bold text-brand-text"
+                >
+                  طرق الدفع
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  كل طرق الدفع المتاحة لهذا المتجر
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPaymentSheetOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-brand-border text-brand-text focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+                aria-label="إغلاق"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {paymentMethods.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-brand-border bg-brand-soft/40 p-4 text-sm text-muted-foreground">
+                  لم يضف المتجر بيانات دفع إلكترونية بعد.
+                </div>
+              )}
+
+              {paymentMethods.map((method) => (
+                <div
+                  key={method.id}
+                  className="rounded-2xl border border-brand-border bg-brand-soft/40 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-bold text-brand-text">
+                        {method.label}
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                        {method.providerLabel}
+                      </p>
+                    </div>
+                    {method.logoSrc ? (
+                      <Image
+                        src={method.logoSrc}
+                        alt={method.providerLabel}
+                        width={92}
+                        height={36}
+                        className="h-9 w-auto object-contain"
+                      />
+                    ) : (
+                      <span className="rounded-md bg-white px-3 py-1 text-sm font-black tracking-wide text-[#4B2383]">
+                        {method.providerLabel}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-4 grid gap-3 rounded-xl bg-white p-3">
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        الاسم
+                      </p>
+                      <p className="mt-1 text-base font-bold text-brand-text">
+                        {method.accountName}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        الرقم أو الحساب
+                      </p>
+                      <p className="mt-1 text-base font-bold text-brand-text" dir="ltr">
+                        {method.accountNumber}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopyPaymentNumber(method)}
+                    className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-brand-border bg-white px-4 py-2 text-sm font-bold text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+                  >
+                    <Copy className="h-4 w-4" aria-hidden="true" />
+                    نسخ الرقم
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <label
+              className={`mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
+                cardOnDeliveryRequested
+                  ? "border-brand-primary bg-brand-soft"
+                  : "border-brand-border bg-white"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={cardOnDeliveryRequested}
+                onChange={(event) =>
+                  setCardOnDeliveryRequested(event.target.checked)
+                }
+                className="mt-1 h-5 w-5 rounded border-brand-border text-brand-primary focus:ring-brand-accent"
+              />
+              <span className="flex-1">
+                <span className="flex items-center gap-2 text-sm font-bold text-brand-text">
+                  <CreditCard className="h-4 w-4" aria-hidden="true" />
+                  أطلب الدفع بالكارت مع التوصيل
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  سنبلغ التاجر أنك تفضل الدفع بالكارت عند وصول الطلب.
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+      )}
     </>
   );
 }

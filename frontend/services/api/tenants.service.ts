@@ -13,6 +13,10 @@ type UpdateTenantDeliverySettingsRequest = {
 type UpdateTenantSettingsRequest = {
   name: string;
   category: string;
+  instapay_account_name?: string;
+  instapay_account_number?: string;
+  ewallet_account_name?: string;
+  ewallet_account_number?: string;
 };
 
 class TenantsService extends HttpService {

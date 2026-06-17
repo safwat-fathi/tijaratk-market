@@ -10,6 +10,10 @@ export const createOrderSchema = z.object({
 	order_request: z.string().optional(),
 	cart: z.string().optional(), // We'll parse this manually or refine
 	delivery_area_slug: z.string().optional(),
+	card_on_delivery_requested: z
+		.enum(["true", "false", "on"])
+		.optional()
+		.transform(value => value === "true" || value === "on"),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

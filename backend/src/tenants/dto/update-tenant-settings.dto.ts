@@ -1,6 +1,23 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsString } from 'class-validator';
+import {
+  IsEnum,
+  IsIn,
+  IsNotEmpty,
+  IsString,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 import { TenantCategory } from '../../../generated/prisma/client';
+
+const hasValue = (value: unknown) =>
+  typeof value === 'string' ? value.trim().length > 0 : value !== undefined;
+
+const hasInstapayValue = (dto: UpdateTenantSettingsDto) =>
+  hasValue(dto.instapay_account_name) || hasValue(dto.instapay_account_number);
+
+const hasEwalletValue = (dto: UpdateTenantSettingsDto) =>
+  hasValue(dto.ewallet_account_name) ||
+  hasValue(dto.ewallet_account_number);
 
 /**
  * Payload for merchant general settings updates.
@@ -18,4 +35,49 @@ export class UpdateTenantSettingsDto {
   })
   @IsEnum(TenantCategory)
   category: TenantCategory;
+
+  @ApiProperty({
+    required: false,
+    example: 'Ahmed Mohamed',
+    description: 'Instapay account display name',
+  })
+  @ValidateIf((dto: UpdateTenantSettingsDto) => hasInstapayValue(dto))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  instapay_account_name?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 'ahmed@instapay',
+    description: 'Instapay account handle or number',
+  })
+  @ValidateIf((dto: UpdateTenantSettingsDto) => hasInstapayValue(dto))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  instapay_account_number?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 'Ahmed Mohamed',
+    description: 'E-wallet account display name',
+  })
+  @ValidateIf((dto: UpdateTenantSettingsDto) => hasEwalletValue(dto))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  ewallet_account_name?: string;
+
+
+  @ApiProperty({
+    required: false,
+    example: '01000000000',
+    description: 'E-wallet account number',
+  })
+  @ValidateIf((dto: UpdateTenantSettingsDto) => hasEwalletValue(dto))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  ewallet_account_number?: string;
 }

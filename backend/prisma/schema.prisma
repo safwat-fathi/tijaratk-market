@@ -218,6 +218,7 @@ model Order {
   total                         Decimal?    @db.Decimal(10, 2)
   free_text_payload             Json?
   notes                         String?
+  card_on_delivery_requested    Boolean     @default(false)
   customer_rejection_reason     String?
   customer_rejected_at          DateTime?   @db.Timestamptz(6)
   order_source                  OrderSource @default(storefront) @map("order_source")
@@ -314,6 +315,10 @@ model Tenant {
   delivery_available Boolean        @default(true)
   delivery_starts_at String?        @db.VarChar(5)
   delivery_ends_at   String?        @db.VarChar(5)
+  instapay_account_name   String?   @db.VarChar(120)
+  instapay_account_number String?   @db.VarChar(120)
+  ewallet_account_name    String?   @db.VarChar(120)
+  ewallet_account_number  String?   @db.VarChar(120)
 
   availability_requests     AvailabilityRequest[]
   customers                 Customer[]
