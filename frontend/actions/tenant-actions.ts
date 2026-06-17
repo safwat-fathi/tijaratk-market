@@ -96,7 +96,7 @@ export async function toggleStoreAvailabilityAction(
   }
 
   const response = await tenantsService.updateMyDeliverySettings({
-    delivery_fee: tenantRes.data.delivery_fee,
+    delivery_fee: Number(tenantRes.data.delivery_fee) || 0,
     delivery_starts_at: tenantRes.data.delivery_starts_at || undefined,
     delivery_ends_at: tenantRes.data.delivery_ends_at || undefined,
     delivery_available: deliveryAvailable,
