@@ -162,10 +162,17 @@ export class ProductsService {
 
     await this.ensureUniqueActiveProductName(tenantId, normalizedName);
 
+    const tenant = await this.getPrismaClient().tenant.findUnique({
+      where: { id: tenantId },
+      select: { category: true },
+    });
+    const defaultUnitLabel = tenant?.category === 'pharmacy' ? 'علبة' : 'قطعة';
+
     const orderMode = this.resolveProductOrderMode(createProductDto.order_mode);
     const orderConfig = this.normalizeProductOrderConfig(
       orderMode,
       createProductDto.order_config,
+      defaultUnitLabel,
     );
     const imageUrl = file?.path
       ? await this.imageProcessorService.processProductThumbnail(file.path)
@@ -244,6 +251,8 @@ export class ProductsService {
         order_mode: ProductOrderMode.QUANTITY,
         order_config: this.normalizeProductOrderConfig(
           ProductOrderMode.QUANTITY,
+          undefined,
+          catalogSource === 'chefaa_csv' ? 'علبة' : 'قطعة',
         ) as Prisma.InputJsonValue,
         is_available: true,
       },
@@ -865,6 +874,12 @@ export class ProductsService {
       updateProductDto.order_mode !== undefined ||
       updateProductDto.order_config !== undefined
     ) {
+      const tenant = await this.getPrismaClient().tenant.findUnique({
+        where: { id: tenantId },
+        select: { category: true },
+      });
+      const defaultUnitLabel = tenant?.category === 'pharmacy' ? 'علبة' : 'قطعة';
+
       const nextOrderMode = this.resolveProductOrderMode(
         updateProductDto.order_mode ?? (product.order_mode as ProductOrderMode),
       );
@@ -874,6 +889,7 @@ export class ProductsService {
         updateProductDto.order_config ??
           (product.order_config as Record<string, unknown>) ??
           undefined,
+        defaultUnitLabel,
       ) as Prisma.InputJsonValue;
     }
 
@@ -1336,6 +1352,7 @@ export class ProductsService {
   private normalizeProductOrderConfig(
     mode: ProductOrderMode,
     rawConfig?: unknown,
+    defaultUnitLabel: string = DEFAULT_QUANTITY_UNIT_LABEL,
   ): ProductOrderConfig {
     const config =
       rawConfig && typeof rawConfig === 'object'
@@ -1349,11 +1366,11 @@ export class ProductsService {
         return this.normalizePriceOrderConfig(config.price);
       case ProductOrderMode.QUANTITY:
       default:
-        return this.normalizeQuantityOrderConfig(config.quantity);
+        return this.normalizeQuantityOrderConfig(config.quantity, defaultUnitLabel);
     }
   }
 
-  private normalizeQuantityOrderConfig(rawValue: unknown): ProductOrderConfig {
+  private normalizeQuantityOrderConfig(rawValue: unknown, defaultUnitLabel: string): ProductOrderConfig {
     const quantityConfig =
       rawValue && typeof rawValue === 'object'
         ? (rawValue as Record<string, unknown>)
@@ -1366,7 +1383,7 @@ export class ProductsService {
 
     return {
       quantity: {
-        unit_label: unitLabel || DEFAULT_QUANTITY_UNIT_LABEL,
+        unit_label: unitLabel || defaultUnitLabel,
         ...(unitOptions.length > 0 ? { unit_options: unitOptions } : {}),
       },
     };

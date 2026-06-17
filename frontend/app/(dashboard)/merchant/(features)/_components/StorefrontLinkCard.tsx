@@ -1,17 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { toggleStoreAvailabilityAction } from "@/actions/tenant-actions";
 
 interface StorefrontLinkCardProps {
 	slug?: string;
 	status?: "active" | "inactive" | "suspended";
+	deliveryAvailable?: boolean;
 }
 
 type CopyState = "idle" | "copied" | "error";
 
-export default function StorefrontLinkCard({ slug, status = "active" }: StorefrontLinkCardProps) {
+export default function StorefrontLinkCard({ slug, status = "active", deliveryAvailable = false }: StorefrontLinkCardProps) {
 	const [copyState, setCopyState] = useState<CopyState>("idle");
+	const [isPending, startTransition] = useTransition();
 	const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const storePath = useMemo(() => {
@@ -162,6 +165,23 @@ export default function StorefrontLinkCard({ slug, status = "active" }: Storefro
 				</div>
 
 				<div className="flex items-center gap-2">
+					<button
+						type="button"
+						onClick={() => {
+							startTransition(async () => {
+								await toggleStoreAvailabilityAction(!deliveryAvailable);
+							});
+						}}
+						disabled={isPending || status === "suspended"}
+						className={`inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors border ${
+							deliveryAvailable
+								? "border-status-success/30 bg-status-success/10 text-status-success hover:bg-status-success/20"
+								: "border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
+						} disabled:opacity-50`}
+					>
+						<div className={`me-2 h-2 w-2 rounded-full ${deliveryAvailable ? "bg-status-success" : "bg-gray-400"} ${isPending ? "animate-pulse" : ""}`} />
+						{isPending ? "جاري التحديث..." : deliveryAvailable ? "المتجر مفتوح" : "المتجر مغلق"}
+					</button>
 					<Link
 						prefetch={true}
 						href={(storePath && status !== "suspended") ? storePath : "#"}

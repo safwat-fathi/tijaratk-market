@@ -38,9 +38,9 @@ cp tijaratk-qr-sticker.html tijaratk-qr-sticker-[merchant-slug].html
 ```
 
 ### 2. Fetch the QR Code SVG
-Call the goQR.me API (or similar tool) to generate a vector SVG QR code with the brand color and standard quiet zone margin:
+Call the goQR.me API (or similar tool) to generate a vector SVG QR code with the brand color and standard quiet zone margin. If embedding a logo in the center, you **must** use the High (`H`) error correction level by appending `&ecc=H`:
 ```url
-https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.tijaratk.com/[merchant-slug]&format=svg&color=0f5a3d&qzone=4
+https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.tijaratk.com/[merchant-slug]&format=svg&color=0f5a3d&qzone=4&ecc=H
 ```
 
 ### 3. Clean and Embed the SVG
@@ -51,6 +51,15 @@ https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.tijara
    ```
    *(Ensure the `viewBox` coordinates match the native width/height attributes returned by the API).*
 3. Place this cleaned SVG code inside the `<div class="qr">` placeholder.
+4. Add the logo container inside the `<div class="qr">` block, placing it right below the `<svg>` element:
+   ```html
+   <div class="qr">
+     <svg ...>...</svg>
+     <div class="qr-logo-container">
+       <img src="../tijaratk-logo-suite/app-icon-green.png" class="qr-logo" alt="Tijaratk Logo" />
+     </div>
+   </div>
+   ```
 
 ### 4. Update Merchant Text & Title
 1. Change the `<title>` element in the `<head>` to:
@@ -111,9 +120,9 @@ When the API generates the QR code, it outputs a `<svg>` element with specific `
   <svg viewBox="0 0 185 185" ...>
   ```
 
-### 2. Configure the QR Wrapper to Explicitly Center the SVG
-Ensure the parent `.qr` container and the `svg` element are styled in CSS to automatically center and scale the vector graphic inside the card.
-The `.qr` wrapper must be styled as a grid container centering its child:
+### 2. Configure the QR Wrapper to Explicitly Center the SVG and Logo
+Ensure the parent `.qr` container, the `svg` element, and the centered logo container are properly styled in CSS to automatically center and scale both elements inside the card.
+The `.qr` wrapper must be styled as a grid container, with the logo container absolute-positioned exactly at the center:
 ```css
 .qr {
   width: 92mm;
@@ -128,6 +137,27 @@ The `.qr` wrapper must be styled as a grid container centering its child:
   height: 100%;
   display: block; /* Avoids inline block spacing quirks */
 }
+
+.qr-logo-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20mm;
+  height: 20mm;
+  background: #ffffff;
+  border-radius: 4mm;
+  padding: 1.5mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 ```
-This guarantees the QR vector stays crisp, responsive, and perfectly centered in the bordered square.
+This guarantees the QR vector stays crisp, responsive, and perfectly centered, with the logo safely and neatly overlaid in the middle.
 

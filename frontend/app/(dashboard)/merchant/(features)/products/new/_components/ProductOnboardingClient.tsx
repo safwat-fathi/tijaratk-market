@@ -106,11 +106,13 @@ export default function ProductOnboardingClient({
 	const [catalogError, setCatalogError] = useState<string | null>(null);
 	const [isShowingHidden, setIsShowingHidden] = useState(false);
 
+	const defaultUnitLabel = storeType === 'pharmacy' ? 'علبة' : DEFAULT_UNIT_LABEL;
+
 	const [manualName, setManualName] = useState("");
 	const [manualPrice, setManualPrice] = useState("");
 	const [manualOrderMode, setManualOrderMode] =
 		useState<ProductOrderMode>(ORDER_MODE_QUANTITY);
-	const [manualUnitLabel, setManualUnitLabel] = useState(DEFAULT_UNIT_LABEL);
+	const [manualUnitLabel, setManualUnitLabel] = useState(defaultUnitLabel);
 	const [manualSecondaryUnitLabel, setManualSecondaryUnitLabel] = useState("");
 	const [manualSecondaryUnitMultiplier, setManualSecondaryUnitMultiplier] =
 		useState("");
@@ -140,7 +142,7 @@ export default function ProductOnboardingClient({
 	const [editIsAvailable, setEditIsAvailable] = useState(true);
 	const [editOrderMode, setEditOrderMode] =
 		useState<ProductOrderMode>(ORDER_MODE_QUANTITY);
-	const [editUnitLabel, setEditUnitLabel] = useState(DEFAULT_UNIT_LABEL);
+	const [editUnitLabel, setEditUnitLabel] = useState(defaultUnitLabel);
 	const [editSecondaryUnitLabel, setEditSecondaryUnitLabel] = useState("");
 	const [editSecondaryUnitMultiplier, setEditSecondaryUnitMultiplier] =
 		useState("");
@@ -624,7 +626,7 @@ export default function ProductOnboardingClient({
 			setManualName("");
 			setManualPrice("");
 			setManualOrderMode(ORDER_MODE_QUANTITY);
-			setManualUnitLabel(DEFAULT_UNIT_LABEL);
+			setManualUnitLabel(defaultUnitLabel);
 			setManualSecondaryUnitLabel("");
 			setManualSecondaryUnitMultiplier("");
 			setManualWeightPresets(DEFAULT_WEIGHT_PRESETS);
@@ -777,7 +779,7 @@ export default function ProductOnboardingClient({
 			URL.revokeObjectURL(editImagePreview);
 		}
 
-		const editState = deriveEditFormState(product, availableProductCategorySet);
+		const editState = deriveEditFormState(product, availableProductCategorySet, defaultUnitLabel);
 
 		setEditingProduct(product);
 		setEditName(editState.name);
@@ -809,7 +811,7 @@ export default function ProductOnboardingClient({
 		setEditPrice("");
 		setEditIsAvailable(true);
 		setEditOrderMode(ORDER_MODE_QUANTITY);
-		setEditUnitLabel(DEFAULT_UNIT_LABEL);
+		setEditUnitLabel(defaultUnitLabel);
 		setEditSecondaryUnitLabel("");
 		setEditSecondaryUnitMultiplier("");
 		setEditWeightPresets(DEFAULT_WEIGHT_PRESETS);

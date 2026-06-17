@@ -24,12 +24,23 @@ export function PublicFooter() {
           />
         </div>
         <div className="flex flex-col items-center gap-3">
-          <Link
-            href="/about"
-            className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"
-          >
-            عن تجارتك
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/about"
+              className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"
+            >
+              عن تجارتك
+            </Link>
+            <span className="text-[#222B2E]/20" aria-hidden="true">
+              •
+            </span>
+            <Link
+              href="/merchant/register"
+              className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"
+            >
+              انضم لنا كتاجر
+            </Link>
+          </div>
           <p className="text-sm font-medium text-[#222B2E]/60">
             © {new Date().getFullYear()} جميع الحقوق محفوظة لـ{" "}
             <span className="text-brand-primary font-bold">تجارتك</span>.

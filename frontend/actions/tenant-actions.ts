@@ -87,6 +87,38 @@ export async function updateDeliverySettingsAction(
   };
 }
 
+export async function toggleStoreAvailabilityAction(
+  deliveryAvailable: boolean
+): Promise<{ success: boolean; message?: string }> {
+  const tenantRes = await tenantsService.getMyTenant();
+  if (!tenantRes.success || !tenantRes.data) {
+    return { success: false, message: "تعذر تحديث حالة المتجر." };
+  }
+
+  const response = await tenantsService.updateMyDeliverySettings({
+    delivery_fee: tenantRes.data.delivery_fee,
+    delivery_starts_at: tenantRes.data.delivery_starts_at || undefined,
+    delivery_ends_at: tenantRes.data.delivery_ends_at || undefined,
+    delivery_available: deliveryAvailable,
+  });
+
+  if (!response.success) {
+    return {
+      success: false,
+      message: response.message || "تعذر تحديث حالة المتجر.",
+    };
+  }
+
+  const tenantSlug = response.data?.slug;
+  revalidatePath("/merchant");
+  revalidatePath("/merchant/settings");
+  if (tenantSlug) {
+    revalidatePath(`/${tenantSlug}`);
+  }
+
+  return { success: true };
+}
+
 export type UpdateStoreSettingsState = {
   success: boolean;
   message: string;

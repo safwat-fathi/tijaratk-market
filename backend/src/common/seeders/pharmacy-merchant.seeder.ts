@@ -344,7 +344,7 @@ async function seedProducts(
           status: ProductStatus.ACTIVE,
           current_price: product.price,
           order_mode: ProductOrderMode.QUANTITY,
-          order_config: { quantity: { unit_label: 'قطعة' } },
+          order_config: { quantity: { unit_label: 'علبة' } },
           is_available: true,
           deleted_at: null,
         },
@@ -362,7 +362,7 @@ async function seedProducts(
         status: ProductStatus.ACTIVE,
         current_price: product.price,
         order_mode: ProductOrderMode.QUANTITY,
-        order_config: { quantity: { unit_label: 'قطعة' } },
+        order_config: { quantity: { unit_label: 'علبة' } },
         is_available: true,
       },
     });

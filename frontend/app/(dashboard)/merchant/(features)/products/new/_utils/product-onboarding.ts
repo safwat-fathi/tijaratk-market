@@ -394,12 +394,13 @@ export const buildProductsByNormalizedNameMap = (products: Product[]): Map<strin
 export const deriveEditFormState = (
   product: Product,
   availableCategorySet: Set<string>,
+  defaultUnitLabel: string = DEFAULT_UNIT_LABEL,
 ): EditFormState => {
   const normalizedCategory = product.category?.trim() || '';
   const productMode = product.order_mode || ORDER_MODE_QUANTITY;
 
   const quantityConfig = product.order_config?.quantity;
-  const quantityUnitLabel = quantityConfig?.unit_label || DEFAULT_UNIT_LABEL;
+  const quantityUnitLabel = quantityConfig?.unit_label || defaultUnitLabel;
   const quantityAltOption = quantityConfig?.unit_options?.find(
     (option) => option.id !== 'base' && option.multiplier > 1,
   );
