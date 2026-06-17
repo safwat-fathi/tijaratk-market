@@ -55,6 +55,14 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
+      - name: Backup Database
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.backend == 'true' || steps.changes.outputs.frontend == 'true'
+        run: |
+          ssh -T ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            set -euo pipefail
+            sudo /usr/local/bin/backup-postgres.sh
+          EOF
+
       - name: Deploy Backend
         if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.backend == 'true'
         run: |
