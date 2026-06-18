@@ -56,13 +56,24 @@ describe('ProductsService catalog source isolation', () => {
           .mockResolvedValue({ category: TenantCategory.grocery }),
       },
       catalogItem: {
-        findMany: jest.fn().mockResolvedValue([{ id: 1, source: 'talabat_csv' }]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 1, source: 'talabat_csv' }]),
         count: jest.fn().mockResolvedValue(1),
+      },
+      tenantHiddenCatalogItem: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
     const service = createService(prisma);
 
-    const result = await service.findCatalogItems(1, undefined, undefined, 1, 40);
+    const result = await service.findCatalogItems(
+      1,
+      undefined,
+      undefined,
+      1,
+      40,
+    );
 
     expect(result.meta.total).toBe(1);
     expect(prisma.catalogItem.findMany).toHaveBeenCalledWith(
@@ -79,7 +90,9 @@ describe('ProductsService catalog source isolation', () => {
   it('returns an empty catalog for unsupported tenant categories', async () => {
     const prisma = {
       tenant: {
-        findUnique: jest.fn().mockResolvedValue({ category: TenantCategory.other }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.other }),
       },
       catalogItem: {
         findMany: jest.fn(),
@@ -88,7 +101,13 @@ describe('ProductsService catalog source isolation', () => {
     };
     const service = createService(prisma);
 
-    const result = await service.findCatalogItems(1, undefined, undefined, 1, 40);
+    const result = await service.findCatalogItems(
+      1,
+      undefined,
+      undefined,
+      1,
+      40,
+    );
 
     expect(result.data).toEqual([]);
     expect(result.meta.total).toBe(0);
@@ -134,9 +153,11 @@ describe('ProductsService catalog source isolation', () => {
         }),
       },
       product: {
-        create: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({ id: 1, ...data }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) =>
+            Promise.resolve({ id: 1, ...data }),
+          ),
       },
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ count: 0 }]),
       $executeRaw: jest.fn().mockResolvedValue(1),
@@ -171,9 +192,11 @@ describe('ProductsService catalog source isolation', () => {
         }),
       },
       product: {
-        create: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({ id: 1, ...data }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) =>
+            Promise.resolve({ id: 1, ...data }),
+          ),
       },
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ count: 0 }]),
       $executeRaw: jest.fn().mockResolvedValue(1),
@@ -199,9 +222,11 @@ describe('ProductsService catalog source isolation', () => {
           .mockResolvedValue({ category: TenantCategory.pharmacy }),
       },
       product: {
-        create: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({ id: 1, ...data }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) =>
+            Promise.resolve({ id: 1, ...data }),
+          ),
       },
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ count: 0 }]),
       $executeRaw: jest.fn().mockResolvedValue(1),
@@ -230,9 +255,11 @@ describe('ProductsService catalog source isolation', () => {
           .mockResolvedValue({ category: TenantCategory.pharmacy }),
       },
       product: {
-        create: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({ id: 1, ...data }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) =>
+            Promise.resolve({ id: 1, ...data }),
+          ),
       },
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ count: 0 }]),
       $executeRaw: jest.fn().mockResolvedValue(1),
