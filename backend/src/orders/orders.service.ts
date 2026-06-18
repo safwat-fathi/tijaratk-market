@@ -568,6 +568,13 @@ export class OrdersService {
       updateData.status = nextStatus;
     }
 
+    if (nextStatus === OrderStatus.CANCELLED) {
+      updateData.merchant_cancellation_reason = this.normalizeOptionalReason(
+        updateOrderDto.cancellation_reason,
+      );
+      updateData.merchant_cancelled_at = new Date();
+    }
+
     if (updateOrderDto.total !== undefined) {
       updateData.total = updateOrderDto.total;
       updateData.pricing_mode = PricingMode.MANUAL;
@@ -585,6 +592,7 @@ export class OrdersService {
           },
         },
         tenant: true,
+        delivery_area: true,
       },
     });
 
@@ -786,6 +794,7 @@ export class OrdersService {
   ): Promise<Order> {
     const order = await this.orderClient().findFirst({
       where: { public_token: token },
+      include: { customer: true, tenant: true, delivery_area: true },
     });
 
     if (!order) {
@@ -794,14 +803,18 @@ export class OrdersService {
 
     this.ensureCustomerDecisionWindow(order.status as any);
 
-    order.status = OrderStatus.REJECTED_BY_CUSTOMER;
-    order.customer_rejection_reason = this.normalizeOptionalReason(reason);
-    order.customer_rejected_at = new Date();
-
-    return this.orderClient().update({
+    const savedOrder = await this.orderClient().update({
       where: { id: order.id },
-      data: order as any,
+      data: {
+        status: OrderStatus.REJECTED_BY_CUSTOMER,
+        customer_rejection_reason: this.normalizeOptionalReason(reason),
+        customer_rejected_at: new Date(),
+      },
+      include: { customer: true, tenant: true, delivery_area: true },
     }) as unknown as Order;
+
+    await this.notifyCustomerStatusChange(savedOrder);
+    return savedOrder;
   }
 
   /**
@@ -1520,10 +1533,7 @@ export class OrdersService {
       }
 
       if (decision === ReplacementDecisionAction.APPROVE) {
-        await this.orderWhatsappService.notifyMerchantReplacementAccepted(
-          order,
-          item,
-        );
+        await this.orderWhatsappService.notifyMerchantReplacementAccepted(order);
         return;
       }
 
@@ -1547,11 +1557,7 @@ export class OrdersService {
     try {
       await this.orderWhatsappService.notifySellerNewOrder(order);
 
-      const trackingUrl = this.buildTrackingUrl(order.public_token);
-      await this.orderWhatsappService.notifyCustomerConfirmed(
-        order,
-        trackingUrl,
-      );
+      await this.orderWhatsappService.notifyCustomerConfirmed(order);
 
       if (isFirstOrder) {
         await this.orderWhatsappService.notifyWelcomeCustomer(order);
@@ -1573,12 +1579,6 @@ export class OrdersService {
     }
   }
 
-  private buildTrackingUrl(publicToken: string): string {
-    const baseUrl = process.env.APP_URL || 'http://localhost:3000';
-    const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
-    return `${normalizedBaseUrl}/track-order/${publicToken}`;
-  }
-
   private async resolveDeliveryAreaId(
     manager: Prisma.TransactionClient,
     tenantId: number,
@@ -1590,7 +1590,11 @@ export class OrdersService {
       this.resolveSourceMetadataAreaSlug(createOrderDto.source_metadata);
 
     if (!areaId && !areaSlug) {
-      return null;
+      const directoryProfile = await manager.tenantDirectoryProfile.findUnique({
+        where: { tenant_id: tenantId },
+        select: { area_id: true },
+      });
+      return directoryProfile?.area_id ?? null;
     }
 
     const areaWhere: Prisma.DirectoryAreaWhereInput = {

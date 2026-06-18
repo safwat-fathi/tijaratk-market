@@ -6,6 +6,7 @@ import {
   Customer,
   Tenant,
   Product,
+  DirectoryArea,
 } from '../../generated/prisma/client';
 import { welcomeCustomer } from 'src/whatsapp/templates';
 import { OrderStatus } from 'src/common/enums/order-status.enum';
@@ -13,6 +14,7 @@ import { OrderStatus } from 'src/common/enums/order-status.enum';
 type OrderWithRelations = Order & {
   customer?: Customer | null;
   tenant?: Tenant | null;
+  delivery_area?: DirectoryArea | null;
 };
 type OrderItemWithProduct = OrderItem & {
   pending_replacement_product?: Product | null;
@@ -22,20 +24,27 @@ type OrderItemWithProduct = OrderItem & {
 export class OrderWhatsappService {
   constructor(private readonly whatsappService: WhatsappService) {}
 
-  private readonly statusLabels: Partial<Record<OrderStatus, string>> = {
-    [OrderStatus.CONFIRMED]: 'تم التأكيد',
-    [OrderStatus.OUT_FOR_DELIVERY]: 'خرج للتوصيل',
-    [OrderStatus.COMPLETED]: 'تم التوصيل',
-    [OrderStatus.CANCELLED]: 'تم الإلغاء',
-    [OrderStatus.REJECTED_BY_CUSTOMER]: 'تم الرفض من العميل',
-  };
+  private resolveStatusLabel(status: OrderStatus): string | null {
+    if (status === OrderStatus.CONFIRMED) return 'تم التأكيد';
+    if (status === OrderStatus.OUT_FOR_DELIVERY) return 'خرج للتوصيل';
+    if (status === OrderStatus.COMPLETED) return 'تم التوصيل';
+    if (status === OrderStatus.CANCELLED) return 'تم الإلغاء';
+    if (status === OrderStatus.REJECTED_BY_CUSTOMER) {
+      return 'تم الرفض من العميل';
+    }
+    return null;
+  }
 
   async notifySellerNewOrder(order: OrderWithRelations): Promise<void> {
     const sellerNumber = order.tenant?.phone;
     if (!sellerNumber) return;
 
     const customerName = order.customer?.name || 'عميل';
-    const area = order.customer?.address || 'غير محدد';
+    const area =
+      order.delivery_area?.name_ar ||
+      order.delivery_area?.name_en ||
+      order.customer?.address ||
+      'غير محدد';
     const total = Number(order.total || 0);
 
     await this.whatsappService.sendTemplatedMessage({
@@ -50,13 +59,7 @@ export class OrderWhatsappService {
     });
   }
 
-  async notifyCustomerConfirmed(
-    order: OrderWithRelations,
-    trackingUrl: string,
-  ): Promise<void> {
-    // parameter defined to match interface, but internally unneeded
-    // @ts-ignore
-
+  async notifyCustomerConfirmed(order: OrderWithRelations): Promise<void> {
     const customerNumber = order.customer_phone || order.customer?.phone;
     if (!customerNumber) return;
 
@@ -78,8 +81,19 @@ export class OrderWhatsappService {
     const customerNumber = order.customer_phone || order.customer?.phone;
     if (!customerNumber) return;
 
-    const statusLabel = this.statusLabels[order.status as OrderStatus];
+    const orderStatus = order.status as OrderStatus;
+    let statusLabel = this.resolveStatusLabel(orderStatus);
     if (!statusLabel) return;
+
+    let reason: string | null = null;
+    if (orderStatus === OrderStatus.CANCELLED) {
+      reason = order.merchant_cancellation_reason;
+    } else if (orderStatus === OrderStatus.REJECTED_BY_CUSTOMER) {
+      reason = order.customer_rejection_reason;
+    }
+    if (reason?.trim()) {
+      statusLabel = `${statusLabel}. السبب: ${reason.trim()}`;
+    }
 
     const customerName = order.customer_name || order.customer?.name || 'عميل';
 
@@ -124,11 +138,7 @@ export class OrderWhatsappService {
    */
   async notifyMerchantReplacementAccepted(
     order: OrderWithRelations,
-    _item: OrderItemWithProduct,
   ): Promise<void> {
-    // parameter defined to match interface, but internally unneeded
-    // @ts-ignore
-
     const sellerNumber = order.tenant?.phone;
     if (!sellerNumber) return;
 

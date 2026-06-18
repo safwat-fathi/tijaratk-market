@@ -67,7 +67,9 @@ class OrdersService extends HttpService {
 
 	public async updateOrder(
 		id: number,
-		payload: Partial<Pick<Order, "status" | "total">>,
+		payload: Partial<Pick<Order, "status" | "total">> & {
+			cancellation_reason?: string;
+		},
 	) {
 		return this.patch<Order>(`${id}`, payload, undefined, {
 			authRequired: true,

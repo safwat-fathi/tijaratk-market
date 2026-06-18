@@ -60,16 +60,25 @@ export default async function OrderDetailsPage({
 
 	const order = orderResponse.data;
 	const customer = order.customer || {};
+	const deliveryAreaLabel =
+		order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
 	const products =
 		productsResponse.success && productsResponse.data
 			? productsResponse.data
 			: [];
 
-	async function updateStatus(newStatus: OrderStatus) {
+	async function updateStatus(newStatus: OrderStatus, formData?: FormData) {
 		"use server";
 
 		try {
-			await ordersService.updateOrder(Number(id), { status: newStatus });
+			const cancellationReason =
+				typeof formData?.get("cancellation_reason") === "string"
+					? formData.get("cancellation_reason")?.toString().trim()
+					: "";
+			await ordersService.updateOrder(Number(id), {
+				status: newStatus,
+				cancellation_reason: cancellationReason || undefined,
+			});
 			revalidatePath(`/merchant/orders/${id}`);
 			revalidatePath("/merchant/orders");
 		} catch (error) {
@@ -132,9 +141,10 @@ export default async function OrderDetailsPage({
 						</div>
 					</div>
 
-					{customer.address && (
-						<div className="mt-3 rounded-md bg-brand-soft/60 p-3 text-sm text-brand-text">
-							📍 {customer.address}
+					{(deliveryAreaLabel || customer.address) && (
+						<div className="mt-3 space-y-1 rounded-md bg-brand-soft/60 p-3 text-sm text-brand-text">
+							{deliveryAreaLabel && <p>📍 المنطقة: {deliveryAreaLabel}</p>}
+							{customer.address && <p>العنوان: {customer.address}</p>}
 						</div>
 					)}
 				</Card>
@@ -202,6 +212,23 @@ export default async function OrderDetailsPage({
 					</section>
 				)}
 
+				{order.merchant_cancellation_reason && (
+					<section className="rounded-lg border border-status-error/20 bg-status-error/10 p-4 shadow-soft">
+						<p className="text-sm text-status-error">
+							<strong>سبب إلغاء التاجر:</strong>{" "}
+							{order.merchant_cancellation_reason}
+						</p>
+					</section>
+				)}
+
+				{order.customer_rejection_reason && (
+					<section className="rounded-lg border border-status-error/20 bg-status-error/10 p-4 shadow-soft">
+						<p className="text-sm text-status-error">
+							<strong>سبب رفض العميل:</strong> {order.customer_rejection_reason}
+						</p>
+					</section>
+				)}
+
 				<Card className="p-4">
 					<div className="space-y-2">
 						<div className="flex justify-between text-sm text-muted-foreground">
@@ -236,8 +263,14 @@ export default async function OrderDetailsPage({
 						<>
 							<form
 								action={updateStatus.bind(null, OrderStatus.CANCELLED)}
-								className="flex-1"
+								className="flex-1 space-y-2"
 							>
+								<textarea
+									name="cancellation_reason"
+									placeholder="سبب الرفض (اختياري)"
+									rows={2}
+									className="w-full resize-none rounded-md border border-brand-border px-3 py-2 text-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
+								/>
 								<Button type="submit" variant="secondary" className="w-full">
 									رفض الطلب
 								</Button>

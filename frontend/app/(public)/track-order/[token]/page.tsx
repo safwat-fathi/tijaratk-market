@@ -218,6 +218,8 @@ export default async function TrackOrder({ params }: Props) {
   const order = await getOrder(token);
 
   if (!order) return notFound();
+  const deliveryAreaLabel =
+    order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
 
   return (
     <div className="overflow-hidden rounded-lg border border-brand-border bg-white shadow-soft">
@@ -275,6 +277,16 @@ export default async function TrackOrder({ params }: Props) {
               {order.tenant?.name || "غير متوفر"}
             </dd>
           </div>
+          {deliveryAreaLabel && (
+            <div className="bg-brand-soft/50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt className="text-sm font-medium text-muted-foreground">
+                المنطقة
+              </dt>
+              <dd className="mt-1 text-sm text-brand-text sm:col-span-2 sm:mt-0">
+                {deliveryAreaLabel}
+              </dd>
+            </div>
+          )}
           <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt className="text-sm font-medium text-muted-foreground">
               تاريخ الطلب
@@ -283,6 +295,16 @@ export default async function TrackOrder({ params }: Props) {
               {new Date(order.created_at).toLocaleString("ar-EG")}
             </dd>
           </div>
+          {order.customer_rejection_reason && (
+            <div className="bg-status-cancelled/10 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt className="text-sm font-medium text-status-cancelled">
+                سبب الرفض
+              </dt>
+              <dd className="mt-1 text-sm text-status-cancelled sm:col-span-2 sm:mt-0">
+                {order.customer_rejection_reason}
+              </dd>
+            </div>
+          )}
           <div className="bg-brand-soft/50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt className="text-sm font-medium text-muted-foreground">
               المجموع الفرعي

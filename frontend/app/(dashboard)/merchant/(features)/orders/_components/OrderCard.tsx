@@ -64,6 +64,8 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
   
   // Safe customer access
   const customerName = order.customer?.name || "عميل جديد";
+  const deliveryAreaLabel =
+    order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
 
   // Handle action click
   const handleAction = async (e: React.MouseEvent) => {
@@ -151,6 +153,11 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
         {/* Middle: Items Preview */}
           <div className="mb-3">
           <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+            {deliveryAreaLabel && (
+              <span className="mb-1 block text-xs font-semibold text-brand-primary">
+                المنطقة: {deliveryAreaLabel}
+              </span>
+            )}
             {renderItemsContent()}
             {order.notes && (
                <span className="mt-1 block text-xs font-medium text-amber-700">
@@ -160,6 +167,16 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
             {order.card_on_delivery_requested && (
               <span className="mt-1 block text-xs font-bold text-brand-primary">
                 طلب الدفع بالكارت مع التوصيل
+              </span>
+            )}
+            {order.merchant_cancellation_reason && (
+              <span className="mt-1 block text-xs font-semibold text-status-error">
+                سبب الإلغاء: {order.merchant_cancellation_reason}
+              </span>
+            )}
+            {order.customer_rejection_reason && (
+              <span className="mt-1 block text-xs font-semibold text-status-error">
+                سبب رفض العميل: {order.customer_rejection_reason}
               </span>
             )}
           </p>

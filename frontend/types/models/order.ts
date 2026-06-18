@@ -79,6 +79,8 @@ export interface Order {
   prescription_unavailability_action?: string | null;
   notes?: string;
   card_on_delivery_requested?: boolean;
+  merchant_cancellation_reason?: string | null;
+  merchant_cancelled_at?: string | null;
   customer_rejection_reason?: string | null;
   customer_rejected_at?: string | null;
   created_at: string;
