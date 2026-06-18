@@ -1,6 +1,6 @@
 # QR Code Sticker Assets & Generation Guide
 
-This directory contains print-ready marketing materials and stickers that brick-and-mortar store merchants can print and place in their storefronts. Scanning these stickers directs customers to the store's digital storefront branch on Tijaratk.
+This directory contains print-ready marketing materials and stickers that brick-and-mortar store merchants can print and place in their storefronts. Scanning these stickers directs customers to the store's digital storefront branch on Tijaratk. QR codes should target `https://www.tijaratk.com/[merchant-slug]?src=qr` so QR-created orders are attributed separately from directory landings.
 
 ## Specifications of Desired Output
 
@@ -38,9 +38,9 @@ cp tijaratk-qr-sticker.html tijaratk-qr-sticker-[merchant-slug].html
 ```
 
 ### 2. Fetch the QR Code SVG
-Call the goQR.me API (or similar tool) to generate a vector SVG QR code with the brand color and standard quiet zone margin. If embedding a logo in the center, you **must** use the High (`H`) error correction level by appending `&ecc=H`:
+Call the goQR.me API (or similar tool) to generate a vector SVG QR code with the brand color and standard quiet zone margin. The storefront URL encoded inside the QR code must include the source query parameter: `https://www.tijaratk.com/[merchant-slug]?src=qr`. If embedding a logo in the center, you **must** use the High (`H`) error correction level by appending `&ecc=H`:
 ```url
-https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.tijaratk.com/[merchant-slug]&format=svg&color=0f5a3d&qzone=4&ecc=H
+https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https%3A%2F%2Fwww.tijaratk.com%2F%5Bmerchant-slug%5D%3Fsrc%3Dqr&format=svg&color=0f5a3d&qzone=4&ecc=H
 ```
 
 ### 3. Clean and Embed the SVG
@@ -160,4 +160,3 @@ The `.qr` wrapper must be styled as a grid container, with the logo container ab
 }
 ```
 This guarantees the QR vector stays crisp, responsive, and perfectly centered, with the logo safely and neatly overlaid in the middle.
-
