@@ -74,6 +74,10 @@ export default function QuickAddSection({
 	storeType,
 }: QuickAddSectionProps) {
 	const imageActionLabel = manualImagePreview ? "تغيير الصورة" : "إضافة صورة";
+	const productNamePlaceholder =
+		storeType === "pharmacy"
+			? "مثال: بنادول 500 مجم"
+			: "مثال: زيت عباد الشمس";
 
 	return (
 		<section
@@ -104,7 +108,7 @@ export default function QuickAddSection({
 					<input
 						value={manualName}
 						onChange={event => onManualNameChange(event.target.value)}
-						placeholder="مثال: زيت عباد الشمس"
+						placeholder={productNamePlaceholder}
 						className="w-full rounded-md border border-brand-border px-4 py-3 text-base focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
 					/>
 					<input

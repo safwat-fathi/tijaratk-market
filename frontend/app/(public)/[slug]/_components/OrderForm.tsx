@@ -34,6 +34,7 @@ import {
   createOrderAction,
   type CreateOrderState,
 } from "@/actions/order-actions";
+import { OrderSource } from "@/types/enums";
 import { useRouter } from "next/navigation";
 import {
 	markCustomAvailabilityRequestSentAction,
@@ -116,6 +117,142 @@ type ToastState = {
   type: "success" | "error";
 };
 
+type OrderFormValidationField =
+  | "customer_name"
+  | "customer_phone"
+  | "delivery_address"
+  | "order_request";
+
+type OrderFormValidationErrors = Partial<
+  Record<OrderFormValidationField, string[]>
+>;
+
+type LandingSource = "directory" | "qr";
+
+type LandingAttributionInput = {
+  source?: string;
+  areaSlug?: string;
+  categorySlug?: string;
+  landedAt?: string;
+};
+
+type ResolvedLandingAttribution = {
+  orderSource: OrderSource.DIRECTORY | OrderSource.STOREFRONT;
+  sourceMetadata: {
+    landingSource: LandingSource;
+    areaSlug?: string;
+    categorySlug?: string;
+    landedAt: string;
+  };
+};
+
+const normalizeOptionalAttributionValue = (value?: string) => {
+  const normalized = value?.trim();
+  return normalized || undefined;
+};
+
+const normalizeLandingSource = (source?: string): LandingSource | null => {
+  const normalized = source?.trim().toLowerCase();
+  if (normalized === "directory" || normalized === "qr") {
+    return normalized;
+  }
+
+  return null;
+};
+
+const resolveLandingAttribution = (
+  input?: LandingAttributionInput,
+): ResolvedLandingAttribution | null => {
+  const landingSource = normalizeLandingSource(input?.source);
+  if (!landingSource) {
+    return null;
+  }
+
+  const areaSlug = normalizeOptionalAttributionValue(input?.areaSlug);
+  const categorySlug = normalizeOptionalAttributionValue(input?.categorySlug);
+  const landedAt =
+    normalizeOptionalAttributionValue(input?.landedAt) ||
+    new Date().toISOString();
+
+  return {
+    orderSource:
+      landingSource === "directory"
+        ? OrderSource.DIRECTORY
+        : OrderSource.STOREFRONT,
+    sourceMetadata: {
+      landingSource,
+      ...(areaSlug ? { areaSlug } : {}),
+      ...(categorySlug ? { categorySlug } : {}),
+      landedAt,
+    },
+  };
+};
+
+const parseStoredLandingAttribution = (
+  value: string | null,
+): ResolvedLandingAttribution | null => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as ResolvedLandingAttribution;
+    const landingSource = parsed.sourceMetadata?.landingSource;
+    const landedAt = parsed.sourceMetadata?.landedAt;
+    const validOrderSource =
+      parsed.orderSource === OrderSource.DIRECTORY ||
+      parsed.orderSource === OrderSource.STOREFRONT;
+
+    if (
+      !validOrderSource ||
+      (landingSource !== "directory" && landingSource !== "qr") ||
+      typeof landedAt !== "string"
+    ) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const getFirstValidationErrorField = (
+  errors: OrderFormValidationErrors,
+): OrderFormValidationField | null => {
+  if (errors.customer_name) return "customer_name";
+  if (errors.customer_phone) return "customer_phone";
+  if (errors.delivery_address) return "delivery_address";
+  if (errors.order_request) return "order_request";
+  return null;
+};
+
+const removeValidationError = (
+  errors: OrderFormValidationErrors,
+  fieldName: OrderFormValidationField,
+) => {
+  const nextErrors = { ...errors };
+
+  if (fieldName === "customer_name") {
+    delete nextErrors.customer_name;
+  } else if (fieldName === "customer_phone") {
+    delete nextErrors.customer_phone;
+  } else if (fieldName === "delivery_address") {
+    delete nextErrors.delivery_address;
+  } else {
+    delete nextErrors.order_request;
+  }
+
+  return nextErrors;
+};
+
+const getValidationFieldSelector = (fieldName: OrderFormValidationField) => {
+  if (fieldName === "customer_name") return '[name="customer_name"]';
+  if (fieldName === "customer_phone") return '[name="customer_phone"]';
+  if (fieldName === "delivery_address") return '[name="delivery_address"]';
+  return '[name="order_request"]';
+};
+
 const getCreatedOrderPublicToken = (data: unknown) => {
   if (!data || typeof data !== "object" || !("public_token" in data)) {
     return "";
@@ -128,6 +265,7 @@ const getCreatedOrderPublicToken = (data: unknown) => {
 type OrderFormProps = {
   tenantSlug: string;
   areaSlug?: string;
+  landingAttribution?: LandingAttributionInput;
   isPharmacy?: boolean;
   tenantCategory?: TenantCategory;
   deliverySettings: TenantDeliverySettings;
@@ -148,6 +286,7 @@ type OrderFormProps = {
 export default function OrderForm({
   tenantSlug,
   areaSlug,
+  landingAttribution,
   isPharmacy,
   tenantCategory,
   deliverySettings,
@@ -189,6 +328,10 @@ export default function OrderForm({
   const [isPaymentSheetOpen, setIsPaymentSheetOpen] = useState(false);
   const [cardOnDeliveryRequested, setCardOnDeliveryRequested] =
     useState(false);
+  const [resolvedLandingAttribution, setResolvedLandingAttribution] =
+    useState<ResolvedLandingAttribution | null>(() =>
+      resolveLandingAttribution(landingAttribution),
+    );
   const [hasPrescription, setHasPrescription] = useState(false);
   const [state, formAction, isPending] = useActionState(
     createOrderAction.bind(null, tenantSlug),
@@ -211,6 +354,8 @@ export default function OrderForm({
   );
   const [isReviewSheetOpen, setIsReviewSheetOpen] = useState(false);
   const [toastState, setToastState] = useState<ToastState | null>(null);
+  const [validationErrors, setValidationErrors] =
+    useState<OrderFormValidationErrors>({});
   const [productsByCategory, setProductsByCategory] = useState<
     Record<string, Product[]>
   >({
@@ -293,6 +438,28 @@ export default function OrderForm({
   const reviewTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const hasNavigatedToSuccessRef = useRef(false);
   const lastProcessedStateRef = useRef<CreateOrderState | null>(null);
+
+  useEffect(() => {
+    const storageKey = `tijaratk:storefront-attribution:${tenantSlug}`;
+    const currentAttribution = resolveLandingAttribution(landingAttribution);
+
+    if (currentAttribution) {
+      sessionStorage.setItem(storageKey, JSON.stringify(currentAttribution));
+      setResolvedLandingAttribution(currentAttribution);
+      return;
+    }
+
+    const storedAttribution = parseStoredLandingAttribution(
+      sessionStorage.getItem(storageKey),
+    );
+    setResolvedLandingAttribution(storedAttribution);
+  }, [
+    tenantSlug,
+    landingAttribution?.source,
+    landingAttribution?.areaSlug,
+    landingAttribution?.categorySlug,
+    landingAttribution?.landedAt,
+  ]);
 
   const categoryTabs = useMemo(
     () =>
@@ -827,75 +994,6 @@ export default function OrderForm({
     [getViewportOffsets],
   );
 
-  const closeReviewSheet = useCallback((restoreFocus = true) => {
-    setIsReviewSheetOpen(false);
-    if (!restoreFocus) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      reviewTriggerButtonRef.current?.focus();
-    });
-  }, []);
-
-  const openReviewSheet = useCallback(() => {
-    if (isPending) {
-      return;
-    }
-
-    hasHandledInvalidRef.current = false;
-    const formNode = formRef.current;
-    if (!formNode) {
-      return;
-    }
-
-    const isValid = formNode.reportValidity();
-    if (!isValid) {
-      return;
-    }
-
-    setIsReviewSheetOpen(true);
-  }, [isPending]);
-
-  const handleFormSubmitCapture = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      hasHandledInvalidRef.current = false;
-
-      const nativeEvent = event.nativeEvent;
-      const submitter =
-        nativeEvent instanceof SubmitEvent ? nativeEvent.submitter : null;
-      const isReviewConfirm =
-        submitter instanceof HTMLElement &&
-        submitter.hasAttribute("data-review-confirm-submit");
-
-      if (isReviewConfirm) {
-        return;
-      }
-
-      event.preventDefault();
-      openReviewSheet();
-    },
-    [openReviewSheet],
-  );
-
-  const handleFormInvalidCapture = useCallback(
-    (event: InvalidEvent<HTMLFormElement>) => {
-      if (hasHandledInvalidRef.current) {
-        return;
-      }
-
-      const invalidElement = event.target;
-      if (!(invalidElement instanceof HTMLElement)) {
-        return;
-      }
-
-      hasHandledInvalidRef.current = true;
-      invalidElement.focus({ preventScroll: true });
-      keepElementVisibleInViewport(invalidElement, "auto");
-    },
-    [keepElementVisibleInViewport],
-  );
-
   const handleRequestAvailability = useCallback(
     async (product: Product): Promise<AvailabilityRequestOutcome> => {
       if (product.is_available) {
@@ -1102,6 +1200,144 @@ export default function OrderForm({
     [effectiveCartSelections, knownProductsById, knownProductsByIdMap],
   );
 
+  const displayedErrors = useMemo(
+    () => ({
+      ...validationErrors,
+      ...(state.errors ?? {}),
+    }),
+    [state.errors, validationErrors],
+  );
+
+  const clearValidationError = useCallback((fieldName: OrderFormValidationField) => {
+    setValidationErrors((currentErrors) => {
+      const nextErrors = removeValidationError(currentErrors, fieldName);
+      if (nextErrors === currentErrors) {
+        return currentErrors;
+      }
+
+      return nextErrors;
+    });
+  }, []);
+
+  const focusOrderFormField = useCallback(
+    (
+      fieldName: OrderFormValidationField,
+      behavior: ScrollBehavior = "smooth",
+    ) => {
+      requestAnimationFrame(() => {
+        const inputNode = document.querySelector(
+          getValidationFieldSelector(fieldName),
+        );
+        if (inputNode instanceof HTMLElement) {
+          inputNode.focus({ preventScroll: true });
+          keepElementVisibleInViewport(inputNode, behavior);
+        }
+      });
+    },
+    [keepElementVisibleInViewport],
+  );
+
+  const validateBeforeReview = useCallback(() => {
+    const nextErrors: OrderFormValidationErrors = {};
+
+    if (customerName.trim().length < 2) {
+      nextErrors.customer_name = ["اكتب اسمك على الأقل حرفين"];
+    }
+
+    if (customerPhone.trim().length < 10) {
+      nextErrors.customer_phone = ["اكتب رقم هاتف صحيح"];
+    }
+
+    if (deliveryAddress.trim().length < 5) {
+      nextErrors.delivery_address = ["اكتب عنوان توصيل واضح"];
+    }
+
+    if (totalItems === 0 && !orderRequest.trim() && !hasPrescription) {
+      nextErrors.order_request = ["اختر منتجاً أو اكتب طلبك هنا"];
+    }
+
+    setValidationErrors(nextErrors);
+    return nextErrors;
+  }, [
+    customerName,
+    customerPhone,
+    deliveryAddress,
+    hasPrescription,
+    orderRequest,
+    totalItems,
+  ]);
+
+  const closeReviewSheet = useCallback((restoreFocus = true) => {
+    setIsReviewSheetOpen(false);
+    if (!restoreFocus) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      reviewTriggerButtonRef.current?.focus();
+    });
+  }, []);
+
+  const openReviewSheet = useCallback(() => {
+    if (isPending) {
+      return;
+    }
+
+    hasHandledInvalidRef.current = false;
+    const nextErrors = validateBeforeReview();
+    const firstErrorField = getFirstValidationErrorField(nextErrors);
+
+    if (firstErrorField) {
+      setToastState({
+        message: "يرجى تصحيح الأخطاء في البيانات المدخلة",
+        type: "error",
+      });
+      focusOrderFormField(firstErrorField);
+      return;
+    }
+
+    setIsReviewSheetOpen(true);
+  }, [focusOrderFormField, isPending, validateBeforeReview]);
+
+  const handleFormSubmitCapture = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      hasHandledInvalidRef.current = false;
+
+      const nativeEvent = event.nativeEvent;
+      const submitter =
+        nativeEvent instanceof SubmitEvent ? nativeEvent.submitter : null;
+      const isReviewConfirm =
+        submitter instanceof HTMLElement &&
+        submitter.hasAttribute("data-review-confirm-submit");
+
+      if (isReviewConfirm) {
+        return;
+      }
+
+      event.preventDefault();
+      openReviewSheet();
+    },
+    [openReviewSheet],
+  );
+
+  const handleFormInvalidCapture = useCallback(
+    (event: InvalidEvent<HTMLFormElement>) => {
+      if (hasHandledInvalidRef.current) {
+        return;
+      }
+
+      const invalidElement = event.target;
+      if (!(invalidElement instanceof HTMLElement)) {
+        return;
+      }
+
+      hasHandledInvalidRef.current = true;
+      invalidElement.focus({ preventScroll: true });
+      keepElementVisibleInViewport(invalidElement, "auto");
+    },
+    [keepElementVisibleInViewport],
+  );
+
   const handleEditManualRequestFromSheet = useCallback(() => {
     closeReviewSheet(false);
 
@@ -1191,6 +1427,22 @@ export default function OrderForm({
         {areaSlug && (
           <input type="hidden" name="delivery_area_slug" value={areaSlug} />
         )}
+        {resolvedLandingAttribution && (
+          <>
+            <input
+              type="hidden"
+              name="order_source"
+              value={resolvedLandingAttribution.orderSource}
+            />
+            <input
+              type="hidden"
+              name="source_metadata"
+              value={JSON.stringify(
+                resolvedLandingAttribution.sourceMetadata,
+              )}
+            />
+          </>
+        )}
         {cardOnDeliveryRequested && (
           <input type="hidden" name="card_on_delivery_requested" value="true" />
         )}
@@ -1262,7 +1514,10 @@ export default function OrderForm({
                 <ProductList
                   products={[]}
                   selections={effectiveCartSelections}
-                  onUpdateSelection={handleUpdateSelection}
+                  onUpdateSelection={(product, selection) => {
+                    clearValidationError("order_request");
+                    handleUpdateSelection(product, selection);
+                  }}
                   onRequestCustomAvailability={handleRequestCustomAvailability}
                 />
               </>
@@ -1281,7 +1536,10 @@ export default function OrderForm({
                 onBack={() => setIsCategoryProductsView(false)}
                 onCategoryChange={handleCategoryChange}
                 setCategoryPillRef={setCategoryPillRef}
-                onUpdateSelection={handleUpdateSelection}
+                onUpdateSelection={(product, selection) => {
+                  clearValidationError("order_request");
+                  handleUpdateSelection(product, selection);
+                }}
                 onProductAdded={handleProductAdded}
                 onRequestAvailability={handleRequestAvailability}
                 onRequestCustomAvailability={handleRequestCustomAvailability}
@@ -1296,7 +1554,10 @@ export default function OrderForm({
 						<ProductList
 							products={[]}
 							selections={effectiveCartSelections}
-							onUpdateSelection={handleUpdateSelection}
+							onUpdateSelection={(product, selection) => {
+								clearValidationError("order_request");
+								handleUpdateSelection(product, selection);
+							}}
 							onRequestCustomAvailability={handleRequestCustomAvailability}
 						/>
 					</div>
@@ -1305,14 +1566,20 @@ export default function OrderForm({
         <OrderNotesSection
           isPharmacy={isPharmacy}
           orderRequest={orderRequest}
-          onOrderRequestChange={setOrderRequest}
-          error={state.errors?.order_request?.[0]}
+          onOrderRequestChange={(value) => {
+            clearValidationError("order_request");
+            setOrderRequest(value);
+          }}
+          error={displayedErrors.order_request?.[0]}
         />
 
         {isPharmacy && (
           <PrescriptionUploadForm 
             tenantSlug={tenantSlug} 
-            onFileChange={setHasPrescription}
+            onFileChange={(hasFile) => {
+              clearValidationError("order_request");
+              setHasPrescription(hasFile);
+            }}
           />
         )}
 
@@ -1324,13 +1591,29 @@ export default function OrderForm({
           suggestedCustomerProfile={suggestedCustomerProfile}
           savedAddressOptions={savedAddressOptions}
           notes={notes}
-          onCustomerNameChange={setCustomerName}
-          onCustomerPhoneChange={handleCustomerPhoneChange}
-          onDeliveryAddressChange={setDeliveryAddress}
-          onUseSavedCustomerProfile={applySuggestedCustomerDetails}
-          onSavedAddressSelect={handleSavedAddressSelect}
+          onCustomerNameChange={(value) => {
+            clearValidationError("customer_name");
+            setCustomerName(value);
+          }}
+          onCustomerPhoneChange={(value) => {
+            clearValidationError("customer_phone");
+            handleCustomerPhoneChange(value);
+          }}
+          onDeliveryAddressChange={(value) => {
+            clearValidationError("delivery_address");
+            setDeliveryAddress(value);
+          }}
+          onUseSavedCustomerProfile={() => {
+            clearValidationError("customer_name");
+            clearValidationError("delivery_address");
+            applySuggestedCustomerDetails();
+          }}
+          onSavedAddressSelect={(address) => {
+            clearValidationError("delivery_address");
+            handleSavedAddressSelect(address);
+          }}
           onNotesChange={setNotes}
-          errors={state.errors}
+          errors={displayedErrors}
           message={state.message}
           success={state.success}
         />

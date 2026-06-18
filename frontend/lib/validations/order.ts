@@ -1,4 +1,12 @@
 import { z } from "zod";
+import { OrderSource } from "@/types/enums";
+
+const orderSourceValues = [
+	OrderSource.STOREFRONT,
+	OrderSource.DIRECTORY,
+	OrderSource.WHATSAPP,
+	OrderSource.MANUAL,
+] as const;
 
 export const createOrderSchema = z.object({
 	customer_name: z.string().min(2, "Name is required"),
@@ -10,6 +18,8 @@ export const createOrderSchema = z.object({
 	order_request: z.string().optional(),
 	cart: z.string().optional(), // We'll parse this manually or refine
 	delivery_area_slug: z.string().optional(),
+	order_source: z.enum(orderSourceValues).optional(),
+	source_metadata: z.string().optional(),
 	card_on_delivery_requested: z
 		.enum(["true", "false", "on"])
 		.optional()

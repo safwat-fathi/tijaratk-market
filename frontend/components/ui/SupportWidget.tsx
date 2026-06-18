@@ -11,7 +11,7 @@ export function SupportWidget() {
   const waUrl = `https://wa.me/${waNumber}`;
 
   return (
-    <div className="fixed bottom-6 start-6 z-50 flex flex-col items-center gap-3">
+    <div className="fixed bottom-24 start-6 z-50 flex flex-col items-center gap-3 lg:bottom-6">
       {/* Expanded Actions */}
       <div
         className={`flex flex-col gap-3 transition-all duration-300 ease-in-out ${

@@ -26,6 +26,8 @@ type Props = {
     reorder?: string;
     category?: string;
     areaSlug?: string;
+    categorySlug?: string;
+    src?: string;
   }>;
 };
 
@@ -143,7 +145,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function StorePage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { reorder, category, areaSlug } = await searchParams;
+  const { reorder, category, areaSlug, categorySlug, src } =
+    await searchParams;
 
   const tenant = await getTenant(slug);
   if (!tenant || !tenant.id) {
@@ -167,6 +170,12 @@ export default async function StorePage({ params, searchParams }: Props) {
         <OrderForm
           tenantSlug={tenant.slug}
           areaSlug={areaSlug}
+          landingAttribution={{
+            source: src,
+            areaSlug,
+            categorySlug,
+            landedAt: new Date().toISOString(),
+          }}
           isPharmacy={tenant.category === "pharmacy"}
           tenantCategory={tenant.category}
           deliverySettings={tenant}

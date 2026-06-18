@@ -1,7 +1,7 @@
 'use server';
 
 import { ordersService } from '@/services/api/orders.service';
-import { OrderStatus, OrderType } from '@/types/enums';
+import { OrderSource, OrderStatus, OrderType } from '@/types/enums';
 import { CloseDayResponse, CreateOrderRequest } from '@/types/services/orders';
 import { revalidatePath } from 'next/cache';
 import { createOrderSchema } from '@/lib/validations/order';
@@ -173,6 +173,8 @@ type CreateOrderCustomerData = {
   customer_phone: string;
   delivery_address?: string;
   delivery_area_slug?: string;
+  order_source?: OrderSource;
+  source_metadata?: string;
   notes?: string;
   card_on_delivery_requested?: boolean;
 };
@@ -198,6 +200,26 @@ const parseCartItems = (cart?: string): CreateOrderCartItem[] => {
   }
 };
 
+const parseSourceMetadata = (
+  sourceMetadata?: string,
+): Record<string, unknown> | undefined => {
+  if (!sourceMetadata) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(sourceMetadata) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    return parsed as Record<string, unknown>;
+  } catch (error) {
+    console.error('Failed to parse order source metadata:', error);
+    return undefined;
+  }
+};
+
 const buildCreateOrderPayload = ({
   customerData,
   items,
@@ -218,6 +240,8 @@ const buildCreateOrderPayload = ({
   free_text_payload: orderRequest ? { text: orderRequest } : undefined,
   order_type: items.length > 0 ? OrderType.CATALOG : OrderType.FREE_TEXT,
   delivery_area_slug: customerData.delivery_area_slug || undefined,
+  order_source: customerData.order_source,
+  source_metadata: parseSourceMetadata(customerData.source_metadata),
 });
 
 const buildCreateOrderFormData = (

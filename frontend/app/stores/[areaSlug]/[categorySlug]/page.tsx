@@ -29,11 +29,15 @@ const getCategoryName = (slug: string, label: string) => {
   return label;
 };
 
-const resolveStorefrontUrl = (store: StoresDirectoryStoreCard) => {
+const resolveStorefrontUrl = (
+  store: StoresDirectoryStoreCard,
+  categorySlug: string,
+) => {
   const params = new URLSearchParams({ src: "directory" });
   if (store.areaSlug) {
     params.set("areaSlug", store.areaSlug);
   }
+  params.set("categorySlug", categorySlug);
 
   return `${store.storefrontUrl}?${params.toString()}`;
 };
@@ -77,9 +81,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   });
 }
 
-const StoreCard = ({ store }: { store: StoresDirectoryStoreCard }) => (
+const StoreCard = ({
+  store,
+  categorySlug,
+}: {
+  store: StoresDirectoryStoreCard;
+  categorySlug: string;
+}) => (
   <Link
-    href={resolveStorefrontUrl(store)}
+    href={resolveStorefrontUrl(store, categorySlug)}
     className="group flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-4 text-right shadow-sm transition-all hover:border-[#27AE60]/30 hover:shadow-md"
   >
     <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[#E8F5ED] text-lg font-black text-[#0F5A3D]">
@@ -180,7 +190,11 @@ export default async function StoresCategoryPage({
           {page.stores.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {page.stores.map((store) => (
-                <StoreCard key={store.id} store={store} />
+                <StoreCard
+                  key={store.id}
+                  store={store}
+                  categorySlug={categorySlug}
+                />
               ))}
             </div>
           ) : (
