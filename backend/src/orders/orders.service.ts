@@ -127,7 +127,11 @@ export class OrdersService {
       );
     }
 
-    return this.createForTenantId(tenant.id, createOrderDto, prescriptionUpload);
+    return this.createForTenantId(
+      tenant.id,
+      createOrderDto,
+      prescriptionUpload,
+    );
   }
 
   /**
@@ -363,14 +367,20 @@ export class OrdersService {
         persistedOrder.total =
           total === undefined ? null : new Prisma.Decimal(total);
 
-        await manager.customer.update({
-          where: { id: customer.id },
-          data: { order_count: { increment: 1 }, last_order_at: new Date() },
-        });
-
         if (customer.order_count === 0) {
           isFirstOrder = true;
         }
+
+        await manager.customer.update({
+          where: { id: customer.id },
+          data: {
+            order_count: { increment: 1 },
+            last_order_at: new Date(),
+            ...(isFirstOrder
+              ? { first_order_at: persistedOrder.created_at }
+              : {}),
+          },
+        });
 
         return persistedOrder;
       });
@@ -596,6 +606,16 @@ export class OrdersService {
       },
     });
 
+    if (
+      nextStatus === OrderStatus.COMPLETED &&
+      previousStatus !== OrderStatus.COMPLETED
+    ) {
+      await this.customerClient().update({
+        where: { id: order.customer_id },
+        data: { completed_order_count: { increment: 1 } },
+      });
+    }
+
     if (nextStatus && nextStatus !== previousStatus) {
       await this.notifyCustomerStatusChange(savedOrder);
     }
@@ -803,7 +823,7 @@ export class OrdersService {
 
     this.ensureCustomerDecisionWindow(order.status as any);
 
-    const savedOrder = await this.orderClient().update({
+    const savedOrder = (await this.orderClient().update({
       where: { id: order.id },
       data: {
         status: OrderStatus.REJECTED_BY_CUSTOMER,
@@ -811,7 +831,7 @@ export class OrdersService {
         customer_rejected_at: new Date(),
       },
       include: { customer: true, tenant: true, delivery_area: true },
-    }) as unknown as Order;
+    })) as unknown as Order;
 
     await this.notifyCustomerStatusChange(savedOrder);
     return savedOrder;
@@ -1533,7 +1553,9 @@ export class OrdersService {
       }
 
       if (decision === ReplacementDecisionAction.APPROVE) {
-        await this.orderWhatsappService.notifyMerchantReplacementAccepted(order);
+        await this.orderWhatsappService.notifyMerchantReplacementAccepted(
+          order,
+        );
         return;
       }
 
@@ -1704,6 +1726,11 @@ export class OrdersService {
   private productClient() {
     const manager = DbTenantContext.getManager();
     return manager ? manager.product : this.prisma.product;
+  }
+
+  private customerClient() {
+    const manager = DbTenantContext.getManager();
+    return manager ? manager.customer : this.prisma.customer;
   }
 
   private dayClosureClient() {
