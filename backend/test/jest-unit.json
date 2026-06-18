@@ -1,0 +1,13 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testRegex": "src/.*\\.spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "<rootDir>/test/swc-jest-transformer.js"
+  },
+  "moduleNameMapper": {
+    "^src/(.*)$": "<rootDir>/src/$1"
+  },
+  "testEnvironment": "node",
+  "watchman": false
+}

@@ -17,6 +17,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AdminModule } from './admin/admin.module';
 import { ImportsModule } from './imports/imports.module';
 import { StoresDirectoryModule } from './stores-directory/stores-directory.module';
+import { MerchantDashboardModule } from './merchant-dashboard/merchant-dashboard.module';
 
 const ENV = process.env.NODE_ENV;
 
@@ -49,6 +50,7 @@ const ENV = process.env.NODE_ENV;
     AdminModule,
     ImportsModule,
     StoresDirectoryModule,
+    MerchantDashboardModule,
   ],
   controllers: [HealthController],
   providers: [TenantRlsInterceptor],
