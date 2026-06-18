@@ -6,6 +6,7 @@ import { orderProductReplacement } from './order-product-replacement';
 import { merchantReplacementAccepted } from './merchant-replacement-accepted';
 import { merchantReplacementRejected } from './merchant-replacement-rejected';
 import { merchantDayClosureSummary } from './merchant-day-closure-summary';
+import { merchantPasswordResetOtp } from './merchant-password-reset-otp';
 
 export const templatesRegistry = {
   new_order_merchant: {
@@ -191,6 +192,23 @@ export const templatesRegistry = {
       totalSalesEgp: number;
       totalCollectedEgp: number;
     }) => merchantDayClosureSummary(data),
+  },
+
+  merchant_password_reset_otp: {
+    contentSidEnv: 'TWILIO_CONTENT_SID_MERCHANT_PASSWORD_RESET_OTP',
+    variables: {
+      otp: 1,
+      expiresInMinutes: 2,
+    },
+    schema: z.object({
+      otp: z
+        .string()
+        .trim()
+        .regex(/^\d{6}$/),
+      expiresInMinutes: z.number().int().positive(),
+    }),
+    fallbackText: (data: { otp: string; expiresInMinutes: number }) =>
+      merchantPasswordResetOtp(data),
   },
 } as const;
 

@@ -12,4 +12,5 @@ export * from './order-product-replacement';
 export * from './merchant-replacement-accepted';
 export * from './merchant-replacement-rejected';
 export * from './merchant-day-closure-summary';
+export * from './merchant-password-reset-otp';
 export * from './templates.registry';

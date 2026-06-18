@@ -1,7 +1,12 @@
 "use server";
 
 import { authService } from "@/services/api/auth.service";
-import { loginSchema, registerSchema } from "@/lib/validations/auth";
+import {
+  loginSchema,
+  registerSchema,
+  requestPasswordResetSchema,
+  verifyPasswordResetSchema,
+} from "@/lib/validations/auth";
 import { redirect } from "next/navigation";
 import { setCookieAction, deleteCookieAction } from "@/app/actions/cookie-store";
 import { STORAGE_KEYS } from "@/constants";
@@ -123,4 +128,95 @@ export async function logoutAction() {
   await deleteCookieAction(STORAGE_KEYS.USER);
   await authService.logout();
   redirect("/merchant/login");
+}
+
+export async function requestPasswordResetAction(
+  prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const rawData = Object.fromEntries(formData.entries());
+  const validated = requestPasswordResetSchema.safeParse(rawData);
+
+  if (!validated.success) {
+    return {
+      success: false,
+      message: "Please fix the errors below.",
+      errors: validated.error.flatten().fieldErrors,
+      timestamp: Date.now(),
+    };
+  }
+
+  try {
+    const response = await authService.requestPasswordReset({
+      phone: validated.data.phone,
+    });
+
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "Could not send reset code.",
+        timestamp: Date.now(),
+      };
+    }
+
+    return {
+      success: true,
+      message: "تم إرسال رمز إعادة التعيين عبر واتساب",
+      timestamp: Date.now(),
+    };
+  } catch (error) {
+    console.error("Request password reset action failed:", error);
+    return {
+      success: false,
+      message: "An unexpected error occurred.",
+      timestamp: Date.now(),
+    };
+  }
+}
+
+export async function verifyPasswordResetAction(
+  prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const rawData = Object.fromEntries(formData.entries());
+  const validated = verifyPasswordResetSchema.safeParse(rawData);
+
+  if (!validated.success) {
+    return {
+      success: false,
+      message: "Please fix the errors below.",
+      errors: validated.error.flatten().fieldErrors,
+      timestamp: Date.now(),
+    };
+  }
+
+  try {
+    const response = await authService.verifyPasswordReset({
+      phone: validated.data.phone,
+      otp: validated.data.otp,
+      password: validated.data.password,
+      confirm_password: validated.data.confirmPassword,
+    });
+
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "Could not reset password.",
+        timestamp: Date.now(),
+      };
+    }
+
+    return {
+      success: true,
+      message: "تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.",
+      timestamp: Date.now(),
+    };
+  } catch (error) {
+    console.error("Verify password reset action failed:", error);
+    return {
+      success: false,
+      message: "An unexpected error occurred.",
+      timestamp: Date.now(),
+    };
+  }
 }

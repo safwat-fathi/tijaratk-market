@@ -57,6 +57,15 @@ export default function LoginForm() {
 					/>
 				</Field>
 
+				<div className="-mt-3 text-left">
+					<Link
+						href="/merchant/reset-password"
+						className="text-sm font-medium text-brand-primary hover:text-brand-primary-hover"
+					>
+						نسيت كلمة المرور؟
+					</Link>
+				</div>
+
 				{state?.message && !state.success && (
 					<div className="rounded-md border border-status-error/20 bg-status-error/10 p-4">
 						<div className="flex">

@@ -21,5 +21,21 @@ export const registerSchema = z.object({
   path: ["confirmPassword"],
 });
 
+export const requestPasswordResetSchema = z.object({
+  phone: z.string().min(10, "Phone number must be at least 10 characters"),
+});
+
+export const verifyPasswordResetSchema = z.object({
+  phone: z.string().min(10, "Phone number must be at least 10 characters"),
+  otp: z.string().regex(/^\d{6}$/, "OTP must be 6 digits"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string().min(6, "Password must be at least 6 characters"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type RequestPasswordResetInput = z.infer<typeof requestPasswordResetSchema>;
+export type VerifyPasswordResetInput = z.infer<typeof verifyPasswordResetSchema>;

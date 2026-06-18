@@ -25,3 +25,14 @@ export interface RegisterRequest {
 	password: string;
 	confirm_password: string;
 }
+
+export interface RequestPasswordResetRequest {
+	phone: string;
+}
+
+export interface VerifyPasswordResetRequest {
+	phone: string;
+	otp: string;
+	password: string;
+	confirm_password: string;
+}

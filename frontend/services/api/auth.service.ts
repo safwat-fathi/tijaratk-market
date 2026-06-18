@@ -3,6 +3,8 @@ import {
   LoginRequest,
   LoginResponse,
   RegisterRequest,
+  RequestPasswordResetRequest,
+  VerifyPasswordResetRequest,
 } from "@/types/services/auth";
 
 class AuthService extends HttpService {
@@ -17,6 +19,20 @@ class AuthService extends HttpService {
 
 	public async signup(payload: RegisterRequest) {
 		return this.post("signup", payload);
+	}
+
+	public async requestPasswordReset(payload: RequestPasswordResetRequest) {
+		return this.post<{ success: boolean; message?: string }>(
+			"password-reset/request",
+			payload,
+		);
+	}
+
+	public async verifyPasswordReset(payload: VerifyPasswordResetRequest) {
+		return this.post<{ success: boolean; message?: string }>(
+			"password-reset/verify",
+			payload,
+		);
 	}
 
 	public async logout() {

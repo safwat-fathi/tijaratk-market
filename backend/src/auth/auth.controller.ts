@@ -13,6 +13,8 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
+import { VerifyPasswordResetDto } from './dto/verify-password-reset.dto';
 @ApiTags('auth')
 @Controller('auth')
 @UseFilters(AuthExceptionFilter)
@@ -50,5 +52,31 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Bad Request' })
   async signup(@Body() signupDto: SignupDto) {
     return this.authService.signup(signupDto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('password-reset/request')
+  @ApiOperation({
+    summary: 'Request merchant password reset OTP',
+    description: 'Sends a WhatsApp OTP if the merchant phone exists',
+  })
+  @ApiBody({ type: RequestPasswordResetDto })
+  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    return this.authService.requestPasswordReset(dto.phone);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('password-reset/verify')
+  @ApiOperation({
+    summary: 'Verify merchant password reset OTP',
+    description: 'Verifies the OTP and updates the merchant password',
+  })
+  @ApiBody({ type: VerifyPasswordResetDto })
+  async verifyPasswordReset(@Body() dto: VerifyPasswordResetDto) {
+    return this.authService.verifyPasswordReset(
+      dto.phone,
+      dto.otp,
+      dto.password,
+    );
   }
 }

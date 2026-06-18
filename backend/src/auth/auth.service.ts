@@ -2,17 +2,25 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'node:crypto';
 import { User, UserRole } from '../../generated/prisma/client';
 import { TenantsService } from '../tenants/tenants.service';
 import { SignupDto } from './dto/signup.dto';
 import { formatPhoneNumber } from 'src/common/utils/phone.util';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { WhatsappService } from 'src/whatsapp/whatsapp.service';
 
 @Injectable()
 export class AuthService {
+  private static readonly PASSWORD_RESET_OTP_TTL_MINUTES = 10;
+  private static readonly PASSWORD_RESET_MAX_ATTEMPTS = 5;
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private tenantsService: TenantsService,
+    private prisma: PrismaService,
+    private whatsappService: WhatsappService,
   ) {}
 
   async validateUser(
@@ -83,6 +91,115 @@ export class AuthService {
 
     // 3. Return Login Response
     return this.login(user);
+  }
+
+  async requestPasswordReset(rawPhone: string) {
+    const phone = formatPhoneNumber(rawPhone);
+    const user = await this.usersService.findOneByPhone(phone);
+
+    if (!user) {
+      return {
+        success: true,
+        message: 'If this phone exists, a reset code has been sent.',
+      };
+    }
+
+    const activeOtp = await this.prisma.passwordResetOtp.findFirst({
+      where: {
+        phone,
+        consumed_at: null,
+        expires_at: { gt: new Date() },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    if (activeOtp) {
+      return {
+        success: true,
+        message: 'If this phone exists, a reset code has been sent.',
+      };
+    }
+
+    const otp = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const otpHash = await bcrypt.hash(otp, 10);
+    const expiresAt = new Date(
+      Date.now() + AuthService.PASSWORD_RESET_OTP_TTL_MINUTES * 60 * 1000,
+    );
+
+    await this.prisma.passwordResetOtp.create({
+      data: {
+        phone,
+        otp_hash: otpHash,
+        expires_at: expiresAt,
+      },
+    });
+
+    await this.whatsappService.sendTemplatedMessage({
+      key: 'merchant_password_reset_otp',
+      to: phone,
+      payload: {
+        otp,
+        expiresInMinutes: AuthService.PASSWORD_RESET_OTP_TTL_MINUTES,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'If this phone exists, a reset code has been sent.',
+    };
+  }
+
+  async verifyPasswordReset(rawPhone: string, otp: string, password: string) {
+    const phone = formatPhoneNumber(rawPhone);
+    const user = await this.usersService.findOneByPhone(phone);
+
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset code');
+    }
+
+    const resetOtp = await this.prisma.passwordResetOtp.findFirst({
+      where: {
+        phone,
+        consumed_at: null,
+        expires_at: { gt: new Date() },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    if (!resetOtp) {
+      throw new BadRequestException('Invalid or expired reset code');
+    }
+
+    if (resetOtp.attempt_count >= AuthService.PASSWORD_RESET_MAX_ATTEMPTS) {
+      throw new BadRequestException('Invalid or expired reset code');
+    }
+
+    const isValidOtp = await bcrypt.compare(otp, resetOtp.otp_hash);
+    if (!isValidOtp) {
+      await this.prisma.passwordResetOtp.update({
+        where: { id: resetOtp.id },
+        data: { attempt_count: { increment: 1 } },
+      });
+      throw new BadRequestException('Invalid or expired reset code');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { password: passwordHash },
+      }),
+      this.prisma.passwordResetOtp.update({
+        where: { id: resetOtp.id },
+        data: { consumed_at: new Date() },
+      }),
+    ]);
+
+    return {
+      success: true,
+      message: 'Password reset successfully',
+    };
   }
 
   // Helper for registering via API if needed (or seeding)

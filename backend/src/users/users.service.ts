@@ -26,4 +26,11 @@ export class UsersService {
     const prismaClient = tx || this.prisma;
     return prismaClient.user.create({ data });
   }
+
+  async updatePassword(id: number, password: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: { password },
+    });
+  }
 }
