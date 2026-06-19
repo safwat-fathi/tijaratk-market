@@ -136,7 +136,8 @@ export class TenantRlsInterceptor implements NestInterceptor {
       path.startsWith('/products') ||
       path.startsWith('/orders') ||
       path.startsWith('/customers') ||
-      path.startsWith('/availability-requests')
+      path.startsWith('/availability-requests') ||
+      path.startsWith('/dashboard')
     );
   }
 

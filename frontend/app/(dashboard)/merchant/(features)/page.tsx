@@ -15,6 +15,8 @@ export const metadata = createNoIndexMetadata(
   "نظرة عامة على نشاط متجرك، الطلبات اليومية، وحالة المبيعات.",
 );
 
+export const dynamic = "force-dynamic";
+
 const PERIODS = new Set<DashboardPeriod>(["today", "7d", "30d"]);
 
 function normalizePeriod(value?: string | string[]): DashboardPeriod {

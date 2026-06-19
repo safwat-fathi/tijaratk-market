@@ -13,7 +13,7 @@ class MerchantDashboardService extends HttpService {
     return this.get<MerchantDashboardMeasurements>(
       "measurements",
       { period },
-      { authRequired: true },
+      { authRequired: true, cache: "no-store" },
     );
   }
 }

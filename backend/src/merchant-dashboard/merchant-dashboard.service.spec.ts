@@ -1,3 +1,4 @@
+import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { MerchantDashboardService } from './merchant-dashboard.service';
 import {
   OrderSource,
@@ -177,6 +178,16 @@ describe('MerchantDashboardService', () => {
       },
       { source: 'manual', label: 'Manual', orders_count: 1, percentage: 25 },
     ]);
+    expect(prisma.customer.count).toHaveBeenNthCalledWith(1, {
+      where: {
+        tenant_id: 1,
+        deleted_at: null,
+        first_order_at: {
+          gte: new Date('2026-06-11T21:00:00.000Z'),
+          lte: new Date('2026-06-18T20:59:59.999Z'),
+        },
+      },
+    });
   });
 
   it('uses completed orders only for sales and top products', async () => {
@@ -220,6 +231,69 @@ describe('MerchantDashboardService', () => {
     expect(result.top_selling_products).toEqual([
       { name: 'Milk', orders_count: 1 },
     ]);
+  });
+
+  it('counts draft orders in total orders without counting them as sales', async () => {
+    const prisma = createPrismaMock({
+      orders: [
+        {
+          id: 1,
+          status: OrderStatus.draft,
+          total: new Prisma.Decimal(90),
+          order_source: OrderSource.storefront,
+          source_metadata: null,
+          customer_id: 1,
+          order_items: [
+            {
+              name_snapshot: 'Draft Item',
+              quantity: '1',
+              selection_quantity: null,
+            },
+          ],
+        },
+      ],
+      activeCustomers: [],
+    });
+    const service = new MerchantDashboardService(prisma as any);
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.total_orders.value).toBe(1);
+    expect(result.completed_orders_rate).toEqual({
+      percentage: 0,
+      completed_orders: 0,
+      total_orders: 1,
+    });
+    expect(result.total_sales.value).toBe(0);
+    expect(result.average_order_value).toBe(0);
+    expect(result.top_selling_products).toEqual([]);
+  });
+
+  it('uses the request-bound tenant manager when available', async () => {
+    const rootPrisma = createPrismaMock({});
+    const tenantManager = createPrismaMock({
+      orders: [
+        {
+          id: 1,
+          status: OrderStatus.draft,
+          total: new Prisma.Decimal(90),
+          order_source: OrderSource.storefront,
+          source_metadata: null,
+          customer_id: 1,
+          order_items: [],
+        },
+      ],
+    });
+    const service = new MerchantDashboardService(rootPrisma as any);
+
+    const result = await DbTenantContext.run(
+      { tenantId: 1, manager: tenantManager as any },
+      () => service.getMeasurements(1, 'today'),
+    );
+
+    expect(result.total_orders.value).toBe(1);
+    expect(tenantManager.order.findMany).toHaveBeenCalled();
+    expect(rootPrisma.order.findMany).not.toHaveBeenCalled();
   });
 
   it('counts availability requests inside the selected period date range', async () => {

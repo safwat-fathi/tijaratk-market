@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   OrderSource,
@@ -109,6 +110,7 @@ export class MerchantDashboardService {
       range.previousStart,
       range.previousEnd,
     );
+    const db = this.getDb();
 
     const [
       orders,
@@ -118,7 +120,7 @@ export class MerchantDashboardService {
       returningCustomers,
       availabilityRequests,
     ] = await Promise.all([
-      this.prisma.order.findMany({
+      db.order.findMany({
         where: orderWhere,
         select: {
           id: true,
@@ -136,8 +138,8 @@ export class MerchantDashboardService {
           },
         },
       }),
-      this.getPreviousOrderSummary(previousOrderWhere),
-      this.prisma.customer.count({
+      this.getPreviousOrderSummary(previousOrderWhere, db),
+      db.customer.count({
         where: {
           tenant_id: tenantId,
           deleted_at: null,
@@ -147,7 +149,7 @@ export class MerchantDashboardService {
           },
         },
       }),
-      this.prisma.order.findMany({
+      db.order.findMany({
         where: {
           ...orderWhere,
           status: OrderStatus.completed,
@@ -155,7 +157,7 @@ export class MerchantDashboardService {
         distinct: ['customer_id'],
         select: { customer_id: true },
       }),
-      this.prisma.customer.count({
+      db.customer.count({
         where: {
           tenant_id: tenantId,
           deleted_at: null,
@@ -169,7 +171,7 @@ export class MerchantDashboardService {
           },
         },
       }),
-      this.prisma.availabilityRequest.count({
+      db.availabilityRequest.count({
         where: {
           tenant_id: tenantId,
           request_date: {
@@ -237,14 +239,17 @@ export class MerchantDashboardService {
     };
   }
 
-  private async getPreviousOrderSummary(where: Prisma.OrderWhereInput) {
+  private async getPreviousOrderSummary(
+    where: Prisma.OrderWhereInput,
+    db: Prisma.TransactionClient | PrismaService,
+  ) {
     const [totalOrders, completedOrders, cancelledOrders, salesAggregate] =
       await Promise.all([
-        this.prisma.order.count({ where }),
-        this.prisma.order.count({
+        db.order.count({ where }),
+        db.order.count({
           where: { ...where, status: OrderStatus.completed },
         }),
-        this.prisma.order.count({
+        db.order.count({
           where: {
             ...where,
             status: {
@@ -252,7 +257,7 @@ export class MerchantDashboardService {
             },
           },
         }),
-        this.prisma.order.aggregate({
+        db.order.aggregate({
           where: { ...where, status: OrderStatus.completed },
           _sum: { total: true },
         }),
@@ -264,6 +269,10 @@ export class MerchantDashboardService {
       cancelledOrders,
       totalSales: this.toNumber(salesAggregate._sum.total),
     };
+  }
+
+  private getDb(): Prisma.TransactionClient | PrismaService {
+    return DbTenantContext.getManager() ?? this.prisma;
   }
 
   private buildOrderWhere(
