@@ -225,7 +225,8 @@ export class OrdersService {
           free_text_payload: createOrderDto.free_text_payload,
           notes: createOrderDto.notes,
           card_on_delivery_requested:
-            createOrderDto.card_on_delivery_requested ?? false,
+            tenant?.card_on_delivery_available === true &&
+            createOrderDto.card_on_delivery_requested === true,
           delivery_address: createOrderDto.customer.address,
           customer_phone: customer.phone,
           customer_name: createOrderDto.customer.name,

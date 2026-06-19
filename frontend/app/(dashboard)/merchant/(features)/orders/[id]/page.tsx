@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { revalidatePath } from "next/cache";
 import { ordersService } from "@/services/api/orders.service";
 import { productsService } from "@/services/api/products.service";
 import { OrderStatus } from "@/types/enums";
 import OrderItemsReplacement from "./_components/OrderItemsReplacement";
-import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import OrderDetailsActions from "./_components/OrderDetailsActions";
 import { formatCurrency } from "@/lib/utils/currency";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getImageUrl } from "@/lib/utils/image";
@@ -66,28 +64,6 @@ export default async function OrderDetailsPage({
 		productsResponse.success && productsResponse.data
 			? productsResponse.data
 			: [];
-
-	async function updateStatus(newStatus: OrderStatus, formData?: FormData) {
-		"use server";
-
-		try {
-			const cancellationReason =
-				typeof formData?.get("cancellation_reason") === "string"
-					? formData.get("cancellation_reason")?.toString().trim()
-					: "";
-			await ordersService.updateOrder(Number(id), {
-				status: newStatus,
-				cancellation_reason: cancellationReason || undefined,
-			});
-			revalidatePath(`/merchant/orders/${id}`);
-			revalidatePath("/merchant/orders");
-		} catch (error) {
-			if (isNextRedirectError(error)) {
-				throw error;
-			}
-			console.error("Update failed", error);
-		}
-	}
 
 	return (
 		<div className="flex min-h-screen flex-col bg-background">
@@ -257,66 +233,11 @@ export default async function OrderDetailsPage({
 				</Card>
 			</div>
 
-			<div className="safe-bottom-padding fixed bottom-0 left-0 right-0 border-t border-brand-border bg-white p-4 shadow-float">
-				<div className="mx-auto flex max-w-md gap-3">
-					{order.status === OrderStatus.DRAFT && (
-						<>
-							<form
-								action={updateStatus.bind(null, OrderStatus.CANCELLED)}
-								className="flex-1 space-y-2"
-							>
-								<textarea
-									name="cancellation_reason"
-									placeholder="سبب الرفض (اختياري)"
-									rows={2}
-									className="w-full resize-none rounded-md border border-brand-border px-3 py-2 text-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
-								/>
-								<Button type="submit" variant="secondary" className="w-full">
-									رفض الطلب
-								</Button>
-							</form>
-							<form
-								action={updateStatus.bind(null, OrderStatus.CONFIRMED)}
-								className="flex-[2]"
-							>
-								<Button type="submit" className="w-full">
-									تأكيد الطلب
-								</Button>
-							</form>
-						</>
-					)}
-
-					{order.status === OrderStatus.CONFIRMED && (
-						<form
-							action={updateStatus.bind(null, OrderStatus.OUT_FOR_DELIVERY)}
-							className="w-full"
-						>
-							<Button type="submit" className="w-full bg-status-warning text-brand-text hover:bg-status-warning/90">
-								تأكيد التوصيل
-							</Button>
-						</form>
-					)}
-
-					{order.status === OrderStatus.OUT_FOR_DELIVERY && (
-						<form
-							action={updateStatus.bind(null, OrderStatus.COMPLETED)}
-							className="w-full"
-						>
-							<Button type="submit" className="w-full bg-status-completed hover:bg-status-completed/90">
-								تم التوصيل
-							</Button>
-						</form>
-					)}
-
-					{(order.status === OrderStatus.COMPLETED ||
-						order.status === OrderStatus.CANCELLED ||
-						order.status === OrderStatus.REJECTED_BY_CUSTOMER) && (
-						<div className="w-full py-2 text-center font-medium text-muted-foreground">
-							حالة الطلب: {statusLabelMap[order.status] || order.status}
-						</div>
-					)}
-				</div>
-			</div>
+			<OrderDetailsActions
+				orderId={order.id}
+				status={order.status}
+				statusLabel={statusLabelMap[order.status] || order.status}
+			/>
 		</div>
 	);
 }

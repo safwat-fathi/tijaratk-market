@@ -321,6 +321,7 @@ model Tenant {
   instapay_account_number String?   @db.VarChar(120)
   ewallet_account_name    String?   @db.VarChar(120)
   ewallet_account_number  String?   @db.VarChar(120)
+  card_on_delivery_available Boolean  @default(false)
 
   availability_requests     AvailabilityRequest[]
   customers                 Customer[]

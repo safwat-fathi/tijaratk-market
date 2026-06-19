@@ -15,6 +15,7 @@ export interface Tenant {
   instapay_account_number?: string | null;
   ewallet_account_name?: string | null;
   ewallet_account_number?: string | null;
+  card_on_delivery_available?: boolean;
   directory_profile?: TenantDirectoryProfile | null;
   tenant_delivery_areas?: TenantDeliveryArea[];
 }
@@ -70,4 +71,5 @@ export type TenantDeliverySettings = Pick<
   | "instapay_account_number"
   | "ewallet_account_name"
   | "ewallet_account_number"
+  | "card_on_delivery_available"
 >;

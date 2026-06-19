@@ -188,6 +188,8 @@ export default function DeliveryDetailsSection({
               type="tel"
               inputMode="numeric"
               dir="ltr"
+              pattern="(?:01\d{9}|\+201\d{9}|201\d{9})"
+              title="اكتب رقم هاتف مصري صحيح مثل 01012345678"
               placeholder="مثال: 01012345678…"
               className="w-full rounded-md border border-brand-border bg-brand-soft/30 p-4 pl-12 text-base transition-colors focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
 							required

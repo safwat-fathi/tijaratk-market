@@ -7,7 +7,7 @@ import { DashboardPeriod } from "@/types/services/merchant-dashboard";
 import EndOfDayTeaser from "./_components/EndOfDayTeaser";
 import StorefrontLinkCard from "./_components/StorefrontLinkCard";
 import DeliverySettingsCard from "./_components/DeliverySettingsCard";
-import MvpMeasurementsDashboard from "./_components/MvpMeasurementsDashboard";
+import MeasurementsDashboard from "./_components/MeasurementsDashboard";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
 export const metadata = createNoIndexMetadata(
@@ -67,7 +67,7 @@ export default async function Dashboard({
       />
 
       {measurementsResponse.success && measurementsResponse.data ? (
-        <MvpMeasurementsDashboard measurements={measurementsResponse.data} />
+        <MeasurementsDashboard measurements={measurementsResponse.data} />
       ) : (
         <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
           تعذر تحميل قياسات لوحة التحكم.

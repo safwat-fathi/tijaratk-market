@@ -46,6 +46,7 @@ import { productsService } from "@/services/api/products.service";
 import { availabilityRequestsService } from "@/services/api/availability-requests.service";
 import { getPublicCustomerByPhoneAction } from "@/actions/customer-actions";
 import { dedupeByNumericId } from "@/lib/utils/collections";
+import { isValidEgyptianCustomerPhone } from "@/lib/utils/phone";
 import ProductList, {
 	type AvailabilityRequestOutcome,
 	type ProductCartSelection,
@@ -381,6 +382,8 @@ export default function OrderForm({
       ) as Record<number, Product>,
   );
   const deliveryAvailable = deliverySettings?.delivery_available !== false;
+  const cardOnDeliveryAvailable =
+    deliverySettings.card_on_delivery_available === true;
   const storeOpen = deliveryAvailable;
   let searchPlaceholder = "ابحث عن منتج";
   if (isPharmacy) {
@@ -1244,7 +1247,7 @@ export default function OrderForm({
       nextErrors.customer_name = ["اكتب اسمك على الأقل حرفين"];
     }
 
-    if (customerPhone.trim().length < 10) {
+    if (!isValidEgyptianCustomerPhone(customerPhone)) {
       nextErrors.customer_phone = ["اكتب رقم هاتف صحيح"];
     }
 
@@ -1443,7 +1446,7 @@ export default function OrderForm({
             />
           </>
         )}
-        {cardOnDeliveryRequested && (
+        {cardOnDeliveryAvailable && cardOnDeliveryRequested && (
           <input type="hidden" name="card_on_delivery_requested" value="true" />
         )}
 
@@ -1751,31 +1754,33 @@ export default function OrderForm({
               ))}
             </div>
 
-            <label
-              className={`mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
-                cardOnDeliveryRequested
-                  ? "border-brand-primary bg-brand-soft"
-                  : "border-brand-border bg-white"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={cardOnDeliveryRequested}
-                onChange={(event) =>
-                  setCardOnDeliveryRequested(event.target.checked)
-                }
-                className="mt-1 h-5 w-5 rounded border-brand-border text-brand-primary focus:ring-brand-accent"
-              />
-              <span className="flex-1">
-                <span className="flex items-center gap-2 text-sm font-bold text-brand-text">
-                  <CreditCard className="h-4 w-4" aria-hidden="true" />
-                  أطلب الدفع بالكارت مع التوصيل
+            {cardOnDeliveryAvailable && (
+              <label
+                className={`mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
+                  cardOnDeliveryRequested
+                    ? "border-brand-primary bg-brand-soft"
+                    : "border-brand-border bg-white"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={cardOnDeliveryRequested}
+                  onChange={(event) =>
+                    setCardOnDeliveryRequested(event.target.checked)
+                  }
+                  className="mt-1 h-5 w-5 rounded border-brand-border text-brand-primary focus:ring-brand-accent"
+                />
+                <span className="flex-1">
+                  <span className="flex items-center gap-2 text-sm font-bold text-brand-text">
+                    <CreditCard className="h-4 w-4" aria-hidden="true" />
+                    أطلب الدفع بالكارت مع التوصيل
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    سنبلغ التاجر أنك تفضل الدفع بالكارت عند وصول الطلب.
+                  </span>
                 </span>
-                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                  سنبلغ التاجر أنك تفضل الدفع بالكارت عند وصول الطلب.
-                </span>
-              </span>
-            </label>
+              </label>
+            )}
           </div>
         </div>
       )}

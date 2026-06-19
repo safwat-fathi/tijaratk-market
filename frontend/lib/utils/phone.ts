@@ -1,5 +1,18 @@
 const E164_MAX_LENGTH = 15;
 const MIN_WHATSAPP_PHONE_LENGTH = 11;
+const EGYPT_LOCAL_MOBILE_PHONE_PATTERN = /^01\d{9}$/;
+const EGYPT_E164_MOBILE_PHONE_PATTERN = /^\+201\d{9}$/;
+const EGYPT_COUNTRY_CODE_MOBILE_PHONE_PATTERN = /^201\d{9}$/;
+
+export const isValidEgyptianCustomerPhone = (rawPhone: string): boolean => {
+	const phone = rawPhone.trim();
+
+	return (
+		EGYPT_LOCAL_MOBILE_PHONE_PATTERN.test(phone) ||
+		EGYPT_E164_MOBILE_PHONE_PATTERN.test(phone) ||
+		EGYPT_COUNTRY_CODE_MOBILE_PHONE_PATTERN.test(phone)
+	);
+};
 
 export const normalizePhoneForWhatsApp = (
 	rawPhone: string,

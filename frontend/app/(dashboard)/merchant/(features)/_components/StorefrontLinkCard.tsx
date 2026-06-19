@@ -164,7 +164,7 @@ export default function StorefrontLinkCard({ slug, status = "active", deliveryAv
 					</p>
 				</div>
 
-				<div className="flex items-center gap-2">
+				<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center mt-2 sm:mt-0">
 					<button
 						type="button"
 						onClick={() => {

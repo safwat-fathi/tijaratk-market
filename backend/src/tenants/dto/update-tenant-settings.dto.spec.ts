@@ -23,11 +23,25 @@ describe('UpdateTenantSettingsDto payment account validation', () => {
         instapay_account_number: 'ahmed@instapay',
         ewallet_account_name: 'Ahmed Mohamed',
         ewallet_account_number: '01000000000',
+        card_on_delivery_available: true,
       }),
     );
 
     expect(errors).toHaveLength(0);
   });
+
+  it.each([undefined, false, true])(
+    'allows card-on-delivery availability value %s',
+    async (cardOnDeliveryAvailable) => {
+      const errors = await validate(
+        buildDto({
+          card_on_delivery_available: cardOnDeliveryAvailable,
+        }),
+      );
+
+      expect(errors).toHaveLength(0);
+    },
+  );
 
   it('rejects Instapay account name without number', async () => {
     const errors = await validate(
@@ -48,5 +62,4 @@ describe('UpdateTenantSettingsDto payment account validation', () => {
       errors.some((error) => error.property === 'ewallet_account_name'),
     ).toBe(true);
   });
-
 });

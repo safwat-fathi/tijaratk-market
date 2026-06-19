@@ -116,6 +116,7 @@ export class TenantsService {
         ewallet_account_number: normalizeOptionalText(
           dto.ewallet_account_number,
         ),
+        card_on_delivery_available: dto.card_on_delivery_available === true,
       },
     });
   }

@@ -153,6 +153,10 @@ const updateStoreSettingsSchema = z.object({
     .optional()
     .or(z.literal(""))
     .transform(value => value?.trim() || undefined),
+  card_on_delivery_available: z
+    .enum(["true", "false", "on", "off"])
+    .optional()
+    .transform(value => value === "true" || value === "on"),
   delivery_fee: z.coerce
     .number({ error: "أدخل قيمة رقمية صحيحة" })
     .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر"),
@@ -247,6 +251,7 @@ export async function updateStoreSettingsAction(
     instapay_account_number,
     ewallet_account_name,
     ewallet_account_number,
+    card_on_delivery_available,
     area_id,
     delivery_area_ids,
     ...deliveryData
@@ -279,6 +284,7 @@ export async function updateStoreSettingsAction(
 
     ewallet_account_name,
     ewallet_account_number,
+    card_on_delivery_available,
   });
 
   if (!generalRes.success) {

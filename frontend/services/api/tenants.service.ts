@@ -17,6 +17,7 @@ type UpdateTenantSettingsRequest = {
   instapay_account_number?: string;
   ewallet_account_name?: string;
   ewallet_account_number?: string;
+  card_on_delivery_available?: boolean;
 };
 
 class TenantsService extends HttpService {

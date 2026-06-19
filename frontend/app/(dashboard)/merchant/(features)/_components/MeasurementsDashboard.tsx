@@ -205,7 +205,7 @@ function OrdersBySource({
   );
 }
 
-export default function MvpMeasurementsDashboard({
+export default function MeasurementsDashboard({
   measurements,
 }: {
   measurements: MerchantDashboardMeasurements;
@@ -228,7 +228,7 @@ export default function MvpMeasurementsDashboard({
         <PeriodFilter activePeriod={measurements.period} />
       </div>
 
-      <Section title="Sales & Orders">
+      <Section title="المبيعات والطلبات">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <MetricCard
             title="إجمالي المبيعات"
@@ -263,7 +263,7 @@ export default function MvpMeasurementsDashboard({
         <TopSellingProducts products={measurements.top_selling_products} />
       </Section>
 
-      <Section title="Customers">
+      <Section title="العملاء">
         <div className="grid gap-3 sm:grid-cols-2">
           <MetricCard
             title="عملاء جدد"
@@ -279,7 +279,7 @@ export default function MvpMeasurementsDashboard({
         </div>
       </Section>
 
-      <Section title="Product Availability">
+      <Section title="توفر المنتجات">
         <MetricCard
           title="طلبات توفير المنتجات"
           value={formatInteger(measurements.availability_requests)}
@@ -289,7 +289,7 @@ export default function MvpMeasurementsDashboard({
         />
       </Section>
 
-      <Section title="Growth Sources">
+      <Section title="مصادر النمو">
         <OrdersBySource sources={measurements.orders_by_source} />
       </Section>
     </div>

@@ -344,6 +344,23 @@ export default function SettingsForm({
               </div>
             </div>
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-100 bg-[#F7F8F6] p-4">
+            <input
+              name="card_on_delivery_available"
+              type="checkbox"
+              defaultChecked={tenant.card_on_delivery_available === true}
+              className="mt-1 h-5 w-5 rounded border-gray-300 text-[#0F5A3D] focus:ring-[#27AE60]/50"
+            />
+            <span>
+              <span className="block text-sm font-bold text-gray-800">
+                إتاحة الدفع بالكارت عند التوصيل
+              </span>
+              <span className="mt-1 block text-sm leading-6 text-gray-500">
+                عند التفعيل يستطيع العميل طلب ماكينة كارت مع المندوب.
+              </span>
+            </span>
+          </label>
         </div>
       </div>
 

@@ -10,9 +10,16 @@ import {
   persistCreatedOrderCustomerTracking,
 } from '@/lib/tracking/customer-tracking-cookie';
 
-export async function updateOrderStatus(orderId: number, status: OrderStatus) {
+export async function updateOrderStatus(
+  orderId: number,
+  status: OrderStatus,
+  cancellationReason?: string,
+) {
   try {
-    const response = await ordersService.updateOrder(orderId, { status });
+    const response = await ordersService.updateOrder(orderId, {
+      status,
+      cancellation_reason: cancellationReason?.trim() || undefined,
+    });
 
     revalidatePath('/merchant/orders');
     revalidatePath(`/merchant/orders/${orderId}`);
@@ -244,6 +251,15 @@ const buildCreateOrderPayload = ({
   source_metadata: parseSourceMetadata(customerData.source_metadata),
 });
 
+const appendCardOnDeliveryRequest = (
+  formDataPayload: FormData,
+  payload: CreateOrderRequest,
+) => {
+  if (payload.card_on_delivery_requested === true) {
+    formDataPayload.append('card_on_delivery_requested', 'true');
+  }
+};
+
 const buildCreateOrderFormData = (
   payload: CreateOrderRequest,
   sourceFormData: FormData,
@@ -286,10 +302,7 @@ const buildCreateOrderFormData = (
   if (payload.delivery_area_slug) {
     formDataPayload.append('delivery_area_slug', payload.delivery_area_slug);
   }
-  formDataPayload.append(
-    'card_on_delivery_requested',
-    String(Boolean(payload.card_on_delivery_requested)),
-  );
+  appendCardOnDeliveryRequest(formDataPayload, payload);
 
   const unavailabilityOption = sourceFormData.get('unavailabilityOption');
   if (typeof unavailabilityOption === 'string' && unavailabilityOption) {
