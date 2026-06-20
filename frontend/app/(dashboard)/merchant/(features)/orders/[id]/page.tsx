@@ -8,6 +8,9 @@ import { formatCurrency } from "@/lib/utils/currency";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getImageUrl } from "@/lib/utils/image";
+import {
+	formatPrescriptionUnavailabilityAction,
+} from "@/lib/orders/prescription-unavailability";
 
 const statusLabelMap: Record<OrderStatus, string> = {
 	[OrderStatus.DRAFT]: "جديد",
@@ -60,6 +63,10 @@ export default async function OrderDetailsPage({
 	const customer = order.customer || {};
 	const deliveryAreaLabel =
 		order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
+	const prescriptionUnavailabilityLabel =
+		formatPrescriptionUnavailabilityAction(
+			order.prescription_unavailability_action,
+		);
 	const products =
 		productsResponse.success && productsResponse.data
 			? productsResponse.data
@@ -148,6 +155,14 @@ export default async function OrderDetailsPage({
 						<h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
 							الوصفة الطبية
 						</h2>
+						{prescriptionUnavailabilityLabel && (
+							<div className="mb-3 rounded-md border border-brand-accent/20 bg-brand-soft/40 p-3 text-sm text-brand-text">
+								<span className="font-semibold text-brand-primary">
+									في حالة عدم التوفر:
+								</span>{" "}
+								{prescriptionUnavailabilityLabel}
+							</div>
+						)}
 						{order.prescription_mime_type?.startsWith("image/") ? (
 							<div className="relative mt-2 flex justify-center w-full overflow-hidden rounded-md border border-brand-border bg-brand-soft/20">
 								<img

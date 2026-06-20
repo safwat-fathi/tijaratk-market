@@ -1578,7 +1578,6 @@ export default function OrderForm({
 
         {isPharmacy && (
           <PrescriptionUploadForm 
-            tenantSlug={tenantSlug} 
             onFileChange={(hasFile) => {
               clearValidationError("order_request");
               setHasPrescription(hasFile);

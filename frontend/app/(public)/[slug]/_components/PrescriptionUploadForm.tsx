@@ -4,18 +4,15 @@ import { useState, useRef } from "react";
 import {
   UploadCloud,
   CheckCircle2,
-  PhoneCall,
   ChevronDown,
   FileText,
 } from "lucide-react";
 
 interface PrescriptionUploadFormProps {
-  tenantSlug: string;
   onFileChange?: (hasFile: boolean) => void;
 }
 
 export default function PrescriptionUploadForm({
-  tenantSlug,
   onFileChange,
 }: PrescriptionUploadFormProps) {
   const [file, setFile] = useState<File | null>(null);

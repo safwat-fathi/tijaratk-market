@@ -328,19 +328,28 @@ export default async function StoresDirectoryPage({
             />
 
             {searchedAreas.length > 0 && (
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                <span className="ml-2 text-sm font-semibold text-gray-500">
+              <div className="mt-4 flex items-start gap-3">
+                <span className="shrink-0 pt-1.5 text-sm font-semibold text-gray-500">
                   الأكثر بحثاً:
                 </span>
-                {searchedAreas.map((area) => (
-                  <Link
-                    key={area.slug}
-                    href={`/?area=${encodeURIComponent(area.slug)}`}
-                    className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-semibold text-[#0F5A3D] transition-colors hover:border-[#27AE60]/30 hover:bg-[#E8F5ED]"
-                  >
-                    {area.nameAr}
-                  </Link>
-                ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  {searchedAreas.map((area) => {
+                    const isSelected = area.slug === selectedAreaSlug;
+                    return (
+                      <Link
+                        key={area.slug}
+                        href={`/?area=${encodeURIComponent(area.slug)}`}
+                        className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
+                          isSelected
+                            ? "border-[#0F5A3D] bg-[#0F5A3D] text-white"
+                            : "border-gray-200 bg-white text-[#0F5A3D] hover:border-[#27AE60]/30 hover:bg-[#E8F5ED]"
+                        }`}
+                      >
+                        {area.nameAr}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

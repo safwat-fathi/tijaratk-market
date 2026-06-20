@@ -11,6 +11,9 @@ import { formatRtlQuantityLabel } from "@/lib/utils/number";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import {
+  formatPrescriptionUnavailabilityAction,
+} from "@/lib/orders/prescription-unavailability";
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -66,6 +69,10 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
   const customerName = order.customer?.name || "عميل جديد";
   const deliveryAreaLabel =
     order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
+  const prescriptionUnavailabilityLabel =
+    formatPrescriptionUnavailabilityAction(
+      order.prescription_unavailability_action,
+    );
 
   // Handle action click
   const handleAction = async (e: React.MouseEvent) => {
@@ -167,6 +174,11 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
             {order.card_on_delivery_requested && (
               <span className="mt-1 block text-xs font-bold text-brand-primary">
                 طلب الدفع بالكارت مع التوصيل
+              </span>
+            )}
+            {order.prescription_file_url && prescriptionUnavailabilityLabel && (
+              <span className="mt-1 block text-xs font-semibold text-brand-primary">
+                في حالة عدم التوفر: {prescriptionUnavailabilityLabel}
               </span>
             )}
             {order.merchant_cancellation_reason && (

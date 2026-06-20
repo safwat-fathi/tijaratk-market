@@ -204,3 +204,61 @@ describe('OrdersService card-on-delivery persistence', () => {
     },
   );
 });
+
+describe('OrdersService prescription unavailability persistence', () => {
+  const prescriptionUpload = {
+    filename: 'prescription-test.pdf',
+    mimetype: 'application/pdf',
+    originalname: 'test-prescription.pdf',
+    path: '/tmp/prescription-test.pdf',
+  };
+
+  it('persists the selected prescription unavailability action', async () => {
+    const { service, manager } = createService();
+
+    const result = await service.createForTenantId(
+      1,
+      {
+        ...createOrderDto(),
+        prescription_unavailability_action: 'alternative',
+      } as any,
+      prescriptionUpload,
+    );
+
+    expect(manager.order.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          prescription_file_url: '/uploads/prescriptions/prescription-test.pdf',
+          prescription_original_filename: 'test-prescription.pdf',
+          prescription_mime_type: 'application/pdf',
+          prescription_unavailability_action: 'alternative',
+        }),
+      }),
+    );
+    expect(result.prescription_unavailability_action).toBe('alternative');
+  });
+
+  it('trims and limits the persisted prescription unavailability action', async () => {
+    const { service, manager } = createService();
+    const rawAction = `  ${'x'.repeat(80)}  `;
+    const expectedAction = 'x'.repeat(64);
+
+    const result = await service.createForTenantId(
+      1,
+      {
+        ...createOrderDto(),
+        prescription_unavailability_action: rawAction,
+      } as any,
+      prescriptionUpload,
+    );
+
+    expect(manager.order.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          prescription_unavailability_action: expectedAction,
+        }),
+      }),
+    );
+    expect(result.prescription_unavailability_action).toBe(expectedAction);
+  });
+});
