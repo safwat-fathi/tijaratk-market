@@ -11,7 +11,7 @@ export function SupportWidget() {
   const waUrl = `https://wa.me/${waNumber}`;
 
   return (
-    <div className="fixed bottom-24 start-6 z-50 flex flex-col items-center gap-3 lg:bottom-6">
+    <div className="fixed bottom-24 start-6 z-50 flex flex-col items-center gap-3 lg:bottom-6 pointer-events-none">
       {/* Expanded Actions */}
       <div
         className={`flex flex-col gap-3 transition-all duration-300 ease-in-out ${
@@ -66,7 +66,7 @@ export function SupportWidget() {
       {/* Main Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="group flex h-14 w-14 items-center justify-center rounded-full bg-[#10b981] text-white shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#10b981]/40"
+        className="group flex h-14 w-14 items-center justify-center rounded-full bg-[#10b981] text-white shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#10b981]/40 pointer-events-auto"
         aria-label="خدمة الدعم"
       >
         <svg

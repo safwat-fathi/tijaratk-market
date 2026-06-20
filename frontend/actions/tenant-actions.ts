@@ -11,43 +11,112 @@ export type UpdateDeliverySettingsState = {
   errors?: Record<string, string[]>;
 };
 
-const updateDeliverySettingsSchema = z.object({
-  delivery_fee: z.coerce
+const deliveryTimePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+const optionalDeliveryFeeSchema = z.preprocess(
+  value => (value === "" || value === undefined || value === null ? undefined : value),
+  z.coerce
     .number({ error: "أدخل قيمة رقمية صحيحة" })
-    .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر"),
-  delivery_available: z.enum(["true", "false"]).transform(value => value === "true"),
-  delivery_starts_at: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "صيغة الوقت غير صحيحة")
-    .optional()
-    .or(z.literal(""))
-    .transform(value => value || undefined),
-  delivery_ends_at: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "صيغة الوقت غير صحيحة")
-    .optional()
-    .or(z.literal(""))
-    .transform(value => value || undefined),
-}).refine(
-  (data) => {
-    const hasStart = !!data.delivery_starts_at;
-    const hasEnd = !!data.delivery_ends_at;
-    return hasStart === hasEnd; // Either both or neither
-  },
-  {
-    message: "أدخل وقت البداية والنهاية للتوصيل",
-    path: ["delivery_ends_at"],
-  }
-).refine(
-  (data) => {
-    if (!data.delivery_starts_at || !data.delivery_ends_at) return true;
-    return data.delivery_ends_at > data.delivery_starts_at;
-  },
-  {
-    message: "وقت النهاية يجب أن يكون بعد وقت البداية",
-    path: ["delivery_ends_at"],
-  }
+    .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر")
+    .optional(),
 );
+
+const optionalDeliveryTimeSchema = z
+  .string()
+  .optional()
+  .or(z.literal(""))
+  .transform(value => value || undefined);
+
+const validateDeliveryDetails = (
+  data: {
+    delivery_available: boolean;
+    delivery_fee?: number;
+    delivery_starts_at?: string;
+    delivery_ends_at?: string;
+  },
+  ctx: z.RefinementCtx,
+) => {
+  if (!data.delivery_available) {
+    return;
+  }
+
+  if (data.delivery_fee === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      message: "أدخل قيمة رقمية صحيحة",
+      path: ["delivery_fee"],
+    });
+  }
+
+  if (
+    data.delivery_starts_at &&
+    !deliveryTimePattern.test(data.delivery_starts_at)
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "صيغة الوقت غير صحيحة",
+      path: ["delivery_starts_at"],
+    });
+  }
+
+  if (data.delivery_ends_at && !deliveryTimePattern.test(data.delivery_ends_at)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "صيغة الوقت غير صحيحة",
+      path: ["delivery_ends_at"],
+    });
+  }
+
+  const hasStart = !!data.delivery_starts_at;
+  const hasEnd = !!data.delivery_ends_at;
+  if (hasStart !== hasEnd) {
+    ctx.addIssue({
+      code: "custom",
+      message: "أدخل وقت البداية والنهاية للتوصيل",
+      path: ["delivery_ends_at"],
+    });
+    return;
+  }
+
+  if (
+    data.delivery_starts_at &&
+    data.delivery_ends_at &&
+    deliveryTimePattern.test(data.delivery_starts_at) &&
+    deliveryTimePattern.test(data.delivery_ends_at) &&
+    data.delivery_ends_at <= data.delivery_starts_at
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "وقت النهاية يجب أن يكون بعد وقت البداية",
+      path: ["delivery_ends_at"],
+    });
+  }
+};
+
+const normalizeDeliveryDetails = <
+  T extends {
+    delivery_available: boolean;
+    delivery_fee?: number;
+    delivery_starts_at?: string;
+    delivery_ends_at?: string;
+  },
+>(
+  data: T,
+) => ({
+  ...data,
+  delivery_fee: data.delivery_available ? (data.delivery_fee ?? 0) : 0,
+  delivery_starts_at: data.delivery_available
+    ? data.delivery_starts_at
+    : undefined,
+  delivery_ends_at: data.delivery_available ? data.delivery_ends_at : undefined,
+});
+
+const updateDeliverySettingsSchema = z.object({
+  delivery_fee: optionalDeliveryFeeSchema,
+  delivery_available: z.enum(["true", "false"]).transform(value => value === "true"),
+  delivery_starts_at: optionalDeliveryTimeSchema,
+  delivery_ends_at: optionalDeliveryTimeSchema,
+}).superRefine(validateDeliveryDetails).transform(normalizeDeliveryDetails);
 
 export async function updateDeliverySettingsAction(
   _prevState: UpdateDeliverySettingsState,
@@ -157,22 +226,10 @@ const updateStoreSettingsSchema = z.object({
     .enum(["true", "false", "on", "off"])
     .optional()
     .transform(value => value === "true" || value === "on"),
-  delivery_fee: z.coerce
-    .number({ error: "أدخل قيمة رقمية صحيحة" })
-    .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر"),
+  delivery_fee: optionalDeliveryFeeSchema,
   delivery_available: z.enum(["true", "false", "on", "off"]).optional().transform(value => value === "true" || value === "on"),
-  delivery_starts_at: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "صيغة الوقت غير صحيحة")
-    .optional()
-    .or(z.literal(""))
-    .transform(value => value || undefined),
-  delivery_ends_at: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "صيغة الوقت غير صحيحة")
-    .optional()
-    .or(z.literal(""))
-    .transform(value => value || undefined),
+  delivery_starts_at: optionalDeliveryTimeSchema,
+  delivery_ends_at: optionalDeliveryTimeSchema,
   area_id: z.preprocess(
     value =>
       value === "" || value === undefined || value === null
@@ -197,27 +254,7 @@ const updateStoreSettingsSchema = z.object({
     message: "أدخل الاسم ورقم المحفظة معاً",
     path: ["ewallet_account_number"],
   },
-).refine(
-  (data) => {
-    if (!data.delivery_available) return true;
-    const hasStart = !!data.delivery_starts_at;
-    const hasEnd = !!data.delivery_ends_at;
-    return hasStart === hasEnd; // Either both or neither
-  },
-  {
-    message: "أدخل وقت البداية والنهاية للتوصيل",
-    path: ["delivery_ends_at"],
-  }
-).refine(
-  (data) => {
-    if (!data.delivery_starts_at || !data.delivery_ends_at) return true;
-    return data.delivery_ends_at > data.delivery_starts_at;
-  },
-  {
-    message: "وقت النهاية يجب أن يكون بعد وقت البداية",
-    path: ["delivery_ends_at"],
-  }
-);
+).superRefine(validateDeliveryDetails).transform(normalizeDeliveryDetails);
 
 export async function updateStoreSettingsAction(
   _prevState: UpdateStoreSettingsState,

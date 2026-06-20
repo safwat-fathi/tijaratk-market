@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import { PlanSelect } from './_components/PlanSelect';
 import { TenantAreaForm } from './_components/TenantAreaForm';
 import { DirectoryStatusForm } from './_components/DirectoryStatusForm';
+import { ExternalLink } from 'lucide-react';
 import type { AdminDirectoryArea, AdminPlan, AdminTenant } from '@/services/api/admin.service';
 
 export const dynamic = 'force-dynamic';
@@ -101,9 +102,15 @@ export default async function AdminMerchants() {
                     <h2 className="break-words text-base font-bold text-gray-900">
                       {merchant.name}
                     </h2>
-                    <div className="break-all text-xs text-gray-500">
+                    <a
+                      href={`/${merchant.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-0.5 inline-flex items-center gap-1 break-all text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    >
                       /{merchant.slug}
-                    </div>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
                   </div>
                   <MerchantStatusBadge status={merchant.status} />
                 </div>
@@ -177,7 +184,17 @@ export default async function AdminMerchants() {
               <tr key={merchant.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {merchant.name}
-                  <div className="text-xs text-gray-500">/{merchant.slug}</div>
+                  <div className="mt-0.5">
+                    <a
+                      href={`/${merchant.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      /{merchant.slug}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant.phone}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant._count?.products || 0}</td>

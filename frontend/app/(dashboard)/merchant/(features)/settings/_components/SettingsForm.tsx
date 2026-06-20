@@ -8,6 +8,7 @@ import { Tenant, DirectoryArea } from "@/types/models/tenant";
 import { updateStoreSettingsAction } from "@/actions/tenant-actions";
 import { useRef } from "react";
 import { INSTAPAY_PROVIDER } from "@/constants/payment-providers";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { WalletCards } from "lucide-react";
 
 const DELIVERY_TIME_PRESETS = [
@@ -357,7 +358,7 @@ export default function SettingsForm({
                 إتاحة الدفع بالكارت عند التوصيل
               </span>
               <span className="mt-1 block text-sm leading-6 text-gray-500">
-                عند التفعيل يستطيع العميل طلب ماكينة كارت مع المندوب.
+                عند التفعيل يستطيع العميل طلب ماكينة كارت مع مندوب التوصيل
               </span>
             </span>
           </label>
@@ -371,21 +372,14 @@ export default function SettingsForm({
         </h2>
 
         <div className="flex flex-col gap-5">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <div className="relative">
-              <input
-                name="delivery_available"
-                type="checkbox"
-                defaultChecked={tenant.delivery_available}
-                onChange={(e) => setDeliveryAvailable(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-[#27AE60] peer-checked:after:translate-x-[-100%] after:content-[''] after:absolute after:top-[2px] after:left-[22px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-            </div>
-            <span className="text-sm font-medium text-gray-700">
-              التوصيل متاح
-            </span>
-          </label>
+          <ToggleSwitch
+            name="delivery_available"
+            label="التوصيل متاح"
+            checked={deliveryAvailable}
+            onChange={setDeliveryAvailable}
+            className="rounded-xl border border-gray-100 bg-[#F7F8F6] p-4"
+            labelClassName="font-bold text-gray-800"
+          />
 
           {deliveryAvailable && (
             <>
