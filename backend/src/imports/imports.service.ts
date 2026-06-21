@@ -383,7 +383,7 @@ export class ImportsService {
     const categorySource = this.resolveCategorySource(row);
 
     const source = CATALOG_IMPORT_SOURCES[row.format];
-    const category = this.mapCategory(categorySource);
+    const category = this.mapCategory(categorySource, row.format);
     if (!isCatalogCategoryAllowedForSource(source, category)) {
       throw new Error(`Category ${category} is not allowed for ${source}`);
     }
@@ -408,10 +408,10 @@ export class ImportsService {
 
     if (row.format === CatalogImportFormat.carrefour) {
       return (
-        row.data.category_path_ar ||
         row.data.category_title_ar ||
-        row.data.category_path ||
-        row.data.category_title
+        row.data.category_path_ar ||
+        row.data.category_title ||
+        row.data.category_path
       );
     }
 
@@ -458,7 +458,12 @@ export class ImportsService {
     return normalizedValue || null;
   }
 
-  private mapCategory(value: string | undefined): string {
+  private mapCategory(value: string | undefined, format: CatalogImportFormat): string {
+    if (format === CatalogImportFormat.carrefour) {
+      const normalized = value?.trim();
+      return normalized || DEFAULT_CATEGORY;
+    }
+
     const parentCategory = value?.split('>')[0]?.trim();
     if (!parentCategory) return DEFAULT_CATEGORY;
 

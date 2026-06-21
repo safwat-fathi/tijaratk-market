@@ -167,7 +167,35 @@
         width: 92mm;
         height: 92mm;
         position: relative;
+        display: grid;
+        place-items: center;
+      }
+
+      .qr svg {
+        width: 100%;
+        height: 100%;
         display: block;
+      }
+
+      .qr-logo-container {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 20mm;
+        height: 20mm;
+        background: #ffffff;
+        border-radius: 4mm;
+        padding: 1.5mm;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .qr-logo {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
       }
 
       .copy {

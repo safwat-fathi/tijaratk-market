@@ -443,8 +443,8 @@ async function bootstrap() {
   try {
     await seedAdmin(prisma);
     await seedDirectoryAreas(prisma);
-    await seedSupermarketMerchant(prisma);
-    await seedPharmacyMerchant(prisma);
+    // await seedSupermarketMerchant(prisma);
+    // await seedPharmacyMerchant(prisma);
     await seedDirectoryProfiles(prisma);
 
     logger.log('Seeding completed successfully.');
