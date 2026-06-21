@@ -34,6 +34,7 @@ export interface Product {
   order_config?: ProductOrderConfig | null;
   source: ProductSource;
   status: ProductStatus;
+  price_needs_review?: boolean;
   tenant_id?: number;
 }
 

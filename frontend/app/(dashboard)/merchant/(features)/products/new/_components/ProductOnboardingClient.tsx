@@ -29,6 +29,7 @@ import ProductMessageBanner from './ProductMessageBanner';
 import ProductOnboardingHeader from './ProductOnboardingHeader';
 import ProductSectionsTabs from './ProductSectionsTabs';
 import QuickAddSection from './QuickAddSection';
+import BulkEssentialWizard from './BulkEssentialWizard';
 import {
   ALL_CATALOG_ITEMS,
   CATEGORY_MODE_SELECT,
@@ -105,6 +106,7 @@ export default function ProductOnboardingClient({
 	const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
 	const [catalogError, setCatalogError] = useState<string | null>(null);
 	const [isShowingHidden, setIsShowingHidden] = useState(false);
+	const [isBulkWizardOpen, setIsBulkWizardOpen] = useState(false);
 
 	const defaultUnitLabel = storeType === 'pharmacy' ? 'علبة' : DEFAULT_UNIT_LABEL;
 
@@ -1079,6 +1081,7 @@ export default function ProductOnboardingClient({
 				<ProductOnboardingHeader
 					activeSectionLabel={activeSectionLabel}
 					productsCount={products.length}
+					onOpenBulkWizard={() => setIsBulkWizardOpen(true)}
 				/>
 				<ProductSectionsTabs
 					sectionTabs={sectionTabs}
@@ -1154,6 +1157,7 @@ export default function ProductOnboardingClient({
 			<MyProductsSection
 				active={activeSection === "my-products"}
 				displayedProductsCountLabel={displayedProductsCountLabel}
+				onOpenBulkWizard={() => setIsBulkWizardOpen(true)}
 				searchQuery={searchQuery}
 				onSearchQueryChange={handleSearchQueryChange}
 				onClearSearchQuery={handleClearSearchQuery}
@@ -1213,6 +1217,14 @@ export default function ProductOnboardingClient({
 				editImageError={editImageError}
 				onEditImageChange={handleEditImageChange}
 				storeType={storeType}
+			/>
+
+			<BulkEssentialWizard
+				isOpen={isBulkWizardOpen}
+				onClose={() => setIsBulkWizardOpen(false)}
+				onSuccess={() => {
+					refreshSearchResultsIfActive();
+				}}
 			/>
 		</div>
 	);

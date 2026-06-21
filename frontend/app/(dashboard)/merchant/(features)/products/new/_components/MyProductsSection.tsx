@@ -27,6 +27,7 @@ type MyProductsSectionProps = {
   onRemoveProduct: (product: Product) => void;
   onCancelRemove: () => void;
   setProductRowRef: (productId: number, node: HTMLLIElement | null) => void;
+  onOpenBulkWizard?: () => void;
 };
 
 export default function MyProductsSection({
@@ -48,6 +49,7 @@ export default function MyProductsSection({
   onRemoveProduct,
   onCancelRemove,
   setProductRowRef,
+  onOpenBulkWizard,
 }: MyProductsSectionProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -118,11 +120,28 @@ export default function MyProductsSection({
 
         <div className="lg:max-h-[58vh] lg:overflow-y-auto lg:pe-1">
           {displayedProducts.length === 0 && !isSearchLoading ? (
-            <p className="mt-4 rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-              {isSearchActive
-                ? "لا توجد نتائج مطابقة."
-                : "لا توجد منتجات حتى الآن."}
-            </p>
+            <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed border-brand-border bg-gray-50/50 p-8 text-center">
+              {isSearchActive ? (
+                <p className="text-sm text-gray-500">لا توجد نتائج مطابقة.</p>
+              ) : (
+                <>
+                  <div className="mb-4 text-6xl opacity-80">🛒</div>
+                  <h3 className="mb-2 text-lg font-bold text-gray-900">
+                    متجرك فاضي؟
+                  </h3>
+                  <p className="mb-6 max-w-sm text-sm text-gray-500 leading-relaxed">
+                    أضف أهم المنتجات الأساسية في السوق المصري بأسعار استرشادية.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onOpenBulkWizard}
+                    className="rounded-lg bg-brand-primary px-6 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-primary/90"
+                  >
+                    أضف التشكيلة الأساسية
+                  </button>
+                </>
+              )}
+            </div>
           ) : (
             <ul className="mt-4 space-y-2">
               {displayedProducts.map((product) => {
@@ -178,6 +197,11 @@ export default function MyProductsSection({
                           {!product.is_available && (
                             <span className="rounded-full bg-status-error/15 px-2 py-1 text-xs font-semibold text-status-error">
                               غير متاح
+                            </span>
+                          )}
+                          {product.price_needs_review && (
+                            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-300">
+                              راجع السعر
                             </span>
                           )}
                         </div>
