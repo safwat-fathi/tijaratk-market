@@ -98,6 +98,11 @@ export default function ProductOnboardingClient({
 	const searchParams = useSearchParams();
 
 	const [products, setProducts] = useState<Product[]>(initialProducts);
+
+	useEffect(() => {
+		setProducts(initialProducts);
+	}, [initialProducts]);
+
 	const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(
 		initialCatalogItems,
 	);

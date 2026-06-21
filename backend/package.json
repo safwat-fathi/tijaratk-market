@@ -24,8 +24,8 @@
     "prisma:migrate:dev": "NODE_ENV=development prisma migrate dev",
     "prisma:migrate:deploy": "NODE_ENV=production prisma migrate deploy",
     "prisma:generate": "prisma generate",
-    "prisma:reset:dev": "NODE_ENV=development prisma migrate reset",
-    "prisma:reset:prod": "NODE_ENV=production prisma migrate reset",
+    "prisma:reset:dev": "NODE_ENV=development prisma migrate reset && NODE_ENV=development ts-node -r tsconfig-paths/register ./src/common/scripts/grant-permissions.ts",
+    "prisma:reset:prod": "NODE_ENV=production prisma migrate reset && NODE_ENV=production ts-node -r tsconfig-paths/register ./src/common/scripts/grant-permissions.ts",
     "prisma:studio": "NODE_ENV=development prisma studio"
   },
   "dependencies": {

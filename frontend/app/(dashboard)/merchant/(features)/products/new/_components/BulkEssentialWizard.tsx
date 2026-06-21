@@ -3,34 +3,45 @@
 import { useState } from "react";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
+import { bulkAddEssentialItemsAction } from "@/actions/product-actions";
 
 // The categories matching exactly the CSV analysis
 const ESSENTIAL_CATEGORIES = [
-  { id: "cooking", label: "مكونات الطبخ (Cooking Ingredients)", count: 627 },
+  { id: "cooking", enTitle: "Cooking Ingredients", arTitle: "مكونات الطبخ", label: "مكونات الطبخ (Cooking Ingredients)", count: 627 },
   {
     id: "biscuits",
+    enTitle: "Biscuits, Crackers & Cakes",
+    arTitle: "بسكويت، كراكرز وكيك",
     label: "بسكويت، كراكرز وكيك (Biscuits, Crackers & Cakes)",
     count: 639,
   },
   {
     id: "chocolate",
+    enTitle: "Chocolate & Confectionery",
+    arTitle: "الشوكولاته والمعجنات",
     label: "الشوكولاته والمعجنات (Chocolate & Confectionery)",
     count: 661,
   },
-  { id: "chips", label: "شيبس ومقبلات (Chips, Dips & Snacks)", count: 296 },
+  { id: "chips", enTitle: "Chips, Dips & Snacks", arTitle: "شيبس ومقبلات", label: "شيبس ومقبلات (Chips, Dips & Snacks)", count: 296 },
   {
     id: "rice",
+    enTitle: "Rice, Pasta & Pulses",
+    arTitle: "أرز , مكرونة والبقوليات",
     label: "أرز , مكرونة والبقوليات (Rice, Pasta & Pulses)",
     count: 276,
   },
-  { id: "jams", label: "مربي، عسل وغيرها (Jams, Honey & Spreads)", count: 271 },
+  { id: "jams", enTitle: "Jams, Honey & Spreads", arTitle: "مربي، عسل وغيرها", label: "مربي، عسل وغيرها (Jams, Honey & Spreads)", count: 271 },
   {
     id: "sugar",
+    enTitle: "Sugar & Home Baking",
+    arTitle: "السكر و مستلزمات الخبز",
     label: "السكر و مستلزمات الخبز (Sugar & Home Baking)",
     count: 251,
   },
   {
     id: "condiments",
+    enTitle: "Condiments, Dressings & Marinades",
+    arTitle: "توابل، صلصات و خل",
     label: "توابل، صلصات و خل (Condiments, Dressings & Marinades)",
     count: 202,
   },
@@ -73,7 +84,7 @@ export default function BulkEssentialWizard({
     }));
   };
 
-  const handleStartImport = () => {
+  const handleStartImport = async () => {
     setStep("loading");
 
     // Mocking the loading process with text changes
@@ -85,11 +96,25 @@ export default function BulkEssentialWizard({
       }
     }, 1500);
 
-    // Mocking the API call completion
-    setTimeout(() => {
+    try {
+      const selectedArabicCategories = ESSENTIAL_CATEGORIES.filter(
+        (cat) => selectedCategories[cat.id]
+      ).map((cat) => cat.arTitle);
+
+      const result = await bulkAddEssentialItemsAction(selectedArabicCategories);
+
+      if (result?.success) {
+        setStep("success");
+      } else {
+        alert(result?.message || "حدث خطأ أثناء الإضافة");
+        setStep("categories");
+      }
+    } catch (error) {
+      alert("حدث خطأ أثناء الإضافة");
+      setStep("categories");
+    } finally {
       clearInterval(intervalId);
-      setStep("success");
-    }, 6000);
+    }
   };
 
   const handleFinish = () => {

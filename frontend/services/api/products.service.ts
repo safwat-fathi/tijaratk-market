@@ -75,6 +75,15 @@ class ProductsService extends HttpService {
     );
   }
 
+  public async bulkAddEssentialItems(categories: string[]) {
+    return this.post<{ count: number }>(
+      'bulk-essentials',
+      { categories },
+      undefined,
+      { authRequired: true }
+    );
+  }
+
   public async updateProduct(productId: number, payload: FormData) {
     return this.patch<Product>(`${productId}`, payload, undefined, {
       authRequired: true,

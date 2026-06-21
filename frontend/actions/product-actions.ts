@@ -250,6 +250,34 @@ export async function addProductFromCatalogAction(catalogItemId: number) {
   }
 }
 
+export async function bulkAddEssentialItemsAction(categories: string[]) {
+  try {
+    const response = await productsService.bulkAddEssentialItems(categories);
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || 'تعذر إضافة المنتجات الأساسية',
+      };
+    }
+
+    revalidatePath('/merchant/products/new');
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Bulk add essential items failed:', error);
+    return {
+      success: false,
+      message: 'تعذر إضافة المنتجات الأساسية',
+    };
+  }
+}
+
 export async function loadCatalogItemsAction(
   params: LoadCatalogItemsParams,
 ): Promise<{

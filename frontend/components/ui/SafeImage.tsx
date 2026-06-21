@@ -52,7 +52,8 @@ export default function SafeImage({
   }
 
   const isAkamaiProtected = typeof normalizedSrc === 'string' && normalizedSrc.includes('cdn.mafrservices.com');
-  const shouldUnoptimize = unoptimized || isAkamaiProtected;
+  const isLocalImage = typeof normalizedSrc === 'string' && (normalizedSrc.includes('localhost:') || normalizedSrc.includes('127.0.0.1:'));
+  const shouldUnoptimize = unoptimized || isAkamaiProtected || isLocalImage;
 
   return (
     <Image
