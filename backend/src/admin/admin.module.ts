@@ -5,10 +5,12 @@ import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
 import { AdminJwtStrategy } from './guards/admin-jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
+import { ProductsModule } from '../products/products.module';
 
 @Module({
   imports: [
     PrismaModule,
+    ProductsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

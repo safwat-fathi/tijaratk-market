@@ -113,6 +113,13 @@ export class AdminTenantResponseDto {
   category: TenantCategory;
 
   @ApiProperty({
+    description: 'The timestamp when bulk essentials were last added',
+    nullable: true,
+    example: '2026-06-21T12:00:00.000Z',
+  })
+  last_bulk_essentials_added_at: Date | null;
+
+  @ApiProperty({
     description: 'The unique slug representing the tenant URL path',
     example: 'tijaratk-groceries',
   })

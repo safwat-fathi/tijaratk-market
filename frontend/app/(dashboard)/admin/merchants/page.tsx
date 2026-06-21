@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import { PlanSelect } from './_components/PlanSelect';
 import { TenantAreaForm } from './_components/TenantAreaForm';
 import { DirectoryStatusForm } from './_components/DirectoryStatusForm';
+import { AdminBulkEssentialsButton } from './_components/AdminBulkEssentialsButton';
 import { ExternalLink } from 'lucide-react';
 import type { AdminDirectoryArea, AdminPlan, AdminTenant } from '@/services/api/admin.service';
 
@@ -155,7 +156,15 @@ export default async function AdminMerchants() {
                   />
                 </div>
 
-                <ToggleTenantStatusForm merchant={merchant} />
+                <div className="flex gap-2 items-center flex-wrap">
+                  <ToggleTenantStatusForm merchant={merchant} />
+                  <AdminBulkEssentialsButton 
+                    tenantId={merchant.id} 
+                    tenantName={merchant.name} 
+                    category={merchant.category} 
+                    lastBulkEssentialsAddedAt={merchant.last_bulk_essentials_added_at}
+                  />
+                </div>
               </div>
             </Card>
           ))
@@ -217,7 +226,15 @@ export default async function AdminMerchants() {
                   <MerchantStatusBadge status={merchant.status} />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <ToggleTenantStatusForm merchant={merchant} />
+                  <div className="flex items-center gap-2">
+                    <ToggleTenantStatusForm merchant={merchant} />
+                    <AdminBulkEssentialsButton 
+                      tenantId={merchant.id} 
+                      tenantName={merchant.name} 
+                      category={merchant.category} 
+                      lastBulkEssentialsAddedAt={merchant.last_bulk_essentials_added_at}
+                    />
+                  </div>
                 </td>
               </tr>
             ))}

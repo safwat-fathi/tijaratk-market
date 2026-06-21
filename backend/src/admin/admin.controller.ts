@@ -24,6 +24,8 @@ import { UpdateTenantStatusDto } from './dto/update-tenant-status.dto';
 import { TogglePlanStatusDto } from './dto/toggle-plan-status.dto';
 import { UpdateTenantPlanDto } from './dto/update-tenant-plan.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
+import { ProductsService } from '../products/products.service';
+import { AddBulkEssentialItemsDto } from '../products/dto/add-bulk-essential.dto';
 import { Response } from 'express';
 import {
   AdminLoginResponseDto,
@@ -37,7 +39,10 @@ import CONSTANTS from 'src/common/constants';
 @ApiTags('Admin')
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly productsService: ProductsService,
+  ) {}
 
   @Post('login')
   @ApiOperation({
@@ -173,6 +178,29 @@ export class AdminController {
     @Body() updateTenantPlanDto: UpdateTenantPlanDto,
   ) {
     return this.adminService.updateTenantPlan(id, updateTenantPlanDto.plan_id);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('tenants/:id/bulk-essentials')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Bulk add essential products for a merchant',
+    description: 'Populate a supermarket tenant with essential catalog items.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The unique ID of the tenant',
+    type: Number,
+  })
+  @ApiBody({ type: AddBulkEssentialItemsDto })
+  @ApiResponse({ status: 201, description: 'Products added successfully' })
+  @ApiResponse({ status: 400, description: 'Tenant is not a supermarket' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  bulkAddEssentials(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AddBulkEssentialItemsDto,
+  ) {
+    return this.productsService.bulkAddEssentials(id, dto);
   }
 
   @UseGuards(AdminAuthGuard)

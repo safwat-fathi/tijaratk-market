@@ -85,7 +85,7 @@ export default function BottomSheet({
         <div
           ref={sheetRef}
           className={cn(
-            "flex max-h-[92dvh] w-full max-w-md animate-slide-up flex-col overflow-hidden rounded-t-xl bg-white shadow-float transition-transform duration-200",
+            "flex max-h-[92dvh] w-full max-w-md animate-slide-up flex-col overflow-hidden rounded-t-xl bg-white shadow-float transition-transform duration-200 whitespace-normal",
             className,
           )}
         >

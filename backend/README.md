@@ -1,4 +1,4 @@
-# Tijaratk Backend
+# Tijaratk Backend (v0.7.0)
 
 Backend API for Tijaratk, an operations-first SaaS for local merchants to receive structured WhatsApp-linked orders, manage products and customers, track order status, and send customer/merchant WhatsApp notifications.
 

@@ -324,6 +324,7 @@ model Tenant {
   ewallet_account_name    String?   @db.VarChar(120)
   ewallet_account_number  String?   @db.VarChar(120)
   card_on_delivery_available Boolean  @default(false)
+  last_bulk_essentials_added_at DateTime? @db.Timestamp(6)
 
   availability_requests     AvailabilityRequest[]
   customers                 Customer[]

@@ -61,6 +61,8 @@ export type AdminTenant = {
 	phone: string;
 	slug: string;
 	status: "active" | "inactive" | "suspended";
+	category?: "grocery" | "pharmacy" | "other";
+	last_bulk_essentials_added_at?: string | null;
 	_count?: AdminTenantCount;
 	tenant_subscriptions?: AdminTenantSubscription[];
 	directory_profile?: AdminTenantDirectoryProfile | null;
@@ -155,6 +157,15 @@ class AdminApiService extends HttpService {
 		payload: UpdateTenantDirectoryProfilePayload,
 	) {
 		return this.patch<AdminTenant>(`tenants/${id}/directory-profile`, payload, undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async adminBulkAddEssentialItems(tenantId: number, categories: string[]) {
+		return this.post<{ count: number }>(
+			`tenants/${tenantId}/bulk-essentials`,
+			{ categories },
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
 	}
 
 	public async getPlans() {

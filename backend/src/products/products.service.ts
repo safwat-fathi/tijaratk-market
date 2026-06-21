@@ -278,73 +278,83 @@ export class ProductsService {
     tenantId: number,
     dto: AddBulkEssentialItemsDto,
   ): Promise<{ count: number }> {
-    const catalogSource = await this.resolveTenantCatalogSource(tenantId);
-    if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
-      throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
-    }
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+      return DbTenantContext.run({ tenantId, manager: tx }, async () => {
+        const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+        if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+          throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
+        }
 
-    const brandFilters = ESSENTIAL_LOCAL_BRANDS.map(brand => ({ name: { contains: brand, mode: 'insensitive' as const } }));
+        const brandFilters = ESSENTIAL_LOCAL_BRANDS.map(brand => ({ name: { contains: brand, mode: 'insensitive' as const } }));
 
-    const catalogItems = await this.getPrismaClient().catalogItem.findMany({
-      where: {
-        source: catalogSource,
-        is_active: true,
-        category: { in: dto.categories },
-        OR: brandFilters,
-      }
+        const catalogItems = await this.getPrismaClient().catalogItem.findMany({
+          where: {
+            source: catalogSource,
+            is_active: true,
+            category: { in: dto.categories },
+            OR: brandFilters,
+          }
+        });
+
+        if (catalogItems.length === 0) {
+          return { count: 0 };
+        }
+
+        const existingProducts = await this.getPrismaClient().product.findMany({
+          where: { tenant_id: tenantId, status: ProductStatus.ACTIVE },
+          select: { name: true }
+        });
+        const existingNames = new Set(existingProducts.map(p => p.name));
+
+        const itemsToAdd = catalogItems.filter(item => !existingNames.has(item.name));
+
+        if (itemsToAdd.length === 0) {
+          return { count: 0 };
+        }
+
+        const defaultUnitLabel = this.resolveDefaultQuantityUnitLabelForCatalogSource(catalogSource);
+        const orderConfig = this.normalizeProductOrderConfig(
+          ProductOrderMode.QUANTITY,
+          undefined,
+          defaultUnitLabel,
+        ) as Prisma.InputJsonValue;
+
+        const dataToInsert = itemsToAdd.map(item => ({
+          tenant_id: tenantId,
+          name: item.name,
+          image_url: item.image_url,
+          category: item.category,
+          source: ProductSource.CATALOG,
+          status: ProductStatus.ACTIVE,
+          current_price: item.price,
+          order_mode: ProductOrderMode.QUANTITY,
+          order_config: orderConfig,
+          is_available: true,
+          price_needs_review: true,
+        }));
+
+        const result = await this.getPrismaClient().product.createMany({
+          data: dataToInsert,
+          skipDuplicates: true,
+        });
+
+        const uniqueCategories = Array.from(new Set(itemsToAdd.map(i => i.category).filter((c): c is string => Boolean(c))));
+        for (const cat of uniqueCategories) {
+          await this.storeTenantProductCategory(tenantId, cat);
+        }
+        
+        await this.getPrismaClient().tenant.update({
+          where: { id: tenantId },
+          data: { last_bulk_essentials_added_at: new Date() },
+        });
+
+        await this.bumpTenantSearchCacheVersion(tenantId);
+        await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+
+        return { count: result.count };
+      });
     });
-
-    if (catalogItems.length === 0) {
-      return { count: 0 };
-    }
-
-    const existingProducts = await this.getPrismaClient().product.findMany({
-      where: { tenant_id: tenantId, status: ProductStatus.ACTIVE },
-      select: { name: true }
-    });
-    const existingNames = new Set(existingProducts.map(p => p.name));
-
-    const itemsToAdd = catalogItems.filter(item => !existingNames.has(item.name));
-
-    if (itemsToAdd.length === 0) {
-      return { count: 0 };
-    }
-
-    const defaultUnitLabel = this.resolveDefaultQuantityUnitLabelForCatalogSource(catalogSource);
-    const orderConfig = this.normalizeProductOrderConfig(
-      ProductOrderMode.QUANTITY,
-      undefined,
-      defaultUnitLabel,
-    ) as Prisma.InputJsonValue;
-
-    const dataToInsert = itemsToAdd.map(item => ({
-      tenant_id: tenantId,
-      name: item.name,
-      image_url: item.image_url,
-      category: item.category,
-      source: ProductSource.CATALOG,
-      status: ProductStatus.ACTIVE,
-      current_price: item.price,
-      order_mode: ProductOrderMode.QUANTITY,
-      order_config: orderConfig,
-      is_available: true,
-      price_needs_review: true,
-    }));
-
-    const result = await this.getPrismaClient().product.createMany({
-      data: dataToInsert,
-      skipDuplicates: true,
-    });
-
-    const uniqueCategories = Array.from(new Set(itemsToAdd.map(i => i.category).filter((c): c is string => Boolean(c))));
-    for (const cat of uniqueCategories) {
-      await this.storeTenantProductCategory(tenantId, cat);
-    }
-    
-    await this.bumpTenantSearchCacheVersion(tenantId);
-    await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
-
-    return { count: result.count };
   }
 
   /**

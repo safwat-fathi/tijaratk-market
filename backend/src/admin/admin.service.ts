@@ -121,7 +121,18 @@ export class AdminService {
   // Tenants Management
   async getTenants() {
     const tenants = await this.prisma.tenant.findMany({
-      include: {
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        slug: true,
+        status: true,
+        category: true,
+        last_bulk_essentials_added_at: true,
+        created_at: true,
+        updated_at: true,
+        deleted_at: true,
+        customer_counter: true,
         directory_profile: {
           include: { area: true },
         },

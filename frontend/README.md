@@ -1,4 +1,4 @@
-# Tijaratk Frontend
+# Tijaratk Frontend (v0.7.0)
 
 Frontend application for Tijaratk, an Arabic-first SaaS that helps local merchants receive structured orders through WhatsApp-linked storefronts and manage daily store operations from a seller dashboard.
 

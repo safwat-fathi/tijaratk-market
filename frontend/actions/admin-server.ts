@@ -165,6 +165,22 @@ export async function updateTenantDirectoryStatusAction(
   };
 }
 
+export async function adminBulkAddEssentialItemsAction(tenantId: number, categories: string[]) {
+	const response = await adminService.adminBulkAddEssentialItems(tenantId, categories);
+	if (!response.success) {
+		return {
+			success: false,
+			message: response.message || "تعذر إضافة التشكيلة الأساسية",
+		};
+	}
+
+	revalidatePath("/admin/merchants");
+	return {
+		success: true,
+		data: response.data,
+	};
+}
+
 export async function togglePlanStatusAction(id: number, currentStatus: boolean): Promise<void> {
   const response = await adminService.togglePlanStatus(id, !currentStatus);
   if (response.success) {
