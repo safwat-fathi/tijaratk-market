@@ -111,11 +111,25 @@ The Prisma datasource uses PostgreSQL. The connection URL is read from `DB_URL`.
 Useful Prisma commands:
 
 ```bash
-pnpm prisma generate
-pnpm prisma migrate dev
-pnpm prisma migrate deploy
-pnpm prisma studio
+pnpm prisma:generate
+pnpm prisma:reset:dev
+pnpm prisma:migrate dev
+pnpm prisma:migrate:deploy
+pnpm prisma:studio
 ```
+
+### Database Reset & Permissions Grant
+
+When resetting the database during development or production migrations, environments with split-privilege users can encounter schema permission errors. To automatically resolve this:
+
+- **Development Reset**: Runs `prisma migrate reset` and automatically executes `src/common/scripts/grant-permissions.ts` to grant all public schema privileges to the app user:
+  ```bash
+  pnpm run prisma:reset:dev
+  ```
+- **Production Reset**:
+  ```bash
+  pnpm run prisma:reset:prod
+  ```
 
 Some legacy TypeORM scripts and dependencies may still exist during the migration period. Do not use them as the primary database workflow unless the team explicitly decides to keep them for a specific task.
 
@@ -132,6 +146,28 @@ Production seed:
 ```bash
 pnpm run seed:prod
 ```
+
+## Catalog Management & Cleanup
+
+### Catalog Source Isolation
+
+Catalog visibility is isolated by tenant category (defined in `src/products/catalog-source-policy.ts`):
+
+- Grocery tenants (`TenantCategory.grocery`) use the supermarket catalog source (`talabat_csv`).
+- Pharmacy tenants (`TenantCategory.pharmacy`) use the pharmacy catalog source (`chefaa_csv`).
+
+### Cleanup & Decontamination
+
+To deactivate/cleanup contaminated rows in the catalog (e.g. pharmacy categories showing up in supermarket sources or generic spillover):
+
+- Development:
+  ```bash
+  pnpm run catalog:cleanup:dev
+  ```
+- Production:
+  ```bash
+  pnpm run catalog:cleanup:prod
+  ```
 
 ## Quality Checks
 
@@ -159,8 +195,10 @@ pnpm run test:e2e
 
 ## Development Notes
 
-- Add Swagger decorators to new routes.
-- Keep request and response DTOs typed.
-- Use Prisma through `PrismaService` or request-bound transaction clients where tenant RLS context is required.
-- Keep tenant-aware reads and writes scoped by tenant context.
-- Avoid exposing sensitive error details to clients.
+- **Swagger Integration**: Add Swagger decorators to new routes.
+- **DTOs**: Keep request and response DTOs typed.
+- **Prisma & RLS**: Use Prisma through `PrismaService` or request-bound transaction clients where tenant RLS context is required.
+- **Tenant Context**: Keep tenant-aware reads and writes scoped by tenant context.
+- **Catalog Image Downloading**: Remote catalog images are downloaded, processed/resized to WebP format using `sharp`, and saved locally. The original URLs are preserved under the `original_image_url` field to prevent duplicate downloads and track syncing.
+- **Bulk Onboarding**: Supermarket tenants can onboard essential items in bulk using `POST /products/bulk-essentials` which filters by popular Arabic brands and key categories. Products imported this way default to `price_needs_review = true` to alert the merchant to verify pricing.
+- **Error Handling**: Avoid exposing sensitive error details to clients.

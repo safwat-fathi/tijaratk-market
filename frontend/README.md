@@ -67,7 +67,7 @@ pnpm type-check
 - `/merchant/orders`: Merchant order list and filtering.
 - `/merchant/orders/[id]`: Merchant order details and order actions.
 - `/merchant/customers`: Customer list and customer details.
-- `/merchant/products/new`: Product onboarding and catalog management.
+- `/merchant/products/new`: Product onboarding and catalog management (manual creation, catalog search, and the new **Bulk Essential Items Wizard**).
 - `/[slug]`: Public merchant storefront.
 - `/track-orders`: Public order tracking entry point.
 - `/track-order/[token]`: Public order tracking details.
@@ -107,6 +107,7 @@ Important conventions:
 - TailwindCSS is the styling system.
 - Prefer existing shared components before creating new ones.
 - Keep merchant workflows optimized for operations, not SEO-heavy content pages.
+- **Bulk Essential Wizard**: Displays common essential Egyptian brands (e.g. dairy, beverages) matching localized patterns. It includes bulk selection, search, category filtering, and bulk price modification, automatically tagging added products as requiring price review (`price_needs_review`).
 
 ## Development Notes
 
@@ -116,3 +117,4 @@ Important conventions:
 - Use type aliases instead of interfaces.
 - Avoid storing sensitive data in browser storage.
 - Keep file and component names in PascalCase for React components.
+- **SafeImage and Local Images**: The `SafeImage` component bypasses next/image optimization (`unoptimized={true}`) for locally-served downloaded images (matching `localhost` or `127.0.0.1`) to prevent Next.js image domain configuration issues during development.

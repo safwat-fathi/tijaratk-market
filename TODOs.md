@@ -20,8 +20,6 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 ## Database
 
-- Add auto backup script to deploy script
-
 ## Merchant mobile app
 
 - Add merchant mobile app for managing their store and products (React Native)
@@ -34,7 +32,4 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 - Should we add PostHog for analytics?
 - How we can make a one qr code for multiple store branches?
 - How we can show avaliable items for a store that has this item in another branch but that branch is not near customer?
-- Merchant default delivery time window should be all day.
-- Add location in merchant settings
 - Subscribitions plans should be handled in code by centeral system (not by merchants in dashboard) because it's a SaaS platform.
-- Add close toggle to the tenant in the admin dashboard
