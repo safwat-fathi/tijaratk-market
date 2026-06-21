@@ -24,6 +24,8 @@ import {
   CATALOG_SOURCE_TALABAT,
   isCatalogCategoryAllowedForSource,
 } from 'src/products/catalog-source-policy';
+import { ImageProcessorService } from 'src/common/services/image-processor.service';
+import { ImageDownloaderService } from './services/image-downloader.service';
 
 const CATALOG_IMPORT_SOURCES: Record<CatalogImportFormat, string> = {
   [CatalogImportFormat.talabat]: CATALOG_SOURCE_TALABAT,
@@ -114,6 +116,7 @@ type CatalogItemData = {
   price: string | null;
   currency: string;
   image_url: string | null;
+  original_image_url?: string | null;
   category: string;
   source: string;
   external_id: string | null;
@@ -133,7 +136,11 @@ type CatalogReplacementState = {
 export class ImportsService {
   private readonly logger = new Logger(ImportsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly imageDownloaderService: ImageDownloaderService,
+    private readonly imageProcessorService: ImageProcessorService,
+  ) {}
 
   /**
    * Creates an import run from an uploaded file and starts processing in-process.
@@ -227,20 +234,51 @@ export class ImportsService {
         parse({ columns: true, skip_empty_lines: true, trim: true }),
       );
 
+      const batchSize = 10;
+      let batch: { rowNumber: number; row: Record<string, unknown> }[] = [];
+
       for await (const row of parser) {
         counters.totalRows += 1;
-        await this.processCatalogImportRow(
-          importRunId,
-          counters.totalRows,
-          row as Record<string, unknown>,
-          importRun.mode,
-          counters,
-          replacementState,
-        );
+        batch.push({
+          rowNumber: counters.totalRows,
+          row: row as Record<string, unknown>,
+        });
 
-        if (counters.totalRows % PROGRESS_UPDATE_INTERVAL === 0) {
-          await this.updateImportProgress(importRunId, counters);
+        if (batch.length >= batchSize) {
+          await Promise.all(
+            batch.map((b) =>
+              this.processCatalogImportRow(
+                importRunId,
+                b.rowNumber,
+                b.row,
+                importRun.mode,
+                counters,
+                replacementState,
+              ),
+            ),
+          );
+          batch = [];
+
+          if (counters.totalRows % PROGRESS_UPDATE_INTERVAL === 0) {
+            await this.updateImportProgress(importRunId, counters);
+          }
         }
+      }
+
+      if (batch.length > 0) {
+        await Promise.all(
+          batch.map((b) =>
+            this.processCatalogImportRow(
+              importRunId,
+              b.rowNumber,
+              b.row,
+              importRun.mode,
+              counters,
+              replacementState,
+            ),
+          ),
+        );
+        await this.updateImportProgress(importRunId, counters);
       }
 
       if (
@@ -307,6 +345,31 @@ export class ImportsService {
         counters.successRows += 1;
         return;
       }
+
+      const incomingExternalUrl = itemData.image_url;
+      let finalImageUrl = existingItem?.image_url || null;
+      let finalOriginalImageUrl = existingItem?.original_image_url || null;
+
+      if (incomingExternalUrl && incomingExternalUrl !== existingItem?.original_image_url) {
+        const processedUrl = await this.imageDownloaderService.downloadImage(incomingExternalUrl);
+        if (processedUrl) {
+          finalImageUrl = processedUrl;
+          finalOriginalImageUrl = incomingExternalUrl;
+
+          if (existingItem?.image_url) {
+            await this.imageProcessorService.deleteManagedProductImage(existingItem.image_url);
+          }
+        } else {
+          finalImageUrl = incomingExternalUrl;
+          finalOriginalImageUrl = incomingExternalUrl;
+        }
+      } else if (!incomingExternalUrl) {
+        finalImageUrl = null;
+        finalOriginalImageUrl = null;
+      }
+
+      itemData.image_url = finalImageUrl;
+      itemData.original_image_url = finalOriginalImageUrl;
 
       if (existingItem) {
         await this.prisma.catalogItem.update({
