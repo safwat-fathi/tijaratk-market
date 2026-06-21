@@ -9,6 +9,8 @@ import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
 import { ProductSource } from 'src/common/enums/product-source.enum';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { AddProductFromCatalogDto } from './dto/add-product-from-catalog.dto';
+import { AddBulkEssentialItemsDto } from './dto/add-bulk-essential.dto';
+import { ESSENTIAL_LOCAL_BRANDS } from './utils/essential-brands.constant';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
@@ -25,6 +27,7 @@ import {
 import {
   buildAllowedCatalogCategoryWhere,
   CATALOG_SOURCE_CHEFAA,
+  CATALOG_SOURCE_TALABAT,
   CatalogSource,
   getAllowedCatalogCategoriesForSource,
   isCatalogCategoryAllowedForSource,
@@ -266,6 +269,82 @@ export class ProductsService {
     await this.bumpTenantSearchCacheVersion(tenantId);
     await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
     return product;
+  }
+
+  /**
+   * Bulk add essential catalog items for the tenant.
+   */
+  async bulkAddEssentials(
+    tenantId: number,
+    dto: AddBulkEssentialItemsDto,
+  ): Promise<{ count: number }> {
+    const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+    if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+      throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
+    }
+
+    const brandFilters = ESSENTIAL_LOCAL_BRANDS.map(brand => ({ name: { contains: brand, mode: 'insensitive' as const } }));
+
+    const catalogItems = await this.getPrismaClient().catalogItem.findMany({
+      where: {
+        source: catalogSource,
+        is_active: true,
+        category: { in: dto.categories },
+        OR: brandFilters,
+      }
+    });
+
+    if (catalogItems.length === 0) {
+      return { count: 0 };
+    }
+
+    const existingProducts = await this.getPrismaClient().product.findMany({
+      where: { tenant_id: tenantId, status: ProductStatus.ACTIVE },
+      select: { name: true }
+    });
+    const existingNames = new Set(existingProducts.map(p => p.name));
+
+    const itemsToAdd = catalogItems.filter(item => !existingNames.has(item.name));
+
+    if (itemsToAdd.length === 0) {
+      return { count: 0 };
+    }
+
+    const defaultUnitLabel = this.resolveDefaultQuantityUnitLabelForCatalogSource(catalogSource);
+    const orderConfig = this.normalizeProductOrderConfig(
+      ProductOrderMode.QUANTITY,
+      undefined,
+      defaultUnitLabel,
+    ) as Prisma.InputJsonValue;
+
+    const dataToInsert = itemsToAdd.map(item => ({
+      tenant_id: tenantId,
+      name: item.name,
+      image_url: item.image_url,
+      category: item.category,
+      source: ProductSource.CATALOG,
+      status: ProductStatus.ACTIVE,
+      current_price: item.price,
+      order_mode: ProductOrderMode.QUANTITY,
+      order_config: orderConfig,
+      is_available: true,
+      price_needs_review: true,
+    }));
+
+    const result = await this.getPrismaClient().product.createMany({
+      data: dataToInsert,
+      skipDuplicates: true,
+    });
+
+    const uniqueCategories = Array.from(new Set(itemsToAdd.map(i => i.category).filter((c): c is string => Boolean(c))));
+    for (const cat of uniqueCategories) {
+      await this.storeTenantProductCategory(tenantId, cat);
+    }
+    
+    await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+
+    return { count: result.count };
   }
 
   /**

@@ -29,6 +29,7 @@ import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { AddProductFromCatalogDto } from './dto/add-product-from-catalog.dto';
+import { AddBulkEssentialItemsDto } from './dto/add-bulk-essential.dto';
 import { UploadFile } from 'src/common/decorators/upload-file.decorator';
 import { imageFileFilter } from 'src/common/utils/file-filters';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
@@ -109,6 +110,27 @@ export class ProductsController {
     }
 
     return this.productsService.createFromCatalog(tenantId, body);
+  }
+
+  @Post('bulk-essentials')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Bulk add essential catalog items' })
+  @ApiBody({ type: AddBulkEssentialItemsDto })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Bulk products created successfully',
+  })
+  bulkAddEssentials(
+    @Req() req: Request,
+    @Body() body: AddBulkEssentialItemsDto,
+  ) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.productsService.bulkAddEssentials(tenantId, body);
   }
 
   @Get('catalog/categories')
