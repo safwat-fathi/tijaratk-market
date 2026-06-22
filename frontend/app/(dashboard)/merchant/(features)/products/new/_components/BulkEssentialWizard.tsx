@@ -45,12 +45,20 @@ const ESSENTIAL_CATEGORIES = [
     label: "توابل، صلصات و خل (Condiments, Dressings & Marinades)",
     count: 202,
   },
+  {
+    id: "cleaning",
+    enTitle: "Household Cleaning Tools",
+    arTitle: "أدوات التنظيف المنزلية",
+    label: "أدوات التنظيف المنزلية (Household Cleaning Tools)",
+    count: 208,
+  },
 ];
 
 const FUN_LOADING_TEXTS = [
   "بنضيف الشيبسي والمقرمشات...",
   "بنجيب الزيت والسكر...",
   "بنرص المكرونة والأرز...",
+  "بنجيب الصابون والمنظفات...",
   "خلاص بنخلص...",
 ];
 

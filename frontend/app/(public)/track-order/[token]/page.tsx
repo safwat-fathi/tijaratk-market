@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { ordersService } from "@/services/api/orders.service";
 import { formatCurrency } from "@/lib/utils/currency";
 import SafeImage from "@/components/ui/SafeImage";

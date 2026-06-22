@@ -262,3 +262,51 @@ describe('OrdersService prescription unavailability persistence', () => {
     expect(result.prescription_unavailability_action).toBe(expectedAction);
   });
 });
+
+describe('OrdersService findByPublicToken', () => {
+  it('throws NotFoundException if order is not found', async () => {
+    const { service, manager } = createService();
+    jest.spyOn(manager.order, 'findFirst').mockResolvedValue(null);
+
+    await expect(service.findByPublicToken('token')).rejects.toThrow(
+      'Order with token token not found',
+    );
+  });
+
+  it.each([
+    OrderStatus.CANCELLED,
+    OrderStatus.REJECTED_BY_CUSTOMER,
+  ])('throws NotFoundException if order is %s', async (status) => {
+    const { service, manager } = createService();
+    jest.spyOn(manager.order, 'findFirst').mockResolvedValue({
+      status,
+      public_token: 'token',
+      order_items: [],
+      tenant: { id: 1, name: 'Test Tenant', slug: 'test-tenant' },
+    } as any);
+
+    await expect(service.findByPublicToken('token')).rejects.toThrow(
+      'Order with token token not found',
+    );
+  });
+
+  it.each([
+    OrderStatus.DRAFT,
+    OrderStatus.CONFIRMED,
+    OrderStatus.OUT_FOR_DELIVERY,
+    OrderStatus.COMPLETED,
+  ])('returns the order if status is %s', async (status) => {
+    const { service, manager } = createService();
+    const mockOrder = {
+      status,
+      public_token: 'token',
+      order_items: [],
+      tenant: { id: 1, name: 'Test Tenant', slug: 'test-tenant' },
+    };
+    jest.spyOn(manager.order, 'findFirst').mockResolvedValue(mockOrder as any);
+
+    const result = await service.findByPublicToken('token');
+    expect(result).toBeDefined();
+    expect(result.status).toBe(status);
+  });
+});

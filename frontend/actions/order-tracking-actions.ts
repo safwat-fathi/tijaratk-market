@@ -2,12 +2,20 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { clearTrackedOrdersCookie } from '@/lib/tracking/customer-tracking-cookie';
+import {
+  clearTrackedOrdersCookie,
+  removeTrackedOrderFromCookie,
+} from '@/lib/tracking/customer-tracking-cookie';
 import { ordersService } from '@/services/api/orders.service';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 
 export async function clearTrackedOrdersAction() {
   await clearTrackedOrdersCookie();
+  revalidatePath('/track-orders');
+}
+
+export async function removeTrackedOrderAction(token: string) {
+  await removeTrackedOrderFromCookie(token);
   revalidatePath('/track-orders');
 }
 
@@ -43,6 +51,8 @@ export async function rejectOrderByTrackingAction(
 ) {
   try {
     const response = await ordersService.rejectOrderByToken(token, payload);
+
+    await removeTrackedOrderFromCookie(token);
 
     revalidatePath(`/track-order/${token}`);
     revalidatePath('/track-orders');

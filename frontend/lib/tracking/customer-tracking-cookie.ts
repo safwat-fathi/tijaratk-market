@@ -395,7 +395,25 @@ export async function upsertCustomerProfileBySlugInCookie(
 	});
 }
 
+export async function removeTrackedOrderFromCookie(
+	token: string,
+): Promise<TrackedOrderCookieItem[]> {
+	const payload = await readTrackedOrdersCookiePayload();
+	const nextItems = payload.items.filter(item => item.token !== token);
+
+	await writeTrackedOrdersCookie({
+		v: COOKIE_VERSION,
+		items: nextItems,
+		customer_profiles_by_slug: payload.customer_profiles_by_slug,
+	});
+
+	return nextItems;
+}
+
 export async function clearTrackedOrdersCookie(): Promise<void> {
 	const cookieStore = await cookies();
-	cookieStore.delete(STORAGE_KEYS.CUSTOMER_TRACKED_ORDERS);
+	cookieStore.delete({
+		name: STORAGE_KEYS.CUSTOMER_TRACKED_ORDERS,
+		path: "/",
+	});
 }

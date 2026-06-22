@@ -1,6 +1,8 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 
-import { clearTrackedOrdersAction } from "@/actions/order-tracking-actions";
+import { clearTrackedOrdersAction, removeTrackedOrderAction } from "@/actions/order-tracking-actions";
 import { formatCurrency } from "@/lib/utils/currency";
 import {
 	listTrackedOrdersFromCookie,
@@ -216,12 +218,23 @@ export default async function TrackOrdersPage() {
 								</div>
 
 								<div className="mt-5 flex flex-col gap-2 sm:flex-row">
-									<Link
-										href={`/track-order/${item.token}`}
-										className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
-									>
-										تفاصيل التتبع
-									</Link>
+									{status !== OrderStatus.CANCELLED && status !== OrderStatus.REJECTED_BY_CUSTOMER ? (
+										<Link
+											href={`/track-order/${item.token}`}
+											className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+										>
+											تفاصيل التتبع
+										</Link>
+									) : (
+										<form action={removeTrackedOrderAction.bind(null, item.token)} className="flex-1 flex">
+											<button
+												type="submit"
+												className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-brand-border bg-white px-4 py-2.5 text-sm font-semibold text-status-error transition-colors hover:bg-status-error/5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+											>
+												إزالة من القائمة
+											</button>
+										</form>
+									)}
 									<Link
 										href={`/${storeSlug}?reorder=${item.token}`}
 										className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-brand-border bg-white px-4 py-2.5 text-sm font-semibold text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"

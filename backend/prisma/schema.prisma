@@ -315,7 +315,7 @@ model Tenant {
   category           TenantCategory @default(other) @map("category")
   slug               String         @unique(map: "UQ_2310ecc5cb8be427097154b18fc") @db.VarChar
   status             TenantStatus   @default(active) @map("status")
-  delivery_fee       Decimal        @default(0) @db.Decimal(10, 2)
+  delivery_fee       Decimal        @default(20) @db.Decimal(10, 2)
   delivery_available Boolean        @default(true)
   delivery_starts_at String?        @db.VarChar(5)
   delivery_ends_at   String?        @db.VarChar(5)

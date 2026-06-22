@@ -39,6 +39,7 @@ export class TenantsService {
         phone,
         slug,
         category: category || TENANT_CATEGORIES.OTHER.value,
+        delivery_fee: 20,
         ...(basicPlan && {
           tenant_subscriptions: {
             create: {

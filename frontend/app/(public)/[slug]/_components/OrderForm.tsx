@@ -441,6 +441,9 @@ export default function OrderForm({
   const reviewTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const hasNavigatedToSuccessRef = useRef(false);
   const lastProcessedStateRef = useRef<CreateOrderState | null>(null);
+  const isAutoScrollingRef = useRef(false);
+  const autoScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isIntersectingRef = useRef(false);
 
   useEffect(() => {
     const storageKey = `tijaratk:storefront-attribution:${tenantSlug}`;
@@ -674,6 +677,10 @@ export default function OrderForm({
   );
 
   const loadNextPage = useCallback(() => {
+    if (isAutoScrollingRef.current) {
+      return;
+    }
+
     const categoryState =
       paginationByCategoryMap.get(activeProductsStateKey) ||
       DEFAULT_PAGINATION_STATE;
@@ -699,6 +706,19 @@ export default function OrderForm({
     paginationByCategoryMap,
   ]);
 
+  const temporarilyDisableInfiniteScroll = useCallback(() => {
+    isAutoScrollingRef.current = true;
+    if (autoScrollTimeoutRef.current) {
+      clearTimeout(autoScrollTimeoutRef.current);
+    }
+    autoScrollTimeoutRef.current = setTimeout(() => {
+      isAutoScrollingRef.current = false;
+      if (isIntersectingRef.current) {
+        loadNextPage();
+      }
+    }, 1200);
+  }, [loadNextPage]);
+
   const setLoadMoreTarget = useCallback(
     (node: HTMLDivElement | null) => {
       if (loadMoreObserver.current) {
@@ -711,6 +731,7 @@ export default function OrderForm({
 
       loadMoreObserver.current = new IntersectionObserver(
         (entries) => {
+          isIntersectingRef.current = entries[0]?.isIntersecting ?? false;
           if (entries[0]?.isIntersecting) {
             loadNextPage();
           }
@@ -989,12 +1010,16 @@ export default function OrderForm({
         return;
       }
 
+      if (behavior === "smooth") {
+        temporarilyDisableInfiniteScroll();
+      }
+
       window.scrollTo({
         top: Math.max(0, targetTop),
         behavior,
       });
     },
-    [getViewportOffsets],
+    [getViewportOffsets, temporarilyDisableInfiniteScroll],
   );
 
   const handleRequestAvailability = useCallback(
@@ -1350,6 +1375,7 @@ export default function OrderForm({
         const { safeTop } = getViewportOffsets();
         const sectionTop =
           window.scrollY + targetSection.getBoundingClientRect().top;
+        temporarilyDisableInfiniteScroll();
         window.scrollTo({
           top: Math.max(0, sectionTop - safeTop),
           behavior: "smooth",
@@ -1366,7 +1392,7 @@ export default function OrderForm({
       textarea.focus({ preventScroll: true });
       keepElementVisibleInViewport(textarea, "smooth");
     });
-  }, [closeReviewSheet, getViewportOffsets, keepElementVisibleInViewport]);
+  }, [closeReviewSheet, getViewportOffsets, keepElementVisibleInViewport, temporarilyDisableInfiniteScroll]);
 
   useEffect(() => {
     if (isPending) {
@@ -1646,6 +1672,7 @@ export default function OrderForm({
           onClose={() => closeReviewSheet(true)}
           onEditManualRequest={handleEditManualRequestFromSheet}
           onUpdateSelection={handleReviewSelectionUpdate}
+          deliveryFee={Number(deliverySettings?.delivery_fee ?? 0)}
         />
       </form>
 

@@ -145,6 +145,7 @@ type ProductListCardProps = {
 	onApplyInlineValue: (product: Product, mode: InlineEditorMode) => void;
 	onCancelInlineValue: (product: Product, mode: InlineEditorMode) => void;
 	onOpenAvailabilitySheet: (product: Product) => void;
+	onImageClick?: (url: string, alt: string) => void;
 };
 
 const resolveSelectionMetrics = ({
@@ -630,6 +631,7 @@ const ProductListCard = ({
 	onApplyInlineValue,
 	onCancelInlineValue,
 	onOpenAvailabilitySheet,
+	onImageClick,
 }: ProductListCardProps) => {
 	const mode = resolveProductMode(product);
 	const isUnavailable = product.is_available === false;
@@ -667,9 +669,14 @@ const ProductListCard = ({
 		>
 			<div className="flex items-center gap-3">
 				<div
-					className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg ring-1 ${
+					className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg ring-1 transition-colors ${
 						isUnavailable ? "bg-gray-100 ring-gray-200" : "bg-gray-100 ring-gray-100"
-					}`}
+					} ${product.image_url ? "cursor-pointer hover:ring-brand-accent/50" : ""}`}
+					onClick={() => {
+						if (product.image_url && onImageClick) {
+							onImageClick(getImageUrl(product.image_url), product.name);
+						}
+					}}
 				>
 					{product.image_url ? (
 						<SafeImage
@@ -782,7 +789,8 @@ export default function ProductList({
 	const [customAvailabilityName, setCustomAvailabilityName] = useState("");
 	const [customAvailabilityError, setCustomAvailabilityError] = useState("");
 	const [isAvailabilitySubmitting, setIsAvailabilitySubmitting] = useState(false);
-	useBodyScrollLock(Boolean(availabilitySheet));
+	const [enlargedImage, setEnlargedImage] = useState<{ url: string; alt: string } | null>(null);
+	useBodyScrollLock(Boolean(availabilitySheet) || Boolean(enlargedImage));
 	const selectedAvailabilityProduct =
 		availabilitySheet?.type === "product" ? availabilitySheet.product : null;
 
@@ -1144,6 +1152,7 @@ export default function ProductList({
 										product: selectedProduct,
 									})
 								}
+								onImageClick={(url, alt) => setEnlargedImage({ url, alt })}
 							/>
 						);
 					})}
@@ -1220,6 +1229,33 @@ export default function ProductList({
 							</button>
 						</div>
 					</div>
+				</div>
+			)}
+
+			{enlargedImage && (
+				<div
+					className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+					role="dialog"
+					aria-modal="true"
+					onClick={() => setEnlargedImage(null)}
+				>
+					<button
+						type="button"
+						onClick={() => setEnlargedImage(null)}
+						className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+						aria-label="إغلاق"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+							<path d="M18 6 6 18" />
+							<path d="m6 6 12 12" />
+						</svg>
+					</button>
+					<img
+						src={enlargedImage.url}
+						alt={enlargedImage.alt}
+						className="max-h-[90vh] max-w-full rounded-xl object-contain shadow-2xl"
+						onClick={(e) => e.stopPropagation()}
+					/>
 				</div>
 			)}
 		</>

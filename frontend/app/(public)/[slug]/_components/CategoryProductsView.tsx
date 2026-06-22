@@ -5,6 +5,7 @@ import ProductList, {
 } from "./ProductList";
 import CategoryProductsTab from "./CategoryProductsTab";
 import type { CategoryTab, PaginationState } from "../_utils/order-form";
+import { ArrowRightIcon } from "lucide-react";
 
 type CategoryProductsViewProps = {
   categoryTabs: CategoryTab[];
@@ -17,10 +18,7 @@ type CategoryProductsViewProps = {
   cartSelections: Record<number, ProductCartSelection>;
   onBack: () => void;
   onCategoryChange: (categoryKey: string) => void;
-  setCategoryPillRef: (
-    categoryKey: string,
-    node: HTMLElement | null,
-  ) => void;
+  setCategoryPillRef: (categoryKey: string, node: HTMLElement | null) => void;
   onUpdateSelection: (
     product: Product,
     selection: ProductCartSelection | null,
@@ -74,8 +72,9 @@ export default function CategoryProductsView({
         <button
           type="button"
           onClick={onBack}
-          className="min-h-11 rounded-md border border-brand-border px-3 py-2 text-sm font-semibold text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+          className="flex items-center gap-2 min-h-11 rounded-md border border-brand-border px-3 py-2 text-sm font-semibold text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
         >
+          <ArrowRightIcon className="h-4 w-4" />
           رجوع
         </button>
         <p className="min-w-0 truncate text-sm font-semibold text-brand-text">

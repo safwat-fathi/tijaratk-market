@@ -975,6 +975,13 @@ export class OrdersService {
       throw new NotFoundException(`Order with token ${token} not found`);
     }
 
+    if (
+      order.status === OrderStatus.CANCELLED ||
+      order.status === OrderStatus.REJECTED_BY_CUSTOMER
+    ) {
+      throw new NotFoundException(`Order with token ${token} not found`);
+    }
+
     return this.mapOrderPayload(order);
   }
 

@@ -34,7 +34,9 @@ class OrdersService extends HttpService {
 
 	// Public tracking endpoint
 	public async getOrderByPublicToken(token: string) {
-		return this.get<Order>(`tracking/${token}`);
+		return this.get<Order>(`tracking/${token}`, undefined, {
+			cache: "no-store",
+		});
 	}
 
 	public async getOrdersByPublicTokens(tokens: string[]) {
@@ -55,7 +57,9 @@ class OrdersService extends HttpService {
 			query.append("token", token);
 		}
 
-		return this.get<Order[]>(`tracking?${query.toString()}`);
+		return this.get<Order[]>(`tracking?${query.toString()}`, undefined, {
+			cache: "no-store",
+		});
 	}
 
 	public async createPublicOrder(

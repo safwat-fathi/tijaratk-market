@@ -26,6 +26,7 @@ type OrderReviewSheetProps = {
 		productId: number,
 		nextSelection: ProductCartSelection | null,
 	) => void;
+	deliveryFee?: number;
 };
 
 const MAX_NOTE_LENGTH = 255;
@@ -346,6 +347,7 @@ export default function OrderReviewSheet({
 	onClose,
 	onEditManualRequest,
 	onUpdateSelection,
+	deliveryFee = 0,
 }: OrderReviewSheetProps) {
 	useBodyScrollLock(isOpen);
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -499,20 +501,40 @@ export default function OrderReviewSheet({
 							paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
 						}}
 					>
-						<div className="mb-3 flex items-end justify-between gap-2">
-							<p className="text-sm font-semibold text-gray-600">
-								العناصر: {formatNumericValue(totalItems)}
-							</p>
-							{hasPricedItems ? (
-								<p className="text-sm font-bold text-brand-primary">
-									إجمالي تقريبي: {formatCurrency(estimatedTotal)}
+						{hasPricedItems ? (
+							<div className="mb-4 space-y-2 text-sm border-b border-gray-100 pb-3">
+								<div className="flex justify-between text-gray-600">
+									<span>إجمالي المنتجات ({formatNumericValue(totalItems)}):</span>
+									<span className="font-semibold">{formatCurrency(estimatedTotal)}</span>
+								</div>
+								<div className="flex justify-between text-gray-600">
+									<span>رسوم التوصيل:</span>
+									<span className="font-semibold text-brand-primary">
+										{deliveryFee > 0 ? formatCurrency(deliveryFee) : "مجاني"}
+									</span>
+								</div>
+								<div className="flex justify-between text-base font-bold text-brand-text pt-2 border-t border-dashed border-gray-100">
+									<span>إجمالي تقريبي:</span>
+									<span className="text-brand-primary">{formatCurrency(estimatedTotal + deliveryFee)}</span>
+								</div>
+							</div>
+						) : (
+							<div className="mb-4 space-y-2 text-sm border-b border-gray-100 pb-3">
+								<div className="flex justify-between text-gray-600">
+									<span>العناصر:</span>
+									<span className="font-semibold">{formatNumericValue(totalItems)}</span>
+								</div>
+								<div className="flex justify-between text-gray-600">
+									<span>رسوم التوصيل:</span>
+									<span className="font-semibold text-brand-primary">
+										{deliveryFee > 0 ? formatCurrency(deliveryFee) : "مجاني"}
+									</span>
+								</div>
+								<p className="text-xs font-medium text-gray-500 text-center pt-2 border-t border-dashed border-gray-100">
+									الأسعار النهائية للمنتجات يتم تأكيدها بعد الطلب
 								</p>
-							) : (
-								<p className="text-xs font-medium text-gray-500">
-									الأسعار النهائية يتم تأكيدها بعد الطلب
-								</p>
-							)}
-						</div>
+							</div>
+						)}
 						<button
 							type="submit"
 							data-review-confirm-submit
