@@ -10,7 +10,7 @@ jest.mock('src/customers/customers.service', () => ({
 }));
 
 import { Prisma } from '../../generated/prisma/client';
-import { OrderSource } from '../../generated/prisma/client';
+import { OrderSource, TenantStatus } from '../../generated/prisma/client';
 import { PricingMode } from 'src/common/enums/pricing-mode.enum';
 import { OrderStatus } from 'src/common/enums/order-status.enum';
 import { OrderType } from 'src/common/enums/order-type.enum';
@@ -160,14 +160,18 @@ const createService = ({
     notifyCustomerConfirmed: jest.fn().mockResolvedValue(undefined),
     notifyWelcomeCustomer: jest.fn().mockResolvedValue(undefined),
   };
+  const tenantCancellationPolicyService = {
+    recordMerchantCancellation: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new OrdersService(
     prisma as any,
     customersService as any,
     tenantsService as any,
     orderWhatsappService as any,
+    tenantCancellationPolicyService as any,
   );
 
-  return { service, manager };
+  return { service, manager, tenantCancellationPolicyService };
 };
 
 describe('OrdersService card-on-delivery persistence', () => {
@@ -260,6 +264,119 @@ describe('OrdersService prescription unavailability persistence', () => {
       }),
     );
     expect(result.prescription_unavailability_action).toBe(expectedAction);
+  });
+});
+
+const createUpdateService = (status: OrderStatus) => {
+  const order = {
+    id: 50,
+    tenant_id: 1,
+    customer_id: 7,
+    public_token: 'token',
+    order_type: OrderType.FREE_TEXT,
+    status,
+    pricing_mode: PricingMode.MANUAL,
+    subtotal: null,
+    delivery_fee: new Prisma.Decimal(0),
+    delivery_area_id: null,
+    delivery_time_window_snapshot: null,
+    total: null,
+    free_text_payload: null,
+    notes: null,
+    card_on_delivery_requested: false,
+    delivery_address: null,
+    customer_phone: '01012345678',
+    customer_name: 'Test Customer',
+    order_source: OrderSource.storefront,
+    source_metadata: null,
+    prescription_file_url: null,
+    prescription_original_filename: null,
+    prescription_mime_type: null,
+    prescription_unavailability_action: null,
+    merchant_cancellation_reason: null,
+    merchant_cancelled_at: null,
+    customer_rejection_reason: null,
+    customer_rejected_at: null,
+    created_at: new Date('2026-06-19T06:00:00.000Z'),
+    updated_at: new Date('2026-06-19T06:00:00.000Z'),
+    deleted_at: null,
+    customer: { id: 7 },
+    tenant: { id: 1, status: TenantStatus.active },
+    delivery_area: null,
+    order_items: [],
+  };
+  const manager = {
+    order: {
+      findFirst: jest.fn().mockResolvedValue(order),
+      update: jest.fn().mockImplementation(({ data }) =>
+        Promise.resolve({
+          ...order,
+          ...data,
+          status: data.status ?? order.status,
+        }),
+      ),
+    },
+    customer: {
+      update: jest.fn().mockResolvedValue({}),
+    },
+  };
+  const prisma = {
+    $transaction: jest.fn((callback) => callback(manager)),
+  };
+  const orderWhatsappService = {
+    notifyCustomerStatusUpdate: jest.fn().mockResolvedValue(undefined),
+  };
+  const tenantCancellationPolicyService = {
+    recordMerchantCancellation: jest.fn().mockResolvedValue(undefined),
+  };
+  const service = new OrdersService(
+    prisma as any,
+    {} as any,
+    {} as any,
+    orderWhatsappService as any,
+    tenantCancellationPolicyService as any,
+  );
+
+  return { service, tenantCancellationPolicyService };
+};
+
+describe('OrdersService cancellation policy counting', () => {
+  it('counts merchant cancelled transitions', async () => {
+    const { service, tenantCancellationPolicyService } = createUpdateService(
+      OrderStatus.CONFIRMED,
+    );
+
+    await service.update(50, { status: OrderStatus.CANCELLED } as any);
+
+    expect(
+      tenantCancellationPolicyService.recordMerchantCancellation,
+    ).toHaveBeenCalledWith(1, 50, expect.any(Object));
+  });
+
+  it('does not count customer rejection transitions', async () => {
+    const { service, tenantCancellationPolicyService } = createUpdateService(
+      OrderStatus.CONFIRMED,
+    );
+
+    await service.update(50, {
+      status: OrderStatus.REJECTED_BY_CUSTOMER,
+    } as any);
+
+    expect(
+      tenantCancellationPolicyService.recordMerchantCancellation,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('does not double count already-cancelled orders', async () => {
+    const { service, tenantCancellationPolicyService } = createUpdateService(
+      OrderStatus.CANCELLED,
+    );
+
+    await service.update(50, { status: OrderStatus.CANCELLED } as any);
+
+    expect(
+      tenantCancellationPolicyService.recordMerchantCancellation,
+    ).not.toHaveBeenCalled();
   });
 });
 

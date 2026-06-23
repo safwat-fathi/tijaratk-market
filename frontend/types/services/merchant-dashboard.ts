@@ -31,6 +31,19 @@ export type OrdersBySourceMetric = {
   percentage: number;
 };
 
+export type CancellationPolicyMetric = {
+  status: "ok" | "warning" | "suspended";
+  count: number;
+  warning_threshold: number;
+  suspension_threshold: number;
+  remaining_before_suspension: number;
+  window_start: string;
+  window_end: string;
+  is_probation: boolean;
+  last_warning_at: string | null;
+  last_suspension_at: string | null;
+};
+
 export type MerchantDashboardMeasurements = {
   period: DashboardPeriod;
   period_start: string;
@@ -45,4 +58,5 @@ export type MerchantDashboardMeasurements = {
   top_selling_products: TopSellingProductMetric[];
   availability_requests: number;
   orders_by_source: OrdersBySourceMetric[];
+  cancellation_policy: CancellationPolicyMetric;
 };

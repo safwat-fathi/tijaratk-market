@@ -55,6 +55,22 @@ type AdminTenantDeliveryArea = {
 	area: AdminDirectoryArea;
 };
 
+type AdminTenantCancellationPolicy = {
+	status: "ok" | "warning" | "suspended";
+	count: number;
+	warning_threshold: number;
+	suspension_threshold: number;
+	remaining_before_suspension: number;
+	window_start: string;
+	window_end: string;
+	is_probation: boolean;
+	last_warning_at: string | null;
+	last_suspension_at: string | null;
+	last_event_type: "merchant_order_cancelled" | "warning_issued" | "auto_suspended" | "admin_reactivated" | null;
+	last_event_at: string | null;
+	last_suspension_policy: boolean;
+};
+
 export type AdminTenant = {
 	id: number;
 	name: string;
@@ -67,6 +83,7 @@ export type AdminTenant = {
 	tenant_subscriptions?: AdminTenantSubscription[];
 	directory_profile?: AdminTenantDirectoryProfile | null;
 	tenant_delivery_areas?: AdminTenantDeliveryArea[];
+	cancellation_policy?: AdminTenantCancellationPolicy;
 };
 
 export type AdminPlan = {

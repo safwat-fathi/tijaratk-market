@@ -9,6 +9,7 @@ import StorefrontLinkCard from "./_components/StorefrontLinkCard";
 import DeliverySettingsCard from "./_components/DeliverySettingsCard";
 import MeasurementsDashboard from "./_components/MeasurementsDashboard";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
+import type { CancellationPolicyMetric } from "@/types/services/merchant-dashboard";
 
 export const metadata = createNoIndexMetadata(
   "لوحة التحكم",
@@ -24,6 +25,33 @@ function normalizePeriod(value?: string | string[]): DashboardPeriod {
   return rawValue && PERIODS.has(rawValue as DashboardPeriod)
     ? (rawValue as DashboardPeriod)
     : "today";
+}
+
+function CancellationPolicyBanner({
+  policy,
+}: {
+  policy?: CancellationPolicyMetric;
+}) {
+  if (!policy || policy.status === "ok") {
+    return null;
+  }
+
+  if (policy.status === "suspended") {
+    return (
+      <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 shadow-sm">
+        تم إيقاف المتجر مؤقتًا بسبب كثرة إلغاء الطلبات. لن يستطيع العملاء إرسال
+        طلبات جديدة حتى يعيد المسؤول تفعيل الحساب.
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900 shadow-sm">
+      وصلت إلى {policy.count} طلبات ملغاة هذا الشهر. إلغاء{" "}
+      {policy.remaining_before_suspension} طلبات أخرى قد يؤدي إلى إيقاف الحساب
+      مؤقتًا.
+    </section>
+  );
 }
 
 export default async function Dashboard({
@@ -69,7 +97,12 @@ export default async function Dashboard({
       />
 
       {measurementsResponse.success && measurementsResponse.data ? (
-        <MeasurementsDashboard measurements={measurementsResponse.data} />
+        <>
+          <CancellationPolicyBanner
+            policy={measurementsResponse.data.cancellation_policy}
+          />
+          <MeasurementsDashboard measurements={measurementsResponse.data} />
+        </>
       ) : (
         <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
           تعذر تحميل قياسات لوحة التحكم.

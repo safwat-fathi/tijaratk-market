@@ -16,6 +16,7 @@ const createPrismaMock = (input: {
   newCustomers?: number;
   returningCustomers?: number;
   availabilityRequests?: number;
+  tenantStatus?: OrderStatus | string;
 }) => ({
   order: {
     findMany: jest
@@ -40,6 +41,29 @@ const createPrismaMock = (input: {
   availabilityRequest: {
     count: jest.fn().mockResolvedValue(input.availabilityRequests ?? 0),
   },
+  tenant: {
+    findUnique: jest.fn().mockResolvedValue({
+      status: input.tenantStatus ?? 'active',
+    }),
+  },
+});
+
+const createPolicyMock = (
+  overrides: Record<string, unknown> = {},
+) => ({
+  getSnapshot: jest.fn().mockResolvedValue({
+    status: 'ok',
+    count: 0,
+    warning_threshold: 10,
+    suspension_threshold: 16,
+    remaining_before_suspension: 16,
+    window_start: '2026-06-01T00:00:00.000Z',
+    window_end: '2026-06-30T20:59:59.999Z',
+    is_probation: false,
+    last_warning_at: null,
+    last_suspension_at: null,
+    ...overrides,
+  }),
 });
 
 describe('MerchantDashboardService', () => {
@@ -54,7 +78,8 @@ describe('MerchantDashboardService', () => {
 
   it('returns zeroed MVP measurements for an empty period', async () => {
     const prisma = createPrismaMock({});
-    const service = new MerchantDashboardService(prisma as any);
+    const policy = createPolicyMock();
+    const service = new MerchantDashboardService(prisma as any, policy as any);
 
     const result = await service.getMeasurements(1, 'today');
 
@@ -66,6 +91,7 @@ describe('MerchantDashboardService', () => {
     expect(result.returning_customers_rate.percentage).toBe(0);
     expect(result.top_selling_products).toEqual([]);
     expect(result.orders_by_source).toEqual([]);
+    expect(result.cancellation_policy.status).toBe('ok');
   });
 
   it('calculates sales, rates, customers, availability, products, and source buckets', async () => {
@@ -132,7 +158,10 @@ describe('MerchantDashboardService', () => {
       returningCustomers: 1,
       availabilityRequests: 7,
     });
-    const service = new MerchantDashboardService(prisma as any);
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
 
     const result = await service.getMeasurements(1, '7d');
 
@@ -222,7 +251,10 @@ describe('MerchantDashboardService', () => {
       ],
       activeCustomers: [{ customer_id: 1 }],
     });
-    const service = new MerchantDashboardService(prisma as any);
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
 
     const result = await service.getMeasurements(1, 'today');
 
@@ -254,7 +286,10 @@ describe('MerchantDashboardService', () => {
       ],
       activeCustomers: [],
     });
-    const service = new MerchantDashboardService(prisma as any);
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
 
     const result = await service.getMeasurements(1, 'today');
 
@@ -284,7 +319,10 @@ describe('MerchantDashboardService', () => {
         },
       ],
     });
-    const service = new MerchantDashboardService(rootPrisma as any);
+    const service = new MerchantDashboardService(
+      rootPrisma as any,
+      createPolicyMock() as any,
+    );
 
     const result = await DbTenantContext.run(
       { tenantId: 1, manager: tenantManager as any },
@@ -298,7 +336,10 @@ describe('MerchantDashboardService', () => {
 
   it('counts availability requests inside the selected period date range', async () => {
     const prisma = createPrismaMock({ availabilityRequests: 12 });
-    const service = new MerchantDashboardService(prisma as any);
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
 
     await service.getMeasurements(1, '30d');
 
@@ -311,5 +352,38 @@ describe('MerchantDashboardService', () => {
         },
       },
     });
+  });
+
+  it('returns warning cancellation policy payload', async () => {
+    const prisma = createPrismaMock({});
+    const policy = createPolicyMock({
+      status: 'warning',
+      count: 10,
+      remaining_before_suspension: 6,
+    });
+    const service = new MerchantDashboardService(prisma as any, policy as any);
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.cancellation_policy).toEqual(
+      expect.objectContaining({
+        status: 'warning',
+        count: 10,
+        remaining_before_suspension: 6,
+      }),
+    );
+  });
+
+  it('returns suspended cancellation policy when tenant is suspended', async () => {
+    const prisma = createPrismaMock({ tenantStatus: 'suspended' });
+    const policy = createPolicyMock({
+      status: 'suspended',
+      count: 16,
+    });
+    const service = new MerchantDashboardService(prisma as any, policy as any);
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.cancellation_policy.status).toBe('suspended');
   });
 });

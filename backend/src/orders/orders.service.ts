@@ -34,6 +34,7 @@ import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { OrderItemSelectionMode } from 'src/common/enums/order-item-selection-mode.enum';
 import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
 import { OrderType } from 'src/common/enums/order-type.enum';
+import { TenantCancellationPolicyService } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -90,6 +91,7 @@ export class OrdersService {
     private readonly customersService: CustomersService,
     private readonly tenantsService: TenantsService,
     private readonly orderWhatsappService: OrderWhatsappService,
+    private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
   ) {}
 
   async createForTenantSlug(
@@ -565,59 +567,101 @@ export class OrdersService {
   }
 
   async update(id: number, updateOrderDto: UpdateOrderDto): Promise<Order> {
-    const order = await this.findOne(id);
-    const previousStatus = order.status as unknown as OrderStatus;
-    const nextStatus = updateOrderDto.status;
+    let previousStatus: OrderStatus | undefined;
+    let nextStatus: OrderStatus | undefined;
+    let savedOrder: OrderWithItemsPayload;
 
-    if (nextStatus && nextStatus !== previousStatus) {
-      this.validateStatusTransition(previousStatus, nextStatus);
-    }
-
-    const updateData: Prisma.OrderUpdateInput = {};
-
-    if (nextStatus !== undefined) {
-      updateData.status = nextStatus;
-    }
-
-    if (nextStatus === OrderStatus.CANCELLED) {
-      updateData.merchant_cancellation_reason = this.normalizeOptionalReason(
-        updateOrderDto.cancellation_reason,
-      );
-      updateData.merchant_cancelled_at = new Date();
-    }
-
-    if (updateOrderDto.total !== undefined) {
-      updateData.total = updateOrderDto.total;
-      updateData.pricing_mode = PricingMode.MANUAL;
-    }
-
-    const savedOrder = await this.orderClient().update({
-      where: { id: order.id },
-      data: updateData,
-      include: {
-        customer: true,
-        order_items: {
-          include: {
-            replaced_by_product: true,
-            pending_replacement_product: true,
+    const updateOrder = async (manager: Prisma.TransactionClient) => {
+      const order = await manager.order.findFirst({
+        where: { id },
+        include: {
+          customer: true,
+          order_items: {
+            include: {
+              replaced_by_product: true,
+              pending_replacement_product: true,
+            },
           },
+          tenant: true,
+          delivery_area: true,
         },
-        tenant: true,
-        delivery_area: true,
-      },
-    });
-
-    if (
-      nextStatus === OrderStatus.COMPLETED &&
-      previousStatus !== OrderStatus.COMPLETED
-    ) {
-      await this.customerClient().update({
-        where: { id: order.customer_id },
-        data: { completed_order_count: { increment: 1 } },
       });
-    }
 
-    if (nextStatus && nextStatus !== previousStatus) {
+      if (!order) {
+        throw new NotFoundException(`Order with ID ${id} not found`);
+      }
+
+      previousStatus = order.status as unknown as OrderStatus;
+      nextStatus = updateOrderDto.status;
+
+      if (nextStatus && nextStatus !== previousStatus) {
+        this.validateStatusTransition(previousStatus, nextStatus);
+      }
+
+      const updateData: Prisma.OrderUpdateInput = {};
+
+      if (nextStatus !== undefined) {
+        updateData.status = nextStatus;
+      }
+
+      if (nextStatus === OrderStatus.CANCELLED) {
+        updateData.merchant_cancellation_reason = this.normalizeOptionalReason(
+          updateOrderDto.cancellation_reason,
+        );
+        updateData.merchant_cancelled_at = new Date();
+      }
+
+      if (updateOrderDto.total !== undefined) {
+        updateData.total = updateOrderDto.total;
+        updateData.pricing_mode = PricingMode.MANUAL;
+      }
+
+      const updatedOrder = await manager.order.update({
+        where: { id: order.id },
+        data: updateData,
+        include: {
+          customer: true,
+          order_items: {
+            include: {
+              replaced_by_product: true,
+              pending_replacement_product: true,
+            },
+          },
+          tenant: true,
+          delivery_area: true,
+        },
+      });
+
+      if (
+        nextStatus === OrderStatus.COMPLETED &&
+        previousStatus !== OrderStatus.COMPLETED
+      ) {
+        await manager.customer.update({
+          where: { id: order.customer_id },
+          data: { completed_order_count: { increment: 1 } },
+        });
+      }
+
+      if (
+        nextStatus === OrderStatus.CANCELLED &&
+        previousStatus !== OrderStatus.CANCELLED
+      ) {
+        await this.tenantCancellationPolicyService.recordMerchantCancellation(
+          order.tenant_id,
+          order.id,
+          manager,
+        );
+      }
+
+      return updatedOrder as OrderWithItemsPayload;
+    };
+
+    const manager = DbTenantContext.getManager();
+    savedOrder = manager
+      ? await updateOrder(manager)
+      : await this.prisma.$transaction(updateOrder);
+
+    if (previousStatus && nextStatus && nextStatus !== previousStatus) {
       await this.notifyCustomerStatusChange(savedOrder);
     }
 

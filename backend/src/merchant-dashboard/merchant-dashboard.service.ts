@@ -7,6 +7,10 @@ import {
   Prisma,
 } from '../../generated/prisma/client';
 import { DashboardPeriod } from './dto/get-dashboard-measurements.dto';
+import {
+  CancellationPolicySnapshot,
+  TenantCancellationPolicyService,
+} from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
 
 type SourceKey =
   | 'qr_code'
@@ -59,6 +63,7 @@ export type MerchantDashboardMeasurements = {
   top_selling_products: TopSellingProduct[];
   availability_requests: number;
   orders_by_source: OrdersBySourceItem[];
+  cancellation_policy: CancellationPolicySnapshot;
 };
 
 type PeriodRange = {
@@ -97,7 +102,10 @@ export class MerchantDashboardService {
     storefront: 'Storefront',
   };
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
+  ) {}
 
   async getMeasurements(
     tenantId: number,
@@ -119,6 +127,7 @@ export class MerchantDashboardService {
       activeCustomerIds,
       returningCustomers,
       availabilityRequests,
+      tenant,
     ] = await Promise.all([
       db.order.findMany({
         where: orderWhere,
@@ -180,10 +189,20 @@ export class MerchantDashboardService {
           },
         },
       }),
+      db.tenant.findUnique({
+        where: { id: tenantId },
+        select: { status: true },
+      }),
     ]);
 
     const currentSummary = this.summarizeOrders(orders);
     const activeCustomers = activeCustomerIds.length;
+    const cancellationPolicy =
+      await this.tenantCancellationPolicyService.getSnapshot(
+        tenantId,
+        tenant?.status,
+        db,
+      );
 
     return {
       period: range.period,
@@ -236,6 +255,7 @@ export class MerchantDashboardService {
       top_selling_products: this.buildTopSellingProducts(orders),
       availability_requests: availabilityRequests,
       orders_by_source: this.buildOrdersBySource(orders),
+      cancellation_policy: cancellationPolicy,
     };
   }
 

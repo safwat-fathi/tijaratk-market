@@ -66,6 +66,36 @@ function MerchantStatusBadge({ status }: { status: AdminTenant['status'] }) {
   );
 }
 
+function CancellationPolicySummary({ merchant }: { merchant: AdminTenant }) {
+  const policy = merchant.cancellation_policy;
+  if (!policy) {
+    return <span className="text-xs text-gray-400">لا توجد بيانات</span>;
+  }
+
+  const tone =
+    policy.status === "suspended"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : policy.status === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-900"
+        : "border-gray-200 bg-gray-50 text-gray-700";
+
+  return (
+    <div className={`rounded-md border px-2 py-2 text-xs font-semibold ${tone}`}>
+      <div>
+        إلغاءات: {policy.count} / {policy.suspension_threshold}
+      </div>
+      <div className="mt-1 font-medium">
+        {policy.is_probation ? "تحت المراقبة بعد إعادة التفعيل" : "دورة شهرية"}
+      </div>
+      {policy.last_event_type ? (
+        <div className="mt-1 font-medium text-gray-500">
+          آخر حدث: {policy.last_event_type}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
   return (
     <form action={toggleTenantStatusAction.bind(null, merchant.id, merchant.status)}>
@@ -148,6 +178,11 @@ export default async function AdminMerchants() {
                 </div>
 
                 <div className="space-y-2">
+                  <div className="text-xs font-semibold text-gray-600">سياسة الإلغاء</div>
+                  <CancellationPolicySummary merchant={merchant} />
+                </div>
+
+                <div className="space-y-2">
                   <div className="text-xs font-semibold text-gray-600">الباقة</div>
                   <PlanSelect
                     tenantId={merchant.id}
@@ -183,6 +218,7 @@ export default async function AdminMerchants() {
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">العملاء</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">المناطق</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">حالة الدليل</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">سياسة الإلغاء</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الباقة</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحالة</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
@@ -214,6 +250,9 @@ export default async function AdminMerchants() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <DirectoryStatusForm tenant={merchant} />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <CancellationPolicySummary merchant={merchant} />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <PlanSelect

@@ -235,6 +235,7 @@ model Order {
   tenant      Tenant      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_527dd6efd5f3402f729c6b3e826")
   customer    Customer    @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_772d0ce0473ac2ccfa26060dbe9")
   delivery_area DirectoryArea? @relation(fields: [delivery_area_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_orders_delivery_area")
+  cancellation_policy_events TenantCancellationPolicyEvent[]
 
   @@index([delivery_area_id], map: "IDX_orders_delivery_area_id")
   @@index([tenant_id], map: "IDX_527dd6efd5f3402f729c6b3e82")
@@ -340,8 +341,52 @@ model Tenant {
   tenant_delivery_areas     TenantDeliveryArea[]
   directory_events          DirectoryEvent[]
   tenant_hidden_catalog_items TenantHiddenCatalogItem[]
+  cancellation_policy_state TenantCancellationPolicyState?
+  cancellation_policy_events TenantCancellationPolicyEvent[]
 
   @@map("tenants")
+}
+
+model TenantCancellationPolicyState {
+  id                       Int       @id(map: "PK_tenant_cancellation_policy_states_id") @default(autoincrement())
+  tenant_id                Int       @unique(map: "UQ_tenant_cancellation_policy_states_tenant_id")
+  window_start             DateTime  @db.Timestamptz(6)
+  window_end               DateTime  @db.Timestamptz(6)
+  cancellation_count       Int       @default(0)
+  warning_threshold        Int       @default(10)
+  suspension_threshold     Int       @default(16)
+  is_probation             Boolean   @default(false)
+  last_warning_at          DateTime? @db.Timestamptz(6)
+  last_suspension_at       DateTime? @db.Timestamptz(6)
+  last_suspension_event_id Int?
+  last_suspension_policy   Boolean   @default(false)
+  created_at               DateTime  @default(now()) @db.Timestamp(6)
+  updated_at               DateTime  @default(now()) @db.Timestamp(6)
+  tenant                   Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_tenant_cancellation_policy_states_tenant")
+
+  @@index([tenant_id, window_start], map: "IDX_tenant_cancellation_policy_states_tenant_window")
+  @@map("tenant_cancellation_policy_states")
+}
+
+model TenantCancellationPolicyEvent {
+  id                 Int                                    @id(map: "PK_tenant_cancellation_policy_events_id") @default(autoincrement())
+  tenant_id          Int
+  order_id           Int?
+  event_type         TenantCancellationPolicyEventType
+  actor_type         TenantCancellationPolicyActorType
+  cancellation_count Int?
+  threshold          Int?
+  window_start       DateTime?                              @db.Timestamptz(6)
+  window_end         DateTime?                              @db.Timestamptz(6)
+  metadata           Json?
+  created_at         DateTime                               @default(now()) @db.Timestamptz(6)
+  tenant             Tenant                                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_tenant_cancellation_policy_events_tenant")
+  order              Order?                                 @relation(fields: [order_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_tenant_cancellation_policy_events_order")
+
+  @@index([tenant_id, created_at], map: "IDX_tenant_cancellation_policy_events_tenant_created")
+  @@index([tenant_id, event_type, created_at], map: "IDX_tenant_cancellation_policy_events_tenant_type_created")
+  @@index([order_id], map: "IDX_tenant_cancellation_policy_events_order_id")
+  @@map("tenant_cancellation_policy_events")
 }
 
 model DirectoryArea {
@@ -604,6 +649,23 @@ enum TenantStatus {
   suspended
 
   @@map("tenants_status_enum")
+}
+
+enum TenantCancellationPolicyEventType {
+  merchant_order_cancelled
+  warning_issued
+  auto_suspended
+  admin_reactivated
+
+  @@map("tenant_cancellation_policy_event_type_enum")
+}
+
+enum TenantCancellationPolicyActorType {
+  merchant
+  system
+  admin
+
+  @@map("tenant_cancellation_policy_actor_type_enum")
 }
 
 enum UserRole {

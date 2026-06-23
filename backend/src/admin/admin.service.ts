@@ -8,12 +8,14 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { Prisma, TenantStatus } from '../../generated/prisma/client';
+import { TenantCancellationPolicyService } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
   ) {}
 
   async login(loginDto: AdminLoginDto) {
@@ -151,13 +153,18 @@ export class AdminService {
 
     return Promise.all(
       tenants.map(async (tenant) => {
-        const [orders, customers, products] = await this.runWithTenantRls(
+        const [orders, customers, products, cancellationPolicy] = await this.runWithTenantRls(
           tenant.id,
           (tx) =>
             Promise.all([
               tx.order.count({ where: { tenant_id: tenant.id } }),
               tx.customer.count({ where: { tenant_id: tenant.id } }),
               tx.product.count({ where: { tenant_id: tenant.id } }),
+              this.tenantCancellationPolicyService.getAdminSummary(
+                tenant.id,
+                tenant.status,
+                tx,
+              ),
             ]),
         );
 
@@ -168,6 +175,7 @@ export class AdminService {
             customers,
             products,
           },
+          cancellation_policy: cancellationPolicy,
         };
       }),
     );
@@ -177,9 +185,20 @@ export class AdminService {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    return this.prisma.tenant.update({
-      where: { id },
-      data: { status },
+    return this.runWithTenantRls(id, async (tx) => {
+      const updatedTenant = await tx.tenant.update({
+        where: { id },
+        data: { status },
+      });
+
+      await this.tenantCancellationPolicyService.recordAdminStatusChange(
+        id,
+        tenant.status,
+        status,
+        tx,
+      );
+
+      return updatedTenant;
     });
   }
 

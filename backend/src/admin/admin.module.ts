@@ -6,11 +6,13 @@ import { AdminController } from './admin.controller';
 import { AdminJwtStrategy } from './guards/admin-jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ProductsModule } from '../products/products.module';
+import { TenantCancellationPolicyModule } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.module';
 
 @Module({
   imports: [
     PrismaModule,
     ProductsModule,
+    TenantCancellationPolicyModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
