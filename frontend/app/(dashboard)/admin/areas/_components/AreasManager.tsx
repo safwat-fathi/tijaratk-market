@@ -75,11 +75,12 @@ export default function AreasManager({ initialAreas }: AreasManagerProps) {
   const handleDelete = async (id: number) => {
     if (!confirm("هل أنت متأكد من حذف هذه المنطقة؟")) return;
     setLoading(true);
+    setError("");
     try {
       await deleteDirectoryAreaAction(id);
       setAreas(areas.filter((a) => a.id !== id));
     } catch (err: any) {
-      alert(err.message || "تعذر حذف المنطقة");
+      setError(err.message || "تعذر حذف المنطقة");
     } finally {
       setLoading(false);
     }
@@ -92,6 +93,12 @@ export default function AreasManager({ initialAreas }: AreasManagerProps) {
           إضافة منطقة جديدة
         </Button>
       </div>
+      
+      {!isModalOpen && error && (
+        <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md text-sm">
+          {error}
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">

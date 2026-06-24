@@ -34,7 +34,7 @@ import {
   createOrderAction,
   type CreateOrderState,
 } from "@/actions/order-actions";
-import { OrderSource } from "@/types/enums";
+import { OrderSource, UnavailableItemAction } from "@/types/enums";
 import { useRouter } from "next/navigation";
 import {
 	markCustomAvailabilityRequestSentAction,
@@ -44,7 +44,10 @@ import {
 } from "@/actions/availability-request-cookie-actions";
 import { productsService } from "@/services/api/products.service";
 import { availabilityRequestsService } from "@/services/api/availability-requests.service";
-import { getPublicCustomerByPhoneAction } from "@/actions/customer-actions";
+import {
+  getPublicCustomerByAccessCodeAction,
+  getPublicCustomerByPhoneAction,
+} from "@/actions/customer-actions";
 import { dedupeByNumericId } from "@/lib/utils/collections";
 import { isValidEgyptianCustomerPhone } from "@/lib/utils/phone";
 import ProductList, {
@@ -70,6 +73,9 @@ import {
 import {
   INSTAPAY_PROVIDER,
 } from "@/constants/payment-providers";
+import {
+  DEFAULT_UNAVAILABLE_ITEM_ACTION,
+} from "@/lib/orders/unavailable-item-action";
 
 const initialState: CreateOrderState = {
   success: false,
@@ -263,6 +269,18 @@ const getCreatedOrderPublicToken = (data: unknown) => {
   return typeof publicToken === "string" ? publicToken.trim() : "";
 };
 
+const getCreatedCustomerAccessCode = (data: unknown) => {
+  if (!data || typeof data !== "object" || !("customer_access_code" in data)) {
+    return "";
+  }
+
+  const customerAccessCode = (data as { customer_access_code?: unknown })
+    .customer_access_code;
+  return typeof customerAccessCode === "string"
+    ? customerAccessCode.trim()
+    : "";
+};
+
 type OrderFormProps = {
   tenantSlug: string;
   areaSlug?: string;
@@ -305,6 +323,11 @@ export default function OrderForm({
   const [notes, setNotes] = useState(
     initialOrder?.notes || savedCustomerProfile?.notes || "",
   );
+  const [unavailableItemAction, setUnavailableItemAction] =
+    useState<UnavailableItemAction>(
+      initialOrder?.unavailable_item_action ||
+        DEFAULT_UNAVAILABLE_ITEM_ACTION,
+    );
   const [customerName, setCustomerName] = useState(
     initialOrder?.customer?.name || savedCustomerProfile?.name || "",
   );
@@ -807,13 +830,18 @@ export default function OrderForm({
     if (!publicToken) {
       return;
     }
+    const customerAccessCode = getCreatedCustomerAccessCode(state.data);
+    const successUrl = new URL(
+      `/${encodeURIComponent(tenantSlug)}/success`,
+      window.location.origin,
+    );
+    successUrl.searchParams.set("token", publicToken);
+    if (customerAccessCode) {
+      successUrl.searchParams.set("customerCode", customerAccessCode);
+    }
 
     hasNavigatedToSuccessRef.current = true;
-    router.replace(
-      `/${encodeURIComponent(tenantSlug)}/success?token=${encodeURIComponent(
-        publicToken,
-      )}`,
-    );
+    router.replace(`${successUrl.pathname}${successUrl.search}`);
   }, [router, state.data, state.success, tenantSlug]);
 
 
@@ -927,6 +955,42 @@ export default function OrderForm({
     setSuggestedCustomerProfile(null);
     setSavedAddressOptions([]);
   }, []);
+
+  const handleCustomerAccessCodeLookup = useCallback(
+    async (input: { code: string; phone: string }) => {
+      const response = await getPublicCustomerByAccessCodeAction(input);
+
+      if (!response.success || !response.data) {
+        return {
+          success: false,
+          message: response.message || "لم نجد بيانات لهذا الكود والرقم",
+        };
+      }
+
+      const profile = response.data;
+      const addresses = profile.addresses || [];
+
+      setSuggestedCustomerProfile(profile);
+      setSavedAddressOptions(addresses);
+      setCustomerPhone(profile.phone || input.phone);
+      if (profile.name) {
+        setCustomerName(profile.name);
+      }
+      if (addresses[0]) {
+        setDeliveryAddress(addresses[0]);
+      }
+      if (profile.notes) {
+        setNotes(profile.notes);
+      }
+      setToastState({
+        type: "success",
+        message: "تم تحميل بيانات العميل",
+      });
+
+      return { success: true };
+    },
+    [],
+  );
 
   const handleUpdateSelection = (
     product: Product,
@@ -1475,6 +1539,11 @@ export default function OrderForm({
         {cardOnDeliveryAvailable && cardOnDeliveryRequested && (
           <input type="hidden" name="card_on_delivery_requested" value="true" />
         )}
+        <input
+          type="hidden"
+          name="unavailable_item_action"
+          value={unavailableItemAction}
+        />
 
         <div className="px-4 pt-4">
           <label className="relative block">
@@ -1641,6 +1710,7 @@ export default function OrderForm({
             handleSavedAddressSelect(address);
           }}
           onNotesChange={setNotes}
+          onCustomerAccessCodeLookup={handleCustomerAccessCodeLookup}
           errors={displayedErrors}
           message={state.message}
           success={state.success}
@@ -1667,6 +1737,8 @@ export default function OrderForm({
           orderRequest={orderRequest}
           deliveryAvailable={deliveryAvailable}
           hasPrescription={hasPrescription}
+          unavailableItemAction={unavailableItemAction}
+          onUnavailableItemActionChange={setUnavailableItemAction}
           selections={effectiveCartSelections}
           knownProductsById={knownProductsById}
           onClose={() => closeReviewSheet(true)}

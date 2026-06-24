@@ -18,6 +18,10 @@ type DeliveryDetailsSectionProps = {
   onUseSavedCustomerProfile: () => void;
   onSavedAddressSelect: (value: string) => void;
   onNotesChange: (value: string) => void;
+  onCustomerAccessCodeLookup: (input: {
+    code: string;
+    phone: string;
+  }) => Promise<{ success: boolean; message?: string }>;
   errors?: Record<string, string[]>;
   message?: string;
   success?: boolean;
@@ -37,11 +41,18 @@ export default function DeliveryDetailsSection({
   onUseSavedCustomerProfile,
   onSavedAddressSelect,
   onNotesChange,
+  onCustomerAccessCodeLookup,
   errors,
   message,
   success,
 }: DeliveryDetailsSectionProps) {
   const [isAddressSheetOpen, setIsAddressSheetOpen] = useState(false);
+  const [customerAccessCode, setCustomerAccessCode] = useState("");
+  const [accessCodePhone, setAccessCodePhone] = useState("");
+  const [accessCodeMessage, setAccessCodeMessage] = useState<string | null>(null);
+  const [accessCodeLookupState, setAccessCodeLookupState] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
   const deliveryAvailable = deliverySettings?.delivery_available !== false;
   const hasMultipleSavedAddresses = savedAddressOptions.length > 1;
   const hasSavedCustomerSuggestion = Boolean(suggestedCustomerProfile);
@@ -140,6 +151,74 @@ export default function DeliveryDetailsSection({
       </div>
 
       <div className="space-y-5">
+        <div className="rounded-lg border border-brand-border bg-brand-soft/30 p-4">
+          <p className="text-sm font-bold text-brand-text">لديك كود عميل؟</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <input
+              type="text"
+              inputMode="text"
+              dir="ltr"
+              placeholder="A7K-42Q9"
+              value={customerAccessCode}
+              onChange={(event) => {
+                setCustomerAccessCode(event.target.value.toUpperCase());
+                setAccessCodeMessage(null);
+                setAccessCodeLookupState("idle");
+              }}
+              className="min-h-11 rounded-md border border-brand-border bg-white px-3 py-2 text-sm font-semibold tracking-wider text-brand-text transition-colors focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
+            />
+            <input
+              type="tel"
+              inputMode="numeric"
+              dir="ltr"
+              placeholder="01012345678"
+              value={accessCodePhone}
+              onChange={(event) => {
+                setAccessCodePhone(event.target.value);
+                setAccessCodeMessage(null);
+                setAccessCodeLookupState("idle");
+              }}
+              className="min-h-11 rounded-md border border-brand-border bg-white px-3 py-2 text-sm text-brand-text transition-colors focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
+            />
+            <button
+              type="button"
+              disabled={accessCodeLookupState === "loading"}
+              onClick={async () => {
+                const code = customerAccessCode.trim();
+                const phone = accessCodePhone.trim();
+                if (!code || !phone) {
+                  setAccessCodeLookupState("error");
+                  setAccessCodeMessage("اكتب كود العميل ورقم الهاتف");
+                  return;
+                }
+
+                setAccessCodeLookupState("loading");
+                const result = await onCustomerAccessCodeLookup({ code, phone });
+                setAccessCodeLookupState(result.success ? "success" : "error");
+                setAccessCodeMessage(
+                  result.success
+                    ? "تم تحميل بياناتك"
+                    : result.message || "لم نجد بيانات لهذا الكود والرقم",
+                );
+              }}
+              className="min-h-11 rounded-md bg-brand-primary px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {accessCodeLookupState === "loading" ? "جار التحميل" : "استخدام الكود"}
+            </button>
+          </div>
+          {accessCodeMessage && (
+            <p
+              className={`mt-2 text-sm font-medium ${
+                accessCodeLookupState === "success"
+                  ? "text-status-success"
+                  : "text-status-error"
+              }`}
+            >
+              {accessCodeMessage}
+            </p>
+          )}
+        </div>
+
         <div>
           <label className="mb-2 block text-sm font-bold text-brand-text">
             الإسم
