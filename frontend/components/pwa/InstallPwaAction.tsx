@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Copy, Download, ExternalLink, Share2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -54,11 +55,13 @@ export default function InstallPwaAction({
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [browserFamily, setBrowserFamily] = useState<BrowserFamily>("unknown");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       setIsStandalone(isStandaloneDisplay());
       setBrowserFamily(getBrowserFamily());
+      setMounted(true);
     });
 
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -173,7 +176,7 @@ export default function InstallPwaAction({
         {buttonText && <span>{buttonText}</span>}
       </button>
 
-      {isOpen && (
+      {isOpen && mounted && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0"
           role="dialog"
@@ -242,7 +245,8 @@ export default function InstallPwaAction({
               بعض المتصفحات تعرض اسم الخيار بصيغة مختلفة مثل Add to Home Screen أو Install App.
             </p>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
