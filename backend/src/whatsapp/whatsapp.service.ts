@@ -44,8 +44,9 @@ export class WhatsappService {
       }
 
       const start = Date.now();
-      const accountSid = process.env.ACCOUNT_SID;
-      const authToken = process.env.AUTH_TOKEN;
+      const accountSid =
+        process.env.TWILIO_ACCOUNT_SID || process.env.ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN || process.env.AUTH_TOKEN;
 
       if (!accountSid || !authToken) {
         this.logger.warn('Twilio env vars are missing; skipping message send.');
@@ -78,7 +79,7 @@ export class WhatsappService {
     try {
       const { client, from, to: recipient } = context;
       this.logger.log(
-        `Sending WhatsApp message to ${recipient} (original: ${to}): ${body}`,
+        `Sending WhatsApp message to ${this.maskPhone(recipient)} (original: ${this.maskPhone(to)}), bodyLength=${body.length}`,
       );
 
       await client.messages.create({
@@ -86,7 +87,7 @@ export class WhatsappService {
         from,
         to: recipient,
       });
-      this.logger.log(`Message sent to ${recipient}`);
+      this.logger.log(`Message sent to ${this.maskPhone(recipient)}`);
     } catch (error) {
       const details =
         error instanceof Error ? error.stack || error.message : String(error);
@@ -214,5 +215,10 @@ export class WhatsappService {
       from: fromWithPrefix,
       to: toWithPrefix,
     };
+  }
+
+  private maskPhone(value: string): string {
+    const visibleSuffix = value.slice(-4);
+    return `${'*'.repeat(Math.max(0, value.length - 4))}${visibleSuffix}`;
   }
 }
