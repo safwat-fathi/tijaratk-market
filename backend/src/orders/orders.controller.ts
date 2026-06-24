@@ -14,6 +14,7 @@ import {
   Query,
   UploadedFile,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -74,13 +75,17 @@ export class OrdersController {
     description: 'Get all orders for the authenticated tenant',
   })
   @ApiResponse({ status: HttpStatus.OK, description: 'Return all orders' })
-  findAll(@Req() req: Request, @Query('date') date?: string) {
+  findAll(
+    @Req() req: Request,
+    @Query('date') date?: string,
+    @Query('limit') limit?: string,
+  ) {
     const tenantId = req.user?.tenant_id;
     if (!tenantId) {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.ordersService.findAll(tenantId, date);
+    return this.ordersService.findAll(tenantId, date, Number(limit));
   }
 
   @Get('day-close/today')
@@ -126,6 +131,8 @@ export class OrdersController {
   }
 
   @Post(':tenant_slug')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Create a new order (Public)' })
   @ApiConsumes('application/json', 'multipart/form-data')
   @ApiBody({
@@ -143,6 +150,7 @@ export class OrdersController {
         source_metadata: { type: 'object' },
         delivery_area_id: { type: 'number' },
         delivery_area_slug: { type: 'string' },
+        unavailable_item_action: { type: 'string' },
         prescription_unavailability_action: { type: 'string' },
         prescription_file: { type: 'string', format: 'binary' },
       },
@@ -184,6 +192,8 @@ export class OrdersController {
   }
 
   @Get('tracking/:token')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get an order by public token (Tracking)',
     description: 'Get an order by public token (Tracking)',
@@ -195,6 +205,8 @@ export class OrdersController {
   }
 
   @Get('tracking')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Get orders by public tokens (Tracking)',
     description: 'Get multiple orders by public tracking tokens',
@@ -300,6 +312,8 @@ export class OrdersController {
   }
 
   @Patch('tracking/:token/items/:itemId/replacement-decision')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Decide replacement item by tracking token',
     description:
@@ -324,6 +338,8 @@ export class OrdersController {
   }
 
   @Patch('tracking/:token/reject')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Reject order by tracking token',
     description:
@@ -368,6 +384,30 @@ export class OrdersController {
       id,
       dto.total_price,
     );
+  }
+
+  @Patch('items/:id/out-of-stock')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiOperation({
+    summary: 'Mark order item out of stock',
+    description:
+      'Marks a merchant order item unavailable, removes it from order totals, and disables the linked product',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Order item marked out of stock successfully',
+  })
+  markOrderItemOutOfStock(
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.ordersService.markOrderItemOutOfStock(tenantId, id);
   }
 
   private toStringArray(value?: string | string[]): string[] {

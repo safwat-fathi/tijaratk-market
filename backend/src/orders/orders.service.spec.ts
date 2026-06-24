@@ -10,11 +10,20 @@ jest.mock('src/customers/customers.service', () => ({
 }));
 
 import { Prisma } from '../../generated/prisma/client';
-import { OrderSource, TenantStatus } from '../../generated/prisma/client';
+import {
+  OrderSource,
+  TenantCategory,
+  TenantStatus,
+} from '../../generated/prisma/client';
 import { PricingMode } from 'src/common/enums/pricing-mode.enum';
 import { OrderStatus } from 'src/common/enums/order-status.enum';
 import { OrderType } from 'src/common/enums/order-type.enum';
+import { UnavailableItemAction } from 'src/common/enums/unavailable-item-action.enum';
 import { OrdersService } from './orders.service';
+import {
+  ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
+  MIN_ACTIVE_PRODUCTS_FOR_ORDERS,
+} from 'src/products/order-readiness-policy';
 
 const createOrderDto = (cardOnDeliveryRequested?: boolean) => ({
   customer: {
@@ -45,6 +54,8 @@ const createOrderRecord = (data: any) => ({
   free_text_payload: data.free_text_payload ?? null,
   notes: data.notes ?? null,
   card_on_delivery_requested: data.card_on_delivery_requested,
+  unavailable_item_action:
+    data.unavailable_item_action ?? UnavailableItemAction.SUGGEST_REPLACEMENT,
   delivery_address: data.delivery_address ?? null,
   customer_phone: data.customer_phone ?? null,
   customer_name: data.customer_name ?? null,
@@ -151,8 +162,16 @@ const createService = ({
       phone: '01012345678',
       name: 'Test Customer',
       address: 'Test address',
+      global_customer_id: null,
       order_count: 1,
     }),
+    ensureGlobalCustomerForTenantCustomer: jest.fn().mockResolvedValue({
+      id: 2,
+      access_code: 'A7K42Q9B',
+    }),
+    formatAccessCode: jest
+      .fn()
+      .mockImplementation((code: string) => `${code.slice(0, 4)}-${code.slice(4)}`),
   };
   const tenantsService = {};
   const orderWhatsappService = {
@@ -171,10 +190,31 @@ const createService = ({
     tenantCancellationPolicyService as any,
   );
 
-  return { service, manager, tenantCancellationPolicyService };
+  return { service, manager, customersService, tenantCancellationPolicyService };
 };
 
 describe('OrdersService card-on-delivery persistence', () => {
+  it('returns the generated global customer access code on order creation', async () => {
+    const { service, customersService } = createService();
+
+    const result = await service.createForTenantId(1, createOrderDto() as any);
+
+    expect(customersService.ensureGlobalCustomerForTenantCustomer).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        id: 5,
+        phone: '01012345678',
+      }),
+      'Test Customer',
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        public_token: expect.any(String),
+        customer_access_code: 'A7K4-2Q9B',
+      }),
+    );
+  });
+
   it.each([
     [undefined, false, false],
     [undefined, true, false],
@@ -205,6 +245,37 @@ describe('OrdersService card-on-delivery persistence', () => {
         }),
       );
       expect(result.card_on_delivery_requested).toBe(expectedValue);
+    },
+  );
+});
+
+describe('OrdersService unavailable item action persistence', () => {
+  it.each([
+    [undefined, UnavailableItemAction.SUGGEST_REPLACEMENT],
+    [
+      UnavailableItemAction.SUGGEST_REPLACEMENT,
+      UnavailableItemAction.SUGGEST_REPLACEMENT,
+    ],
+    [UnavailableItemAction.DELETE_ITEM, UnavailableItemAction.DELETE_ITEM],
+    [UnavailableItemAction.CANCEL_ORDER, UnavailableItemAction.CANCEL_ORDER],
+  ])(
+    'persists unavailable item action %s as %s',
+    async (inputValue, expected) => {
+      const { service, manager } = createService();
+
+      const result = await service.createForTenantId(1, {
+        ...createOrderDto(),
+        ...(inputValue ? { unavailable_item_action: inputValue } : {}),
+      } as any);
+
+      expect(manager.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            unavailable_item_action: expected,
+          }),
+        }),
+      );
+      expect(result.unavailable_item_action).toBe(expected);
     },
   );
 });
@@ -267,6 +338,119 @@ describe('OrdersService prescription unavailability persistence', () => {
   });
 });
 
+const createPublicOrderGuardService = (activeProductsCount: number) => {
+  return createPublicOrderGuardServiceForCategory(
+    activeProductsCount,
+    TenantCategory.grocery,
+  );
+};
+
+const createPublicOrderGuardServiceForCategory = (
+  activeProductsCount: number,
+  tenantCategory: TenantCategory,
+) => {
+  const prisma = {
+    product: {
+      count: jest.fn().mockResolvedValue(activeProductsCount),
+    },
+  };
+  const tenantsService = {
+    findOneBySlug: jest.fn().mockResolvedValue({
+      id: 1,
+      slug: 'test-tenant',
+      status: TenantStatus.active,
+      category: tenantCategory,
+      delivery_available: true,
+      onboarding_completed: true,
+    }),
+  };
+  const service = new OrdersService(
+    prisma as any,
+    {} as any,
+    tenantsService as any,
+    {} as any,
+    {} as any,
+  );
+
+  return { service, prisma, tenantsService };
+};
+
+describe('OrdersService product order readiness guard', () => {
+  it('rejects public orders below the active product threshold', async () => {
+    const { service, prisma } = createPublicOrderGuardService(
+      MIN_ACTIVE_PRODUCTS_FOR_ORDERS - 1,
+    );
+    const createForTenantIdSpy = jest.spyOn(service, 'createForTenantId');
+
+    await expect(
+      service.createForTenantSlug('test-tenant', createOrderDto() as any),
+    ).rejects.toThrow('عذراً، هذا المتجر غير مستعد لاستقبال الطلبات حالياً.');
+
+    expect(createForTenantIdSpy).not.toHaveBeenCalled();
+    expect(prisma.product.count).toHaveBeenCalledWith({
+      where: {
+        tenant_id: 1,
+        ...ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
+      },
+    });
+  });
+
+  it('continues public order creation at the active product threshold', async () => {
+    const { service } = createPublicOrderGuardService(
+      MIN_ACTIVE_PRODUCTS_FOR_ORDERS,
+    );
+    const expectedOrder = { id: 10 };
+    const createForTenantIdSpy = jest
+      .spyOn(service, 'createForTenantId')
+      .mockResolvedValue(expectedOrder as any);
+
+    await expect(
+      service.createForTenantSlug('test-tenant', createOrderDto() as any),
+    ).resolves.toBe(expectedOrder);
+
+    expect(createForTenantIdSpy).toHaveBeenCalledWith(
+      1,
+      createOrderDto(),
+      undefined,
+    );
+  });
+
+  it('continues public order creation at the lightweight threshold for other tenants', async () => {
+    const { service } = createPublicOrderGuardServiceForCategory(
+      50,
+      TenantCategory.other,
+    );
+    const expectedOrder = { id: 10 };
+    const createForTenantIdSpy = jest
+      .spyOn(service, 'createForTenantId')
+      .mockResolvedValue(expectedOrder as any);
+
+    await expect(
+      service.createForTenantSlug('test-tenant', createOrderDto() as any),
+    ).resolves.toBe(expectedOrder);
+
+    expect(createForTenantIdSpy).toHaveBeenCalledWith(
+      1,
+      createOrderDto(),
+      undefined,
+    );
+  });
+
+  it('rejects public orders below the lightweight threshold for other tenants', async () => {
+    const { service } = createPublicOrderGuardServiceForCategory(
+      49,
+      TenantCategory.other,
+    );
+    const createForTenantIdSpy = jest.spyOn(service, 'createForTenantId');
+
+    await expect(
+      service.createForTenantSlug('test-tenant', createOrderDto() as any),
+    ).rejects.toThrow('عذراً، هذا المتجر غير مستعد لاستقبال الطلبات حالياً.');
+
+    expect(createForTenantIdSpy).not.toHaveBeenCalled();
+  });
+});
+
 const createUpdateService = (status: OrderStatus) => {
   const order = {
     id: 50,
@@ -284,6 +468,7 @@ const createUpdateService = (status: OrderStatus) => {
     free_text_payload: null,
     notes: null,
     card_on_delivery_requested: false,
+    unavailable_item_action: UnavailableItemAction.SUGGEST_REPLACEMENT,
     delivery_address: null,
     customer_phone: '01012345678',
     customer_name: 'Test Customer',
@@ -380,6 +565,146 @@ describe('OrdersService cancellation policy counting', () => {
   });
 });
 
+const createUpdateOrderItemPriceService = () => {
+  const order = {
+    id: 50,
+    tenant_id: 1,
+    status: OrderStatus.CONFIRMED,
+    delivery_fee: new Prisma.Decimal(10),
+  };
+  const orderItem = {
+    id: 70,
+    order_id: order.id,
+    product_id: 30,
+    replaced_by_product_id: null,
+    quantity: '2',
+    total_price: new Prisma.Decimal(40),
+    unit_price: new Prisma.Decimal(20),
+    order,
+  };
+  const activePriceHistory = {
+    id: 90,
+    tenant_id: 1,
+    product_id: 30,
+    price: new Prisma.Decimal(20),
+    effective_to: null,
+  };
+  const manager = {
+    $executeRaw: jest.fn(),
+    orderItem: {
+      findFirst: jest.fn().mockResolvedValue(orderItem),
+      update: jest.fn().mockImplementation(({ data }) =>
+        Promise.resolve({
+          ...orderItem,
+          ...data,
+        }),
+      ),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ total_price: new Prisma.Decimal(60) }]),
+    },
+    order: {
+      findFirst: jest.fn().mockResolvedValue(order),
+      update: jest.fn().mockResolvedValue({}),
+    },
+    product: {
+      findFirst: jest.fn().mockResolvedValue({
+        id: 30,
+        tenant_id: 1,
+        current_price: new Prisma.Decimal(20),
+      }),
+      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    productPriceHistory: {
+      findFirst: jest.fn().mockResolvedValue(activePriceHistory),
+      update: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockResolvedValue({}),
+    },
+  };
+  const prisma = {
+    $transaction: jest.fn((callback) => callback(manager)),
+  };
+  const service = new OrdersService(
+    prisma as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+  );
+
+  return { service, manager };
+};
+
+describe('OrdersService updateOrderItemPrice', () => {
+  it('updates the merchant product price when an order item price changes', async () => {
+    const { service, manager } = createUpdateOrderItemPriceService();
+
+    await service.updateOrderItemPrice(1, 70, 60);
+
+    expect(manager.orderItem.update).toHaveBeenCalledWith({
+      where: { id: 70 },
+      data: {
+        total_price: new Prisma.Decimal(60),
+        unit_price: new Prisma.Decimal(30),
+      },
+    });
+    expect(manager.productPriceHistory.update).toHaveBeenCalledWith({
+      where: { id: 90 },
+      data: { effective_to: expect.any(Date) },
+    });
+    expect(manager.productPriceHistory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenant_id: 1,
+        product_id: 30,
+        price: 30,
+        reason: 'manual update from order item',
+      }),
+    });
+    expect(manager.product.update).toHaveBeenCalledWith({
+      where: { id: 30 },
+      data: { current_price: 30 },
+    });
+  });
+});
+
+describe('OrdersService markOrderItemOutOfStock', () => {
+  it('marks the item unavailable, disables the product, and recalculates totals', async () => {
+    const { service, manager } = createUpdateOrderItemPriceService();
+
+    await service.markOrderItemOutOfStock(1, 70);
+
+    expect(manager.orderItem.update).toHaveBeenCalledWith({
+      where: { id: 70 },
+      data: {
+        is_out_of_stock: true,
+        out_of_stock_at: expect.any(Date),
+        total_price: new Prisma.Decimal(0),
+        unit_price: new Prisma.Decimal(0),
+      },
+    });
+    expect(manager.product.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 30,
+        tenant_id: 1,
+      },
+      data: { is_available: false },
+    });
+    expect(manager.orderItem.findMany).toHaveBeenCalledWith({
+      where: { order_id: 50, is_out_of_stock: false },
+      select: { total_price: true },
+    });
+    expect(manager.order.update).toHaveBeenCalledWith({
+      where: { id: 50 },
+      data: {
+        pricing_mode: PricingMode.MANUAL,
+        subtotal: new Prisma.Decimal(60),
+        total: new Prisma.Decimal(70),
+      },
+    });
+  });
+});
+
 describe('OrdersService findByPublicToken', () => {
   it('throws NotFoundException if order is not found', async () => {
     const { service, manager } = createService();
@@ -390,22 +715,22 @@ describe('OrdersService findByPublicToken', () => {
     );
   });
 
-  it.each([
-    OrderStatus.CANCELLED,
-    OrderStatus.REJECTED_BY_CUSTOMER,
-  ])('throws NotFoundException if order is %s', async (status) => {
-    const { service, manager } = createService();
-    jest.spyOn(manager.order, 'findFirst').mockResolvedValue({
-      status,
-      public_token: 'token',
-      order_items: [],
-      tenant: { id: 1, name: 'Test Tenant', slug: 'test-tenant' },
-    } as any);
+  it.each([OrderStatus.CANCELLED, OrderStatus.REJECTED_BY_CUSTOMER])(
+    'throws NotFoundException if order is %s',
+    async (status) => {
+      const { service, manager } = createService();
+      jest.spyOn(manager.order, 'findFirst').mockResolvedValue({
+        status,
+        public_token: 'token',
+        order_items: [],
+        tenant: { id: 1, name: 'Test Tenant', slug: 'test-tenant' },
+      } as any);
 
-    await expect(service.findByPublicToken('token')).rejects.toThrow(
-      'Order with token token not found',
-    );
-  });
+      await expect(service.findByPublicToken('token')).rejects.toThrow(
+        'Order with token token not found',
+      );
+    },
+  );
 
   it.each([
     OrderStatus.DRAFT,

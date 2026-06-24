@@ -3,6 +3,7 @@
 import { useDebounce } from 'use-debounce';
 import { useEffect, useMemo, memo, useRef, useState, useTransition } from 'react';
 import {
+  markOrderItemOutOfStockAction,
   replaceOrderItemAction,
   resetOrderItemReplacementAction,
   updateOrderItemPriceAction,
@@ -231,6 +232,8 @@ export default function OrderItemsReplacement({
   const canEditItemReplacement =
     orderStatus === OrderStatus.DRAFT || orderStatus === OrderStatus.CONFIRMED;
   const canEditItemPrice =
+    orderStatus === OrderStatus.DRAFT || orderStatus === OrderStatus.CONFIRMED;
+  const canMarkOutOfStock =
     orderStatus === OrderStatus.DRAFT || orderStatus === OrderStatus.CONFIRMED;
 
   const activeItemCategory = useMemo(() => {
@@ -470,6 +473,22 @@ export default function OrderItemsReplacement({
     );
   };
 
+  const applyOutOfStock = (itemId: number) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              is_out_of_stock: true,
+              out_of_stock_at: new Date().toISOString(),
+              unit_price: 0,
+              total_price: 0,
+            }
+          : item,
+      ),
+    );
+  };
+
   const applyResetDecision = (itemId: number) => {
     setItems((prev) =>
       prev.map((item) =>
@@ -635,6 +654,30 @@ export default function OrderItemsReplacement({
     });
   };
 
+  const handleMarkOutOfStock = (item: OrderItem) => {
+    if (!canMarkOutOfStock) {
+      setFeedback('تحديد عدم التوفر متاح في حالتي جديد ومؤكد فقط');
+      return;
+    }
+
+    if (item.is_out_of_stock) {
+      setFeedback('تم تحديد هذا الصنف كغير متوفر بالفعل');
+      return;
+    }
+
+    startTransition(async () => {
+      const response = await markOrderItemOutOfStockAction(orderId, item.id);
+
+      if (!response.success) {
+        setFeedback(response.error || 'تعذر تحديد الصنف كغير متوفر');
+        return;
+      }
+
+      applyOutOfStock(item.id);
+      setFeedback(`تم تحديد ${item.name_snapshot} كغير متوفر وإيقافه من المتجر`);
+    });
+  };
+
   const formatLinePrice = (value: number | string | null | undefined) => {
     return formatCurrency(value) || 'غير محدد';
   };
@@ -665,28 +708,43 @@ export default function OrderItemsReplacement({
 						const isDecisionLocked =
 							decisionStatus === ReplacementDecisionStatus.APPROVED ||
 							decisionStatus === ReplacementDecisionStatus.REJECTED;
+						const isOutOfStock = Boolean(item.is_out_of_stock);
 
 						return (
 							<div
 								key={item.id}
-								className="rounded-xl border border-gray-200 p-3"
+								className={`rounded-xl border p-3 ${
+									isOutOfStock
+										? "border-red-200 bg-red-50/50"
+										: "border-gray-200"
+								}`}
 							>
 								<div className="flex justify-between gap-3">
 									<div>
-										<p className="font-semibold text-gray-900">
-											{item.name_snapshot}
-										</p>
+										<div className="flex flex-wrap items-center gap-2">
+											<p className="font-semibold text-gray-900">
+												{item.name_snapshot}
+											</p>
+											{isOutOfStock && (
+												<span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
+													غير متوفر
+												</span>
+											)}
+										</div>
 										<p className="text-sm text-gray-500">
 											الكمية:{" "}
 											{formatArabicQuantity(item.quantity) || item.quantity}
 										</p>
 										<p className="mt-1 text-sm font-semibold text-gray-800">
-											السعر: {formatLinePrice(item.total_price)}
+											السعر:{" "}
+											{isOutOfStock
+												? "محذوف من الإجمالي"
+												: formatLinePrice(item.total_price)}
 										</p>
 									</div>
 								</div>
 
-								<div className="mt-3 grid grid-cols-2 gap-2">
+								<div className="mt-3 grid grid-cols-3 gap-2">
 									<button
 										type="button"
 										onClick={() => openReplacementSheet(item.id)}
@@ -702,10 +760,19 @@ export default function OrderItemsReplacement({
 									<button
 										type="button"
 										onClick={() => openPriceSheet(item.id)}
-										disabled={!canEditItemPrice}
+										disabled={!canEditItemPrice || isOutOfStock}
 										className="rounded-md bg-brand-primary px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
 									>
 										تسعير المنتج
+									</button>
+
+									<button
+										type="button"
+										onClick={() => handleMarkOutOfStock(item)}
+										disabled={!canMarkOutOfStock || isPending || isOutOfStock}
+										className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+									>
+										غير متوفر
 									</button>
 								</div>
 
@@ -718,6 +785,12 @@ export default function OrderItemsReplacement({
 								{!canEditItemReplacement && (
 									<p className="mt-2 text-xs text-gray-500">
 										الاستبدال متاح في حالتي جديد ومؤكد فقط
+									</p>
+								)}
+
+								{isOutOfStock && (
+									<p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700">
+										تم حذف الصنف من إجمالي الطلب وإيقاف المنتج من المتجر.
 									</p>
 								)}
 

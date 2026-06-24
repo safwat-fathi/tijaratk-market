@@ -48,7 +48,7 @@ export const Input = ({ className, type, dir, ...props }: ComponentProps<"input"
 					type={toggleType}
 					dir={resolvedDir}
 					className={cn(
-						"block min-h-11 w-full rounded-md border border-(--brand-border) bg-white ps-4 pe-12 py-3 text-base text-(--brand-text) shadow-sm transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-muted-foreground focus:border-(--brand-accent) focus:outline-none focus:ring-4 focus:ring-(--brand-accent)/15 disabled:cursor-not-allowed disabled:opacity-60",
+						"block min-h-11 w-full rounded-md border border-(--brand-border) bg-white ps-4 pe-12 py-3 text-base text-(--brand-text) shadow-sm transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-gray-400 placeholder:opacity-70 focus:border-(--brand-accent) focus:outline-none focus:ring-4 focus:ring-(--brand-accent)/15 disabled:cursor-not-allowed disabled:opacity-60",
 						"text-left",
 						className,
 					)}
@@ -83,7 +83,7 @@ export const Input = ({ className, type, dir, ...props }: ComponentProps<"input"
 			type={type}
 			dir={resolvedDir}
 			className={cn(
-				"block min-h-11 w-full rounded-md border border-(--brand-border) bg-white px-4 py-3 text-base text-(--brand-text) shadow-sm transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-muted-foreground focus:border-(--brand-accent) focus:outline-none focus:ring-4 focus:ring-(--brand-accent)/15 disabled:cursor-not-allowed disabled:opacity-60",
+				"block min-h-11 w-full rounded-md border border-(--brand-border) bg-white px-4 py-3 text-base text-(--brand-text) shadow-sm transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-gray-400 placeholder:opacity-70 focus:border-(--brand-accent) focus:outline-none focus:ring-4 focus:ring-(--brand-accent)/15 disabled:cursor-not-allowed disabled:opacity-60",
 				isLtr && "text-left",
 				className,
 			)}
@@ -95,7 +95,7 @@ export const Input = ({ className, type, dir, ...props }: ComponentProps<"input"
 export const Textarea = ({ className, ...props }: ComponentProps<"textarea">) => (
 	<textarea
 		className={cn(
-			"block min-h-28 w-full rounded-md border border-(--brand-border) bg-white px-4 py-3 text-base leading-7 text-(--brand-text) shadow-sm transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-muted-foreground focus:border-(--brand-accent) focus:outline-none focus:ring-4 focus:ring-(--brand-accent)/15 disabled:cursor-not-allowed disabled:opacity-60",
+			"block min-h-28 w-full rounded-md border border-(--brand-border) bg-white px-4 py-3 text-base leading-7 text-(--brand-text) shadow-sm transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-gray-400 placeholder:opacity-70 focus:border-(--brand-accent) focus:outline-none focus:ring-4 focus:ring-(--brand-accent)/15 disabled:cursor-not-allowed disabled:opacity-60",
 			className,
 		)}
 		{...props}

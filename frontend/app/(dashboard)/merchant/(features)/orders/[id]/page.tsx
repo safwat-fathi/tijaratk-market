@@ -11,6 +11,7 @@ import { getImageUrl } from "@/lib/utils/image";
 import {
 	formatPrescriptionUnavailabilityAction,
 } from "@/lib/orders/prescription-unavailability";
+import { formatUnavailableItemAction } from "@/lib/orders/unavailable-item-action";
 
 const statusLabelMap: Record<OrderStatus, string> = {
 	[OrderStatus.DRAFT]: "جديد",
@@ -67,6 +68,9 @@ export default async function OrderDetailsPage({
 		formatPrescriptionUnavailabilityAction(
 			order.prescription_unavailability_action,
 		);
+	const unavailableItemActionLabel = formatUnavailableItemAction(
+		order.unavailable_item_action,
+	);
 	const products =
 		productsResponse.success && productsResponse.data
 			? productsResponse.data
@@ -199,6 +203,17 @@ export default async function OrderDetailsPage({
 					<section className="rounded-lg border border-brand-accent/30 bg-brand-soft p-4 shadow-soft">
 						<p className="text-sm font-semibold text-brand-primary">
 							العميل طلب الدفع بالكارت مع التوصيل.
+						</p>
+					</section>
+				)}
+
+				{unavailableItemActionLabel && (
+					<section className="rounded-lg border border-brand-accent/30 bg-brand-soft p-4 shadow-soft">
+						<p className="text-sm text-brand-text">
+							<strong className="text-brand-primary">
+								في حالة عدم توفر منتج:
+							</strong>{" "}
+							{unavailableItemActionLabel}
 						</p>
 					</section>
 				)}

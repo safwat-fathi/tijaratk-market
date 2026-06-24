@@ -3,6 +3,7 @@ import {
   OrderType,
   PricingMode,
   ReplacementDecisionStatus,
+  UnavailableItemAction,
 } from '../enums';
 
 export interface OrderCustomer {
@@ -23,6 +24,8 @@ export interface OrderItem {
   quantity: string;
   unit_price?: OrderNumericValue;
   total_price?: OrderNumericValue;
+  is_out_of_stock?: boolean;
+  out_of_stock_at?: string | null;
   notes?: string;
   selection_mode?: OrderItemSelectionMode;
   selection_quantity?: OrderNumericValue;
@@ -77,12 +80,14 @@ export interface Order {
   prescription_original_filename?: string | null;
   prescription_mime_type?: string | null;
   prescription_unavailability_action?: string | null;
+  unavailable_item_action?: UnavailableItemAction | null;
   notes?: string;
   card_on_delivery_requested?: boolean;
   merchant_cancellation_reason?: string | null;
   merchant_cancelled_at?: string | null;
   customer_rejection_reason?: string | null;
   customer_rejected_at?: string | null;
+  customer_access_code?: string;
   created_at: string;
   updated_at: string;
 }

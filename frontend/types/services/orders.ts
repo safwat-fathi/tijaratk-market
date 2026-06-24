@@ -1,5 +1,5 @@
 import { Order } from '../models/order';
-import { OrderSource, OrderType } from '../enums';
+import { OrderSource, OrderType, UnavailableItemAction } from '../enums';
 
 export interface CreateOrderRequest {
   customer: {
@@ -30,6 +30,7 @@ export interface CreateOrderRequest {
   delivery_area_id?: number;
   delivery_area_slug?: string;
   card_on_delivery_requested?: boolean;
+  unavailable_item_action?: UnavailableItemAction;
   prescription_unavailability_action?: string;
 }
 

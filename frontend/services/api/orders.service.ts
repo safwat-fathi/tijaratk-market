@@ -127,6 +127,21 @@ class OrdersService extends HttpService {
 			{ authRequired: true },
 		);
 	}
+
+	public async markOrderItemOutOfStock(itemId: number) {
+		return this.patch<{
+			id: number;
+			is_out_of_stock: boolean;
+			out_of_stock_at?: string | null;
+			total_price?: number;
+			unit_price?: number;
+		}>(
+			`items/${itemId}/out-of-stock`,
+			{},
+			undefined,
+			{ authRequired: true },
+		);
+	}
 }
 
 export const ordersService = new OrdersService();

@@ -14,6 +14,7 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import {
   formatPrescriptionUnavailabilityAction,
 } from "@/lib/orders/prescription-unavailability";
+import { formatUnavailableItemAction } from "@/lib/orders/unavailable-item-action";
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -73,6 +74,9 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
     formatPrescriptionUnavailabilityAction(
       order.prescription_unavailability_action,
     );
+  const unavailableItemActionLabel = formatUnavailableItemAction(
+    order.unavailable_item_action,
+  );
 
   // Handle action click
   const handleAction = async (e: React.MouseEvent) => {
@@ -179,6 +183,11 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
             {order.prescription_file_url && prescriptionUnavailabilityLabel && (
               <span className="mt-1 block text-xs font-semibold text-brand-primary">
                 في حالة عدم التوفر: {prescriptionUnavailabilityLabel}
+              </span>
+            )}
+            {unavailableItemActionLabel && (
+              <span className="mt-1 block text-xs font-semibold text-brand-primary">
+                عند عدم توفر منتج: {unavailableItemActionLabel}
               </span>
             )}
             {order.merchant_cancellation_reason && (

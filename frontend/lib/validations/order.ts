@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { OrderSource } from "@/types/enums";
+import { OrderSource, UnavailableItemAction } from "@/types/enums";
 import { isValidEgyptianCustomerPhone } from "@/lib/utils/phone";
 
 const orderSourceValues = [
@@ -7,6 +7,12 @@ const orderSourceValues = [
 	OrderSource.DIRECTORY,
 	OrderSource.WHATSAPP,
 	OrderSource.MANUAL,
+] as const;
+
+const unavailableItemActionValues = [
+	UnavailableItemAction.SUGGEST_REPLACEMENT,
+	UnavailableItemAction.DELETE_ITEM,
+	UnavailableItemAction.CANCEL_ORDER,
 ] as const;
 
 export const createOrderSchema = z.object({
@@ -21,6 +27,7 @@ export const createOrderSchema = z.object({
 	delivery_area_slug: z.string().optional(),
 	order_source: z.enum(orderSourceValues).optional(),
 	source_metadata: z.string().optional(),
+	unavailable_item_action: z.enum(unavailableItemActionValues).optional(),
 	card_on_delivery_requested: z
 		.enum(["true", "false", "on"])
 		.optional()

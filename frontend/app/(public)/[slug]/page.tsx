@@ -110,6 +110,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     alternates: {
       canonical: `/${slug}`,
     },
+    manifest: `/pwa/storefront/${encodeURIComponent(slug)}/manifest`,
     keywords: [
       tenant.name,
       categoryLabel,
@@ -162,31 +163,42 @@ export default async function StorePage({ params, searchParams }: Props) {
     ]);
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-md bg-background">
+    <div className="mx-auto min-h-screen w-full max-w-md bg-background flex flex-col">
       <StoreHeader tenant={tenant} />
-      {/* <WriteOrderFAB /> */}
-
-      <div className="min-w-0">
-        <OrderForm
-          tenantSlug={tenant.slug}
-          areaSlug={areaSlug}
-          landingAttribution={{
-            source: src,
-            areaSlug,
-            categorySlug,
-            landedAt: new Date().toISOString(),
-          }}
-          isPharmacy={tenant.category === "pharmacy"}
-          tenantCategory={tenant.category}
-          deliverySettings={tenant}
-          initialCategory={category}
-          initialProducts={products}
-          initialProductsMeta={meta}
-          initialCategories={categories}
-          initialOrder={initialOrder}
-          savedCustomerProfile={savedCustomerProfile}
-        />
-      </div>
+      
+      {!tenant.onboarding_completed ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center">
+            <span className="text-4xl">🚧</span>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900">المتجر قيد التجهيز</h2>
+          <p className="text-gray-500 max-w-xs">
+            هذا المتجر يقوم حالياً بإعداد قائمة المنتجات وسيتم افتتاحه قريباً للطلبات!
+          </p>
+        </div>
+      ) : (
+        <div className="min-w-0">
+          <OrderForm
+            tenantSlug={tenant.slug}
+            areaSlug={areaSlug}
+            landingAttribution={{
+              source: src,
+              areaSlug,
+              categorySlug,
+              landedAt: new Date().toISOString(),
+            }}
+            isPharmacy={tenant.category === "pharmacy"}
+            tenantCategory={tenant.category}
+            deliverySettings={tenant}
+            initialCategory={category}
+            initialProducts={products}
+            initialProductsMeta={meta}
+            initialCategories={categories}
+            initialOrder={initialOrder}
+            savedCustomerProfile={savedCustomerProfile}
+          />
+        </div>
+      )}
     </div>
   );
 }

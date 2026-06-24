@@ -1,7 +1,12 @@
 'use server';
 
 import { ordersService } from '@/services/api/orders.service';
-import { OrderSource, OrderStatus, OrderType } from '@/types/enums';
+import {
+  OrderSource,
+  OrderStatus,
+  OrderType,
+  UnavailableItemAction,
+} from '@/types/enums';
 import { CloseDayResponse, CreateOrderRequest } from '@/types/services/orders';
 import { revalidatePath } from 'next/cache';
 import { createOrderSchema } from '@/lib/validations/order';
@@ -121,6 +126,33 @@ export async function updateOrderItemPriceAction(
   }
 }
 
+export async function markOrderItemOutOfStockAction(
+  orderId: number,
+  itemId: number,
+) {
+  try {
+    const response = await ordersService.markOrderItemOutOfStock(itemId);
+
+    if (!response.success) {
+      return {
+        success: false,
+        error: response.message || 'Failed to mark order item out of stock',
+      };
+    }
+
+    revalidatePath(`/merchant/orders/${orderId}`);
+    revalidatePath('/merchant/orders');
+
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Failed to mark order item out of stock:', error);
+    return { success: false, error: 'Failed to mark order item out of stock' };
+  }
+}
+
 export async function closeDayAction(): Promise<{
   success: boolean;
   message?: string;
@@ -184,10 +216,12 @@ type CreateOrderCustomerData = {
   source_metadata?: string;
   notes?: string;
   card_on_delivery_requested?: boolean;
+  unavailable_item_action?: UnavailableItemAction;
 };
 
 type CreatedOrderMeta = {
   public_token?: unknown;
+  customer_access_code?: unknown;
   created_at?: unknown;
 };
 
@@ -244,6 +278,7 @@ const buildCreateOrderPayload = ({
   items,
   notes: customerData.notes,
   card_on_delivery_requested: customerData.card_on_delivery_requested,
+  unavailable_item_action: customerData.unavailable_item_action,
   free_text_payload: orderRequest ? { text: orderRequest } : undefined,
   order_type: items.length > 0 ? OrderType.CATALOG : OrderType.FREE_TEXT,
   delivery_area_slug: customerData.delivery_area_slug || undefined,
@@ -258,6 +293,20 @@ const appendCardOnDeliveryRequest = (
   if (payload.card_on_delivery_requested === true) {
     formDataPayload.append('card_on_delivery_requested', 'true');
   }
+};
+
+const appendUnavailableItemAction = (
+  formDataPayload: FormData,
+  payload: CreateOrderRequest,
+) => {
+  if (!payload.unavailable_item_action) {
+    return;
+  }
+
+  formDataPayload.append(
+    'unavailable_item_action',
+    payload.unavailable_item_action,
+  );
 };
 
 const buildCreateOrderFormData = (
@@ -302,6 +351,7 @@ const buildCreateOrderFormData = (
   if (payload.delivery_area_slug) {
     formDataPayload.append('delivery_area_slug', payload.delivery_area_slug);
   }
+  appendUnavailableItemAction(formDataPayload, payload);
   appendCardOnDeliveryRequest(formDataPayload, payload);
 
   const unavailabilityOption = sourceFormData.get('unavailabilityOption');
@@ -412,11 +462,22 @@ export async function createOrderAction(
         typeof (response.data as CreatedOrderMeta)?.public_token === 'string'
           ? ((response.data as CreatedOrderMeta).public_token as string).trim()
           : '';
+      const customerAccessCode =
+        typeof (response.data as CreatedOrderMeta)?.customer_access_code === 'string'
+          ? ((response.data as CreatedOrderMeta).customer_access_code as string).trim()
+          : '';
 
       return {
         success: true,
         message: 'Order created successfully',
-        data: publicToken ? { public_token: publicToken } : response.data,
+        data: publicToken
+          ? {
+              public_token: publicToken,
+              ...(customerAccessCode
+                ? { customer_access_code: customerAccessCode }
+                : {}),
+            }
+          : response.data,
       };
     }
 

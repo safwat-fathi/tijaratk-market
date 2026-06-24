@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 type OrderSuccessViewProps = {
   tenantSlug: string;
   orderToken: string;
+  customerAccessCode?: string;
 };
 
 const TrackingOrdersIcon = () => (
@@ -33,8 +34,10 @@ const TrackingOrdersIcon = () => (
 export default function OrderSuccessView({
   tenantSlug,
   orderToken,
+  customerAccessCode,
 }: OrderSuccessViewProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedCustomerCode, setCopiedCustomerCode] = useState(false);
 
   const handleCopyToken = useCallback(() => {
     const url = `${window.location.origin}/track-order/${orderToken}`;
@@ -42,6 +45,13 @@ export default function OrderSuccessView({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [orderToken]);
+
+  const handleCopyCustomerCode = useCallback(() => {
+    if (!customerAccessCode) return;
+    navigator.clipboard.writeText(customerAccessCode);
+    setCopiedCustomerCode(true);
+    setTimeout(() => setCopiedCustomerCode(false), 2000);
+  }, [customerAccessCode]);
 
   return (
     <div className="fixed inset-0 z-50 flex animate-fade-in flex-col items-center justify-start sm:justify-center overflow-y-auto bg-white p-6 py-10 text-center">
@@ -65,7 +75,7 @@ export default function OrderSuccessView({
       </h2>
       <p className="mb-4 max-w-sm text-muted-foreground">
         سيتواصل معك صاحب المتجر للتأكيد. <br />
-        احفظ رابط التتبع لمتابعة الحالة.
+        احفظ كود العميل ورابط التتبع لمتابعة طلباتك من أي جهاز.
       </p>
 
       <div className="mb-4 flex w-full max-w-sm items-start gap-2.5 rounded-lg border border-brand-border bg-brand-soft/30 p-3 text-right text-xs text-muted-foreground dark:bg-brand-soft/5">
@@ -90,6 +100,61 @@ export default function OrderSuccessView({
           عن أي منتج تالف، منتهي الصلاحية أو غير صالح للاستخدام الآدمي.
         </p>
       </div>
+
+      {customerAccessCode && (
+        <div className="mb-4 flex w-full max-w-sm items-center justify-between gap-4 rounded-lg border border-brand-primary/20 bg-brand-soft/70 p-4">
+          <div className="flex flex-col items-start overflow-hidden text-start">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              كود العميل
+            </span>
+            <span className="mt-1 font-mono text-2xl font-black tracking-wider text-brand-text">
+              {customerAccessCode}
+            </span>
+            <span className="mt-1 text-xs leading-5 text-muted-foreground">
+              استخدمه مع رقم هاتفك لتعبئة بياناتك وتتبع طلباتك من أي جهاز.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleCopyCustomerCode}
+            aria-label="نسخ كود العميل"
+            className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-white hover:text-brand-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+            title="نسخ كود العميل"
+          >
+            {copiedCustomerCode ? (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-status-success"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+              </svg>
+            )}
+          </button>
+        </div>
+      )}
 
       <div className="mb-6 flex w-full max-w-sm items-center justify-between gap-4 rounded-lg border border-brand-border bg-brand-soft/50 p-4">
         <div className="flex flex-col items-start overflow-hidden">

@@ -17,6 +17,7 @@ import {
 import { OrderType } from 'src/common/enums/order-type.enum';
 import { CreateCustomerDto } from 'src/customers/dto/create-customer.dto';
 import { OrderItemSelectionMode } from 'src/common/enums/order-item-selection-mode.enum';
+import { UnavailableItemAction } from 'src/common/enums/unavailable-item-action.enum';
 import { OrderSource } from '../../../generated/prisma/client';
 
 import { plainToInstance } from 'class-transformer';
@@ -193,6 +194,15 @@ export class CreateOrderDto {
   @IsBoolean()
   @Transform(({ value }) => value === true || value === 'true')
   card_on_delivery_requested?: boolean;
+
+  @ApiPropertyOptional({
+    enum: UnavailableItemAction,
+    example: UnavailableItemAction.SUGGEST_REPLACEMENT,
+    description: 'Customer preference if a normal cart item is unavailable',
+  })
+  @IsOptional()
+  @IsEnum(UnavailableItemAction)
+  unavailable_item_action?: UnavailableItemAction;
 
   @ApiPropertyOptional({
     example: 'call',

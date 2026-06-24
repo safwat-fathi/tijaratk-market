@@ -8,6 +8,10 @@ import { formatArabicInteger } from "@/lib/utils/number";
 import type { Product } from "@/types/models/product";
 import type { ProductCartSelection } from "./ProductList";
 import { resolveSelectionLineTotal } from "../_utils/order-form";
+import { UnavailableItemAction } from "@/types/enums";
+import {
+	UNAVAILABLE_ITEM_ACTION_OPTIONS,
+} from "@/lib/orders/unavailable-item-action";
 
 type OrderReviewSheetProps = {
 	isOpen: boolean;
@@ -18,6 +22,8 @@ type OrderReviewSheetProps = {
 	orderRequest: string;
 	deliveryAvailable?: boolean;
 	hasPrescription?: boolean;
+	unavailableItemAction: UnavailableItemAction;
+	onUnavailableItemActionChange: (action: UnavailableItemAction) => void;
 	selections: Record<number, ProductCartSelection>;
 	knownProductsById: Record<number, Product>;
 	onClose: () => void;
@@ -342,6 +348,8 @@ export default function OrderReviewSheet({
 	orderRequest,
 	deliveryAvailable = true,
 	hasPrescription = false,
+	unavailableItemAction,
+	onUnavailableItemActionChange,
 	selections,
 	knownProductsById,
 	onClose,
@@ -493,6 +501,32 @@ export default function OrderReviewSheet({
 								التوصيل غير متاح حالياً. يمكنك الرجوع للمتجر لاحقاً عند فتح استقبال الطلبات.
 							</div>
 						)}
+
+						<div className="rounded-lg border border-brand-border bg-white p-3 shadow-soft">
+							<p className="text-sm font-bold text-brand-text">
+								لو منتج غير متوفر
+							</p>
+							<div className="mt-3 grid grid-cols-1 gap-2">
+								{UNAVAILABLE_ITEM_ACTION_OPTIONS.map(option => {
+									const isSelected = unavailableItemAction === option.value;
+									return (
+										<button
+											key={option.value}
+											type="button"
+											onClick={() => onUnavailableItemActionChange(option.value)}
+											disabled={isPending}
+											className={`min-h-11 rounded-md border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
+												isSelected
+													? "border-brand-primary bg-brand-soft text-brand-primary"
+													: "border-brand-border bg-white text-brand-text hover:bg-brand-soft/50"
+											}`}
+										>
+											{option.label}
+										</button>
+									);
+								})}
+							</div>
+						</div>
 					</div>
 
 					<div

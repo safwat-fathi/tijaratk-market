@@ -1,9 +1,12 @@
+import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
 import {
   BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
   ForbiddenException,
+  Inject,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
@@ -27,14 +30,19 @@ import { TenantsService } from 'src/tenants/tenants.service';
 import { OrderWhatsappService } from './order-whatsapp.service';
 import { Product } from '../../generated/prisma/client';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
-import { ProductPriceHistory } from '../../generated/prisma/client';
 import { ReplacementDecisionStatus } from 'src/common/enums/replacement-decision-status.enum';
 import { ReplacementDecisionAction } from './dto/decide-replacement.dto';
 import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { OrderItemSelectionMode } from 'src/common/enums/order-item-selection-mode.enum';
+import { UnavailableItemAction } from 'src/common/enums/unavailable-item-action.enum';
 import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
 import { OrderType } from 'src/common/enums/order-type.enum';
 import { TenantCancellationPolicyService } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
+import {
+  ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
+  resolveRequiredProductsForTenantCategory,
+} from 'src/products/order-readiness-policy';
+import { getDashboardCacheVersionKey } from 'src/merchant-dashboard/merchant-dashboard.service';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -79,6 +87,7 @@ type PrescriptionUpload = Pick<
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
   private static readonly MAX_TRACKING_TOKENS = 15;
+  private static readonly MAX_ORDER_LIST_LIMIT = 200;
   private static readonly CAIRO_TIME_ZONE = 'Africa/Cairo';
   private static readonly CANCELLED_STATUSES = [
     OrderStatus.CANCELLED,
@@ -92,6 +101,7 @@ export class OrdersService {
     private readonly tenantsService: TenantsService,
     private readonly orderWhatsappService: OrderWhatsappService,
     private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
+    @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
   async createForTenantSlug(
@@ -113,6 +123,32 @@ export class OrdersService {
     if (tenant.delivery_available === false) {
       await this.deleteUploadedFileQuietly(prescriptionUpload);
       throw new BadRequestException('التوصيل غير متاح حاليا');
+    }
+
+    // Explicitly cast to any since tenant model might not have the newly added fields typed correctly if client not fully reloaded, though it should be typed now.
+    const t = tenant as any;
+    if (!t.onboarding_completed) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      throw new BadRequestException(
+        'عذراً، هذا المتجر غير مستعد لاستقبال الطلبات حالياً.',
+      );
+    }
+
+    const activeProductsCount = await this.prisma.product.count({
+      where: {
+        tenant_id: tenant.id,
+        ...ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
+      },
+    });
+
+    const requiredProductsCount = resolveRequiredProductsForTenantCategory(
+      tenant.category,
+    );
+    if (activeProductsCount < requiredProductsCount) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      throw new BadRequestException(
+        'عذراً، هذا المتجر غير مستعد لاستقبال الطلبات حالياً.',
+      );
     }
 
     if (
@@ -145,6 +181,7 @@ export class OrdersService {
     prescriptionUpload?: PrescriptionUpload,
   ): Promise<Order> {
     let isFirstOrder = false;
+    let customerAccessCode = '';
 
     let savedOrder: Order;
     try {
@@ -161,6 +198,15 @@ export class OrdersService {
           createOrderDto.customer.address,
           manager,
           deliveryAreaId,
+        );
+        const globalCustomer =
+          await this.customersService.ensureGlobalCustomerForTenantCustomer(
+            manager,
+            customer,
+            createOrderDto.customer.name,
+          );
+        customerAccessCode = this.customersService.formatAccessCode(
+          globalCustomer.access_code,
         );
 
         const hasItems = Boolean(createOrderDto.items?.length);
@@ -229,6 +275,9 @@ export class OrdersService {
           card_on_delivery_requested:
             tenant?.card_on_delivery_available === true &&
             createOrderDto.card_on_delivery_requested === true,
+          unavailable_item_action: this.normalizeUnavailableItemAction(
+            createOrderDto.unavailable_item_action,
+          ),
           delivery_address: createOrderDto.customer.address,
           customer_phone: customer.phone,
           customer_name: createOrderDto.customer.name,
@@ -393,12 +442,23 @@ export class OrdersService {
     }
 
     const completeOrder = await this.findOne(savedOrder.id);
+    await this.bumpDashboardCacheVersion(tenantId);
     await this.notifyOrderCreated(completeOrder, isFirstOrder);
 
-    return completeOrder;
+    return {
+      ...completeOrder,
+      customer_access_code: customerAccessCode,
+    } as Order & { customer_access_code: string };
   }
 
-  async findAll(tenantId: number, date?: string): Promise<Order[]> {
+  async findAll(
+    tenantId: number,
+    date?: string,
+    limit = OrdersService.MAX_ORDER_LIST_LIMIT,
+  ): Promise<Order[]> {
+    const normalizedLimit = Number.isFinite(limit)
+      ? Math.min(OrdersService.MAX_ORDER_LIST_LIMIT, Math.max(1, limit))
+      : OrdersService.MAX_ORDER_LIST_LIMIT;
     const whereClause: Prisma.OrderWhereInput = { tenant_id: tenantId };
     if (date) {
       whereClause.created_at = {
@@ -419,6 +479,7 @@ export class OrdersService {
         delivery_area: true,
       },
       orderBy: { created_at: 'desc' },
+      take: normalizedLimit,
     });
 
     return orders.map((order) => this.mapOrderPayload(order));
@@ -569,7 +630,6 @@ export class OrdersService {
   async update(id: number, updateOrderDto: UpdateOrderDto): Promise<Order> {
     let previousStatus: OrderStatus | undefined;
     let nextStatus: OrderStatus | undefined;
-    let savedOrder: OrderWithItemsPayload;
 
     const updateOrder = async (manager: Prisma.TransactionClient) => {
       const order = await manager.order.findFirst({
@@ -657,7 +717,7 @@ export class OrdersService {
     };
 
     const manager = DbTenantContext.getManager();
-    savedOrder = manager
+    const savedOrder = manager
       ? await updateOrder(manager)
       : await this.prisma.$transaction(updateOrder);
 
@@ -665,6 +725,7 @@ export class OrdersService {
       await this.notifyCustomerStatusChange(savedOrder);
     }
 
+    await this.bumpDashboardCacheVersion(savedOrder.tenant_id);
     return this.mapOrderPayload(savedOrder);
   }
 
@@ -879,6 +940,7 @@ export class OrdersService {
     })) as unknown as Order;
 
     await this.notifyCustomerStatusChange(savedOrder);
+    await this.bumpDashboardCacheVersion(savedOrder.tenant_id);
     return savedOrder;
   }
 
@@ -895,9 +957,8 @@ export class OrdersService {
       throw new BadRequestException('Item price must be a positive number');
     }
 
-    return this.withTenantManager(tenantId, async (manager) => {
+    const savedItem = await this.withTenantManager(tenantId, async (manager) => {
       const orderItemRepository = manager.orderItem;
-      const orderRepository = manager.order;
 
       const orderItem = await orderItemRepository.findFirst({
         where: { id: itemId },
@@ -908,9 +969,10 @@ export class OrdersService {
         throw new NotFoundException(`Order item with ID ${itemId} not found`);
       }
 
+      const orderStatus = orderItem.order.status as unknown as OrderStatus;
       if (
-        orderItem.order.status !== OrderStatus.DRAFT &&
-        orderItem.order.status !== OrderStatus.CONFIRMED
+        orderStatus !== OrderStatus.DRAFT &&
+        orderStatus !== OrderStatus.CONFIRMED
       ) {
         throw new BadRequestException(
           'Item prices can only be updated for draft or confirmed orders',
@@ -929,60 +991,9 @@ export class OrdersService {
           total_price: new Prisma.Decimal(normalizedTotal),
           unit_price: new Prisma.Decimal(normalizedUnitPrice),
         },
-      })) as any;
+      })) as unknown as OrderItem;
 
-      const order = await orderRepository.findFirst({
-        where: { id: orderItem.order_id },
-      });
-      if (!order) {
-        throw new NotFoundException(
-          `Order with ID ${orderItem.order_id} not found`,
-        );
-      }
-
-      const orderItems = await orderItemRepository.findMany({
-        where: { order_id: order.id },
-        select: { total_price: true },
-      });
-
-      const pricedLines = orderItems
-        .map((item) =>
-          item.total_price !== null ? Number(item.total_price) : null,
-        )
-        .filter(
-          (value): value is number => value !== null && !Number.isNaN(value),
-        );
-
-      const subtotal =
-        pricedLines.length > 0
-          ? this.roundCurrency(
-              pricedLines.reduce((sum, value) => sum + value, 0),
-            )
-          : undefined;
-
-      const deliveryFee = Number(order.delivery_fee || 0);
-
-      let recomputedTotal: number | undefined;
-      if (subtotal !== undefined) {
-        recomputedTotal = this.roundCurrency(subtotal + deliveryFee);
-      } else if (deliveryFee > 0) {
-        recomputedTotal = this.roundCurrency(deliveryFee);
-      } else {
-        recomputedTotal = undefined;
-      }
-
-      await orderRepository.update({
-        where: { id: order.id },
-        data: {
-          pricing_mode: PricingMode.MANUAL,
-          subtotal:
-            subtotal === undefined ? null : new Prisma.Decimal(subtotal),
-          total:
-            recomputedTotal === undefined
-              ? null
-              : new Prisma.Decimal(recomputedTotal),
-        },
-      });
+      await this.recalculateOrderTotals(manager, orderItem.order_id);
 
       const targetProductId =
         orderItem.replaced_by_product_id ?? orderItem.product_id ?? null;
@@ -997,6 +1008,62 @@ export class OrdersService {
 
       return savedItem;
     });
+    await this.bumpDashboardCacheVersion(tenantId);
+    return savedItem;
+  }
+
+  /**
+   * Marks one order item unavailable, removes it from totals, and hides the linked merchant product.
+   */
+  async markOrderItemOutOfStock(
+    tenantId: number,
+    itemId: number,
+  ): Promise<OrderItem> {
+    const savedItem = await this.withTenantManager(tenantId, async (manager) => {
+      const orderItem = await manager.orderItem.findFirst({
+        where: { id: itemId },
+        include: { order: true },
+      });
+
+      if (!orderItem || orderItem.order.tenant_id !== tenantId) {
+        throw new NotFoundException(`Order item with ID ${itemId} not found`);
+      }
+
+      if (
+        orderItem.order.status !== OrderStatus.DRAFT &&
+        orderItem.order.status !== OrderStatus.CONFIRMED
+      ) {
+        throw new BadRequestException(
+          'Order items can only be marked out of stock for draft or confirmed orders',
+        );
+      }
+
+      const savedItem = (await manager.orderItem.update({
+        where: { id: orderItem.id },
+        data: {
+          is_out_of_stock: true,
+          out_of_stock_at: new Date(),
+          unit_price: new Prisma.Decimal(0),
+          total_price: new Prisma.Decimal(0),
+        },
+      })) as unknown as OrderItem;
+
+      if (orderItem.product_id) {
+        await manager.product.updateMany({
+          where: {
+            id: orderItem.product_id,
+            tenant_id: tenantId,
+          },
+          data: { is_available: false },
+        });
+      }
+
+      await this.recalculateOrderTotals(manager, orderItem.order_id);
+
+      return savedItem;
+    });
+    await this.bumpDashboardCacheVersion(tenantId);
+    return savedItem;
   }
 
   async findByPublicToken(token: string): Promise<Order> {
@@ -1070,6 +1137,55 @@ export class OrdersService {
       ...order,
       items: order.items ?? orderItems ?? [],
     } as unknown as Order;
+  }
+
+  private async recalculateOrderTotals(
+    manager: Prisma.TransactionClient,
+    orderId: number,
+  ): Promise<void> {
+    const order = await manager.order.findFirst({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    const orderItems = await manager.orderItem.findMany({
+      where: { order_id: order.id, is_out_of_stock: false },
+      select: { total_price: true },
+    });
+
+    const pricedLines = orderItems
+      .map((item) =>
+        item.total_price !== null ? Number(item.total_price) : null,
+      )
+      .filter(
+        (value): value is number => value !== null && !Number.isNaN(value),
+      );
+
+    const subtotal =
+      pricedLines.length > 0
+        ? this.roundCurrency(pricedLines.reduce((sum, value) => sum + value, 0))
+        : undefined;
+    const deliveryFee = Number(order.delivery_fee || 0);
+    const recomputedTotal =
+      subtotal !== undefined
+        ? this.roundCurrency(subtotal + deliveryFee)
+        : deliveryFee > 0
+          ? this.roundCurrency(deliveryFee)
+          : undefined;
+
+    await manager.order.update({
+      where: { id: order.id },
+      data: {
+        pricing_mode: PricingMode.MANUAL,
+        subtotal: subtotal === undefined ? null : new Prisma.Decimal(subtotal),
+        total:
+          recomputedTotal === undefined
+            ? null
+            : new Prisma.Decimal(recomputedTotal),
+      },
+    });
   }
 
   private normalizeTrackingTokens(tokens: string[]): string[] {
@@ -1732,6 +1848,20 @@ export class OrdersService {
     return normalized ? normalized.slice(0, 64) : undefined;
   }
 
+  private normalizeUnavailableItemAction(
+    value?: UnavailableItemAction,
+  ): UnavailableItemAction {
+    if (
+      value === UnavailableItemAction.DELETE_ITEM ||
+      value === UnavailableItemAction.CANCEL_ORDER ||
+      value === UnavailableItemAction.SUGGEST_REPLACEMENT
+    ) {
+      return value;
+    }
+
+    return UnavailableItemAction.SUGGEST_REPLACEMENT;
+  }
+
   private async deleteUploadedFileQuietly(
     prescriptionUpload?: PrescriptionUpload,
   ): Promise<void> {
@@ -1788,5 +1918,14 @@ export class OrdersService {
   private dayClosureClient() {
     const manager = DbTenantContext.getManager();
     return manager ? manager.dayClosure : this.prisma.dayClosure;
+  }
+
+  private async bumpDashboardCacheVersion(tenantId: number): Promise<void> {
+    if (!this.cacheManager) return;
+
+    await this.cacheManager.set(
+      getDashboardCacheVersionKey(tenantId),
+      Date.now().toString(),
+    );
   }
 }

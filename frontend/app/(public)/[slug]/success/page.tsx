@@ -10,12 +10,12 @@ export const metadata = createNoIndexMetadata(
 
 type Props = {
 	params: Promise<{ slug: string }>;
-	searchParams: Promise<{ token?: string }>;
+	searchParams: Promise<{ token?: string; customerCode?: string }>;
 };
 
 export default async function OrderSuccessPage({ params, searchParams }: Props) {
 	const { slug } = await params;
-	const { token } = await searchParams;
+	const { token, customerCode } = await searchParams;
 
 	if (!token) {
 		redirect(`/${slug}`);
@@ -28,7 +28,11 @@ export default async function OrderSuccessPage({ params, searchParams }: Props) 
 
 	return (
 		<div className="mx-auto min-h-screen w-full max-w-md overflow-x-hidden bg-background relative">
-			<OrderSuccessView tenantSlug={slug} orderToken={token} />
+			<OrderSuccessView
+				tenantSlug={slug}
+				orderToken={token}
+				customerAccessCode={customerCode}
+			/>
 		</div>
 	);
 }
