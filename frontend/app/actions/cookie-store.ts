@@ -21,6 +21,7 @@ export async function setCookieAction(
   cookieStore.set(name, value, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    domain: process.env.NODE_ENV === "production" ? ".tijaratk.com" : undefined,
     sameSite: "lax",
     path: "/",
     ...options,
@@ -29,5 +30,11 @@ export async function setCookieAction(
 
 export async function deleteCookieAction(name: string) {
   const cookieStore = await cookies();
-  cookieStore.delete(name);
+  const domain = process.env.NODE_ENV === "production" ? ".tijaratk.com" : undefined;
+  
+  if (domain) {
+    cookieStore.set(name, "", { maxAge: 0, domain, path: "/" });
+  } else {
+    cookieStore.delete(name);
+  }
 }

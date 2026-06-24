@@ -41,8 +41,15 @@ async function notifyBackendLogout(): Promise<void> {
 }
 
 function clearSessionCookies(response: NextResponse): NextResponse {
-	response.cookies.delete(STORAGE_KEYS.ACCESS_TOKEN);
-	response.cookies.delete(STORAGE_KEYS.USER);
+	const domain = process.env.NODE_ENV === "production" ? ".tijaratk.com" : undefined;
+	
+	if (domain) {
+		response.cookies.set(STORAGE_KEYS.ACCESS_TOKEN, "", { maxAge: 0, domain, path: "/" });
+		response.cookies.set(STORAGE_KEYS.USER, "", { maxAge: 0, domain, path: "/" });
+	} else {
+		response.cookies.delete(STORAGE_KEYS.ACCESS_TOKEN);
+		response.cookies.delete(STORAGE_KEYS.USER);
+	}
 	return response;
 }
 
