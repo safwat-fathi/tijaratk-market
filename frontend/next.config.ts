@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -5,6 +6,9 @@ const apiImageHost = apiBaseUrl ? new URL(apiBaseUrl).hostname : null;
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  turbopack: {
+    root: path.join(__dirname, ".."),
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "15mb",
