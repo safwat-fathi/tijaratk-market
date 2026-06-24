@@ -16,6 +16,7 @@ import CategoryGrid, {
   DirectoryCategoryCard,
 } from "@/components/stores-directory/CategoryGrid";
 import { AppHeader } from "@/components/layout/AppHeader";
+import InstallPwaAction from "@/components/pwa/InstallPwaAction";
 
 type StoresDirectoryPageProps = {
   searchParams: Promise<{
@@ -82,6 +83,7 @@ export async function generateMetadata(): Promise<Metadata> {
       description: seo.description,
       path: STORES_PATH,
     }),
+    manifest: "/pwa/stores-directory/manifest",
     keywords: [
       "دليل المتاجر",
       "سوبر ماركت قريب",
@@ -305,6 +307,7 @@ export default async function StoresDirectoryPage({
       <AppHeader
         title="دليل المتاجر"
         innerClassName="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8"
+        actions={<InstallPwaAction appName="دليل تجارتك" />}
       />
 
       <main className="flex-1">

@@ -1,6 +1,7 @@
 import { TENANT_CATEGORIES, type TenantCategory } from "@/constants";
 import { Tenant } from "@/types/models/tenant";
 import { AppHeader } from "@/components/layout/AppHeader";
+import InstallPwaAction from "@/components/pwa/InstallPwaAction";
 
 type TenantCategoryMeta =
 	(typeof TENANT_CATEGORIES)[keyof typeof TENANT_CATEGORIES];
@@ -31,6 +32,7 @@ export default function StoreHeader({ tenant }: { tenant: Tenant }) {
 		<AppHeader
 			title={tenant.name}
 			subtitle={categoryMeta.labels.ar}
+			actions={<InstallPwaAction appName={tenant.name} />}
 			data-store-header={true}
 			headerClassName="sticky top-0 z-40 rounded-b-xl border-b border-white/10 bg-brand-primary text-white shadow-soft backdrop-blur-md transition-[background-color,box-shadow] duration-200"
 		/>
