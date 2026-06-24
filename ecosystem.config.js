@@ -16,10 +16,10 @@ module.exports = {
     },
     {
       name: "tijaratk-frontend",
-      script: ".next/standalone/server.js", // Next.js cluster mode requires the standalone server file!
+      script: ".next/standalone/server.js",
       cwd: "./frontend",
-      exec_mode: "cluster",
-      instances: 2,
+      exec_mode: "fork",
+      instances: 1,
       env: {
         NODE_ENV: "production",
         PORT: 3000,
