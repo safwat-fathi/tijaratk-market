@@ -12,11 +12,18 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
 import { AllExceptionFilter } from './common/filters/all-exception.filter';
 import { TenantRlsInterceptor } from './common/interceptors/tenant-rls.interceptor';
 import { validationExceptionFactory } from './common/utils/validation-exception.factory';
+import { requestLoggingMiddleware } from './common/middlewares/request-logging.middleware';
+
+const parseBooleanEnv = (value: string | undefined, defaultValue: boolean) => {
+  if (value === undefined) return defaultValue;
+  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+};
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.useGlobalFilters(new AllExceptionFilter());
+  app.use(requestLoggingMiddleware);
 
   // Remove COOP header to fix Swagger UI issues
   app.use((_req: Request, res: Response, next: NextFunction) => {
@@ -46,11 +53,25 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true }));
 
   // cors
+  const configuredCorsOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const corsOrigin =
+    configuredCorsOrigins?.length
+      ? configuredCorsOrigins
+      : process.env.NODE_ENV === 'development';
+
   app.enableCors({
-    origin: true,
+    origin: corsOrigin,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Accept',
+      'Authorization',
+      'X-Tenant-Id',
+      'X-Request-Id',
+    ],
   });
 
   app.useStaticAssets(join(process.cwd(), 'public'));
@@ -68,46 +89,49 @@ async function bootstrap() {
     next();
   });
 
-  // Swagger docs
-  const options = new DocumentBuilder()
-    .setTitle('Tijaratk API')
-    .setDescription('Tijaratk API documentation')
-    .setVersion('1.0')
-    .setExternalDoc('API Documentation', '/docs')
-    .setContact('Tijaratk', 'https://www.tijaratk.com', 'help@tijaratk.com')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'Authorization',
-        description: 'Enter JWT token **_only_**',
-        in: 'header',
+  const swaggerEnabled = parseBooleanEnv(
+    process.env.ENABLE_SWAGGER,
+    process.env.NODE_ENV === 'development',
+  );
+
+  if (swaggerEnabled) {
+    // Swagger docs
+    const options = new DocumentBuilder()
+      .setTitle('Tijaratk API')
+      .setDescription('Tijaratk API documentation')
+      .setVersion('1.0')
+      .setExternalDoc('API Documentation', '/docs')
+      .setContact('Tijaratk', 'https://www.tijaratk.com', 'help@tijaratk.com')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'Authorization',
+          description: 'Enter JWT token **_only_**',
+          in: 'header',
+        },
+        CONSTANTS.ACCESS_TOKEN, // This name should match the name in @ApiBearerAuth() decorator in your controller
+      );
+
+    if (process.env.NODE_ENV === 'development') {
+      options.addServer(process.env.APP_URL, 'Local environment');
+    } else {
+      options.addServer(process.env.APP_URL, 'Production environment');
+    }
+
+    const config = options.build();
+    const document = SwaggerModule.createDocument(app, config);
+
+    SwaggerModule.setup('docs', app, document, {
+      jsonDocumentUrl: 'docs/json',
+      swaggerOptions: {
+        persistAuthorization: true,
       },
-      CONSTANTS.ACCESS_TOKEN, // This name should match the name in @ApiBearerAuth() decorator in your controller
-    );
-
-  // Ensure HTTP scheme is used (replace https with http if present)
-  // const appUrl = (process.env.APP_URL || '').replace(/^https:\/\//, 'http://');
-
-  if (process.env.NODE_ENV === 'development') {
-    options.addServer(process.env.APP_URL, 'Local environment');
-  } else {
-    options.addServer(process.env.APP_URL, 'Production environment');
+      customSiteTitle: 'Tijaratk API docs - ' + process.env.NODE_ENV,
+      customfavIcon: '/favicon.ico',
+    });
   }
-
-  const config = options.build();
-
-  const document = SwaggerModule.createDocument(app, config);
-
-  SwaggerModule.setup('docs', app, document, {
-    jsonDocumentUrl: 'docs/json',
-    swaggerOptions: {
-      persistAuthorization: true,
-    },
-    customSiteTitle: 'Tijaratk API docs - ' + process.env.NODE_ENV,
-    customfavIcon: '/favicon.ico',
-  });
 
   // Global Pipe for validation
   app.useGlobalPipes(

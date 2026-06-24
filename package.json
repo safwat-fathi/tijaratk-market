@@ -1,0 +1,15 @@
+{
+  "name": "tijaratk-root",
+  "private": true,
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2"
+  },
+  "lint-staged": {
+    "frontend/**/*.{js,jsx,ts,tsx,mjs}": "cd frontend && eslint",
+    "backend/**/*.{js,ts,mjs}": "cd backend && eslint"
+  }
+}

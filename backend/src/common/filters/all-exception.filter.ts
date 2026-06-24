@@ -16,7 +16,7 @@ export class AllExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<Request & { requestId?: string }>();
 
     if (this.isCriticalError(exception)) {
       this.logger.error(
@@ -28,6 +28,7 @@ export class AllExceptionFilter implements ExceptionFilter {
         message: 'Internal server error',
         timestamp: new Date().toISOString(),
         path: request.url,
+        requestId: request.requestId,
       });
     }
 
@@ -38,13 +39,14 @@ export class AllExceptionFilter implements ExceptionFilter {
         errors: exception,
         timestamp: new Date().toISOString(),
         path: request.url,
+        requestId: request.requestId,
       });
     }
 
     const { status, message, errorDetails } =
       this.resolveErrorDetails(exception);
 
-    if (status === HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (status === Number(HttpStatus.INTERNAL_SERVER_ERROR)) {
       const errMsg = exception instanceof Error ? exception.message : 'Unknown';
       this.logger.error(
         `Unexpected Error: ${errMsg}`,
@@ -60,6 +62,7 @@ export class AllExceptionFilter implements ExceptionFilter {
       errors: errorDetails,
       timestamp: new Date().toISOString(),
       path: request.url,
+      requestId: request.requestId,
     });
   }
 
