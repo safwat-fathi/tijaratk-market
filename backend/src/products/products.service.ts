@@ -42,6 +42,7 @@ const DEFAULT_PRICE_PRESET_AMOUNTS = [100, 200, 300] as const;
 const DEFAULT_QUANTITY_UNIT_LABEL = 'قطعة';
 const DEFAULT_PHARMACY_QUANTITY_UNIT_LABEL = 'علبة';
 const MAX_ORDER_PRESETS = 6;
+const DEFAULT_BULK_ESSENTIAL_SELECTED_COUNT = 20;
 
 type QuantityUnitOptionConfig = {
   id: string;
@@ -101,6 +102,13 @@ type CatalogItemsResult = {
     last_page: number;
     has_next: boolean;
   };
+};
+
+type BulkEssentialStage = {
+  category: string;
+  total: number;
+  default_selected_catalog_item_ids: number[];
+  items: CatalogItem[];
 };
 
 type TenantProductsSearchOptions = {
@@ -278,6 +286,28 @@ export class ProductsService {
     tenantId: number,
     dto: AddBulkEssentialItemsDto,
   ): Promise<{ count: number }> {
+    const selectedItemIds = this.normalizeCatalogItemIds(dto.catalog_item_ids);
+    const normalizedCategory = this.normalizeOptionalCategory(dto.category);
+    if (selectedItemIds.length > 0) {
+      if (!normalizedCategory) {
+        throw new BadRequestException('Category is required for selected item import.');
+      }
+
+      return this.bulkAddEssentialItemsById(
+        tenantId,
+        normalizedCategory,
+        selectedItemIds,
+      );
+    }
+
+    const categories = (dto.categories ?? [])
+      .map((category) => this.normalizeOptionalCategory(category))
+      .filter((category): category is string => Boolean(category));
+
+    if (categories.length === 0) {
+      throw new BadRequestException('At least one category or catalog item is required.');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
       return DbTenantContext.run({ tenantId, manager: tx }, async () => {
@@ -286,14 +316,12 @@ export class ProductsService {
           throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
         }
 
-        const brandFilters = ESSENTIAL_LOCAL_BRANDS.map(brand => ({ name: { contains: brand, mode: 'insensitive' as const } }));
-
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
           where: {
             source: catalogSource,
             is_active: true,
-            category: { in: dto.categories },
-            OR: brandFilters,
+            category: { in: categories },
+            OR: this.buildEssentialBrandFilters(),
           }
         });
 
@@ -355,6 +383,202 @@ export class ProductsService {
         return { count: result.count };
       });
     });
+  }
+
+  /**
+   * Returns staged essential bulk candidates grouped by category.
+   */
+  async findBulkEssentialStages(tenantId: number): Promise<BulkEssentialStage[]> {
+    const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+    if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+      return [];
+    }
+
+    const catalogItems = await this.getPrismaClient().catalogItem.findMany({
+      where: {
+        source: catalogSource,
+        is_active: true,
+        category: buildAllowedCatalogCategoryWhere(catalogSource),
+        OR: this.buildEssentialBrandFilters(),
+      },
+      orderBy: [{ category: 'asc' }, { id: 'asc' }],
+    });
+
+    const groupedItems = new Map<string, CatalogItem[]>();
+    for (const item of catalogItems) {
+      const category = this.normalizeOptionalCategory(item.category ?? undefined);
+      if (!category || !isCatalogCategoryAllowedForSource(catalogSource, category)) {
+        continue;
+      }
+
+      const items = groupedItems.get(category) ?? [];
+      items.push(item);
+      groupedItems.set(category, items);
+    }
+
+    return Array.from(groupedItems.entries())
+      .sort(([left], [right]) => left.localeCompare(right, 'ar'))
+      .map(([category, items]) => {
+        const rankedItems = this.rankEssentialCatalogItems(items);
+        return {
+          category,
+          total: rankedItems.length,
+          default_selected_catalog_item_ids: rankedItems
+            .slice(0, DEFAULT_BULK_ESSENTIAL_SELECTED_COUNT)
+            .map((item) => item.id),
+          items: rankedItems,
+        };
+      });
+  }
+
+  private async bulkAddEssentialItemsById(
+    tenantId: number,
+    category: string,
+    catalogItemIds: number[],
+  ): Promise<{ count: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+      return DbTenantContext.run({ tenantId, manager: tx }, async () => {
+        const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+        if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+          throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
+        }
+
+        if (!isCatalogCategoryAllowedForSource(catalogSource, category)) {
+          throw new BadRequestException('Category is not supported for this catalog source.');
+        }
+
+        const catalogItems = await this.getPrismaClient().catalogItem.findMany({
+          where: {
+            id: { in: catalogItemIds },
+            source: catalogSource,
+            is_active: true,
+            category,
+            OR: this.buildEssentialBrandFilters(),
+          },
+        });
+
+        if (catalogItems.length !== catalogItemIds.length) {
+          throw new BadRequestException('One or more selected catalog items are invalid for this category.');
+        }
+
+        return this.createBulkEssentialProductsFromCatalogItems(
+          tenantId,
+          catalogSource,
+          catalogItems,
+        );
+      });
+    });
+  }
+
+  private async createBulkEssentialProductsFromCatalogItems(
+    tenantId: number,
+    catalogSource: CatalogSource,
+    catalogItems: CatalogItem[],
+  ): Promise<{ count: number }> {
+    if (catalogItems.length === 0) {
+      return { count: 0 };
+    }
+
+    const existingProducts = await this.getPrismaClient().product.findMany({
+      where: { tenant_id: tenantId, status: ProductStatus.ACTIVE },
+      select: { name: true },
+    });
+    const existingNames = new Set(existingProducts.map((product) => product.name));
+    const itemsToAdd = catalogItems.filter((item) => !existingNames.has(item.name));
+
+    if (itemsToAdd.length === 0) {
+      return { count: 0 };
+    }
+
+    const defaultUnitLabel =
+      this.resolveDefaultQuantityUnitLabelForCatalogSource(catalogSource);
+    const orderConfig = this.normalizeProductOrderConfig(
+      ProductOrderMode.QUANTITY,
+      undefined,
+      defaultUnitLabel,
+    ) as Prisma.InputJsonValue;
+
+    const dataToInsert = itemsToAdd.map((item) => ({
+      tenant_id: tenantId,
+      name: item.name,
+      image_url: item.image_url,
+      category: item.category,
+      source: ProductSource.CATALOG,
+      status: ProductStatus.ACTIVE,
+      current_price: item.price,
+      order_mode: ProductOrderMode.QUANTITY,
+      order_config: orderConfig,
+      is_available: true,
+      price_needs_review: true,
+    }));
+
+    const result = await this.getPrismaClient().product.createMany({
+      data: dataToInsert,
+      skipDuplicates: true,
+    });
+
+    const uniqueCategories = Array.from(
+      new Set(itemsToAdd.map((item) => item.category).filter((category): category is string => Boolean(category))),
+    );
+    for (const itemCategory of uniqueCategories) {
+      await this.storeTenantProductCategory(tenantId, itemCategory);
+    }
+
+    await this.getPrismaClient().tenant.update({
+      where: { id: tenantId },
+      data: { last_bulk_essentials_added_at: new Date() },
+    });
+
+    await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+
+    return { count: result.count };
+  }
+
+  private buildEssentialBrandFilters(): Prisma.CatalogItemWhereInput[] {
+    return ESSENTIAL_LOCAL_BRANDS.map((brand) => ({
+      name: { contains: brand, mode: 'insensitive' as const },
+    }));
+  }
+
+  private rankEssentialCatalogItems(items: CatalogItem[]): CatalogItem[] {
+    return [...items].sort((left, right) => {
+      const leftBrandRank = this.getEssentialBrandRank(left.name);
+      const rightBrandRank = this.getEssentialBrandRank(right.name);
+      if (leftBrandRank !== rightBrandRank) {
+        return leftBrandRank - rightBrandRank;
+      }
+
+      const leftCompleteness = Number(Boolean(left.image_url)) + Number(left.price != null);
+      const rightCompleteness = Number(Boolean(right.image_url)) + Number(right.price != null);
+      if (leftCompleteness !== rightCompleteness) {
+        return rightCompleteness - leftCompleteness;
+      }
+
+      return left.id - right.id;
+    });
+  }
+
+  private getEssentialBrandRank(name: string): number {
+    const normalizedName = name.toLowerCase();
+    const index = ESSENTIAL_LOCAL_BRANDS.findIndex((brand) =>
+      normalizedName.includes(brand.toLowerCase()),
+    );
+
+    return index === -1 ? ESSENTIAL_LOCAL_BRANDS.length : index;
+  }
+
+  private normalizeCatalogItemIds(itemIds?: number[]): number[] {
+    if (!Array.isArray(itemIds)) {
+      return [];
+    }
+
+    return Array.from(
+      new Set(
+        itemIds.filter((itemId) => Number.isInteger(itemId) && itemId > 0),
+      ),
+    );
   }
 
   /**
@@ -471,8 +695,28 @@ export class ProductsService {
       this.resolveSimilarityThreshold(normalizedSearch);
     const strictMatchThresholds =
       this.resolveStrictMatchThresholds(normalizedSearch);
+    const tenantId = await this.resolveTenantIdBySlug(slug);
+    const cacheKey = tenantId
+      ? await this.buildPublicProductSearchCacheKey(
+          tenantId,
+          slug,
+          normalizedSearch,
+          normalizedCategory,
+          similarityThreshold,
+          strictMatchThresholds,
+          normalizedPage,
+          normalizedLimit,
+        )
+      : null;
 
-    return this.searchWithinPublicProducts(
+    const cached = cacheKey
+      ? await this.cacheManager.get<PublicProductsResult>(cacheKey)
+      : undefined;
+    if (cached) {
+      return cached;
+    }
+
+    const result = await this.searchWithinPublicProducts(
       slug,
       normalizedSearch,
       normalizedCategory,
@@ -481,6 +725,16 @@ export class ProductsService {
       normalizedPage,
       normalizedLimit,
     );
+
+    if (cacheKey) {
+      await this.cacheManager.set(
+        cacheKey,
+        result,
+        PRODUCT_SEARCH_CACHE_TTL_SECONDS,
+      );
+    }
+
+    return result;
   }
 
   /**
@@ -497,6 +751,23 @@ export class ProductsService {
       ? Math.min(50, Math.max(1, limit))
       : 20;
     const normalizedCategory = category?.trim();
+    const tenantId = await this.resolveTenantIdBySlug(slug);
+    const cacheKey = tenantId
+      ? await this.buildPublicProductListCacheKey(
+          tenantId,
+          slug,
+          normalizedCategory,
+          normalizedPage,
+          normalizedLimit,
+        )
+      : null;
+
+    const cached = cacheKey
+      ? await this.cacheManager.get<PublicProductsResult>(cacheKey)
+      : undefined;
+    if (cached) {
+      return cached;
+    }
 
     const where: Prisma.ProductWhereInput = {
       status: ProductStatus.ACTIVE,
@@ -521,7 +792,7 @@ export class ProductsService {
 
     const lastPage = total > 0 ? Math.ceil(total / normalizedLimit) : 1;
 
-    return {
+    const result = {
       data,
       meta: {
         total,
@@ -531,6 +802,16 @@ export class ProductsService {
         has_next: normalizedPage < lastPage,
       },
     };
+
+    if (cacheKey) {
+      await this.cacheManager.set(
+        cacheKey,
+        result,
+        PRODUCT_SEARCH_CACHE_TTL_SECONDS,
+      );
+    }
+
+    return result;
   }
 
   /**
@@ -539,6 +820,13 @@ export class ProductsService {
   async findPublicCategoriesByTenantSlug(
     slug: string,
   ): Promise<PublicProductCategorySummary[]> {
+    const tenant = await this.getPrismaClient().tenant.findUnique({
+      where: { slug },
+      select: { category: true },
+    });
+    const catalogSource = resolveCatalogSourceForTenantCategory(
+      tenant?.category,
+    );
     const normalizedCategoryExpression = `COALESCE(NULLIF(TRIM(product.category), ''), '${DEFAULT_PRODUCT_CATEGORY}')`;
 
     const categoryQuery = `
@@ -560,18 +848,25 @@ export class ProductsService {
 
     const categories = categoryRows.map((row) => row.category);
 
-    const catalogRows = await this.getPrismaClient().catalogItem.findMany({
-      where: {
-        is_active: true,
-        category: { in: categories },
-        image_url: { not: null, notIn: [''] },
-      },
-      select: {
-        category: true,
-        image_url: true,
-      },
-      orderBy: [{ category: 'asc' }, { name: 'asc' }],
-    });
+    const catalogRows = catalogSource
+      ? await this.getPrismaClient().catalogItem.findMany({
+          where: {
+            is_active: true,
+            source: catalogSource,
+            category: {
+              in: categories.filter((category) =>
+                isCatalogCategoryAllowedForSource(catalogSource, category),
+              ),
+            },
+            image_url: { not: null, notIn: [''] },
+          },
+          select: {
+            category: true,
+            image_url: true,
+          },
+          orderBy: [{ category: 'asc' }, { name: 'asc' }],
+        })
+      : [];
 
     const categoryImages = new Map<string, string>();
     for (const row of catalogRows) {
@@ -725,21 +1020,17 @@ export class ProductsService {
       return this.emptyCatalogItemsResult(normalizedPage, normalizedLimit);
     }
 
-    const hiddenItems = await this.getPrismaClient().tenantHiddenCatalogItem.findMany({
-      where: { tenant_id: tenantId },
-      select: { catalog_item_id: true }
-    });
-    const hiddenItemIds = hiddenItems.map(h => h.catalog_item_id);
-
     if (normalizedSearch.length >= 2) {
       const normalizedCategory = this.normalizeOptionalCategory(category);
       const similarityThreshold =
         this.resolveSimilarityThreshold(normalizedSearch);
       const strictMatchThresholds =
         this.resolveStrictMatchThresholds(normalizedSearch);
+      const searchVersion = await this.getCatalogSearchCacheVersion(tenantId);
 
       const cacheKey = this.buildCatalogSearchCacheKey(
         tenantId,
+        searchVersion,
         normalizedSearch,
         normalizedCategory,
         catalogSource,
@@ -778,11 +1069,10 @@ export class ProductsService {
       is_active: true,
       source: catalogSource,
       category: buildAllowedCatalogCategoryWhere(catalogSource),
+      tenant_hidden_catalog_items: {
+        none: { tenant_id: tenantId },
+      },
     };
-    
-    if (hiddenItemIds.length > 0) {
-      where.id = { notIn: hiddenItemIds };
-    }
 
     if (category) {
       where.category = isCatalogCategoryAllowedForSource(
@@ -821,6 +1111,29 @@ export class ProductsService {
    * Hides a catalog item from a tenant's view.
    */
   async hideCatalogItem(tenantId: number, catalogItemId: number): Promise<void> {
+    const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+    if (!catalogSource) {
+      throw new NotFoundException(
+        `Catalog item with ID ${catalogItemId} not found`,
+      );
+    }
+
+    const catalogItem = await this.getPrismaClient().catalogItem.findFirst({
+      where: {
+        id: catalogItemId,
+        is_active: true,
+        source: catalogSource,
+        category: buildAllowedCatalogCategoryWhere(catalogSource),
+      },
+      select: { id: true },
+    });
+
+    if (!catalogItem) {
+      throw new NotFoundException(
+        `Catalog item with ID ${catalogItemId} not found`,
+      );
+    }
+
     await this.getPrismaClient().tenantHiddenCatalogItem.upsert({
       where: {
         tenant_id_catalog_item_id: {
@@ -834,6 +1147,7 @@ export class ProductsService {
       },
       update: {},
     });
+    await this.bumpCatalogSearchCacheVersion(tenantId);
   }
 
   /**
@@ -849,6 +1163,7 @@ export class ProductsService {
           },
         },
       });
+      await this.bumpCatalogSearchCacheVersion(tenantId);
     } catch (error) {
       // Ignore if it's already deleted/doesn't exist
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
@@ -877,6 +1192,9 @@ export class ProductsService {
     }
 
     const where: Prisma.CatalogItemWhereInput = {
+      is_active: true,
+      source: catalogSource,
+      category: buildAllowedCatalogCategoryWhere(catalogSource),
       tenant_hidden_catalog_items: {
         some: { tenant_id: tenantId },
       },
@@ -1657,6 +1975,10 @@ export class ProductsService {
     return `merchant:products:search:version:${tenantId}`;
   }
 
+  private getPublicProductCacheVersionKey(tenantId: number): string {
+    return `public:products:version:${tenantId}`;
+  }
+
   private buildTenantSearchCacheKey(
     tenantId: number,
     normalizedSearch: string,
@@ -1678,6 +2000,7 @@ export class ProductsService {
 
   private buildCatalogSearchCacheKey(
     tenantId: number,
+    version: string,
     normalizedSearch: string,
     category: string | undefined,
     source: CatalogSource,
@@ -1687,7 +2010,38 @@ export class ProductsService {
     limit: number,
   ): string {
     const normalizedCategory = category || 'all';
-    return `catalog:search:tenant:${tenantId}:${source}:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${page}:${limit}`;
+    return `catalog:search:tenant:${tenantId}:${version}:${source}:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${page}:${limit}`;
+  }
+
+  private async buildPublicProductSearchCacheKey(
+    tenantId: number,
+    slug: string,
+    normalizedSearch: string,
+    category: string | undefined,
+    similarityThreshold: number,
+    strictMatchThresholds: StrictMatchThresholds,
+    page: number,
+    limit: number,
+  ): Promise<string> {
+    const version = await this.getPublicProductCacheVersion(tenantId);
+    const normalizedCategory = category || 'all';
+    return `public:products:search:${tenantId}:${version}:${slug}:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${page}:${limit}`;
+  }
+
+  private async buildPublicProductListCacheKey(
+    tenantId: number,
+    slug: string,
+    category: string | undefined,
+    page: number,
+    limit: number,
+  ): Promise<string> {
+    const version = await this.getPublicProductCacheVersion(tenantId);
+    const normalizedCategory = category || 'all';
+    return `public:products:list:${tenantId}:${version}:${slug}:${normalizedCategory}:${page}:${limit}`;
+  }
+
+  private getCatalogSearchCacheVersionKey(tenantId: number): string {
+    return `catalog:search:version:${tenantId}`;
   }
 
   private async searchWithinCatalogItems(
@@ -1713,7 +2067,9 @@ export class ProductsService {
 
     conditions.push(`is_active = true`);
     conditions.push(`source = ${addParam(source)}`);
-    conditions.push(`id NOT IN (SELECT catalog_item_id FROM tenant_hidden_catalog_items WHERE tenant_id = ${addParam(tenantId)})`);
+    conditions.push(
+      `NOT EXISTS (SELECT 1 FROM tenant_hidden_catalog_items hidden WHERE hidden.catalog_item_id = catalog_items.id AND hidden.tenant_id = ${addParam(tenantId)})`,
+    );
 
     const allowedCategories = getAllowedCatalogCategoriesForSource(source);
     if (allowedCategories.length > 0) {
@@ -1830,6 +2186,56 @@ export class ProductsService {
 
   private async bumpTenantSearchCacheVersion(tenantId: number): Promise<void> {
     const versionKey = this.getTenantSearchCacheVersionKey(tenantId);
+    const version = Date.now().toString();
+    await Promise.all([
+      this.cacheManager.set(versionKey, version),
+      this.bumpPublicProductCacheVersion(tenantId, version),
+    ]);
+  }
+
+  private async getPublicProductCacheVersion(tenantId: number): Promise<string> {
+    const versionKey = this.getPublicProductCacheVersionKey(tenantId);
+    const cachedVersion = await this.cacheManager.get<string>(versionKey);
+    if (cachedVersion) {
+      return cachedVersion;
+    }
+
+    const initialVersion = Date.now().toString();
+    await this.cacheManager.set(versionKey, initialVersion);
+    return initialVersion;
+  }
+
+  private async bumpPublicProductCacheVersion(
+    tenantId: number,
+    version = Date.now().toString(),
+  ): Promise<void> {
+    const versionKey = this.getPublicProductCacheVersionKey(tenantId);
+    await this.cacheManager.set(versionKey, version);
+  }
+
+  private async resolveTenantIdBySlug(slug: string): Promise<number | null> {
+    const tenant = await this.getPrismaClient().tenant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+
+    return tenant?.id ?? null;
+  }
+
+  private async getCatalogSearchCacheVersion(tenantId: number): Promise<string> {
+    const versionKey = this.getCatalogSearchCacheVersionKey(tenantId);
+    const cachedVersion = await this.cacheManager.get<string>(versionKey);
+    if (cachedVersion) {
+      return cachedVersion;
+    }
+
+    const initialVersion = Date.now().toString();
+    await this.cacheManager.set(versionKey, initialVersion);
+    return initialVersion;
+  }
+
+  private async bumpCatalogSearchCacheVersion(tenantId: number): Promise<void> {
+    const versionKey = this.getCatalogSearchCacheVersionKey(tenantId);
     await this.cacheManager.set(versionKey, Date.now().toString());
   }
 }

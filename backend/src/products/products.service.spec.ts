@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unnecessary-type-assertion */
 import { ProductsService } from './products.service';
 import { TenantCategory } from '../../generated/prisma/client';
 
@@ -81,7 +81,12 @@ describe('ProductsService catalog source isolation', () => {
         where: {
           is_active: true,
           source: 'talabat_csv',
-          category: undefined,
+          category: expect.objectContaining({
+            in: expect.arrayContaining(['أرز ومكرونة', 'شيبس ومقبلات']),
+          }),
+          tenant_hidden_catalog_items: {
+            none: { tenant_id: 1 },
+          },
         },
       }),
     );
@@ -112,6 +117,34 @@ describe('ProductsService catalog source isolation', () => {
     expect(result.data).toEqual([]);
     expect(result.meta.total).toBe(0);
     expect(prisma.catalogItem.findMany).not.toHaveBeenCalled();
+  });
+
+  it('does not expose Chefaa source rows to grocery tenants', async () => {
+    const prisma = {
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.grocery }),
+      },
+      catalogItem: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    };
+    const service = createService(prisma);
+
+    await expect(
+      service.createFromCatalog(1, { catalog_item_id: 10 }),
+    ).rejects.toThrow('Catalog item with ID 10 not found');
+
+    expect(prisma.catalogItem.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 10,
+          is_active: true,
+          source: 'talabat_csv',
+        }),
+      }),
+    );
   });
 
   it('does not expose grocery categories from the Chefaa source', async () => {
@@ -278,5 +311,173 @@ describe('ProductsService catalog source isolation', () => {
         }),
       }),
     );
+  });
+
+  it('returns supermarket essential stages with the first 20 items selected by default', async () => {
+    const items = Array.from({ length: 22 }, (_, index) => ({
+      id: index + 1,
+      name: `شيبسي ${index + 1}`,
+      image_url: index === 0 ? 'https://example.com/chips.png' : null,
+      category: 'شيبس ومقبلات',
+      price: 10 + index,
+      source: 'talabat_csv',
+      is_active: true,
+      created_at: new Date(),
+    }));
+    const prisma = {
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.grocery }),
+      },
+      catalogItem: {
+        findMany: jest.fn().mockResolvedValue(items),
+      },
+    };
+    const service = createService(prisma);
+
+    const result = await service.findBulkEssentialStages(1);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      category: 'شيبس ومقبلات',
+      total: 22,
+      default_selected_catalog_item_ids: Array.from(
+        { length: 20 },
+        (_, index) => index + 1,
+      ),
+    });
+    expect(prisma.catalogItem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          source: 'talabat_csv',
+          is_active: true,
+        }),
+      }),
+    );
+  });
+
+  it('returns no essential stages for unsupported tenant categories', async () => {
+    const prisma = {
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.other }),
+      },
+      catalogItem: {
+        findMany: jest.fn(),
+      },
+    };
+    const service = createService(prisma);
+
+    await expect(service.findBulkEssentialStages(1)).resolves.toEqual([]);
+    expect(prisma.catalogItem.findMany).not.toHaveBeenCalled();
+  });
+
+  it('imports selected essential catalog items and skips duplicate active products', async () => {
+    const catalogItems = [
+      {
+        id: 1,
+        name: 'شيبسي ملح',
+        image_url: null,
+        category: 'شيبس ومقبلات',
+        price: 12,
+      },
+      {
+        id: 2,
+        name: 'شيبسي جبنة',
+        image_url: null,
+        category: 'شيبس ومقبلات',
+        price: 13,
+      },
+    ];
+    const prisma = {
+      $transaction: jest.fn((callback) => callback(prisma)),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.grocery }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      catalogItem: {
+        findMany: jest.fn().mockResolvedValue(catalogItems),
+      },
+      product: {
+        findMany: jest.fn().mockResolvedValue([{ name: 'شيبسي ملح' }]),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const readinessService = { recalculateTenantReadiness: jest.fn() };
+    const service = new ProductsService(
+      prisma as any,
+      {} as any,
+      readinessService as any,
+      { get: jest.fn(), set: jest.fn() } as any,
+    );
+
+    const result = await service.bulkAddEssentials(1, {
+      category: 'شيبس ومقبلات',
+      catalog_item_ids: [1, 2],
+    });
+
+    expect(result).toEqual({ count: 1 });
+    expect(prisma.product.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          name: 'شيبسي جبنة',
+          price_needs_review: true,
+          source: 'catalog',
+          category: 'شيبس ومقبلات',
+        }),
+      ],
+      skipDuplicates: true,
+    });
+    expect(readinessService.recalculateTenantReadiness).toHaveBeenCalledWith(1);
+  });
+
+  it('rejects selected essential items that do not belong to the requested source and category', async () => {
+    const prisma = {
+      $transaction: jest.fn((callback) => callback(prisma)),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.grocery }),
+      },
+      catalogItem: {
+        findMany: jest.fn().mockResolvedValue([{ id: 1, name: 'شيبسي' }]),
+      },
+    };
+    const service = createService(prisma);
+
+    await expect(
+      service.bulkAddEssentials(1, {
+        category: 'شيبس ومقبلات',
+        catalog_item_ids: [1, 2],
+      }),
+    ).rejects.toThrow('One or more selected catalog items are invalid');
+  });
+
+  it('rejects hiding catalog items outside the tenant allowed source', async () => {
+    const prisma = {
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.grocery }),
+      },
+      catalogItem: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      tenantHiddenCatalogItem: {
+        upsert: jest.fn(),
+      },
+    };
+    const service = createService(prisma);
+
+    await expect(service.hideCatalogItem(1, 99)).rejects.toThrow(
+      'Catalog item with ID 99 not found',
+    );
+    expect(prisma.tenantHiddenCatalogItem.upsert).not.toHaveBeenCalled();
   });
 });

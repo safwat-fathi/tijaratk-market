@@ -1,6 +1,7 @@
 import HttpService from '@/services/base/http.service';
 import {
   CatalogItemsResponse,
+  BulkEssentialStage,
   Product,
   ProductOrderConfig,
   PublicProductCategory,
@@ -75,10 +76,21 @@ class ProductsService extends HttpService {
     );
   }
 
-  public async bulkAddEssentialItems(categories: string[]) {
+  public async getBulkEssentialStages() {
+    return this.get<BulkEssentialStage[]>('bulk-essentials/stages', undefined, {
+      cache: 'no-store',
+      authRequired: true,
+    });
+  }
+
+  public async bulkAddEssentialItems(payload: {
+    category?: string;
+    catalog_item_ids?: number[];
+    categories?: string[];
+  }) {
     return this.post<{ count: number }>(
       'bulk-essentials',
-      { categories },
+      payload,
       undefined,
       { authRequired: true }
     );

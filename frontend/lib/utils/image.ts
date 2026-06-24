@@ -6,7 +6,8 @@ export function getImageUrl(path: string | null | undefined): string {
   }
   
   if (path.startsWith("/uploads")) {
-    return `${process.env.NEXT_PUBLIC_API_BASE_URL}${path}`;
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    return `${apiBaseUrl.replace(/\/$/, '')}${path}`;
   }
   
   return path;

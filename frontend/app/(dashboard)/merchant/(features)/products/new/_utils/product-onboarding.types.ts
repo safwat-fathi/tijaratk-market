@@ -4,6 +4,8 @@ export type CategoryMode = 'select' | 'custom';
 
 export type ProductSection = 'quick-add' | 'catalog' | 'my-products';
 
+export type ProductAvailabilityFilter = 'all' | 'available' | 'unavailable';
+
 export type SectionTab = {
   key: ProductSection;
   label: string;

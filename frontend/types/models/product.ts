@@ -54,6 +54,13 @@ export interface CatalogItemsResponse {
   meta: PublicProductsMeta;
 }
 
+export interface BulkEssentialStage {
+  category: string;
+  total: number;
+  default_selected_catalog_item_ids: number[];
+  items: CatalogItem[];
+}
+
 export interface PublicProductsMeta {
   total: number;
   page: number;

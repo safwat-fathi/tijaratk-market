@@ -1,12 +1,23 @@
 import { useRef } from "react";
 import SafeImage from "@/components/ui/SafeImage";
+import { formatArabicInteger } from "@/lib/utils/number";
 import type { Product } from "@/types/models/product";
 import { SECTION_MY_PRODUCTS } from "../_utils/product-onboarding.constants";
+import type { ProductAvailabilityFilter } from "../_utils/product-onboarding.types";
 import {
   normalizeModeBadge,
   resolveImageUrl,
   resolveProductPriceText,
 } from "../_utils/product-onboarding";
+
+const availabilityFilters: {
+  id: ProductAvailabilityFilter;
+  label: string;
+}[] = [
+  { id: "all", label: "الكل" },
+  { id: "available", label: "متاح" },
+  { id: "unavailable", label: "غير متاح" },
+];
 
 type MyProductsSectionProps = {
   active: boolean;
@@ -14,6 +25,9 @@ type MyProductsSectionProps = {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   onClearSearchQuery: () => void;
+  availabilityFilter: ProductAvailabilityFilter;
+  onAvailabilityFilterChange: (value: ProductAvailabilityFilter) => void;
+  availabilityFilterCounts: Record<ProductAvailabilityFilter, number>;
   needsMoreSearchChars: boolean;
   isSearchLoading: boolean;
   searchError: string | null;
@@ -36,6 +50,9 @@ export default function MyProductsSection({
   searchQuery,
   onSearchQueryChange,
   onClearSearchQuery,
+  availabilityFilter,
+  onAvailabilityFilterChange,
+  availabilityFilterCounts,
   needsMoreSearchChars,
   isSearchLoading,
   searchError,
@@ -57,6 +74,8 @@ export default function MyProductsSection({
     onClearSearchQuery();
     searchInputRef.current?.focus();
   };
+
+  const isFilteredList = isSearchActive || availabilityFilter !== "all";
 
   return (
     <section
@@ -118,10 +137,44 @@ export default function MyProductsSection({
           )}
         </div>
 
+        <div
+          className="mt-3 flex gap-2 overflow-x-auto pb-1"
+          aria-label="فلترة المنتجات حسب التوفر"
+        >
+          {availabilityFilters.map((filter) => {
+            const isActive = availabilityFilter === filter.id;
+            const count = availabilityFilterCounts[filter.id] || 0;
+            const countLabel = formatArabicInteger(count) || count;
+
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => onAvailabilityFilterChange(filter.id)}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  isActive
+                    ? "border-gray-900 bg-gray-900 text-white shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                }`}
+                aria-pressed={isActive}
+              >
+                <span>{filter.label}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[11px] ${
+                    isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {countLabel}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="lg:max-h-[58vh] lg:overflow-y-auto lg:pe-1">
           {displayedProducts.length === 0 && !isSearchLoading ? (
             <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed border-brand-border bg-gray-50/50 p-8 text-center">
-              {isSearchActive ? (
+              {isFilteredList ? (
                 <p className="text-sm text-gray-500">لا توجد نتائج مطابقة.</p>
               ) : (
                 <>

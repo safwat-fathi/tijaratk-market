@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
@@ -11,6 +12,11 @@ import {
   CancellationPolicySnapshot,
   TenantCancellationPolicyService,
 } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
+import {
+  ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
+  buildProductOrderReadiness,
+  ProductOrderReadiness,
+} from 'src/products/order-readiness-policy';
 
 type SourceKey =
   | 'qr_code'
@@ -36,6 +42,23 @@ type MetricWithDelta = {
   previous_value: number;
   change_percentage: number | null;
 };
+
+const DASHBOARD_CACHE_TTL_SECONDS = 30;
+
+/**
+ * Cache version key for tenant dashboard measurements.
+ */
+export const getDashboardCacheVersionKey = (tenantId: number): string =>
+  `merchant:dashboard:version:${tenantId}`;
+
+/**
+ * Cache key for tenant dashboard measurements.
+ */
+export const getDashboardCacheKey = (
+  tenantId: number,
+  period: DashboardPeriod,
+  version: string,
+): string => `merchant:dashboard:${tenantId}:${period}:${version}`;
 
 export type MerchantDashboardMeasurements = {
   period: DashboardPeriod;
@@ -64,6 +87,7 @@ export type MerchantDashboardMeasurements = {
   availability_requests: number;
   orders_by_source: OrdersBySourceItem[];
   cancellation_policy: CancellationPolicySnapshot;
+  product_readiness: ProductOrderReadiness;
 };
 
 type PeriodRange = {
@@ -91,6 +115,8 @@ type OrderForMetrics = {
   }>;
 };
 
+type OrderForSourceMetrics = Omit<OrderForMetrics, 'order_items'>;
+
 @Injectable()
 export class MerchantDashboardService {
   private static readonly CAIRO_TIME_ZONE = 'Africa/Cairo';
@@ -105,12 +131,21 @@ export class MerchantDashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
+    @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
   async getMeasurements(
     tenantId: number,
     requestedPeriod: DashboardPeriod = 'today',
   ): Promise<MerchantDashboardMeasurements> {
+    const cacheKey = await this.resolveCacheKey(tenantId, requestedPeriod);
+    const cached = cacheKey
+      ? await this.cacheManager?.get<MerchantDashboardMeasurements>(cacheKey)
+      : undefined;
+    if (cached) {
+      return cached;
+    }
+
     const range = this.buildPeriodRange(requestedPeriod);
     const orderWhere = this.buildOrderWhere(tenantId, range.start, range.end);
     const previousOrderWhere = this.buildOrderWhere(
@@ -121,16 +156,34 @@ export class MerchantDashboardService {
     const db = this.getDb();
 
     const [
-      orders,
+      currentSummary,
+      ordersForSource,
+      completedOrdersWithItems,
       previousSummary,
       newCustomers,
       activeCustomerIds,
       returningCustomers,
       availabilityRequests,
       tenant,
+      activeProductsCount,
     ] = await Promise.all([
+      this.getOrderSummary(orderWhere, db),
       db.order.findMany({
         where: orderWhere,
+        select: {
+          id: true,
+          status: true,
+          total: true,
+          order_source: true,
+          source_metadata: true,
+          customer_id: true,
+        },
+      }),
+      db.order.findMany({
+        where: {
+          ...orderWhere,
+          status: OrderStatus.completed,
+        },
         select: {
           id: true,
           status: true,
@@ -191,11 +244,16 @@ export class MerchantDashboardService {
       }),
       db.tenant.findUnique({
         where: { id: tenantId },
-        select: { status: true },
+        select: { status: true, category: true },
+      }),
+      db.product.count({
+        where: {
+          tenant_id: tenantId,
+          ...ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
+        },
       }),
     ]);
 
-    const currentSummary = this.summarizeOrders(orders);
     const activeCustomers = activeCustomerIds.length;
     const cancellationPolicy =
       await this.tenantCancellationPolicyService.getSnapshot(
@@ -204,7 +262,7 @@ export class MerchantDashboardService {
         db,
       );
 
-    return {
+    const measurements = {
       period: range.period,
       period_start: range.start.toISOString(),
       period_end: range.end.toISOString(),
@@ -252,14 +310,51 @@ export class MerchantDashboardService {
         returning_customers: returningCustomers,
         active_customers: activeCustomers,
       },
-      top_selling_products: this.buildTopSellingProducts(orders),
+      top_selling_products: this.buildTopSellingProducts(completedOrdersWithItems),
       availability_requests: availabilityRequests,
-      orders_by_source: this.buildOrdersBySource(orders),
+      orders_by_source: this.buildOrdersBySource(ordersForSource),
       cancellation_policy: cancellationPolicy,
+      product_readiness: buildProductOrderReadiness(
+        activeProductsCount,
+        tenant?.category,
+      ),
     };
+
+    if (cacheKey) {
+      await this.cacheManager?.set(
+        cacheKey,
+        measurements,
+        DASHBOARD_CACHE_TTL_SECONDS,
+      );
+    }
+
+    return measurements;
+  }
+
+  private async resolveCacheKey(
+    tenantId: number,
+    period: DashboardPeriod,
+  ): Promise<string | null> {
+    if (!this.cacheManager) return null;
+
+    const versionKey = getDashboardCacheVersionKey(tenantId);
+    let version = await this.cacheManager.get<string>(versionKey);
+    if (!version) {
+      version = Date.now().toString();
+      await this.cacheManager.set(versionKey, version);
+    }
+
+    return getDashboardCacheKey(tenantId, period, version);
   }
 
   private async getPreviousOrderSummary(
+    where: Prisma.OrderWhereInput,
+    db: Prisma.TransactionClient | PrismaService,
+  ) {
+    return this.getOrderSummary(where, db);
+  }
+
+  private async getOrderSummary(
     where: Prisma.OrderWhereInput,
     db: Prisma.TransactionClient | PrismaService,
   ) {
@@ -310,34 +405,6 @@ export class MerchantDashboardService {
     };
   }
 
-  private summarizeOrders(orders: OrderForMetrics[]) {
-    return orders.reduce(
-      (summary, order) => {
-        summary.totalOrders += 1;
-
-        if (order.status === OrderStatus.completed) {
-          summary.completedOrders += 1;
-          summary.totalSales += this.toNumber(order.total);
-        }
-
-        if (
-          order.status === OrderStatus.cancelled ||
-          order.status === OrderStatus.rejected_by_customer
-        ) {
-          summary.cancelledOrders += 1;
-        }
-
-        return summary;
-      },
-      {
-        totalOrders: 0,
-        completedOrders: 0,
-        cancelledOrders: 0,
-        totalSales: 0,
-      },
-    );
-  }
-
   private buildTopSellingProducts(
     orders: OrderForMetrics[],
   ): TopSellingProduct[] {
@@ -370,7 +437,9 @@ export class MerchantDashboardService {
       .slice(0, 5);
   }
 
-  private buildOrdersBySource(orders: OrderForMetrics[]): OrdersBySourceItem[] {
+  private buildOrdersBySource(
+    orders: OrderForSourceMetrics[],
+  ): OrdersBySourceItem[] {
     const counts: Record<SourceKey, number> = {
       qr_code: 0,
       stores_directory: 0,
@@ -393,7 +462,7 @@ export class MerchantDashboardService {
       }));
   }
 
-  private resolveSourceKey(order: OrderForMetrics): SourceKey {
+  private resolveSourceKey(order: OrderForSourceMetrics): SourceKey {
     if (
       order.order_source === OrderSource.storefront &&
       this.readLandingSource(order.source_metadata) === 'qr'

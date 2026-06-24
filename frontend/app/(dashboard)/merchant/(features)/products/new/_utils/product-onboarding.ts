@@ -69,7 +69,7 @@ export const resolveImageUrl = (imageUrl?: string | null): string | null => {
   }
 
   if (imageUrl.startsWith('/uploads')) {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
     if (!apiBaseUrl) {
       return imageUrl;
     }

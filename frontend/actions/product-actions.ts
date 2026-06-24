@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { productsService } from '@/services/api/products.service';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import {
+  BulkEssentialStage,
   Product,
   CatalogItemsResponse,
   ProductOrderConfig,
@@ -250,9 +251,54 @@ export async function addProductFromCatalogAction(catalogItemId: number) {
   }
 }
 
-export async function bulkAddEssentialItemsAction(categories: string[]) {
+export async function loadBulkEssentialStagesAction(): Promise<{
+  success: boolean;
+  data?: BulkEssentialStage[];
+  message?: string;
+}> {
   try {
-    const response = await productsService.bulkAddEssentialItems(categories);
+    const response = await productsService.getBulkEssentialStages();
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || 'تعذر تحميل مجموعات المنتجات الأساسية',
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Load bulk essential stages failed:', error);
+    return {
+      success: false,
+      message: 'تعذر تحميل مجموعات المنتجات الأساسية',
+    };
+  }
+}
+
+export async function bulkAddEssentialItemsAction(
+  payload:
+    | {
+        category: string;
+        catalogItemIds: number[];
+      }
+    | string[],
+) {
+  try {
+    const response = await productsService.bulkAddEssentialItems(
+      Array.isArray(payload)
+        ? { categories: payload }
+        : {
+            category: payload.category,
+            catalog_item_ids: payload.catalogItemIds,
+          },
+    );
 
     if (!response.success || !response.data) {
       return {

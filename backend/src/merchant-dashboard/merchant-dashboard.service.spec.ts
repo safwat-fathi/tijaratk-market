@@ -4,6 +4,7 @@ import {
   OrderSource,
   OrderStatus,
   Prisma,
+  TenantCategory,
 } from '../../generated/prisma/client';
 
 const createPrismaMock = (input: {
@@ -17,6 +18,8 @@ const createPrismaMock = (input: {
   returningCustomers?: number;
   availabilityRequests?: number;
   tenantStatus?: OrderStatus | string;
+  tenantCategory?: TenantCategory;
+  activeProductsCount?: number;
 }) => ({
   order: {
     findMany: jest
@@ -44,13 +47,15 @@ const createPrismaMock = (input: {
   tenant: {
     findUnique: jest.fn().mockResolvedValue({
       status: input.tenantStatus ?? 'active',
+      category: input.tenantCategory ?? TenantCategory.grocery,
     }),
+  },
+  product: {
+    count: jest.fn().mockResolvedValue(input.activeProductsCount ?? 0),
   },
 });
 
-const createPolicyMock = (
-  overrides: Record<string, unknown> = {},
-) => ({
+const createPolicyMock = (overrides: Record<string, unknown> = {}) => ({
   getSnapshot: jest.fn().mockResolvedValue({
     status: 'ok',
     count: 0,
@@ -92,6 +97,14 @@ describe('MerchantDashboardService', () => {
     expect(result.top_selling_products).toEqual([]);
     expect(result.orders_by_source).toEqual([]);
     expect(result.cancellation_policy.status).toBe('ok');
+    expect(result.product_readiness).toEqual({
+      active_products_count: 0,
+      required_products_count: 200,
+      remaining_products_count: 200,
+      completion_percentage: 0,
+      status: 'not_ready_for_orders',
+      milestones: [50, 100, 150, 200],
+    });
   });
 
   it('calculates sales, rates, customers, availability, products, and source buckets', async () => {
@@ -157,6 +170,7 @@ describe('MerchantDashboardService', () => {
       newCustomers: 3,
       returningCustomers: 1,
       availabilityRequests: 7,
+      activeProductsCount: 125,
     });
     const service = new MerchantDashboardService(
       prisma as any,
@@ -187,6 +201,14 @@ describe('MerchantDashboardService', () => {
       active_customers: 2,
     });
     expect(result.availability_requests).toBe(7);
+    expect(result.product_readiness).toEqual({
+      active_products_count: 125,
+      required_products_count: 200,
+      remaining_products_count: 75,
+      completion_percentage: 62.5,
+      status: 'add_products',
+      milestones: [50, 100, 150, 200],
+    });
     expect(result.top_selling_products).toEqual([
       { name: 'Panadol Extra', orders_count: 3 },
       { name: 'Nescafe Gold', orders_count: 1.5 },
@@ -217,6 +239,145 @@ describe('MerchantDashboardService', () => {
         },
       },
     });
+  });
+
+  it('marks product readiness complete at the order threshold', async () => {
+    const prisma = createPrismaMock({ activeProductsCount: 200 });
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.product_readiness).toEqual({
+      active_products_count: 200,
+      required_products_count: 200,
+      remaining_products_count: 0,
+      completion_percentage: 100,
+      status: 'ready_for_orders',
+      milestones: [50, 100, 150, 200],
+    });
+  });
+
+  it('reports one remaining product just below the order threshold', async () => {
+    const prisma = createPrismaMock({ activeProductsCount: 199 });
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.product_readiness.remaining_products_count).toBe(1);
+    expect(result.product_readiness.completion_percentage).toBe(99.5);
+    expect(result.product_readiness.status).toBe('add_products');
+  });
+
+  it('uses the 200 product readiness threshold for pharmacy tenants', async () => {
+    const prisma = createPrismaMock({
+      activeProductsCount: 199,
+      tenantCategory: TenantCategory.pharmacy,
+    });
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.product_readiness).toEqual({
+      active_products_count: 199,
+      required_products_count: 200,
+      remaining_products_count: 1,
+      completion_percentage: 99.5,
+      status: 'add_products',
+      milestones: [50, 100, 150, 200],
+    });
+  });
+
+  it('uses the 50 product readiness threshold for other tenant categories', async () => {
+    const prisma = createPrismaMock({
+      activeProductsCount: 50,
+      tenantCategory: TenantCategory.other,
+    });
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.product_readiness).toEqual({
+      active_products_count: 50,
+      required_products_count: 50,
+      remaining_products_count: 0,
+      completion_percentage: 100,
+      status: 'ready_for_orders',
+      milestones: [10, 25, 50],
+    });
+  });
+
+  it('uses the 50 product readiness threshold for greengrocer tenants', async () => {
+    const prisma = createPrismaMock({
+      activeProductsCount: 50,
+      tenantCategory: TenantCategory.greengrocer,
+    });
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.product_readiness).toEqual({
+      active_products_count: 50,
+      required_products_count: 50,
+      remaining_products_count: 0,
+      completion_percentage: 100,
+      status: 'ready_for_orders',
+      milestones: [10, 25, 50],
+    });
+  });
+
+  it('reports one remaining product below the greengrocer threshold', async () => {
+    const prisma = createPrismaMock({
+      activeProductsCount: 49,
+      tenantCategory: TenantCategory.greengrocer,
+    });
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.product_readiness).toEqual({
+      active_products_count: 49,
+      required_products_count: 50,
+      remaining_products_count: 1,
+      completion_percentage: 98,
+      status: 'add_products',
+      milestones: [10, 25, 50],
+    });
+  });
+
+  it('reports one remaining product below the lightweight threshold', async () => {
+    const prisma = createPrismaMock({
+      activeProductsCount: 49,
+      tenantCategory: TenantCategory.other,
+    });
+    const service = new MerchantDashboardService(
+      prisma as any,
+      createPolicyMock() as any,
+    );
+
+    const result = await service.getMeasurements(1, 'today');
+
+    expect(result.product_readiness.remaining_products_count).toBe(1);
+    expect(result.product_readiness.completion_percentage).toBe(98);
+    expect(result.product_readiness.status).toBe('add_products');
+    expect(result.product_readiness.milestones).toEqual([10, 25, 50]);
   });
 
   it('uses completed orders only for sales and top products', async () => {

@@ -1,17 +1,20 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import SafeImage from "@/components/ui/SafeImage";
 
-interface AppHeaderProps {
+type AppHeaderProps = {
   title: string;
   subtitle?: string;
   innerClassName?: string;
   headerClassName?: string;
+  actions?: ReactNode;
   "data-store-header"?: boolean;
-}
+};
 
 export function AppHeader({
   title,
   subtitle,
+  actions,
   innerClassName = "px-4 py-3 flex items-center justify-between",
   headerClassName = "sticky top-0 z-50 rounded-b-xl border-b border-white/10 bg-brand-primary text-white shadow-soft backdrop-blur-md transition-[background-color,box-shadow] duration-200",
   ...props
@@ -22,7 +25,7 @@ export function AppHeader({
       {...(props["data-store-header"] ? { "data-store-header": true } : {})}
     >
       <div className={innerClassName}>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="shrink-0 rounded-md border border-white/10 bg-white p-1 shadow-inner backdrop-blur-sm">
             <SafeImage
               src="/tijaratk-logo-suite/app-icon-green.png"
@@ -45,13 +48,16 @@ export function AppHeader({
           </div>
         </div>
 
-        <Link
-          href="/track-orders"
-          className="flex min-h-11 items-center justify-center rounded-md border border-white/30 bg-white/10 p-2.5 text-white backdrop-blur transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
-          aria-label="تتبع طلباتي"
-        >
-          تتبع طلباتي
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          {actions}
+          <Link
+            href="/track-orders"
+            className="flex min-h-11 items-center justify-center rounded-md border border-white/30 bg-white/10 p-2.5 text-white backdrop-blur transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
+            aria-label="تتبع طلباتي"
+          >
+            تتبع طلباتي
+          </Link>
+        </div>
       </div>
     </div>
   );

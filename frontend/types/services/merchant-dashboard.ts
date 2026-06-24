@@ -44,6 +44,20 @@ export type CancellationPolicyMetric = {
   last_suspension_at: string | null;
 };
 
+export type ProductReadinessStatus =
+  | "ready_for_orders"
+  | "add_products"
+  | "not_ready_for_orders";
+
+export type ProductReadinessMetric = {
+  active_products_count: number;
+  required_products_count: number;
+  remaining_products_count: number;
+  completion_percentage: number;
+  status: ProductReadinessStatus;
+  milestones: number[];
+};
+
 export type MerchantDashboardMeasurements = {
   period: DashboardPeriod;
   period_start: string;
@@ -59,4 +73,5 @@ export type MerchantDashboardMeasurements = {
   availability_requests: number;
   orders_by_source: OrdersBySourceMetric[];
   cancellation_policy: CancellationPolicyMetric;
+  product_readiness: ProductReadinessMetric;
 };

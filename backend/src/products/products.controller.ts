@@ -133,6 +133,23 @@ export class ProductsController {
     return this.productsService.bulkAddEssentials(tenantId, body);
   }
 
+  @Get('bulk-essentials/stages')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Get staged essential bulk import candidates' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Return staged essential catalog categories and candidates',
+  })
+  findBulkEssentialStages(@Req() req: Request) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.productsService.findBulkEssentialStages(tenantId);
+  }
+
   @Get('catalog/categories')
   @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
