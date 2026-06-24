@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createAppUrl } from '@/lib/url/app-url';
 
 export function proxy(request: NextRequest) {
   // Check for access token in cookies
@@ -16,7 +17,7 @@ export function proxy(request: NextRequest) {
     if (pathname.includes('/login') || pathname.includes('/register')) {
       // If user is already logged in, redirect to dashboard
       if (token) {
-        const dashboardUrl = new URL('/merchant', request.url);
+        const dashboardUrl = createAppUrl('/merchant', request);
         return NextResponse.redirect(dashboardUrl);
       }
       
@@ -27,13 +28,13 @@ export function proxy(request: NextRequest) {
     if (!token) {
       // Redirect to login if no token found
       // Note: Now login is at /merchant/login
-      const loginUrl = new URL('/merchant/login', request.url);
+      const loginUrl = createAppUrl('/merchant/login', request);
       return NextResponse.redirect(loginUrl);
     }
   }
 
   if (pathname === '/admin/login' && adminToken) {
-    const adminUrl = new URL('/admin', request.url);
+    const adminUrl = createAppUrl('/admin', request);
     return NextResponse.redirect(adminUrl);
   }
 

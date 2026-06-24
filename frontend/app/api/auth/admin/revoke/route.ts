@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { STORAGE_KEYS } from "@/constants";
+import { createAppUrl } from "@/lib/url/app-url";
 
 const DEFAULT_LOGIN_ROUTE = "/admin/login";
 
@@ -20,6 +21,6 @@ export async function GET(request: Request) {
 			? redirectPathParam
 			: DEFAULT_LOGIN_ROUTE;
 
-	const response = NextResponse.redirect(new URL(redirectPath, request.url));
+	const response = NextResponse.redirect(createAppUrl(redirectPath, request));
 	return clearAdminSessionCookie(response);
 }
