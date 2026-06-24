@@ -82,6 +82,7 @@ const PARENT_CATEGORY_MAP = {
   'منتجات الفطور الغذائية': 'مخبوزات',
   'المكسرات والتمور والفواكه المجففة': 'سناكس و حلويات',
   'منتجات من كل أنحاء العالم': DEFAULT_CATEGORY,
+  'أدوات التنظيف المنزلية': 'منظفات ومنتجات ورقية',
 } as const;
 
 type CatalogImportCounters = {
@@ -582,11 +583,6 @@ export class ImportsService {
   }
 
   private mapCategory(value: string | undefined, format: CatalogImportFormat): string {
-    if (format === CatalogImportFormat.carrefour) {
-      const normalized = value?.trim();
-      return normalized || DEFAULT_CATEGORY;
-    }
-
     const parentCategory = value?.split('>')[0]?.trim();
     if (!parentCategory) return DEFAULT_CATEGORY;
 

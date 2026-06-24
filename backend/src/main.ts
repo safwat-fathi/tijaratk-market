@@ -56,10 +56,9 @@ async function bootstrap() {
   const configuredCorsOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
-  const corsOrigin =
-    configuredCorsOrigins?.length
-      ? configuredCorsOrigins
-      : process.env.NODE_ENV === 'development';
+  const corsOrigin = configuredCorsOrigins?.length
+    ? configuredCorsOrigins
+    : process.env.NODE_ENV === 'development';
 
   app.enableCors({
     origin: corsOrigin,
