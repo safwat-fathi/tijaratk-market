@@ -23,6 +23,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 3000,
+        NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "T1hS0R8iP/uI2r3oZ1vT1oV7sF3y2l6Q9wYq1sD1V8U=",
       },
       autorestart: true,
       watch: false,
