@@ -148,6 +148,9 @@ export default function ProductOnboardingClient({
   const [isShowingHidden, setIsShowingHidden] = useState(false);
   const [isBulkWizardOpen, setIsBulkWizardOpen] = useState(false);
 
+  const canUseBulkWizard = storeType === "grocery";
+  const handleOpenBulkWizard = canUseBulkWizard ? () => setIsBulkWizardOpen(true) : undefined;
+
   const defaultUnitLabel =
     storeType === "pharmacy" ? "علبة" : DEFAULT_UNIT_LABEL;
 
@@ -1166,7 +1169,7 @@ export default function ProductOnboardingClient({
           activeSectionLabel={activeSectionLabel}
           productsCount={products.length}
           productReadiness={productReadiness}
-          onOpenBulkWizard={() => setIsBulkWizardOpen(true)}
+          onOpenBulkWizard={handleOpenBulkWizard}
         />
         <ProductSectionsTabs
           sectionTabs={sectionTabs}
@@ -1242,7 +1245,7 @@ export default function ProductOnboardingClient({
       <MyProductsSection
         active={activeSection === "my-products"}
         displayedProductsCountLabel={displayedProductsCountLabel}
-        onOpenBulkWizard={() => setIsBulkWizardOpen(true)}
+        onOpenBulkWizard={handleOpenBulkWizard}
         searchQuery={searchQuery}
         onSearchQueryChange={handleSearchQueryChange}
         onClearSearchQuery={handleClearSearchQuery}

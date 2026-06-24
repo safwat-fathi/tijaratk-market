@@ -69,6 +69,11 @@ export default function BulkEssentialWizard({
     hasLoadedStagesRef.current = true;
     setIsLoadingStages(true);
     setErrorMessage(null);
+    setStages([]);
+    setActiveStageIndex(0);
+    setSelectedByCategory({});
+    setStageStatuses({});
+    setStageResults({});
 
     try {
       const result = await loadBulkEssentialStagesAction();
@@ -95,12 +100,12 @@ export default function BulkEssentialWizard({
   }, []);
 
   useEffect(() => {
-    if (!isOpen || stages.length > 0 || hasLoadedStagesRef.current) {
+    if (!isOpen) {
       return;
     }
 
     void loadStages();
-  }, [isOpen, loadStages, stages.length]);
+  }, [isOpen, loadStages]);
 
   useEffect(() => {
     if (isOpen) {

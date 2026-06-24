@@ -171,7 +171,7 @@ export default function MyProductsSection({
           })}
         </div>
 
-        <div className="lg:max-h-[58vh] lg:overflow-y-auto lg:pe-1">
+        <div className="lg:pe-1">
           {displayedProducts.length === 0 && !isSearchLoading ? (
             <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed border-brand-border bg-gray-50/50 p-8 text-center">
               {isFilteredList ? (

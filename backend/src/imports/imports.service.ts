@@ -20,70 +20,16 @@ import {
   parseCatalogImportRow,
 } from './schemas/catalog-import-row.schema';
 import {
-  GROCERY_CATALOG_CATEGORIES,
-  PHARMACY_CATALOG_CATEGORIES,
   isCatalogCategoryAllowedForSource,
+  normalizeCatalogCategory,
   resolveCatalogSourceForImportFormat,
 } from 'src/products/catalog-source-policy';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import { ImageDownloaderService } from './services/image-downloader.service';
 
-const DEFAULT_CATEGORY = 'أخرى';
 const EXPECTED_CURRENCY = 'EGP';
 const PROGRESS_UPDATE_INTERVAL = 100;
 const ROW_ERROR_BATCH_SIZE = 50;
-
-const SEEDED_CATEGORIES = new Set<string>([
-  ...GROCERY_CATALOG_CATEGORIES,
-  ...PHARMACY_CATALOG_CATEGORIES,
-]);
-
-const PARENT_CATEGORY_MAP = {
-  Bakery: 'مخبوزات',
-  'Fruit & Veg': DEFAULT_CATEGORY,
-  Dairy: 'ألبان و بيض',
-  Eggs: 'ألبان و بيض',
-  'Rice, Pasta & Pulses': 'أرز ومكرونة',
-  'Oil & Ghee': 'زيت وسمن',
-  'Herbs & Spices': 'توابل',
-  Sauces: 'صلصات و خل',
-  Beverages: 'مشروبات',
-  'Meat & Poultry': 'لحوم و دواجن',
-  Frozen: 'مجمدات',
-  'Snacks & Confectionery': 'سناكس و حلويات',
-  'Honey, Jam & Spreads': 'عسل ومربى وشوكولاتة',
-  Cleaning: 'منظفات ومنتجات ورقية',
-  'Personal Care': 'عناية شخصية',
-  'Biscuits, Crackers & Cakes': 'سناكس و حلويات',
-  'Chocolate & Confectionery': 'سناكس و حلويات',
-  'Chips & Snacks': 'سناكس و حلويات',
-  'Jam, Honey & Spreads': 'عسل ومربى وشوكولاتة',
-  'Sugar & Home Baking': 'سكر و دقيق',
-  'Spices, Sauces & Vinegar': 'صلصات و خل',
-  'Breakfast Food': 'مخبوزات',
-  'Nuts, Dates & Dried Fruits': 'سناكس و حلويات',
-  'World Foods': DEFAULT_CATEGORY,
-  الأدوية: 'أدوية',
-  'العناية بالشعر': 'عناية شخصية',
-  'العناية بالبشرة': 'عناية شخصية',
-  'العناية اليومية': 'عناية شخصية',
-  'الأم والطفل': 'عناية شخصية',
-  'المكياج و الاكسسوارات': 'عناية شخصية',
-  'المستلزمات الطبية': 'أدوية',
-  'الفيتامينات والمكملات': 'أدوية',
-  'الصحة الجنسية': 'عناية شخصية',
-  'بسكويت، كراكرز وكيك': 'سناكس و حلويات',
-  'الشوكولاته والمعجنات': 'سناكس و حلويات',
-  'شيبس ومقبلات': 'سناكس و حلويات',
-  'أرز , مكرونة والبقوليات': 'أرز ومكرونة',
-  'مربي، عسل وغيرها': 'عسل ومربى وشوكولاتة',
-  'السكر و مستلزمات الخبز': 'سكر و دقيق',
-  'توابل، صلصات و خل': 'صلصات و خل',
-  'منتجات الفطور الغذائية': 'مخبوزات',
-  'المكسرات والتمور والفواكه المجففة': 'سناكس و حلويات',
-  'منتجات من كل أنحاء العالم': DEFAULT_CATEGORY,
-  'أدوات التنظيف المنزلية': 'منظفات ومنتجات ورقية',
-} as const;
 
 type CatalogImportCounters = {
   totalRows: number;
@@ -504,11 +450,10 @@ export class ImportsService {
       throw new Error(`Unsupported currency: ${currency}`);
     }
 
-    const categorySource = this.resolveCategorySource(row);
-
     const source = resolveCatalogSourceForImportFormat(row.format);
-    const category = this.mapCategory(categorySource, row.format);
-    if (!isCatalogCategoryAllowedForSource(source, category)) {
+    const categorySource = this.resolveCategorySource(row);
+    const category = this.mapCategory(categorySource);
+    if (!category || !isCatalogCategoryAllowedForSource(source, category)) {
       throw new Error(`Category ${category} is not allowed for ${source}`);
     }
 
@@ -582,21 +527,8 @@ export class ImportsService {
     return normalizedValue || null;
   }
 
-  private mapCategory(value: string | undefined, format: CatalogImportFormat): string {
-    const parentCategory = value?.split('>')[0]?.trim();
-    if (!parentCategory) return DEFAULT_CATEGORY;
-
-    if (SEEDED_CATEGORIES.has(parentCategory)) {
-      return parentCategory;
-    }
-
-    const mappedCategory =
-      PARENT_CATEGORY_MAP[parentCategory as keyof typeof PARENT_CATEGORY_MAP] ??
-      DEFAULT_CATEGORY;
-
-    return SEEDED_CATEGORIES.has(mappedCategory)
-      ? mappedCategory
-      : DEFAULT_CATEGORY;
+  private mapCategory(value: string | undefined): string {
+    return normalizeCatalogCategory(value) ?? '';
   }
 
   private async saveRowError(

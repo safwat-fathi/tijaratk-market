@@ -180,7 +180,7 @@ export default function CatalogSection({
         </ScrollableTabList>
         )}
 
-        <div className="lg:max-h-[58vh] lg:overflow-y-auto lg:pe-1">
+        <div className="lg:pe-1">
           {catalogItems.length === 0 && !isLoadingCatalog ? (
             <p className="mt-4 rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
               لا توجد منتجات في الكتالوج حالياً
@@ -247,6 +247,10 @@ export default function CatalogSection({
                           >
                             {pendingCatalogIds[item.id] ? "...جاري" : "إظهار"}
                           </button>
+                        ) : item.is_in_stock ? (
+                          <div className="flex items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                            <span className="text-sm font-semibold text-emerald-700">تمت الإضافة</span>
+                          </div>
                         ) : (
                           <>
                             <button

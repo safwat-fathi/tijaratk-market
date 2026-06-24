@@ -61,6 +61,9 @@ describe('ProductsService catalog source isolation', () => {
           .mockResolvedValue([{ id: 1, source: 'talabat_csv' }]),
         count: jest.fn().mockResolvedValue(1),
       },
+      product: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       tenantHiddenCatalogItem: {
         findMany: jest.fn().mockResolvedValue([]),
       },
@@ -313,8 +316,8 @@ describe('ProductsService catalog source isolation', () => {
     );
   });
 
-  it('returns supermarket essential stages with the first 20 items selected by default', async () => {
-    const items = Array.from({ length: 22 }, (_, index) => ({
+  it('returns all supermarket catalog categories with the first 20 ranked items selected by default', async () => {
+    const chipsItems = Array.from({ length: 22 }, (_, index) => ({
       id: index + 1,
       name: `شيبسي ${index + 1}`,
       image_url: index === 0 ? 'https://example.com/chips.png' : null,
@@ -324,6 +327,29 @@ describe('ProductsService catalog source isolation', () => {
       is_active: true,
       created_at: new Date(),
     }));
+    const items = [
+      ...chipsItems,
+      {
+        id: 101,
+        name: 'لبن كامل الدسم',
+        image_url: null,
+        category: 'ألبان و بيض',
+        price: 40,
+        source: 'talabat_csv',
+        is_active: true,
+        created_at: new Date(),
+      },
+      {
+        id: 102,
+        name: 'مكرونة قلم',
+        image_url: null,
+        category: 'أرز ومكرونة',
+        price: 30,
+        source: 'talabat_csv',
+        is_active: true,
+        created_at: new Date(),
+      },
+    ];
     const prisma = {
       tenant: {
         findUnique: jest
@@ -333,13 +359,21 @@ describe('ProductsService catalog source isolation', () => {
       catalogItem: {
         findMany: jest.fn().mockResolvedValue(items),
       },
+      product: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     };
     const service = createService(prisma);
 
     const result = await service.findBulkEssentialStages(1);
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
+    expect(result.map((stage) => stage.category)).toEqual([
+      'أرز ومكرونة',
+      'ألبان و بيض',
+      'شيبس ومقبلات',
+    ]);
+    expect(result).toHaveLength(3);
+    expect(result.find((stage) => stage.category === 'شيبس ومقبلات')).toMatchObject({
       category: 'شيبس ومقبلات',
       total: 22,
       default_selected_catalog_item_ids: Array.from(
@@ -352,6 +386,16 @@ describe('ProductsService catalog source isolation', () => {
         where: expect.objectContaining({
           source: 'talabat_csv',
           is_active: true,
+          category: expect.objectContaining({
+            in: expect.arrayContaining(['ألبان و بيض', 'أرز ومكرونة']),
+          }),
+        }),
+      }),
+    );
+    expect(prisma.catalogItem.findMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.anything(),
         }),
       }),
     );
@@ -378,16 +422,16 @@ describe('ProductsService catalog source isolation', () => {
     const catalogItems = [
       {
         id: 1,
-        name: 'شيبسي ملح',
+        name: 'مكرونة قلم',
         image_url: null,
-        category: 'شيبس ومقبلات',
+        category: 'أرز ومكرونة',
         price: 12,
       },
       {
         id: 2,
-        name: 'شيبسي جبنة',
+        name: 'أرز أبيض',
         image_url: null,
-        category: 'شيبس ومقبلات',
+        category: 'أرز ومكرونة',
         price: 13,
       },
     ];
@@ -404,7 +448,7 @@ describe('ProductsService catalog source isolation', () => {
         findMany: jest.fn().mockResolvedValue(catalogItems),
       },
       product: {
-        findMany: jest.fn().mockResolvedValue([{ name: 'شيبسي ملح' }]),
+        findMany: jest.fn().mockResolvedValue([{ name: 'مكرونة قلم' }]),
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
@@ -417,7 +461,7 @@ describe('ProductsService catalog source isolation', () => {
     );
 
     const result = await service.bulkAddEssentials(1, {
-      category: 'شيبس ومقبلات',
+      category: 'أرز ومكرونة',
       catalog_item_ids: [1, 2],
     });
 
@@ -425,15 +469,75 @@ describe('ProductsService catalog source isolation', () => {
     expect(prisma.product.createMany).toHaveBeenCalledWith({
       data: [
         expect.objectContaining({
-          name: 'شيبسي جبنة',
+          name: 'أرز أبيض',
           price_needs_review: true,
           source: 'catalog',
-          category: 'شيبس ومقبلات',
+          category: 'أرز ومكرونة',
         }),
       ],
       skipDuplicates: true,
     });
+    expect(prisma.catalogItem.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [1, 2] },
+        source: 'talabat_csv',
+        is_active: true,
+        category: 'أرز ومكرونة',
+      },
+    });
     expect(readinessService.recalculateTenantReadiness).toHaveBeenCalledWith(1);
+  });
+
+  it('imports legacy category bulk items without restricting to essential brands', async () => {
+    const catalogItems = [
+      {
+        id: 1,
+        name: 'لبن كامل الدسم',
+        image_url: null,
+        category: 'ألبان و بيض',
+        price: 40,
+      },
+    ];
+    const prisma = {
+      $transaction: jest.fn((callback) => callback(prisma)),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      tenant: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ category: TenantCategory.grocery }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      catalogItem: {
+        findMany: jest.fn().mockResolvedValue(catalogItems),
+      },
+      product: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const service = createService(prisma);
+
+    const result = await service.bulkAddEssentials(1, {
+      categories: ['ألبان و بيض'],
+    });
+
+    expect(result).toEqual({ count: 1 });
+    expect(prisma.catalogItem.findMany).toHaveBeenCalledWith({
+      where: {
+        source: 'talabat_csv',
+        is_active: true,
+        category: { in: ['ألبان و بيض'] },
+      },
+    });
+    expect(prisma.product.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          name: 'لبن كامل الدسم',
+          category: 'ألبان و بيض',
+        }),
+      ],
+      skipDuplicates: true,
+    });
   });
 
   it('rejects selected essential items that do not belong to the requested source and category', async () => {

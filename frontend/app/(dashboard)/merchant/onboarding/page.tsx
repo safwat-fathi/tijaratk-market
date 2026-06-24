@@ -51,8 +51,9 @@ export default function MerchantOnboardingWizard() {
     if (!tenant) return;
     const nextStep = currentStep + 1;
 
+    const finalStepId = steps[steps.length - 1].id;
     // If it's the final step
-    if (currentStep === 5) {
+    if (currentStep === finalStepId) {
       await tenantsService.updateMyOnboardingProgress({
         onboarding_completed: true,
         onboarding_step: nextStep,
@@ -81,13 +82,17 @@ export default function MerchantOnboardingWizard() {
     );
   }
 
-  const steps = [
+  const isGrocery = tenant.category === "grocery";
+
+  const allSteps = [
     { id: 1, title: "العنوان", description: "مكان المتجر لتغطية التوصيل" },
     { id: 2, title: "التوصيل", description: "مصاريف ومواعيد التوصيل" },
     { id: 3, title: "طرق الدفع", description: "المحافظ الإلكترونية وإنستاباي" },
-    { id: 4, title: "إضافة المنتجات", description: "تجهيز بضاعة المتجر" },
-    { id: 5, title: "مراجعة الأسعار", description: "تأكيد توافر المنتجات" },
+    { id: 4, title: "إضافة المنتجات", description: "تجهيز بضاعة المتجر", groceryOnly: true },
+    { id: 5, title: "مراجعة الأسعار", description: "تأكيد توافر المنتجات", groceryOnly: true },
   ];
+
+  const steps = allSteps.filter(s => !s.groceryOnly || isGrocery);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center">
@@ -153,10 +158,10 @@ export default function MerchantOnboardingWizard() {
         <div className="flex-1 p-6 flex flex-col bg-white">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900">
-              {steps[currentStep - 1].title}
+              {steps.find(s => s.id === currentStep)?.title}
             </h2>
             <p className="text-gray-500 text-sm mt-1">
-              {steps[currentStep - 1].description}
+              {steps.find(s => s.id === currentStep)?.description}
             </p>
           </div>
 

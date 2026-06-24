@@ -180,15 +180,18 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
                 طلب الدفع بالكارت مع التوصيل
               </span>
             )}
-            {order.prescription_file_url && prescriptionUnavailabilityLabel && (
-              <span className="mt-1 block text-xs font-semibold text-brand-primary">
-                في حالة عدم التوفر: {prescriptionUnavailabilityLabel}
-              </span>
-            )}
-            {unavailableItemActionLabel && (
-              <span className="mt-1 block text-xs font-semibold text-brand-primary">
-                عند عدم توفر منتج: {unavailableItemActionLabel}
-              </span>
+            {order.prescription_file_url ? (
+              prescriptionUnavailabilityLabel && (
+                <span className="mt-1 block text-xs font-semibold text-brand-primary">
+                  في حالة عدم التوفر: {prescriptionUnavailabilityLabel}
+                </span>
+              )
+            ) : (
+              unavailableItemActionLabel && (
+                <span className="mt-1 block text-xs font-semibold text-brand-primary">
+                  عند عدم توفر منتج: {unavailableItemActionLabel}
+                </span>
+              )
             )}
             {order.merchant_cancellation_reason && (
               <span className="mt-1 block text-xs font-semibold text-status-error">

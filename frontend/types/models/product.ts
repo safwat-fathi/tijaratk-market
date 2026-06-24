@@ -46,6 +46,7 @@ export interface CatalogItem {
   currency?: string;
   category: string;
   is_active: boolean;
+  is_in_stock?: boolean;
   created_at: string;
 }
 

@@ -94,7 +94,7 @@ type TenantProductsSearchResult = {
 };
 
 type CatalogItemsResult = {
-  data: CatalogItem[];
+  data: (CatalogItem & { is_in_stock?: boolean })[];
   meta: {
     total: number;
     page: number;
@@ -108,7 +108,7 @@ type BulkEssentialStage = {
   category: string;
   total: number;
   default_selected_catalog_item_ids: number[];
-  items: CatalogItem[];
+  items: (CatalogItem & { is_in_stock?: boolean })[];
 };
 
 type TenantProductsSearchOptions = {
@@ -316,13 +316,20 @@ export class ProductsService {
           throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
         }
 
+        const unsupportedCategories = categories.filter(
+          (category) =>
+            !isCatalogCategoryAllowedForSource(catalogSource, category),
+        );
+        if (unsupportedCategories.length > 0) {
+          throw new BadRequestException('Category is not supported for this catalog source.');
+        }
+
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
           where: {
             source: catalogSource,
             is_active: true,
             category: { in: categories },
-            OR: this.buildEssentialBrandFilters(),
-          }
+          },
         });
 
         if (catalogItems.length === 0) {
@@ -399,13 +406,17 @@ export class ProductsService {
         source: catalogSource,
         is_active: true,
         category: buildAllowedCatalogCategoryWhere(catalogSource),
-        OR: this.buildEssentialBrandFilters(),
       },
       orderBy: [{ category: 'asc' }, { id: 'asc' }],
     });
 
-    const groupedItems = new Map<string, CatalogItem[]>();
-    for (const item of catalogItems) {
+    const enrichedCatalogItems = await this.enrichCatalogItemsWithStockStatus(
+      tenantId,
+      catalogItems,
+    );
+
+    const groupedItems = new Map<string, (CatalogItem & { is_in_stock?: boolean })[]>();
+    for (const item of enrichedCatalogItems) {
       const category = this.normalizeOptionalCategory(item.category ?? undefined);
       if (!category || !isCatalogCategoryAllowedForSource(catalogSource, category)) {
         continue;
@@ -454,7 +465,6 @@ export class ProductsService {
             source: catalogSource,
             is_active: true,
             category,
-            OR: this.buildEssentialBrandFilters(),
           },
         });
 
@@ -589,6 +599,7 @@ export class ProductsService {
       where: {
         tenant_id: tenantId,
         status: ProductStatus.ACTIVE,
+        deleted_at: null,
       },
       orderBy: {
         created_at: 'desc',
@@ -771,6 +782,7 @@ export class ProductsService {
 
     const where: Prisma.ProductWhereInput = {
       status: ProductStatus.ACTIVE,
+      deleted_at: null,
       tenant: {
         slug: slug,
       },
@@ -833,7 +845,7 @@ export class ProductsService {
       SELECT ${normalizedCategoryExpression} as category, COUNT(product.id)::int as count
       FROM products product
       INNER JOIN tenants tenant ON product.tenant_id = tenant.id
-      WHERE tenant.slug = $1 AND product.status = $2
+      WHERE tenant.slug = $1 AND product.status = $2 AND product.deleted_at IS NULL
       GROUP BY ${normalizedCategoryExpression}
       ORDER BY category ASC
     `;
@@ -1001,6 +1013,34 @@ export class ProductsService {
   }
 
   /**
+   * Enriches a list of catalog items with a boolean indicating if they are already in the tenant's products.
+   */
+  private async enrichCatalogItemsWithStockStatus(
+    tenantId: number,
+    catalogItems: CatalogItem[],
+  ): Promise<(CatalogItem & { is_in_stock: boolean })[]> {
+    if (catalogItems.length === 0) {
+      return [];
+    }
+
+    const existingProducts = await this.getPrismaClient().product.findMany({
+      where: {
+        tenant_id: tenantId,
+        status: ProductStatus.ACTIVE,
+        name: { in: catalogItems.map((item) => item.name) },
+      },
+      select: { name: true },
+    });
+
+    const existingNames = new Set(existingProducts.map((p) => p.name));
+
+    return catalogItems.map((item) => ({
+      ...item,
+      is_in_stock: existingNames.has(item.name),
+    }));
+  }
+
+  /**
    * Returns active catalog items, optionally filtered by category.
    */
   async findCatalogItems(
@@ -1095,8 +1135,13 @@ export class ProductsService {
 
     const lastPage = total > 0 ? Math.ceil(total / normalizedLimit) : 1;
 
-    return {
+    const enrichedData = await this.enrichCatalogItemsWithStockStatus(
+      tenantId,
       data,
+    );
+
+    return {
+      data: enrichedData,
       meta: {
         total,
         page: normalizedPage,
@@ -1212,8 +1257,13 @@ export class ProductsService {
 
     const lastPage = total > 0 ? Math.ceil(total / normalizedLimit) : 1;
 
-    return {
+    const enrichedData = await this.enrichCatalogItemsWithStockStatus(
+      tenantId,
       data,
+    );
+
+    return {
+      data: enrichedData,
       meta: {
         total,
         page: normalizedPage,
@@ -1369,6 +1419,7 @@ export class ProductsService {
 
     conditions.push(`tenant_id = ${addParam(tenantId)}`);
     conditions.push(`status = ${addParam(ProductStatus.ACTIVE)}`);
+    conditions.push(`deleted_at IS NULL`);
 
     if (useCategoryAsFilter) {
       conditions.push(`category = ${addParam(category)}`);
@@ -1468,6 +1519,7 @@ export class ProductsService {
     const slugParam = addParam(slug);
     conditions.push(`tenant.slug = ${slugParam}`);
     conditions.push(`product.status = ${addParam(ProductStatus.ACTIVE)}`);
+    conditions.push(`product.deleted_at IS NULL`);
 
     if (category) {
       conditions.push(`product.category = ${addParam(category)}`);
@@ -2145,8 +2197,13 @@ export class ProductsService {
 
     const lastPage = total > 0 ? Math.ceil(total / limit) : 1;
 
-    return {
+    const enrichedData = await this.enrichCatalogItemsWithStockStatus(
+      tenantId,
       data,
+    );
+
+    return {
+      data: enrichedData,
       meta: {
         total,
         page,
