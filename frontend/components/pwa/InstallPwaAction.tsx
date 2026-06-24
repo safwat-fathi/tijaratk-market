@@ -90,6 +90,21 @@ export default function InstallPwaAction({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
   const instruction = useMemo(() => {
     if (installPrompt) {
       return "ثبّت الاختصار كتطبيق على موبايلك وافتحه مباشرة من الشاشة الرئيسية.";
@@ -178,6 +193,11 @@ export default function InstallPwaAction({
 
       {isOpen && mounted && createPortal(
         <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsOpen(false);
+            }
+          }}
           className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 px-4 pb-4 sm:items-center sm:pb-0"
           role="dialog"
           aria-modal="true"
