@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { uploadCatalogImportAction } from "@/actions/admin-server";
 import { adminService } from "@/services/api/admin.service";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import { CancelImportButton } from "./_components/CancelImportButton";
 import type { ImportRun, ImportStatus } from "@/types/models/import";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ const STATUS_LABELS: Record<ImportStatus, string> = {
   success: "نجح",
   failed: "فشل",
   partial_success: "نجاح جزئي",
+  cancelled: "تم الإلغاء",
 };
 
 async function getImports(): Promise<ImportRun[]> {
@@ -67,7 +69,7 @@ export default async function AdminImportsPage() {
                 type="file"
                 name="file"
                 accept=".csv,text/csv"
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 file:ml-3 file:rounded-md file:border-0 file:bg-gray-900 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
+                className="block w-full h-11 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 file:ml-3 file:rounded-md file:border-0 file:bg-gray-900 file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white"
               />
             </label>
 
@@ -78,7 +80,7 @@ export default async function AdminImportsPage() {
               <select
                 name="mode"
                 defaultValue="upsert"
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
+                className="block w-full h-11 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
               >
                 <option value="upsert">إضافة وتحديث</option>
                 <option value="replace_source">استبدال كتالوج السوبرماركت</option>
@@ -87,7 +89,7 @@ export default async function AdminImportsPage() {
               </select>
             </label>
 
-            <Button type="submit" className="h-10">
+            <Button type="submit" className="h-11">
               رفع وبدء الاستيراد
             </Button>
           </div>
@@ -142,12 +144,17 @@ export default async function AdminImportsPage() {
                       {formatDate(importRun.created_at)}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm">
-                      <Link
-                        href={`/admin/imports/${importRun.id}`}
-                        className="font-semibold text-red-700 hover:text-red-800"
-                      >
-                        عرض
-                      </Link>
+                      <div className="flex items-center justify-end gap-3">
+                        {(importRun.status === "processing" || importRun.status === "pending") ? (
+                          <CancelImportButton importId={importRun.id} />
+                        ) : null}
+                        <Link
+                          href={`/admin/imports/${importRun.id}`}
+                          className="font-semibold text-red-700 hover:text-red-800"
+                        >
+                          عرض
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))

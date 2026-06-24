@@ -208,6 +208,10 @@ class AdminApiService extends HttpService {
 		return this.get<ImportRun>(`imports/${id}`, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
+	public async cancelImport(id: number) {
+		return this.post<{ success: boolean; message: string }>(`imports/${id}/cancel`, undefined, undefined, ADMIN_AUTH_OPTIONS);
+	}
+
 	public async getImportErrors(id: number) {
 		return this.get<ImportRowError[]>(`imports/${id}/errors`, undefined, ADMIN_AUTH_OPTIONS);
 	}

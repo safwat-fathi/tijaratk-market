@@ -9,7 +9,8 @@ export type ImportStatus =
   | "processing"
   | "success"
   | "failed"
-  | "partial_success";
+  | "partial_success"
+  | "cancelled";
 
 export type ImportRun = {
   id: number;

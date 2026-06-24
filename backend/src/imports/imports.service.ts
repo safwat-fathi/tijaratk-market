@@ -20,40 +20,22 @@ import {
   parseCatalogImportRow,
 } from './schemas/catalog-import-row.schema';
 import {
-  CATALOG_SOURCE_CHEFAA,
-  CATALOG_SOURCE_TALABAT,
+  GROCERY_CATALOG_CATEGORIES,
+  PHARMACY_CATALOG_CATEGORIES,
   isCatalogCategoryAllowedForSource,
+  resolveCatalogSourceForImportFormat,
 } from 'src/products/catalog-source-policy';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import { ImageDownloaderService } from './services/image-downloader.service';
 
-const CATALOG_IMPORT_SOURCES: Record<CatalogImportFormat, string> = {
-  [CatalogImportFormat.talabat]: CATALOG_SOURCE_TALABAT,
-  [CatalogImportFormat.chefaa]: CATALOG_SOURCE_CHEFAA,
-  [CatalogImportFormat.carrefour]: CATALOG_SOURCE_TALABAT,
-};
 const DEFAULT_CATEGORY = 'أخرى';
 const EXPECTED_CURRENCY = 'EGP';
 const PROGRESS_UPDATE_INTERVAL = 100;
+const ROW_ERROR_BATCH_SIZE = 50;
 
-const SEEDED_CATEGORIES = new Set([
-  'ألبان و بيض',
-  'مخبوزات',
-  'زيت وسمن',
-  'أرز ومكرونة',
-  'بقوليات',
-  'سكر و دقيق',
-  'توابل',
-  'صلصات و خل',
-  'مشروبات',
-  'لحوم و دواجن',
-  'مجمدات',
-  'سناكس و حلويات',
-  'عسل ومربى وشوكولاتة',
-  'منظفات ومنتجات ورقية',
-  'عناية شخصية',
-  'أدوية',
-  DEFAULT_CATEGORY,
+const SEEDED_CATEGORIES = new Set<string>([
+  ...GROCERY_CATALOG_CATEGORIES,
+  ...PHARMACY_CATALOG_CATEGORIES,
 ]);
 
 const PARENT_CATEGORY_MAP = {
@@ -135,6 +117,11 @@ type CatalogReplacementState = {
 @Injectable()
 export class ImportsService {
   private readonly logger = new Logger(ImportsService.name);
+  private readonly rowErrorBatches = new Map<
+    number,
+    Prisma.ImportRowErrorCreateManyInput[]
+  >();
+  private readonly cancelledImports = new Set<number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -187,6 +174,25 @@ export class ImportsService {
     }
 
     return importRun;
+  }
+
+  /**
+   * Cancels a running import process.
+   */
+  async cancelImport(importRunId: number) {
+    const importRun = await this.prisma.importRun.findUnique({
+      where: { id: importRunId },
+    });
+    if (!importRun) {
+      throw new NotFoundException(`Import run with ID ${importRunId} not found`);
+    }
+
+    if (importRun.status !== ImportStatus.processing && importRun.status !== ImportStatus.pending) {
+      throw new BadRequestException(`Cannot cancel import with status ${importRun.status}`);
+    }
+
+    this.cancelledImports.add(importRunId);
+    return { success: true, message: 'Cancellation requested' };
   }
 
   /**
@@ -259,7 +265,22 @@ export class ImportsService {
           );
           batch = [];
 
+          if (this.cancelledImports.has(importRunId)) {
+            this.cancelledImports.delete(importRunId);
+            await this.flushRowErrors(importRunId);
+            await this.prisma.importRun.update({
+              where: { id: importRunId },
+              data: {
+                status: ImportStatus.cancelled,
+                error_message: 'تم إلغاء الاستيراد من قبل المستخدم',
+                ...this.toImportProgressData(counters),
+              },
+            });
+            return;
+          }
+
           if (counters.totalRows % PROGRESS_UPDATE_INTERVAL === 0) {
+            await this.flushRowErrors(importRunId);
             await this.updateImportProgress(importRunId, counters);
           }
         }
@@ -278,6 +299,7 @@ export class ImportsService {
             ),
           ),
         );
+        await this.flushRowErrors(importRunId);
         await this.updateImportProgress(importRunId, counters);
       }
 
@@ -288,8 +310,10 @@ export class ImportsService {
         await this.deactivateMissingSourceItems(replacementState, counters);
       }
 
+      await this.flushRowErrors(importRunId);
       await this.finishImport(importRunId, counters);
     } catch (error) {
+      await this.flushRowErrors(importRunId);
       await this.prisma.importRun.update({
         where: { id: importRunId },
         data: {
@@ -445,7 +469,7 @@ export class ImportsService {
 
     const categorySource = this.resolveCategorySource(row);
 
-    const source = CATALOG_IMPORT_SOURCES[row.format];
+    const source = resolveCatalogSourceForImportFormat(row.format);
     const category = this.mapCategory(categorySource, row.format);
     if (!isCatalogCategoryAllowedForSource(source, category)) {
       throw new Error(`Category ${category} is not allowed for ${source}`);
@@ -550,15 +574,27 @@ export class ImportsService {
     errorCode: string,
     errorMessage: string,
   ) {
-    await this.prisma.importRowError.create({
-      data: {
-        import_run_id: importRunId,
-        row_number: rowNumber,
-        row_data: rowData as Prisma.InputJsonValue,
-        error_code: errorCode,
-        error_message: errorMessage,
-      },
+    const batch = this.rowErrorBatches.get(importRunId) ?? [];
+    batch.push({
+      import_run_id: importRunId,
+      row_number: rowNumber,
+      row_data: rowData as Prisma.InputJsonValue,
+      error_code: errorCode,
+      error_message: errorMessage,
     });
+    this.rowErrorBatches.set(importRunId, batch);
+
+    if (batch.length >= ROW_ERROR_BATCH_SIZE) {
+      await this.flushRowErrors(importRunId);
+    }
+  }
+
+  private async flushRowErrors(importRunId: number): Promise<void> {
+    const batch = this.rowErrorBatches.get(importRunId);
+    if (!batch?.length) return;
+
+    this.rowErrorBatches.delete(importRunId);
+    await this.prisma.importRowError.createMany({ data: batch });
   }
 
   private async updateImportProgress(

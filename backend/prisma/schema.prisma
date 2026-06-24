@@ -106,6 +106,7 @@ model Customer {
   updated_at            DateTime          @default(now()) @db.Timestamp(6)
   deleted_at            DateTime?         @db.Timestamp(6)
   tenant_id             Int
+  global_customer_id    Int?
   id                    Int               @id(map: "PK_133ec679a801fab5e070f73d3ea") @default(autoincrement())
   phone                 String            @db.VarChar
   name                  String?           @db.VarChar
@@ -117,14 +118,30 @@ model Customer {
   last_order_at         DateTime?         @db.Timestamp(6)
   order_count           Int               @default(0)
   completed_order_count Int               @default(0)
+  global_customer       GlobalCustomer?   @relation(fields: [global_customer_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_customers_global_customer")
   tenant                Tenant            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_97913f35ac2e435a4463fb50a01")
   orders                Order[]
   addresses             CustomerAddress[]
 
   @@unique([tenant_id, code], map: "UQ_31e385cc0f0f40cc6a0149b9806")
   @@unique([tenant_id, phone], map: "UQ_d9ef0802e47c0384f5831b59733")
+  @@index([global_customer_id], map: "IDX_customers_global_customer_id")
   @@index([tenant_id], map: "IDX_97913f35ac2e435a4463fb50a0")
   @@map("customers")
+}
+
+model GlobalCustomer {
+  created_at  DateTime   @default(now()) @db.Timestamp(6)
+  updated_at  DateTime   @default(now()) @updatedAt @db.Timestamp(6)
+  deleted_at  DateTime?  @db.Timestamp(6)
+  id          Int        @id(map: "PK_global_customers_id") @default(autoincrement())
+  phone       String     @unique(map: "UQ_global_customers_phone") @db.VarChar(32)
+  access_code String     @unique(map: "UQ_global_customers_access_code") @db.VarChar(16)
+  name        String?    @db.VarChar
+  customers   Customer[]
+
+  @@index([access_code], map: "IDX_global_customers_access_code")
+  @@map("global_customers")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -182,6 +199,8 @@ model OrderItem {
   replacement_decision_status    ReplacementDecisionStatus @default(none) @map("replacement_decision_status")
   replacement_decision_reason    String?
   replacement_decided_at         DateTime?                 @db.Timestamptz(6)
+  is_out_of_stock                Boolean                   @default(false)
+  out_of_stock_at                DateTime?                 @db.Timestamptz(6)
   selection_mode                 OrderItemSelectionMode?   @map("selection_mode")
   selection_quantity             Decimal?                  @db.Decimal(10, 3)
   selection_grams                Int?
@@ -220,6 +239,7 @@ model Order {
   free_text_payload             Json?
   notes                         String?
   card_on_delivery_requested    Boolean     @default(false)
+  unavailable_item_action       String      @default("suggest_replacement") @db.VarChar(64)
   merchant_cancellation_reason  String?
   merchant_cancelled_at         DateTime?   @db.Timestamptz(6)
   customer_rejection_reason     String?
@@ -326,6 +346,8 @@ model Tenant {
   ewallet_account_number  String?   @db.VarChar(120)
   card_on_delivery_available Boolean  @default(false)
   last_bulk_essentials_added_at DateTime? @db.Timestamp(6)
+  onboarding_completed Boolean  @default(false)
+  onboarding_step      Int      @default(1)
 
   availability_requests     AvailabilityRequest[]
   customers                 Customer[]
@@ -628,6 +650,7 @@ enum ImportStatus {
   success
   failed
   partial_success
+  cancelled
 
   @@map("import_runs_status_enum")
 }

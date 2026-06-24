@@ -208,6 +208,15 @@ export async function uploadCatalogImportAction(formData: FormData): Promise<voi
   throw new Error(response.message || "تعذر رفع ملف الاستيراد");
 }
 
+export async function cancelImportAction(id: number): Promise<void> {
+  const response = await adminService.cancelImport(id);
+  if (!response.success) {
+    throw new Error(response.message || "تعذر إلغاء الاستيراد");
+  }
+  revalidatePath("/admin/imports");
+  revalidatePath(`/admin/imports/${id}`);
+}
+
 import { AdminDirectoryArea } from "@/services/api/admin.service";
 
 export async function createDirectoryAreaAction(payload: Partial<AdminDirectoryArea>): Promise<void> {

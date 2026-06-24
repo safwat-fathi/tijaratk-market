@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { adminService } from "@/services/api/admin.service";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import { CancelImportButton } from "../_components/CancelImportButton";
 import type { ImportRowError, ImportRun, ImportStatus } from "@/types/models/import";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ const STATUS_LABELS: Record<ImportStatus, string> = {
   success: "نجح",
   failed: "فشل",
   partial_success: "نجاح جزئي",
+  cancelled: "تم الإلغاء",
 };
 
 async function getImportData(id: number): Promise<{
@@ -76,9 +78,14 @@ export default async function AdminImportDetailsPage({
             تفاصيل الاستيراد #{importRun.id}
           </h1>
         </div>
-        <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-700">
-          {STATUS_LABELS[importRun.status] || importRun.status}
-        </span>
+        <div className="flex items-center gap-3">
+          {(importRun.status === "processing" || importRun.status === "pending") ? (
+            <CancelImportButton importId={importRun.id} />
+          ) : null}
+          <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-700">
+            {STATUS_LABELS[importRun.status] || importRun.status}
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">

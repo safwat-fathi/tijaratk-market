@@ -136,4 +136,15 @@ export class ImportsController {
   findErrors(@Param('id', ParseIntPipe) id: number) {
     return this.importsService.findErrors(id);
   }
+
+  /**
+   * Cancels a running import run.
+   */
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'Cancel a running import run' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Import cancelled successfully' })
+  cancelImport(@Param('id', ParseIntPipe) id: number) {
+    return this.importsService.cancelImport(id);
+  }
 }
