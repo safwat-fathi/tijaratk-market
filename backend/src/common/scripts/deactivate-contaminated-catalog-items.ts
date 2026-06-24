@@ -4,6 +4,7 @@ import { config } from 'dotenv';
 import { Pool } from 'pg';
 import {
   CATALOG_SOURCE_CHEFAA,
+  CATALOG_SOURCE_TALABAT,
   getAllowedCatalogCategoriesForSource,
 } from 'src/products/catalog-source-policy';
 
@@ -17,29 +18,30 @@ config({
 const logger = new Logger('CatalogSourceCleanup');
 
 async function main() {
-  const allowedCategories = getAllowedCatalogCategoriesForSource(
-    CATALOG_SOURCE_CHEFAA,
-  );
+  const sources = [CATALOG_SOURCE_CHEFAA, CATALOG_SOURCE_TALABAT];
 
   const pool = new Pool({
     connectionString: process.env.MIGRATE_DB_URL ?? process.env.DB_URL,
   });
 
   try {
-    const result = await pool.query(
-      `
-        UPDATE catalog_items
-        SET is_active = false, updated_at = NOW()
-        WHERE source = $1
-          AND is_active = true
-          AND category <> ALL($2::text[])
-      `,
-      [CATALOG_SOURCE_CHEFAA, allowedCategories],
-    );
+    for (const source of sources) {
+      const allowedCategories = getAllowedCatalogCategoriesForSource(source);
+      const result = await pool.query(
+        `
+          UPDATE catalog_items
+          SET is_active = false, updated_at = NOW()
+          WHERE source = $1
+            AND is_active = true
+            AND category <> ALL($2::text[])
+        `,
+        [source, allowedCategories],
+      );
 
-    logger.log(
-      `Deactivated ${result.rowCount ?? 0} contaminated ${CATALOG_SOURCE_CHEFAA} catalog items.`,
-    );
+      logger.log(
+        `Deactivated ${result.rowCount ?? 0} contaminated ${source} catalog items.`,
+      );
+    }
   } finally {
     await pool.end();
   }

@@ -3,6 +3,10 @@ import { PrismaClient } from '../../../generated/prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse } from 'csv-parse/sync';
+import {
+  CATALOG_SOURCE_TALABAT,
+  isCatalogCategoryAllowedForSource,
+} from 'src/products/catalog-source-policy';
 
 const DEFAULT_CATALOG_CATEGORY = 'أخرى';
 const EXPECTED_CATALOG_CURRENCY = 'EGP';
@@ -22,6 +26,7 @@ type CatalogSeedItem = {
   currency: string;
   image_url: string | null;
   category: string;
+  external_id: string | null;
 };
 
 /**
@@ -66,6 +71,7 @@ export async function seedCatalog(prisma: PrismaClient) {
     const uniqueItemsMap = new Map<string, CatalogSeedItem>();
     let skippedCurrencyCount = 0;
     let skippedNameCount = 0;
+    let skippedCategoryCount = 0;
 
     for (const record of records) {
       const name = record.name?.trim();
@@ -82,6 +88,11 @@ export async function seedCatalog(prisma: PrismaClient) {
       }
 
       const category = record.category?.trim() || DEFAULT_CATALOG_CATEGORY;
+      if (!isCatalogCategoryAllowedForSource(CATALOG_SOURCE_TALABAT, category)) {
+        skippedCategoryCount += 1;
+        continue;
+      }
+
       const productId = normalizeOptionalText(record.product_id);
       const key = productId || `${name}|${category}`;
 
@@ -92,6 +103,7 @@ export async function seedCatalog(prisma: PrismaClient) {
           currency,
           image_url: normalizeOptionalText(record.image_url),
           category,
+          external_id: productId,
         });
       }
     }
@@ -106,6 +118,11 @@ export async function seedCatalog(prisma: PrismaClient) {
     if (skippedNameCount > 0) {
       logger.warn(`Skipped ${skippedNameCount} catalog rows without a name.`);
     }
+    if (skippedCategoryCount > 0) {
+      logger.warn(
+        `Skipped ${skippedCategoryCount} catalog rows with invalid ${CATALOG_SOURCE_TALABAT} categories.`,
+      );
+    }
 
     let createdItemsCount = 0;
     let updatedItemsCount = 0;
@@ -113,9 +130,12 @@ export async function seedCatalog(prisma: PrismaClient) {
     for (const item of newItems) {
       const existingItem = await prisma.catalogItem.findFirst({
         where: {
+          source: CATALOG_SOURCE_TALABAT,
           OR: [
+            item.external_id
+              ? { external_id: item.external_id }
+              : { name: item.name, category: item.category },
             { name: item.name, category: item.category },
-            { name: item.name },
           ],
         },
         orderBy: { id: 'asc' },
@@ -130,6 +150,8 @@ export async function seedCatalog(prisma: PrismaClient) {
             currency: item.currency,
             image_url: item.image_url,
             category: item.category,
+            source: CATALOG_SOURCE_TALABAT,
+            external_id: item.external_id,
             is_active: true,
           },
         });
@@ -144,6 +166,8 @@ export async function seedCatalog(prisma: PrismaClient) {
           currency: item.currency,
           image_url: item.image_url,
           category: item.category,
+          source: CATALOG_SOURCE_TALABAT,
+          external_id: item.external_id,
           is_active: true,
         },
       });
