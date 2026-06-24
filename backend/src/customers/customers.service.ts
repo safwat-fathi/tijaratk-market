@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { randomInt } from 'node:crypto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { formatPhoneNumber } from '@/common/utils/phone.util';
 import { DbTenantContext } from '@/common/contexts/db-tenant.context';
@@ -9,9 +10,128 @@ type PublicCustomerProfile = Pick<Customer, 'name' | 'phone' | 'notes'> & {
   addresses: string[];
 };
 
+type PublicCustomerOrder = Pick<
+  Order,
+  | 'id'
+  | 'public_token'
+  | 'status'
+  | 'created_at'
+  | 'total'
+  | 'delivery_address'
+  | 'delivery_time_window_snapshot'
+> & {
+  tenant?: { id: number; name: string; slug: string };
+  items?: unknown[];
+};
+
 @Injectable()
 export class CustomersService {
+  private static readonly ACCESS_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  private static readonly ACCESS_CODE_LENGTH = 8;
+  private static readonly MAX_ACCESS_CODE_GENERATION_ATTEMPTS = 8;
+
   constructor(private readonly prisma: PrismaService) {}
+
+  normalizeAccessCode(rawCode: string): string {
+    return rawCode.trim().toUpperCase().replace(/[\s-]/g, '');
+  }
+
+  formatAccessCode(rawCode: string): string {
+    const normalized = this.normalizeAccessCode(rawCode);
+    return normalized.length > 4
+      ? `${normalized.slice(0, 4)}-${normalized.slice(4)}`
+      : normalized;
+  }
+
+  private generateAccessCode(): string {
+    let code = '';
+    for (let index = 0; index < CustomersService.ACCESS_CODE_LENGTH; index += 1) {
+      code +=
+        CustomersService.ACCESS_CODE_ALPHABET[
+          randomInt(CustomersService.ACCESS_CODE_ALPHABET.length)
+        ];
+    }
+    return code;
+  }
+
+  async ensureGlobalCustomerForTenantCustomer(
+    manager: Prisma.TransactionClient,
+    customer: Pick<Customer, 'id' | 'phone' | 'name' | 'global_customer_id'>,
+    name?: string,
+  ): Promise<{ id: number; access_code: string }> {
+    const phone = formatPhoneNumber(customer.phone);
+    const displayName = name?.trim() || customer.name?.trim() || undefined;
+
+    const existingByCustomer = customer.global_customer_id
+      ? await manager.globalCustomer.findUnique({
+          where: { id: customer.global_customer_id },
+          select: { id: true, access_code: true },
+        })
+      : null;
+
+    if (existingByCustomer) {
+      if (displayName) {
+        await manager.globalCustomer.update({
+          where: { id: existingByCustomer.id },
+          data: { name: displayName },
+        });
+      }
+      return existingByCustomer;
+    }
+
+    const existingByPhone = await manager.globalCustomer.findUnique({
+      where: { phone },
+      select: { id: true, access_code: true },
+    });
+
+    if (existingByPhone) {
+      await manager.customer.update({
+        where: { id: customer.id },
+        data: { global_customer_id: existingByPhone.id },
+      });
+      if (displayName) {
+        await manager.globalCustomer.update({
+          where: { id: existingByPhone.id },
+          data: { name: displayName },
+        });
+      }
+      return existingByPhone;
+    }
+
+    for (
+      let attempt = 0;
+      attempt < CustomersService.MAX_ACCESS_CODE_GENERATION_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        const globalCustomer = await manager.globalCustomer.create({
+          data: {
+            phone,
+            name: displayName,
+            access_code: this.generateAccessCode(),
+          },
+          select: { id: true, access_code: true },
+        });
+
+        await manager.customer.update({
+          where: { id: customer.id },
+          data: { global_customer_id: globalCustomer.id },
+        });
+
+        return globalCustomer;
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new Error('Failed to generate unique customer access code');
+  }
 
   /**
    * Finds a public customer profile by tenant slug and phone number.
@@ -66,6 +186,119 @@ export class CustomersService {
       notes: customer.notes,
       addresses,
     };
+  }
+
+  async findPublicProfileByAccessCode(
+    rawCode: string,
+    rawPhone: string,
+  ): Promise<PublicCustomerProfile | null> {
+    const accessCode = this.normalizeAccessCode(rawCode);
+    const normalizedPhone = rawPhone.trim();
+
+    if (!accessCode || !normalizedPhone) {
+      return null;
+    }
+
+    const phone = formatPhoneNumber(normalizedPhone);
+    const globalCustomer = await this.prisma.globalCustomer.findFirst({
+      where: {
+        access_code: accessCode,
+        phone,
+        deleted_at: null,
+      },
+      include: {
+        customers: {
+          where: { deleted_at: null },
+          include: {
+            addresses: {
+              where: { deleted_at: null },
+              select: { address: true },
+              orderBy: [{ last_used_at: 'desc' }, { created_at: 'desc' }],
+              take: 10,
+            },
+          },
+          orderBy: [{ last_order_at: 'desc' }, { created_at: 'desc' }],
+        },
+      },
+    });
+
+    if (!globalCustomer) {
+      return null;
+    }
+
+    const latestCustomer = globalCustomer.customers[0];
+    const addresses = Array.from(
+      new Set(
+        globalCustomer.customers
+          .flatMap((customer) => customer.addresses)
+          .map((addressRow) => addressRow.address.trim())
+          .filter((address): address is string => Boolean(address)),
+      ),
+    );
+
+    return {
+      name: globalCustomer.name || latestCustomer?.name || null,
+      phone: globalCustomer.phone,
+      notes: latestCustomer?.notes || null,
+      addresses,
+    };
+  }
+
+  async findPublicOrdersByAccessCode(
+    rawCode: string,
+    rawPhone: string,
+  ): Promise<PublicCustomerOrder[]> {
+    const accessCode = this.normalizeAccessCode(rawCode);
+    const normalizedPhone = rawPhone.trim();
+
+    if (!accessCode || !normalizedPhone) {
+      return [];
+    }
+
+    const phone = formatPhoneNumber(normalizedPhone);
+    const globalCustomer = await this.prisma.globalCustomer.findFirst({
+      where: {
+        access_code: accessCode,
+        phone,
+        deleted_at: null,
+      },
+      select: { id: true },
+    });
+
+    if (!globalCustomer) {
+      return [];
+    }
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        customer: {
+          global_customer_id: globalCustomer.id,
+        },
+      },
+      include: {
+        tenant: { select: { id: true, name: true, slug: true } },
+        order_items: {
+          include: {
+            replaced_by_product: true,
+            pending_replacement_product: true,
+          },
+        },
+      },
+      orderBy: { created_at: 'desc' },
+      take: 50,
+    });
+
+    return orders.map((order) => ({
+      id: order.id,
+      public_token: order.public_token,
+      status: order.status,
+      created_at: order.created_at,
+      total: order.total,
+      delivery_address: order.delivery_address,
+      delivery_time_window_snapshot: order.delivery_time_window_snapshot,
+      tenant: order.tenant,
+      items: order.order_items,
+    })) as PublicCustomerOrder[];
   }
 
   async create(

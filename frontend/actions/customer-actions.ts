@@ -34,6 +34,12 @@ type PublicCustomerProfileActionResult = {
   data?: PublicCustomerProfile | null;
 };
 
+type PublicCustomerOrdersActionResult = {
+  success: boolean;
+  message?: string;
+  data?: Awaited<ReturnType<typeof customersService.getPublicOrdersByAccessCode>>["data"];
+};
+
 const DEFAULT_LIMIT = 20;
 
 const normalizePositiveInteger = (
@@ -217,6 +223,96 @@ export async function getPublicCustomerByPhoneAction(input: {
       success: false,
       message:
         error instanceof Error ? error.message : "تعذر تحميل بيانات العميل",
+    };
+  }
+}
+
+export async function getPublicCustomerByAccessCodeAction(input: {
+  code: string;
+  phone: string;
+}): Promise<PublicCustomerProfileActionResult> {
+  const code = input.code.trim();
+  const phone = input.phone.trim();
+
+  if (!code || !phone) {
+    return {
+      success: false,
+      message: "اكتب كود العميل ورقم الهاتف",
+    };
+  }
+
+  try {
+    const response = await customersService.getPublicCustomerByAccessCode({
+      code,
+      phone,
+    });
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحميل بيانات العميل",
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data
+        ? normalizePublicCustomerProfile(response.data)
+        : null,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "تعذر تحميل بيانات العميل",
+    };
+  }
+}
+
+export async function getPublicOrdersByAccessCodeAction(input: {
+  code: string;
+  phone: string;
+}): Promise<PublicCustomerOrdersActionResult> {
+  const code = input.code.trim();
+  const phone = input.phone.trim();
+
+  if (!code || !phone) {
+    return {
+      success: false,
+      message: "اكتب كود العميل ورقم الهاتف",
+      data: [],
+    };
+  }
+
+  try {
+    const response = await customersService.getPublicOrdersByAccessCode({
+      code,
+      phone,
+    });
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحميل الطلبات",
+        data: [],
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "تعذر تحميل الطلبات",
+      data: [],
     };
   }
 }

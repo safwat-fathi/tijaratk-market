@@ -1,5 +1,6 @@
 import HttpService from "@/services/base/http.service";
 import { Customer } from "@/types/models/customer";
+import { Order } from "@/types/models/order";
 
 type CustomersListMeta = {
 	total: number;
@@ -33,6 +34,26 @@ class CustomersService extends HttpService {
 
 	public async getPublicCustomerByPhone(slug: string, phone: string) {
 		return this.get<PublicCustomerProfile | null>(`public/${slug}/by-phone`, { phone }, {
+			cache: "no-store",
+		});
+	}
+
+	public async getPublicCustomerByAccessCode(input: {
+		code: string;
+		phone: string;
+	}) {
+		return this.get<PublicCustomerProfile | null>(
+			"public/by-access-code/profile",
+			input,
+			{ cache: "no-store" },
+		);
+	}
+
+	public async getPublicOrdersByAccessCode(input: {
+		code: string;
+		phone: string;
+	}) {
+		return this.get<Order[]>("public/by-access-code/orders", input, {
 			cache: "no-store",
 		});
 	}

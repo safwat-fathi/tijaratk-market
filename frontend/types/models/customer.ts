@@ -8,6 +8,7 @@ export interface CustomerOrderSummary {
 export interface Customer {
 	id: number;
 	tenant_id: number;
+	global_customer_id?: number | null;
 	phone: string;
 	code: number;
 	merchant_label?: string;

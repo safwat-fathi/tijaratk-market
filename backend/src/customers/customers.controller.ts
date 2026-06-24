@@ -17,6 +17,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import CONSTANTS from 'src/common/constants';
 import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -64,6 +65,8 @@ export class CustomersController {
   }
 
   @Get('public/:slug/by-phone')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({ summary: 'Find customer profile by phone (Public)' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -75,6 +78,40 @@ export class CustomersController {
     @Query('phone') phone: string,
   ) {
     return this.customersService.findPublicProfileByPhone(slug, phone);
+  }
+
+  @Get('public/by-access-code/profile')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Find global customer profile by access code and phone (Public)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Return public customer profile fields for portable autofill',
+  })
+  findPublicProfileByAccessCode(
+    @Query('code') code: string,
+    @Query('phone') phone: string,
+  ) {
+    return this.customersService.findPublicProfileByAccessCode(code, phone);
+  }
+
+  @Get('public/by-access-code/orders')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Find global customer orders by access code and phone (Public)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Return public-safe customer orders across stores',
+  })
+  findPublicOrdersByAccessCode(
+    @Query('code') code: string,
+    @Query('phone') phone: string,
+  ) {
+    return this.customersService.findPublicOrdersByAccessCode(code, phone);
   }
 
   @Get(':id')

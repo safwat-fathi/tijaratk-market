@@ -28,6 +28,7 @@ Note: **pricing plans features details is in `pricing-plans.md`**
 
 ## New Features
 
+- Code for every customer (search for orders history, order details, reorder)
 - Make app ready for multiple store types (supermarket, restaurant, online store, pharmacy, etc.)
 - Should we add PostHog for analytics?
 - How we can make a one qr code for multiple store branches?

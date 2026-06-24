@@ -14,6 +14,7 @@ import { OrderStatus } from "@/types/enums";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import CustomerAccessOrdersLookup from "./CustomerAccessOrdersLookup";
 
 export const metadata = {
 	title: "تتبع طلباتي",
@@ -145,6 +146,8 @@ export default async function TrackOrdersPage() {
 					</div>
 				</div>
 			</Card>
+
+			<CustomerAccessOrdersLookup />
 
 			{hasError && (
 				<div className="mt-4 rounded-lg border border-status-warning/30 bg-status-warning/20 px-4 py-3 text-sm text-amber-900">
