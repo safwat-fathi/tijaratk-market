@@ -706,7 +706,7 @@ export default function LandingPage() {
               </div>
               */}
 
-              {pricingPlans.filter(p => p.name !== "الباقة الأساسية").map((plan, index) => (
+              {pricingPlans.map((plan, index) => (
                 <div
                   key={index}
                   className={`relative flex flex-col rounded-[2.5rem] p-8 md:p-10 shadow-md transition-all duration-300 hover:-translate-y-2 hover:shadow-xl ${

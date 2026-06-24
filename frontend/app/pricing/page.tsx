@@ -24,34 +24,7 @@ export default function PricingPage() {
 				dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingJsonLd) }}
 			/>
 			<section className="grid gap-5 lg:grid-cols-2">
-				{/* الباقة الأساسية - تم تعليقها بناءً على طلب العميل
-				<article
-					className="flex flex-col rounded-2xl border border-brand-border bg-white p-6 shadow-soft"
-				>
-					<h2 className="text-2xl font-black text-brand-primary">الباقة الأساسية</h2>
-					<p className="mt-2 text-sm leading-7 text-muted-foreground">
-						للمتاجر النامية التي تحتاج لمتابعة أفضل
-					</p>
-					<p className="mt-5 text-4xl font-black text-brand-primary">مجاناً</p>
-					<p className="mt-1 text-sm font-bold text-brand-text">
-						أول شهرين مجاناً، ثم ١٩٩ جنيه/شهر بعد ذلك
-					</p>
-					<ul className="mt-6 flex-1 space-y-3 text-sm leading-7 text-brand-text">
-						<li>- عدد منتجات غير محدود</li>
-						<li>- عدد طلبات غير محدود</li>
-						<li>- تقارير يومية</li>
-						<li>- خدمة عملاء سريعة</li>
-						<li>- تعديلات واجهة المتجر (ألوان المتجر، شعار المتجر)</li>
-					</ul>
-					<Link
-						href="/merchant/register"
-						className="mt-6 inline-flex min-h-11 items-center justify-center rounded-md bg-brand-primary px-5 py-3 text-sm font-bold text-white hover:bg-brand-primary-hover"
-					>
-						ابدأ تجربة تجارتك
-					</Link>
-				</article>
-				*/}
-				{pricingPlans.filter(p => p.name !== "الباقة الأساسية").map(plan => (
+				{pricingPlans.map(plan => (
 					<article
 						key={plan.name}
 						className="flex flex-col rounded-2xl border border-brand-border bg-white p-6 shadow-soft"

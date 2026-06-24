@@ -17,12 +17,7 @@ export default function DocsPricingPage() {
 			<section className="rounded-2xl border border-brand-border bg-white p-6 shadow-soft">
 				<h2 className="text-2xl font-black text-brand-text">ملخص الباقات</h2>
 				<ul className="mt-4 space-y-4 leading-8 text-muted-foreground">
-					{/* الباقة الأساسية - تم تعليقها بناءً على طلب العميل
-					<li>
-						<strong className="text-brand-text">الباقة الأساسية:</strong> أول شهرين مجاناً، ثم ١٩٩ جنيه/شهر بعد ذلك
-					</li>
-					*/}
-					{pricingPlans.filter(p => p.name !== "الباقة الأساسية").map(plan => (
+					{pricingPlans.map(plan => (
 						<li key={plan.name}>
 							<strong className="text-brand-text">{plan.name}:</strong> {plan.promoText}، {plan.afterPromoText}
 						</li>

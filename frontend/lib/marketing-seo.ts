@@ -92,26 +92,6 @@ export const publicMarketingPages = [
 
 export const pricingPlans = [
   {
-    name: "الباقة الأساسية",
-    originalPrice: "١٩٩",
-    priceNumber: 199,
-    currency: "جنيه/شهر",
-    promoPrice: "٠",
-    promoText: "أول شهرين مجاناً",
-    afterPromoText: "ثم ١٩٩ جنيه/شهر بعد ذلك",
-    subPrice: undefined,
-    description: "للمتاجر النامية التي تحتاج لمتابعة أفضل",
-    features: [
-      "عدد منتجات غير محدود",
-      "عدد طلبات غير محدود",
-      "تقارير يومية",
-      "خدمة عملاء سريعة",
-      "تعديلات واجهة المتجر (ألوان المتجر، شعار المتجر)",
-    ],
-    buttonText: "ابدأ فترة التجربة",
-    highlighted: false,
-  },
-  {
     name: "الباقة الكاملة",
     originalPrice: "١٠٠٠",
     priceNumber: 1000,
@@ -269,7 +249,7 @@ export const softwareApplicationJsonLd = {
     "@type": "AggregateOffer",
     priceCurrency: "EGP",
     lowPrice: "0",
-    highPrice: "699",
+    highPrice: "1000",
     offerCount: pricingPlans.length,
     offers: pricingPlans.map((plan) => ({
       "@type": "Offer",

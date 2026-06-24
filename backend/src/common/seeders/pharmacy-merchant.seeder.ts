@@ -9,6 +9,7 @@ import {
   CATALOG_SOURCE_CHEFAA,
   CatalogSource,
 } from 'src/products/catalog-source-policy';
+import { pharmacyProducts } from './pharmacy-products.data';
 
 type MerchantVariant =
   | 'complete_100_products'
@@ -30,6 +31,8 @@ type CatalogSeedProduct = {
   image_url: string | null;
   category: string;
   price: Prisma.Decimal | null;
+  order_mode?: ProductOrderMode;
+  order_config?: Prisma.InputJsonValue;
 };
 
 export const PHARMACY_RANKING_MERCHANTS: RankingSeedMerchant[] = [
@@ -231,7 +234,14 @@ async function findCatalogProducts(
     return preferredProducts;
   }
 
-  return [];
+  return pharmacyProducts.map((p) => ({
+    name: p.name,
+    image_url: null,
+    category: p.category,
+    price: p.current_price ? new Prisma.Decimal(p.current_price) : null,
+    order_mode: p.order_mode,
+    order_config: p.order_config,
+  }));
 }
 
 function selectProductsForVariant(
@@ -336,6 +346,9 @@ async function seedProducts(
       },
     });
 
+    const orderMode = product.order_mode ?? ProductOrderMode.QUANTITY;
+    const orderConfig = product.order_config ?? { quantity: { unit_label: 'علبة' } };
+
     if (existingProduct) {
       await tx.product.update({
         where: { id: existingProduct.id },
@@ -344,8 +357,8 @@ async function seedProducts(
           source: ProductSource.CATALOG,
           status: ProductStatus.ACTIVE,
           current_price: product.price,
-          order_mode: ProductOrderMode.QUANTITY,
-          order_config: { quantity: { unit_label: 'علبة' } },
+          order_mode: orderMode,
+          order_config: orderConfig as Prisma.InputJsonValue,
           is_available: true,
           deleted_at: null,
         },
@@ -362,8 +375,8 @@ async function seedProducts(
         source: ProductSource.CATALOG,
         status: ProductStatus.ACTIVE,
         current_price: product.price,
-        order_mode: ProductOrderMode.QUANTITY,
-        order_config: { quantity: { unit_label: 'علبة' } },
+        order_mode: orderMode,
+        order_config: orderConfig as Prisma.InputJsonValue,
         is_available: true,
       },
     });

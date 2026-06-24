@@ -39,7 +39,7 @@ export async function seedAdmin(prisma: PrismaClient) {
     const plans = [
       {
         name: 'الباقة الكاملة',
-        price: 599.0,
+        price: 1000.0,
         features: {
           products: 'unlimited',
           orders: 'unlimited',
@@ -52,7 +52,7 @@ export async function seedAdmin(prisma: PrismaClient) {
       },
       {
         name: 'الباقة الذهبية',
-        price: 699.0,
+        price: 1000.0,
         features: {
           products: 'unlimited',
           orders: 'unlimited',
@@ -79,7 +79,37 @@ export async function seedAdmin(prisma: PrismaClient) {
         });
         logger.log(`✅ Plan '${plan.name}' created`);
       } else {
-        logger.log(`ℹ️ Plan '${plan.name}' already exists`);
+        await prisma.subscriptionPlan.update({
+          where: { id: existingPlan.id },
+          data: {
+            price: plan.price,
+            features: plan.features,
+          },
+        });
+        logger.log(`✅ Plan '${plan.name}' updated`);
+      }
+    }
+
+    // 3. Clean up the basic plan if it exists
+    const fullPlan = await prisma.subscriptionPlan.findFirst({
+      where: { name: 'الباقة الكاملة' },
+    });
+
+    if (fullPlan) {
+      const basicPlan = await prisma.subscriptionPlan.findFirst({
+        where: { name: 'الباقة الاساسية' },
+      });
+      if (basicPlan) {
+        // Reassign subscriptions to the full plan
+        await prisma.tenantSubscription.updateMany({
+          where: { plan_id: basicPlan.id },
+          data: { plan_id: fullPlan.id },
+        });
+        // Delete the basic plan
+        await prisma.subscriptionPlan.delete({
+          where: { id: basicPlan.id },
+        });
+        logger.log('✅ Reassigned basic plan subscriptions and deleted basic plan');
       }
     }
 

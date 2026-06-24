@@ -1,11 +1,11 @@
 import { Logger } from '@nestjs/common';
 import { config } from 'dotenv';
 import {
-  // seedSupermarketMerchant,
+  seedSupermarketMerchant,
   SUPERMARKET_RANKING_MERCHANTS,
 } from './seeders/supermarket-merchant.seeder';
 import {
-  // seedPharmacyMerchant,
+  seedPharmacyMerchant,
   PHARMACY_RANKING_MERCHANTS,
 } from './seeders/pharmacy-merchant.seeder';
 import { seedAdmin } from './seeders/admin.seeder';
@@ -40,8 +40,8 @@ async function bootstrap() {
   try {
     await seedAdmin(prisma);
     await seedDirectoryAreas(prisma);
-    // await seedSupermarketMerchant(prisma);
-    // await seedPharmacyMerchant(prisma);
+    await seedSupermarketMerchant(prisma);
+    await seedPharmacyMerchant(prisma);
     await seedDirectoryProfiles(prisma);
 
     logger.log('Seeding completed successfully.');
