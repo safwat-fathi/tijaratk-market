@@ -38,17 +38,6 @@ export async function seedAdmin(prisma: PrismaClient) {
     // 2. Create Plans
     const plans = [
       {
-        name: 'الباقة الاساسية',
-        price: 199.0,
-        features: {
-          products: 'unlimited',
-          orders: 'unlimited',
-          reports: 'daily',
-          support: 'fast',
-          customization: true,
-        },
-      },
-      {
         name: 'الباقة الكاملة',
         price: 599.0,
         features: {

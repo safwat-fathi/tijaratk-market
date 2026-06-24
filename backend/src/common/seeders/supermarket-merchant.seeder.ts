@@ -7,6 +7,7 @@ import { TENANT_CATEGORIES } from 'src/tenants/constants/tenant-category';
 import {
   buildAllowedCatalogCategoryWhere,
   CATALOG_SOURCE_TALABAT,
+  CatalogSource,
 } from 'src/products/catalog-source-policy';
 
 type MerchantVariant =
@@ -93,7 +94,7 @@ export async function seedSupermarketMerchant(prisma: PrismaClient) {
 
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenant.id)}, true)`;
       await seedOwner(tx, merchant, tenant.id, ownerCredential, logger);
-      await assignBasicPlan(tx, tenant.id, tenant.slug, logger);
+      await assignDefaultPlan(tx, tenant.id, tenant.slug, logger);
 
       const products = selectProductsForVariant(
         catalogProducts,
@@ -177,17 +178,17 @@ async function seedOwner(
   }
 }
 
-async function assignBasicPlan(
+async function assignDefaultPlan(
   tx: Prisma.TransactionClient,
   tenantId: number,
   slug: string,
   logger: Logger,
 ) {
-  const basicPlan = await tx.subscriptionPlan.findFirst({
-    where: { name: 'الباقة الاساسية' },
+  const defaultPlan = await tx.subscriptionPlan.findFirst({
+    where: { name: 'الباقة الكاملة' },
   });
 
-  if (!basicPlan) return;
+  if (!defaultPlan) return;
 
   const existingSubscription = await tx.tenantSubscription.findFirst({
     where: { tenant_id: tenantId, is_active: true },
@@ -197,17 +198,17 @@ async function assignBasicPlan(
     await tx.tenantSubscription.create({
       data: {
         tenant_id: tenantId,
-        plan_id: basicPlan.id,
+        plan_id: defaultPlan.id,
         is_active: true,
       },
     });
-    logger.log(`Assigned basic plan to tenant ${slug}`);
+    logger.log(`Assigned default plan to tenant ${slug}`);
   }
 }
 
 async function findCatalogProducts(
   tx: Prisma.TransactionClient,
-  preferredSource: string,
+  preferredSource: CatalogSource,
 ): Promise<CatalogSeedProduct[]> {
   const preferredProducts = await tx.catalogItem.findMany({
     where: {
