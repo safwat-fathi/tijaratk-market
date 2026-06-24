@@ -20,40 +20,65 @@ const createPrismaMock = (input: {
   tenantStatus?: OrderStatus | string;
   tenantCategory?: TenantCategory;
   activeProductsCount?: number;
-}) => ({
-  order: {
-    findMany: jest
-      .fn()
-      .mockResolvedValueOnce(input.orders ?? [])
-      .mockResolvedValueOnce(input.activeCustomers ?? []),
-    count: jest
-      .fn()
-      .mockResolvedValueOnce(input.previousTotalOrders ?? 0)
-      .mockResolvedValueOnce(input.previousCompletedOrders ?? 0)
-      .mockResolvedValueOnce(input.previousCancelledOrders ?? 0),
-    aggregate: jest.fn().mockResolvedValue({
-      _sum: { total: input.previousSales ?? 0 },
-    }),
-  },
-  customer: {
-    count: jest
-      .fn()
-      .mockResolvedValueOnce(input.newCustomers ?? 0)
-      .mockResolvedValueOnce(input.returningCustomers ?? 0),
-  },
-  availabilityRequest: {
-    count: jest.fn().mockResolvedValue(input.availabilityRequests ?? 0),
-  },
-  tenant: {
-    findUnique: jest.fn().mockResolvedValue({
-      status: input.tenantStatus ?? 'active',
-      category: input.tenantCategory ?? TenantCategory.grocery,
-    }),
-  },
-  product: {
-    count: jest.fn().mockResolvedValue(input.activeProductsCount ?? 0),
-  },
-});
+}) => {
+  const orders = input.orders ?? [];
+  const completedOrders = orders.filter(
+    (order) => order.status === OrderStatus.completed,
+  );
+  const cancelledOrders = orders.filter(
+    (order) =>
+      order.status === OrderStatus.cancelled ||
+      order.status === OrderStatus.rejected_by_customer,
+  );
+  const currentSales = completedOrders.reduce(
+    (sum, order) => sum + Number(order.total ?? 0),
+    0,
+  );
+
+  return {
+    order: {
+      findMany: jest
+        .fn()
+        .mockResolvedValueOnce(orders)
+        .mockResolvedValueOnce(completedOrders)
+        .mockResolvedValueOnce(input.activeCustomers ?? []),
+      count: jest
+        .fn()
+        .mockResolvedValueOnce(orders.length)
+        .mockResolvedValueOnce(completedOrders.length)
+        .mockResolvedValueOnce(cancelledOrders.length)
+        .mockResolvedValueOnce(input.previousTotalOrders ?? 0)
+        .mockResolvedValueOnce(input.previousCompletedOrders ?? 0)
+        .mockResolvedValueOnce(input.previousCancelledOrders ?? 0),
+      aggregate: jest
+        .fn()
+        .mockResolvedValueOnce({
+          _sum: { total: currentSales },
+        })
+        .mockResolvedValueOnce({
+          _sum: { total: input.previousSales ?? 0 },
+        }),
+    },
+    customer: {
+      count: jest
+        .fn()
+        .mockResolvedValueOnce(input.newCustomers ?? 0)
+        .mockResolvedValueOnce(input.returningCustomers ?? 0),
+    },
+    availabilityRequest: {
+      count: jest.fn().mockResolvedValue(input.availabilityRequests ?? 0),
+    },
+    tenant: {
+      findUnique: jest.fn().mockResolvedValue({
+        status: input.tenantStatus ?? 'active',
+        category: input.tenantCategory ?? TenantCategory.grocery,
+      }),
+    },
+    product: {
+      count: jest.fn().mockResolvedValue(input.activeProductsCount ?? 0),
+    },
+  };
+};
 
 const createPolicyMock = (overrides: Record<string, unknown> = {}) => ({
   getSnapshot: jest.fn().mockResolvedValue({
