@@ -4,7 +4,7 @@
 	"private": true,
 	"scripts": {
 		"dev": "next dev",
-		"build": "next build && cp -r public .next/standalone/public && cp -r .next/static .next/standalone/.next/static",
+		"build": "next build && (cp -r public .next/standalone/frontend/public 2>/dev/null || cp -r public .next/standalone/public) && (cp -r .next/static .next/standalone/frontend/.next/static 2>/dev/null || cp -r .next/static .next/standalone/.next/static)",
 		"start": "next start",
 		"lint": "eslint && tsc --noEmit",
 		"type-check": "tsc --noEmit"
