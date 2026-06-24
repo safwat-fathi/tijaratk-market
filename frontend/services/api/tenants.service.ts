@@ -51,6 +51,15 @@ class TenantsService extends HttpService {
       authRequired: true,
     });
   }
+
+  public async updateMyOnboardingProgress(payload: {
+    onboarding_completed?: boolean;
+    onboarding_step?: number;
+  }) {
+    return this.patch<Tenant>("me/onboarding", payload, undefined, {
+      authRequired: true,
+    });
+  }
 }
 
 export const tenantsService = new TenantsService();

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, Tenant } from '../../generated/prisma/client';
 import { TENANT_CATEGORIES, TenantCategory } from './constants/tenant-category';
@@ -6,12 +7,14 @@ import { generateUniqueSlug } from '../common/utils/slug.utils';
 import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-settings.dto';
 import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
 import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
+import { getDashboardCacheVersionKey } from 'src/merchant-dashboard/merchant-dashboard.service';
 
 @Injectable()
 export class TenantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storesDirectoryService: StoresDirectoryService,
+    @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
   async create(
@@ -29,8 +32,8 @@ export class TenantsService {
       return !!existing;
     });
 
-    const basicPlan = await db.subscriptionPlan.findFirst({
-      where: { name: 'الباقة الاساسية' },
+    const defaultPlan = await db.subscriptionPlan.findFirst({
+      where: { name: 'الباقة الكاملة' },
     });
 
     return db.tenant.create({
@@ -40,10 +43,10 @@ export class TenantsService {
         slug,
         category: category || TENANT_CATEGORIES.OTHER.value,
         delivery_fee: 20,
-        ...(basicPlan && {
+        ...(defaultPlan && {
           tenant_subscriptions: {
             create: {
-              plan_id: basicPlan.id,
+              plan_id: defaultPlan.id,
               is_active: true,
             },
           },
@@ -104,7 +107,12 @@ export class TenantsService {
       return normalized || null;
     };
 
-    return this.prisma.tenant.update({
+    const existingTenant = await this.prisma.tenant.findUnique({
+      where: { id },
+      select: { category: true },
+    });
+
+    const tenant = await this.prisma.tenant.update({
       where: { id },
       data: {
         name: dto.name,
@@ -118,6 +126,31 @@ export class TenantsService {
           dto.ewallet_account_number,
         ),
         card_on_delivery_available: dto.card_on_delivery_available === true,
+      },
+    });
+
+    if (existingTenant?.category !== dto.category) {
+      await this.cacheManager?.set(
+        getDashboardCacheVersionKey(id),
+        Date.now().toString(),
+      );
+    }
+
+    return tenant;
+  }
+
+  /**
+   * Updates onboarding progress.
+   */
+  async updateOnboardingProgress(
+    id: number,
+    dto: import('./dto/update-tenant-onboarding.dto').UpdateTenantOnboardingDto,
+  ): Promise<Tenant> {
+    return this.prisma.tenant.update({
+      where: { id },
+      data: {
+        ...(dto.onboarding_completed !== undefined && { onboarding_completed: dto.onboarding_completed }),
+        ...(dto.onboarding_step !== undefined && { onboarding_step: dto.onboarding_step }),
       },
     });
   }

@@ -10,6 +10,7 @@ import DeliverySettingsCard from "./_components/DeliverySettingsCard";
 import MeasurementsDashboard from "./_components/MeasurementsDashboard";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
 import type { CancellationPolicyMetric } from "@/types/services/merchant-dashboard";
+import ProductReadinessProgress from "@/components/merchant/ProductReadinessProgress";
 
 export const metadata = createNoIndexMetadata(
   "لوحة التحكم",
@@ -94,10 +95,18 @@ export default async function Dashboard({
         slug={tenantSlug}
         status={tenant?.status}
         deliveryAvailable={tenant?.delivery_available}
+        productReadiness={
+          measurementsResponse.success && measurementsResponse.data
+            ? measurementsResponse.data.product_readiness
+            : undefined
+        }
       />
 
       {measurementsResponse.success && measurementsResponse.data ? (
         <>
+          <ProductReadinessProgress
+            readiness={measurementsResponse.data.product_readiness}
+          />
           <CancellationPolicyBanner
             policy={measurementsResponse.data.cancellation_policy}
           />

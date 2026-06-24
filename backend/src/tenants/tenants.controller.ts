@@ -23,6 +23,7 @@ import CONSTANTS from 'src/common/constants';
 import { TenantsService } from './tenants.service';
 import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-settings.dto';
 import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
+import { UpdateTenantOnboardingDto } from './dto/update-tenant-onboarding.dto';
 import { TenantStatus } from '../../generated/prisma/client';
 
 @ApiTags('Tenants')
@@ -96,6 +97,28 @@ export class TenantsController {
     }
 
     return this.tenantsService.updateGeneralSettings(tenantId, dto);
+  }
+
+  @Patch('me/onboarding')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Update authenticated tenant onboarding progress' })
+  @ApiBody({ type: UpdateTenantOnboardingDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Onboarding progress updated successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updateMyOnboardingProgress(
+    @Req() req: Request,
+    @Body() dto: UpdateTenantOnboardingDto,
+  ) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.tenantsService.updateOnboardingProgress(tenantId, dto);
   }
 
   @Get('public/:slug')

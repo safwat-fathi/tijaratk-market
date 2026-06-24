@@ -18,6 +18,8 @@ export interface Tenant {
   card_on_delivery_available?: boolean;
   directory_profile?: TenantDirectoryProfile | null;
   tenant_delivery_areas?: TenantDeliveryArea[];
+  onboarding_completed?: boolean;
+  onboarding_step?: number;
 }
 
 
