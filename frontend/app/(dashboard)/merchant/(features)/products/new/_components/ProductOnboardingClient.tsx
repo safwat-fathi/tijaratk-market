@@ -94,6 +94,14 @@ const removeCatalogItemFromList = (
   catalogItemId: number,
 ) => catalogItemList.filter((item) => item.id !== catalogItemId);
 
+const markCatalogItemInStock = (
+  catalogItemList: CatalogItem[],
+  catalogItemId: number,
+) =>
+  catalogItemList.map((item) =>
+    item.id === catalogItemId ? { ...item, is_in_stock: true } : item,
+  );
+
 const filterProductsByAvailability = (
   productList: Product[],
   availabilityFilter: ProductAvailabilityFilter,
@@ -791,6 +799,7 @@ export default function ProductOnboardingClient({
         }
 
         setProducts((prev) => [response.data, ...prev]);
+        setCatalogItems((prev) => markCatalogItemInStock(prev, catalogItemId));
         addCategoryOption(response.data.category);
         refreshSearchResultsIfActive();
         setConfirmRemoveProductId(null);

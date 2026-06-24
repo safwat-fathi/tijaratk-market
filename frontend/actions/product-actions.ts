@@ -235,6 +235,7 @@ export async function addProductFromCatalogAction(catalogItemId: number) {
       };
     }
 
+    revalidatePath('/merchant/products/new');
     return {
       success: true,
       data: response.data,
