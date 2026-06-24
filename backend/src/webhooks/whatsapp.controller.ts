@@ -23,6 +23,7 @@ export class WhatsAppWebhookController {
   @Post()
   @Header('Content-Type', 'text/xml')
   @ApiConsumes('application/json', 'application/x-www-form-urlencoded')
+  // eslint-disable-next-line sonarjs/no-invariant-returns
   receive(@Body() body: Record<string, unknown>, @Req() req: Request) {
     this.verifyTwilioSignature(req, body);
 

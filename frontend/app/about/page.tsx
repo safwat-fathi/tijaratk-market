@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Logo } from "@/components/ui/Logo";
 import Image from "next/image";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import heroMockup from "@/public/images/hero-mockup.webp";

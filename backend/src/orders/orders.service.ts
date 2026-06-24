@@ -21,7 +21,7 @@ import {
   TenantCategory,
 } from '../../generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateOrderDto, CreateOrderItemDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { CustomersService } from 'src/customers/customers.service';
 import { PricingMode } from 'src/common/enums/pricing-mode.enum';
@@ -242,19 +242,8 @@ export class OrdersService {
         });
         const deliveryFee = Number(tenant?.delivery_fee || 0);
 
-        let deliveryTimeWindowSnapshot: string | null = null;
-        if (tenant?.delivery_starts_at && tenant?.delivery_ends_at) {
-          const formatTime = (time: string) => {
-            const [hours, minutes] = time.split(':');
-            const h = parseInt(hours, 10);
-            const period = h >= 12 ? 'مساءً' : 'صباحاً';
-            const h12 = h % 12 || 12;
-            return `${h12}:${minutes} ${period}`;
-          };
-          deliveryTimeWindowSnapshot = `من ${formatTime(tenant.delivery_starts_at)} إلى ${formatTime(tenant.delivery_ends_at)}`;
-        } else {
-          deliveryTimeWindowSnapshot = 'طوال اليوم';
-        }
+        const deliveryTimeWindowSnapshot =
+          this.resolveDeliveryTimeWindowSnapshot(tenant);
 
         let subtotal: number | undefined;
         let total: number | undefined;
@@ -301,76 +290,11 @@ export class OrdersService {
         });
 
         if (hasItems) {
-          const orderItemsPayload: Prisma.OrderItemUncheckedCreateInput[] =
-            items.map((item) => {
-              const matchedProduct = item.product_id
-                ? productsById.get(item.product_id)
-                : undefined;
-
-              const selectionMode = this.resolveItemSelectionMode(
-                item.selection_mode,
-                matchedProduct?.order_mode,
-              );
-              const selectionQuantity =
-                item.selection_quantity != null &&
-                Number.isFinite(Number(item.selection_quantity)) &&
-                Number(item.selection_quantity) > 0
-                  ? Number(item.selection_quantity)
-                  : null;
-              const selectionGrams =
-                item.selection_grams != null &&
-                Number.isFinite(Number(item.selection_grams)) &&
-                Number(item.selection_grams) > 0
-                  ? Math.round(Number(item.selection_grams))
-                  : null;
-              const selectionAmountEgp =
-                item.selection_amount_egp != null &&
-                Number.isFinite(Number(item.selection_amount_egp)) &&
-                Number(item.selection_amount_egp) > 0
-                  ? this.roundCurrency(Number(item.selection_amount_egp))
-                  : null;
-              const unitOptionId =
-                typeof item.unit_option_id === 'string'
-                  ? item.unit_option_id.trim().slice(0, 64)
-                  : null;
-              const quantityText = this.resolveQuantityText(
-                String(item.quantity).trim(),
-                selectionMode,
-                selectionQuantity,
-                selectionGrams,
-                unitOptionId,
-                matchedProduct,
-              );
-              const resolvedUnitPrice = this.resolveItemUnitPrice(
-                item.unit_price,
-                matchedProduct?.current_price,
-              );
-              const explicitLineTotal =
-                selectionMode === OrderItemSelectionMode.PRICE
-                  ? (selectionAmountEgp ?? item.total_price)
-                  : item.total_price;
-              const lineTotal = this.resolveItemTotal(
-                quantityText,
-                resolvedUnitPrice ?? undefined,
-                explicitLineTotal,
-              );
-
-              return {
-                order_id: persistedOrder.id,
-                product_id: matchedProduct?.id,
-                name_snapshot:
-                  item.name?.trim() || matchedProduct?.name || 'منتج غير محدد',
-                quantity: quantityText,
-                unit_price: resolvedUnitPrice,
-                total_price: lineTotal,
-                notes: item.notes,
-                selection_mode: selectionMode,
-                selection_quantity: selectionQuantity,
-                selection_grams: selectionGrams,
-                selection_amount_egp: selectionAmountEgp,
-                unit_option_id: unitOptionId,
-              };
-            });
+          const orderItemsPayload = this.buildOrderItemsPayload(
+            items,
+            productsById,
+            persistedOrder.id,
+          );
 
           await manager.orderItem.createMany({
             data: orderItemsPayload as any,
@@ -1168,12 +1092,14 @@ export class OrdersService {
         ? this.roundCurrency(pricedLines.reduce((sum, value) => sum + value, 0))
         : undefined;
     const deliveryFee = Number(order.delivery_fee || 0);
-    const recomputedTotal =
-      subtotal !== undefined
-        ? this.roundCurrency(subtotal + deliveryFee)
-        : deliveryFee > 0
-          ? this.roundCurrency(deliveryFee)
-          : undefined;
+    let recomputedTotal: number | undefined;
+    if (subtotal !== undefined) {
+      recomputedTotal = this.roundCurrency(subtotal + deliveryFee);
+    } else if (deliveryFee > 0) {
+      recomputedTotal = this.roundCurrency(deliveryFee);
+    } else {
+      recomputedTotal = undefined;
+    }
 
     await manager.order.update({
       where: { id: order.id },
@@ -1185,6 +1111,96 @@ export class OrdersService {
             ? null
             : new Prisma.Decimal(recomputedTotal),
       },
+    });
+  }
+
+  private resolveDeliveryTimeWindowSnapshot(tenant: any): string {
+    if (tenant?.delivery_starts_at && tenant?.delivery_ends_at) {
+      const formatTime = (time: string) => {
+        const [hours, minutes] = time.split(':');
+        const h = parseInt(hours, 10);
+        const period = h >= 12 ? 'مساءً' : 'صباحاً';
+        const h12 = h % 12 || 12;
+        return `${h12}:${minutes} ${period}`;
+      };
+      return `من ${formatTime(tenant.delivery_starts_at)} إلى ${formatTime(tenant.delivery_ends_at)}`;
+    }
+    return 'طوال اليوم';
+  }
+
+  private buildOrderItemsPayload(
+    items: CreateOrderItemDto[],
+    productsById: Map<number, any>,
+    orderId: number,
+  ): Prisma.OrderItemUncheckedCreateInput[] {
+    return items.map((item) => {
+      const matchedProduct = item.product_id
+        ? productsById.get(item.product_id)
+        : undefined;
+
+      const selectionMode = this.resolveItemSelectionMode(
+        item.selection_mode,
+        matchedProduct?.order_mode,
+      );
+      const selectionQuantity =
+        item.selection_quantity != null &&
+        Number.isFinite(Number(item.selection_quantity)) &&
+        Number(item.selection_quantity) > 0
+          ? Number(item.selection_quantity)
+          : null;
+      const selectionGrams =
+        item.selection_grams != null &&
+        Number.isFinite(Number(item.selection_grams)) &&
+        Number(item.selection_grams) > 0
+          ? Math.round(Number(item.selection_grams))
+          : null;
+      const selectionAmountEgp =
+        item.selection_amount_egp != null &&
+        Number.isFinite(Number(item.selection_amount_egp)) &&
+        Number(item.selection_amount_egp) > 0
+          ? this.roundCurrency(Number(item.selection_amount_egp))
+          : null;
+      const unitOptionId =
+        typeof item.unit_option_id === 'string'
+          ? item.unit_option_id.trim().slice(0, 64)
+          : null;
+      const quantityText = this.resolveQuantityText(
+        String(item.quantity).trim(),
+        selectionMode,
+        selectionQuantity,
+        selectionGrams,
+        unitOptionId,
+        matchedProduct,
+      );
+      const resolvedUnitPrice = this.resolveItemUnitPrice(
+        item.unit_price,
+        matchedProduct?.current_price,
+      );
+      const explicitLineTotal =
+        selectionMode === OrderItemSelectionMode.PRICE
+          ? (selectionAmountEgp ?? item.total_price)
+          : item.total_price;
+      const lineTotal = this.resolveItemTotal(
+        quantityText,
+        resolvedUnitPrice ?? undefined,
+        explicitLineTotal,
+      );
+
+      return {
+        order_id: orderId,
+        product_id: matchedProduct?.id,
+        name_snapshot:
+          item.name?.trim() || matchedProduct?.name || 'منتج غير محدد',
+        quantity: quantityText,
+        unit_price: resolvedUnitPrice,
+        total_price: lineTotal,
+        notes: item.notes,
+        selection_mode: selectionMode,
+        selection_quantity: selectionQuantity,
+        selection_grams: selectionGrams,
+        selection_amount_egp: selectionAmountEgp,
+        unit_option_id: unitOptionId,
+      };
     });
   }
 

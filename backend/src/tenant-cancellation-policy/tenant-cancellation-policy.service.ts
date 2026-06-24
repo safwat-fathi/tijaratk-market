@@ -317,12 +317,14 @@ export class TenantCancellationPolicyService {
   ): CancellationPolicySnapshot {
     const count = state.cancellation_count;
     const suspensionThreshold = state.suspension_threshold;
-    const status =
-      tenantStatus === TenantStatus.suspended && state.last_suspension_policy
-        ? 'suspended'
-        : count >= state.warning_threshold
-          ? 'warning'
-          : 'ok';
+    let status: 'suspended' | 'warning' | 'ok';
+    if (tenantStatus === TenantStatus.suspended && state.last_suspension_policy) {
+      status = 'suspended';
+    } else if (count >= state.warning_threshold) {
+      status = 'warning';
+    } else {
+      status = 'ok';
+    }
 
     return {
       status,
@@ -370,19 +372,10 @@ export class TenantCancellationPolicyService {
       day: '2-digit',
     }).formatToParts(date);
 
-    const read = (type: Intl.DateTimeFormatPartTypes) => {
-      const value = Number(parts.find((part) => part.type === type)?.value);
-      if (!Number.isFinite(value)) {
-        throw new Error(`Failed to resolve Cairo ${type}`);
-      }
-
-      return value;
-    };
-
     return {
-      year: read('year'),
-      month: read('month'),
-      day: read('day'),
+      year: this.readIntlPart(parts, 'year'),
+      month: this.readIntlPart(parts, 'month'),
+      day: this.readIntlPart(parts, 'day'),
     };
   }
 
@@ -446,23 +439,26 @@ export class TenantCancellationPolicyService {
       hourCycle: 'h23',
     }).formatToParts(date);
 
-    const read = (type: Intl.DateTimeFormatPartTypes) => {
-      const value = Number(parts.find((part) => part.type === type)?.value);
-      if (!Number.isFinite(value)) {
-        throw new Error(`Failed to resolve Cairo ${type}`);
-      }
-
-      return value;
-    };
-
     return {
-      year: read('year'),
-      month: read('month'),
-      day: read('day'),
-      hour: read('hour'),
-      minute: read('minute'),
-      second: read('second'),
+      year: this.readIntlPart(parts, 'year'),
+      month: this.readIntlPart(parts, 'month'),
+      day: this.readIntlPart(parts, 'day'),
+      hour: this.readIntlPart(parts, 'hour'),
+      minute: this.readIntlPart(parts, 'minute'),
+      second: this.readIntlPart(parts, 'second'),
     };
+  }
+
+  private readIntlPart(
+    parts: Intl.DateTimeFormatPart[],
+    type: Intl.DateTimeFormatPartTypes,
+  ): number {
+    const value = Number(parts.find((part) => part.type === type)?.value);
+    if (!Number.isFinite(value)) {
+      throw new Error(`Failed to resolve Cairo ${type}`);
+    }
+
+    return value;
   }
 
   private getDb(): DbClient {

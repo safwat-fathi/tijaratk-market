@@ -77,6 +77,7 @@ export default function DeliverySettingsStep({
         setError("حدث خطأ أثناء حفظ الإعدادات");
       }
     } catch (err) {
+      console.error(err);
       setError("حدث خطأ أثناء حفظ الإعدادات");
     } finally {
       setLoading(false);

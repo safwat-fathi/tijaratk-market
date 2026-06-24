@@ -72,12 +72,12 @@ function CancellationPolicySummary({ merchant }: { merchant: AdminTenant }) {
     return <span className="text-xs text-gray-400">لا توجد بيانات</span>;
   }
 
-  const tone =
-    policy.status === "suspended"
-      ? "border-red-200 bg-red-50 text-red-800"
-      : policy.status === "warning"
-        ? "border-amber-200 bg-amber-50 text-amber-900"
-        : "border-gray-200 bg-gray-50 text-gray-700";
+  let tone = "border-gray-200 bg-gray-50 text-gray-700";
+  if (policy.status === "suspended") {
+    tone = "border-red-200 bg-red-50 text-red-800";
+  } else if (policy.status === "warning") {
+    tone = "border-amber-200 bg-amber-50 text-amber-900";
+  }
 
   return (
     <div className={`rounded-md border px-2 py-2 text-xs font-semibold ${tone}`}>

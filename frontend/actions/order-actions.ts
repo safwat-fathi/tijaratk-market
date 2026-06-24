@@ -422,6 +422,14 @@ const persistCreatedOrderTrackingArtifacts = async ({
   }
 };
 
+function extractOrderMeta(data: unknown): { publicToken: string; customerAccessCode: string } {
+  const meta = data as CreatedOrderMeta | undefined;
+  return {
+    publicToken: typeof meta?.public_token === 'string' ? meta.public_token.trim() : '',
+    customerAccessCode: typeof meta?.customer_access_code === 'string' ? meta.customer_access_code.trim() : '',
+  };
+}
+
 export async function createOrderAction(
   tenantSlug: string,
   _prevState: CreateOrderState,
@@ -458,14 +466,7 @@ export async function createOrderAction(
         customerData,
       });
 
-      const publicToken =
-        typeof (response.data as CreatedOrderMeta)?.public_token === 'string'
-          ? ((response.data as CreatedOrderMeta).public_token as string).trim()
-          : '';
-      const customerAccessCode =
-        typeof (response.data as CreatedOrderMeta)?.customer_access_code === 'string'
-          ? ((response.data as CreatedOrderMeta).customer_access_code as string).trim()
-          : '';
+      const { publicToken, customerAccessCode } = extractOrderMeta(response.data);
 
       return {
         success: true,

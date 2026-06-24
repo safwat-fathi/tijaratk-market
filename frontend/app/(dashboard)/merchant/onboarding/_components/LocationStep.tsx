@@ -72,6 +72,7 @@ export default function LocationStep({
       });
       await onNext();
     } catch (err) {
+      console.error(err);
       setError("حدث خطأ أثناء حفظ البيانات");
     } finally {
       setLoading(false);

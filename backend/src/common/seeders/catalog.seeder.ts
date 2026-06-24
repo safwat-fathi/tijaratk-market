@@ -50,6 +50,49 @@ function normalizeCatalogPrice(value: string | undefined): string | null {
   return numericValue.toFixed(2);
 }
 
+function processCatalogRecord(
+  record: CatalogCsvRecord,
+  uniqueItemsMap: Map<string, CatalogSeedItem>,
+  counters: {
+    skippedNameCount: number;
+    skippedCurrencyCount: number;
+    skippedCategoryCount: number;
+  },
+) {
+  const name = record.name?.trim();
+  if (!name) {
+    counters.skippedNameCount += 1;
+    return;
+  }
+
+  const currency =
+    record.currency?.trim().toUpperCase() || EXPECTED_CATALOG_CURRENCY;
+  if (currency !== EXPECTED_CATALOG_CURRENCY) {
+    counters.skippedCurrencyCount += 1;
+    return;
+  }
+
+  const category = record.category?.trim() || DEFAULT_CATALOG_CATEGORY;
+  if (!isCatalogCategoryAllowedForSource(CATALOG_SOURCE_TALABAT, category)) {
+    counters.skippedCategoryCount += 1;
+    return;
+  }
+
+  const productId = normalizeOptionalText(record.product_id);
+  const key = productId || `${name}|${category}`;
+
+  if (!uniqueItemsMap.has(key)) {
+    uniqueItemsMap.set(key, {
+      name,
+      price: normalizeCatalogPrice(record.price),
+      currency,
+      image_url: normalizeOptionalText(record.image_url),
+      category,
+      external_id: productId,
+    });
+  }
+}
+
 export async function seedCatalog(prisma: PrismaClient) {
   const logger = new Logger('CatalogSeeder');
   try {
@@ -69,58 +112,29 @@ export async function seedCatalog(prisma: PrismaClient) {
     });
 
     const uniqueItemsMap = new Map<string, CatalogSeedItem>();
-    let skippedCurrencyCount = 0;
-    let skippedNameCount = 0;
-    let skippedCategoryCount = 0;
+    const counters = {
+      skippedCurrencyCount: 0,
+      skippedNameCount: 0,
+      skippedCategoryCount: 0,
+    };
 
     for (const record of records) {
-      const name = record.name?.trim();
-      if (!name) {
-        skippedNameCount += 1;
-        continue;
-      }
-
-      const currency =
-        record.currency?.trim().toUpperCase() || EXPECTED_CATALOG_CURRENCY;
-      if (currency !== EXPECTED_CATALOG_CURRENCY) {
-        skippedCurrencyCount += 1;
-        continue;
-      }
-
-      const category = record.category?.trim() || DEFAULT_CATALOG_CATEGORY;
-      if (!isCatalogCategoryAllowedForSource(CATALOG_SOURCE_TALABAT, category)) {
-        skippedCategoryCount += 1;
-        continue;
-      }
-
-      const productId = normalizeOptionalText(record.product_id);
-      const key = productId || `${name}|${category}`;
-
-      if (!uniqueItemsMap.has(key)) {
-        uniqueItemsMap.set(key, {
-          name,
-          price: normalizeCatalogPrice(record.price),
-          currency,
-          image_url: normalizeOptionalText(record.image_url),
-          category,
-          external_id: productId,
-        });
-      }
+      processCatalogRecord(record, uniqueItemsMap, counters);
     }
 
     const newItems = Array.from(uniqueItemsMap.values());
     logger.log(`Found ${newItems.length} unique catalog items from CSV.`);
-    if (skippedCurrencyCount > 0) {
+    if (counters.skippedCurrencyCount > 0) {
       logger.warn(
-        `Skipped ${skippedCurrencyCount} catalog rows with non-EGP currency.`,
+        `Skipped ${counters.skippedCurrencyCount} catalog rows with non-EGP currency.`,
       );
     }
-    if (skippedNameCount > 0) {
-      logger.warn(`Skipped ${skippedNameCount} catalog rows without a name.`);
+    if (counters.skippedNameCount > 0) {
+      logger.warn(`Skipped ${counters.skippedNameCount} catalog rows without a name.`);
     }
-    if (skippedCategoryCount > 0) {
+    if (counters.skippedCategoryCount > 0) {
       logger.warn(
-        `Skipped ${skippedCategoryCount} catalog rows with invalid ${CATALOG_SOURCE_TALABAT} categories.`,
+        `Skipped ${counters.skippedCategoryCount} catalog rows with invalid ${CATALOG_SOURCE_TALABAT} categories.`,
       );
     }
 

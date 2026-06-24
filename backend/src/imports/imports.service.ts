@@ -236,82 +236,7 @@ export class ImportsService {
     });
 
     try {
-      const parser = createReadStream(importRun.file_path).pipe(
-        parse({ columns: true, skip_empty_lines: true, trim: true }),
-      );
-
-      const batchSize = 10;
-      let batch: { rowNumber: number; row: Record<string, unknown> }[] = [];
-
-      for await (const row of parser) {
-        counters.totalRows += 1;
-        batch.push({
-          rowNumber: counters.totalRows,
-          row: row as Record<string, unknown>,
-        });
-
-        if (batch.length >= batchSize) {
-          await Promise.all(
-            batch.map((b) =>
-              this.processCatalogImportRow(
-                importRunId,
-                b.rowNumber,
-                b.row,
-                importRun.mode,
-                counters,
-                replacementState,
-              ),
-            ),
-          );
-          batch = [];
-
-          if (this.cancelledImports.has(importRunId)) {
-            this.cancelledImports.delete(importRunId);
-            await this.flushRowErrors(importRunId);
-            await this.prisma.importRun.update({
-              where: { id: importRunId },
-              data: {
-                status: ImportStatus.cancelled,
-                error_message: 'تم إلغاء الاستيراد من قبل المستخدم',
-                ...this.toImportProgressData(counters),
-              },
-            });
-            return;
-          }
-
-          if (counters.totalRows % PROGRESS_UPDATE_INTERVAL === 0) {
-            await this.flushRowErrors(importRunId);
-            await this.updateImportProgress(importRunId, counters);
-          }
-        }
-      }
-
-      if (batch.length > 0) {
-        await Promise.all(
-          batch.map((b) =>
-            this.processCatalogImportRow(
-              importRunId,
-              b.rowNumber,
-              b.row,
-              importRun.mode,
-              counters,
-              replacementState,
-            ),
-          ),
-        );
-        await this.flushRowErrors(importRunId);
-        await this.updateImportProgress(importRunId, counters);
-      }
-
-      if (
-        importRun.mode === ImportMode.replace_source &&
-        counters.failedRows === 0
-      ) {
-        await this.deactivateMissingSourceItems(replacementState, counters);
-      }
-
-      await this.flushRowErrors(importRunId);
-      await this.finishImport(importRunId, counters);
+      await this.doProcessCatalogImport(importRunId, importRun, counters, replacementState);
     } catch (error) {
       await this.flushRowErrors(importRunId);
       await this.prisma.importRun.update({
@@ -324,6 +249,101 @@ export class ImportsService {
       });
       throw error;
     }
+  }
+
+  private async doProcessCatalogImport(
+    importRunId: number,
+    importRun: any,
+    counters: CatalogImportCounters,
+    replacementState: CatalogReplacementState,
+  ) {
+    const parser = createReadStream(importRun.file_path).pipe(
+      parse({ columns: true, skip_empty_lines: true, trim: true }),
+    );
+
+    const batchSize = 10;
+    let batch: { rowNumber: number; row: Record<string, unknown> }[] = [];
+
+    for await (const row of parser) {
+      counters.totalRows += 1;
+      batch.push({
+        rowNumber: counters.totalRows,
+        row: row as Record<string, unknown>,
+      });
+
+      if (batch.length >= batchSize) {
+        await this.processBatch(
+          importRunId,
+          batch,
+          importRun.mode,
+          counters,
+          replacementState,
+        );
+        batch = [];
+
+        if (this.cancelledImports.has(importRunId)) {
+          this.cancelledImports.delete(importRunId);
+          await this.flushRowErrors(importRunId);
+          await this.prisma.importRun.update({
+            where: { id: importRunId },
+            data: {
+              status: ImportStatus.cancelled,
+              error_message: 'تم إلغاء الاستيراد من قبل المستخدم',
+              ...this.toImportProgressData(counters),
+            },
+          });
+          return;
+        }
+
+        if (counters.totalRows % PROGRESS_UPDATE_INTERVAL === 0) {
+          await this.flushRowErrors(importRunId);
+          await this.updateImportProgress(importRunId, counters);
+        }
+      }
+    }
+
+    if (batch.length > 0) {
+      await this.processBatch(
+        importRunId,
+        batch,
+        importRun.mode,
+        counters,
+        replacementState,
+      );
+      await this.flushRowErrors(importRunId);
+      await this.updateImportProgress(importRunId, counters);
+    }
+
+    if (
+      importRun.mode === ImportMode.replace_source &&
+      counters.failedRows === 0
+    ) {
+      await this.deactivateMissingSourceItems(replacementState, counters);
+    }
+
+    await this.flushRowErrors(importRunId);
+    await this.finishImport(importRunId, counters);
+  }
+
+  private async processBatch(
+    importRunId: number,
+    batch: { rowNumber: number; row: Record<string, unknown> }[],
+    mode: ImportMode,
+    counters: CatalogImportCounters,
+    replacementState: CatalogReplacementState,
+  ) {
+    await Promise.all(
+      batch.map((b) =>
+        this.processCatalogImportRow(
+          importRunId,
+          b.rowNumber,
+          b.row,
+          mode,
+          counters,
+          replacementState,
+        ),
+      ),
+    );
   }
 
   private async processCatalogImportRow(
@@ -371,26 +391,8 @@ export class ImportsService {
       }
 
       const incomingExternalUrl = itemData.image_url;
-      let finalImageUrl = existingItem?.image_url || null;
-      let finalOriginalImageUrl = existingItem?.original_image_url || null;
-
-      if (incomingExternalUrl && incomingExternalUrl !== existingItem?.original_image_url) {
-        const processedUrl = await this.imageDownloaderService.downloadImage(incomingExternalUrl);
-        if (processedUrl) {
-          finalImageUrl = processedUrl;
-          finalOriginalImageUrl = incomingExternalUrl;
-
-          if (existingItem?.image_url) {
-            await this.imageProcessorService.deleteManagedProductImage(existingItem.image_url);
-          }
-        } else {
-          finalImageUrl = incomingExternalUrl;
-          finalOriginalImageUrl = incomingExternalUrl;
-        }
-      } else if (!incomingExternalUrl) {
-        finalImageUrl = null;
-        finalOriginalImageUrl = null;
-      }
+      const { finalImageUrl, finalOriginalImageUrl } =
+        await this.processCatalogItemImage(incomingExternalUrl, existingItem as any);
 
       itemData.image_url = finalImageUrl;
       itemData.original_image_url = finalOriginalImageUrl;
@@ -417,6 +419,40 @@ export class ImportsService {
         error instanceof Error ? error.message : String(error),
       );
     }
+  }
+
+  private async processCatalogItemImage(
+    incomingExternalUrl: string | null,
+    existingItem: any,
+  ) {
+    let finalImageUrl = existingItem?.image_url || null;
+    let finalOriginalImageUrl = existingItem?.original_image_url || null;
+
+    if (
+      incomingExternalUrl &&
+      incomingExternalUrl !== existingItem?.original_image_url
+    ) {
+      const processedUrl =
+        await this.imageDownloaderService.downloadImage(incomingExternalUrl);
+      if (processedUrl) {
+        finalImageUrl = processedUrl;
+        finalOriginalImageUrl = incomingExternalUrl;
+
+        if (existingItem?.image_url) {
+          await this.imageProcessorService.deleteManagedProductImage(
+            existingItem.image_url,
+          );
+        }
+      } else {
+        finalImageUrl = incomingExternalUrl;
+        finalOriginalImageUrl = incomingExternalUrl;
+      }
+    } else if (!incomingExternalUrl) {
+      finalImageUrl = null;
+      finalOriginalImageUrl = null;
+    }
+
+    return { finalImageUrl, finalOriginalImageUrl };
   }
 
   private trackReplacementSource(

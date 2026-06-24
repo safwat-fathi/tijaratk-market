@@ -474,14 +474,14 @@ export default function OrderForm({
 
     if (currentAttribution) {
       sessionStorage.setItem(storageKey, JSON.stringify(currentAttribution));
-      setResolvedLandingAttribution(currentAttribution);
+      setTimeout(() => setResolvedLandingAttribution(currentAttribution), 0);
       return;
     }
 
     const storedAttribution = parseStoredLandingAttribution(
       sessionStorage.getItem(storageKey),
     );
-    setResolvedLandingAttribution(storedAttribution);
+    setTimeout(() => setResolvedLandingAttribution(storedAttribution), 0);
   }, [
     tenantSlug,
     landingAttribution?.source,
@@ -1470,14 +1470,18 @@ export default function OrderForm({
       }
       lastProcessedStateRef.current = state;
 
-      closeReviewSheet(false);
+      setTimeout(() => {
+        closeReviewSheet(false);
+
+        if (state.errors) {
+          setToastState({
+            message: "يرجى تصحيح الأخطاء في البيانات المدخلة",
+            type: "error",
+          });
+        }
+      }, 0);
 
       if (state.errors) {
-        setToastState({
-          message: "يرجى تصحيح الأخطاء في البيانات المدخلة",
-          type: "error",
-        });
-
         const firstErrorField = Object.keys(state.errors)[0];
         if (firstErrorField) {
           requestAnimationFrame(() => {
@@ -1491,10 +1495,12 @@ export default function OrderForm({
           });
         }
       } else if (state.message) {
-        setToastState({
-          message: state.message,
-          type: "error",
-        });
+        setTimeout(() => {
+          setToastState({
+            message: state.message,
+            type: "error",
+          });
+        }, 0);
       }
     }
   }, [state, isPending, closeReviewSheet, keepElementVisibleInViewport]);

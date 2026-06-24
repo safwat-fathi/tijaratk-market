@@ -52,6 +52,7 @@ export function AdminBulkEssentialsButton({
         setError(response.message || "حدث خطأ أثناء الإضافة");
       }
     } catch (err) {
+      console.error(err);
       setError("حدث خطأ في الاتصال بالخادم");
     } finally {
       setIsPending(false);

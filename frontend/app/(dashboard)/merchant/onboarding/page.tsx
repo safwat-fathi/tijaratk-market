@@ -5,13 +5,18 @@ import { useRouter } from "next/navigation";
 import { tenantsService } from "@/services/api/tenants.service";
 import { Tenant } from "@/types/models/tenant";
 import { Logo } from "@/components/ui/Logo";
-import { Button } from "@/components/ui/Button";
 import { ChevronRight } from "lucide-react";
 import LocationStep from "./_components/LocationStep";
 import DeliverySettingsStep from "./_components/DeliverySettingsStep";
 import PaymentMethodsStep from "./_components/PaymentMethodsStep";
 import AddProductsStep from "./_components/AddProductsStep";
 import ReviewProductsStep from "./_components/ReviewProductsStep";
+
+function getStepColors(stepId: number, currentStep: number) {
+  if (stepId < currentStep) return "bg-brand-primary border-brand-primary text-white";
+  if (stepId === currentStep) return "bg-white border-brand-primary text-brand-primary";
+  return "bg-white border-gray-300 text-gray-400";
+}
 
 export default function MerchantOnboardingWizard() {
   const router = useRouter();
@@ -130,13 +135,7 @@ export default function MerchantOnboardingWizard() {
             {steps.map((s) => (
               <div key={s.id} className="flex flex-col items-center gap-2">
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors ${
-                    s.id < currentStep
-                      ? "bg-brand-primary border-brand-primary text-white"
-                      : s.id === currentStep
-                        ? "bg-white border-brand-primary text-brand-primary"
-                        : "bg-white border-gray-300 text-gray-400"
-                  }`}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors ${getStepColors(s.id, currentStep)}`}
                 >
                   {s.id < currentStep ? "✓" : s.id}
                 </div>
