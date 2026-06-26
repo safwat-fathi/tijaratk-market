@@ -153,7 +153,7 @@ export default function DeliveryDetailsSection({
       <div className="space-y-5">
         <div className="rounded-lg border border-brand-border bg-brand-soft/30 p-4">
           <p className="text-sm font-bold text-brand-text">لديك كود عميل؟</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
               type="text"
               inputMode="text"
@@ -165,7 +165,7 @@ export default function DeliveryDetailsSection({
                 setAccessCodeMessage(null);
                 setAccessCodeLookupState("idle");
               }}
-              className="min-h-11 rounded-md border border-brand-border bg-white px-3 py-2 text-sm font-semibold tracking-wider text-brand-text transition-colors focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
+              className="min-h-11 w-full min-w-0 flex-1 rounded-md border border-brand-border bg-white px-3 py-2 text-sm font-semibold tracking-wider text-brand-text transition-colors focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
             />
             <input
               type="tel"
@@ -178,7 +178,7 @@ export default function DeliveryDetailsSection({
                 setAccessCodeMessage(null);
                 setAccessCodeLookupState("idle");
               }}
-              className="min-h-11 rounded-md border border-brand-border bg-white px-3 py-2 text-sm text-brand-text transition-colors focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
+              className="min-h-11 w-full min-w-0 flex-1 rounded-md border border-brand-border bg-white px-3 py-2 text-sm text-brand-text transition-colors focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
             />
             <button
               type="button"
@@ -201,7 +201,7 @@ export default function DeliveryDetailsSection({
                     : result.message || "لم نجد بيانات لهذا الكود والرقم",
                 );
               }}
-              className="min-h-11 rounded-md bg-brand-primary px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 w-full shrink-0 sm:w-auto rounded-md bg-brand-primary px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-primary/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {accessCodeLookupState === "loading" ? "جار التحميل" : "استخدام الكود"}
             </button>

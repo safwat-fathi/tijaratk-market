@@ -134,7 +134,7 @@ export class OrdersService {
       );
     }
 
-    const activeProductsCount = await this.prisma.product.count({
+    const activeProductsCount = await this.productClient().count({
       where: {
         tenant_id: tenant.id,
         ...ACTIVE_PRODUCT_FOR_ORDERS_WHERE,

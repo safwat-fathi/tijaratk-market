@@ -20,6 +20,7 @@ import { OrderStatus } from 'src/common/enums/order-status.enum';
 import { OrderType } from 'src/common/enums/order-type.enum';
 import { UnavailableItemAction } from 'src/common/enums/unavailable-item-action.enum';
 import { OrdersService } from './orders.service';
+import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import {
   ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
   MIN_ACTIVE_PRODUCTS_FOR_ORDERS,
@@ -376,6 +377,40 @@ const createPublicOrderGuardServiceForCategory = (
 };
 
 describe('OrdersService product order readiness guard', () => {
+  it('uses the request tenant manager for the public readiness product count', async () => {
+    const { service, prisma } = createPublicOrderGuardService(
+      MIN_ACTIVE_PRODUCTS_FOR_ORDERS - 1,
+    );
+    const manager = {
+      product: {
+        count: jest.fn().mockResolvedValue(MIN_ACTIVE_PRODUCTS_FOR_ORDERS),
+      },
+    };
+    const expectedOrder = { id: 10 };
+    const createForTenantIdSpy = jest
+      .spyOn(service, 'createForTenantId')
+      .mockResolvedValue(expectedOrder as any);
+
+    await expect(
+      DbTenantContext.run({ tenantId: 1, manager: manager as any }, () =>
+        service.createForTenantSlug('test-tenant', createOrderDto() as any),
+      ),
+    ).resolves.toBe(expectedOrder);
+
+    expect(manager.product.count).toHaveBeenCalledWith({
+      where: {
+        tenant_id: 1,
+        ...ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
+      },
+    });
+    expect(prisma.product.count).not.toHaveBeenCalled();
+    expect(createForTenantIdSpy).toHaveBeenCalledWith(
+      1,
+      createOrderDto(),
+      undefined,
+    );
+  });
+
   it('rejects public orders below the active product threshold', async () => {
     const { service, prisma } = createPublicOrderGuardService(
       MIN_ACTIVE_PRODUCTS_FOR_ORDERS - 1,
