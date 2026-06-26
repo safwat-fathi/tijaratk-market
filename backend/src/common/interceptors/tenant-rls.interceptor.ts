@@ -88,6 +88,10 @@ export class TenantRlsInterceptor implements NestInterceptor {
 
     const parts = this.getPathParts(req.path);
 
+    if (this.isCustomersGlobalAccessCodeRoute(parts)) {
+      return TenantRlsInterceptor.NO_TENANT_CONTEXT;
+    }
+
     if (this.isProductsPublicSlugRoute(parts)) {
       const slug = parts[2];
       return this.resolveTenantIdBySlug(slug, tx);
@@ -212,8 +216,25 @@ export class TenantRlsInterceptor implements NestInterceptor {
    * Returns true for /customers/public/:slug routes.
    */
   private isCustomersPublicSlugRoute(parts: string[]): boolean {
+    if (this.isCustomersGlobalAccessCodeRoute(parts)) {
+      return false;
+    }
+
     return (
       parts.length >= 3 && parts[0] === 'customers' && parts[1] === 'public'
+    );
+  }
+
+  /**
+   * Returns true for public global customer access-code routes.
+   */
+  private isCustomersGlobalAccessCodeRoute(parts: string[]): boolean {
+    return (
+      parts.length >= 4 &&
+      parts[0] === 'customers' &&
+      parts[1] === 'public' &&
+      parts[2] === 'by-access-code' &&
+      (parts[3] === 'profile' || parts[3] === 'orders')
     );
   }
 

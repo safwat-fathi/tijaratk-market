@@ -64,22 +64,6 @@ export class CustomersController {
     return result;
   }
 
-  @Get('public/:slug/by-phone')
-  @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
-  @ApiOperation({ summary: 'Find customer profile by phone (Public)' })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description:
-      'Return public customer profile fields for storefront autofill',
-  })
-  findPublicProfileByPhone(
-    @Param('slug') slug: string,
-    @Query('phone') phone: string,
-  ) {
-    return this.customersService.findPublicProfileByPhone(slug, phone);
-  }
-
   @Get('public/by-access-code/profile')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
@@ -112,6 +96,22 @@ export class CustomersController {
     @Query('phone') phone: string,
   ) {
     return this.customersService.findPublicOrdersByAccessCode(code, phone);
+  }
+
+  @Get('public/:slug/by-phone')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Find customer profile by phone (Public)' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description:
+      'Return public customer profile fields for storefront autofill',
+  })
+  findPublicProfileByPhone(
+    @Param('slug') slug: string,
+    @Query('phone') phone: string,
+  ) {
+    return this.customersService.findPublicProfileByPhone(slug, phone);
   }
 
   @Get(':id')
