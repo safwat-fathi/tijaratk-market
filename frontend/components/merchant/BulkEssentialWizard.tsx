@@ -28,7 +28,7 @@ type BulkEssentialWizardProps = {
 
 type StageStatus = "pending" | "added" | "skipped" | "error";
 
-const TOP_SELECTED_COUNT = 20;
+const TOP_SELECTED_COUNT = 10;
 
 const buildInitialSelections = (stages: BulkEssentialStage[]) =>
   stages.reduce<Record<string, Record<number, boolean>>>((acc, stage) => {

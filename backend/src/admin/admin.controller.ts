@@ -26,6 +26,8 @@ import { UpdateTenantPlanDto } from './dto/update-tenant-plan.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { ProductsService } from '../products/products.service';
 import { AddBulkEssentialItemsDto } from '../products/dto/add-bulk-essential.dto';
+import { CreateProductDto } from '../products/dto/create-product.dto';
+import { UpdateProductDto } from '../products/dto/update-product.dto';
 import { Response } from 'express';
 import {
   AdminLoginResponseDto,
@@ -201,6 +203,50 @@ export class AdminController {
     @Body() dto: AddBulkEssentialItemsDto,
   ) {
     return this.productsService.bulkAddEssentials(id, dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('tenants/:id/products')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Create a product for a merchant',
+    description: 'Create a manual product for a selected merchant as admin.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The unique ID of the tenant',
+    type: Number,
+  })
+  @ApiBody({ type: CreateProductDto })
+  @ApiResponse({ status: 201, description: 'Product created successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  createTenantProduct(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateProductDto,
+  ) {
+    return this.productsService.createForTenantAsAdmin(id, dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Patch('products/:id')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Update a merchant product',
+    description: 'Update a product for any merchant as admin.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The unique ID of the product',
+    type: Number,
+  })
+  @ApiBody({ type: UpdateProductDto })
+  @ApiResponse({ status: 200, description: 'Product updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  updateTenantProduct(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateProductDto,
+  ) {
+    return this.productsService.updateForTenantAsAdmin(id, dto);
   }
 
   @UseGuards(AdminAuthGuard)

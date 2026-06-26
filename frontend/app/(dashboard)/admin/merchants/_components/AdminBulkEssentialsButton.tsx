@@ -115,7 +115,7 @@ export function AdminBulkEssentialsButton({
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600 whitespace-normal break-words">
-            سيتم إضافة المنتجات الأساسية من جميع الأقسام (بقالة، حلويات، شيبسي،
+            سيتم إضافة المنتجات الأساسية من جميع الأقسام (سوبر ماركت، حلويات، شيبسي،
             إلخ) لمتجر <strong>{tenantName}</strong>.
             <br />
             المنتجات المضافة ستحتاج إلى مراجعة أسعارها من قبل التاجر.

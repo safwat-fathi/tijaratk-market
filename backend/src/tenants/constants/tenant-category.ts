@@ -14,7 +14,7 @@ export const TENANT_CATEGORIES = {
     value: 'grocery',
     labels: {
       en: 'Grocery',
-      ar: 'بقالة',
+      ar: 'سوبر ماركت',
     },
   },
   GREENGROCER: {

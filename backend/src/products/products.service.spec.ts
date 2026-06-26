@@ -377,7 +377,7 @@ describe('ProductsService catalog source isolation', () => {
       category: 'شيبس ومقبلات',
       total: 22,
       default_selected_catalog_item_ids: Array.from(
-        { length: 20 },
+        { length: 10 },
         (_, index) => index + 1,
       ),
     });

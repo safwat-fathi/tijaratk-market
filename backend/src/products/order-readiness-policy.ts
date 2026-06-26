@@ -1,7 +1,7 @@
 import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { TenantCategory } from '../../generated/prisma/client';
 
-export const MIN_ACTIVE_PRODUCTS_FOR_ORDERS = 200;
+export const MIN_ACTIVE_PRODUCTS_FOR_ORDERS = 100;
 export const MIN_ACTIVE_PRODUCTS_FOR_LIGHTWEIGHT_ORDERS = 50;
 
 export type ProductOrderReadinessStatus =
@@ -20,7 +20,7 @@ export type ProductOrderReadiness = {
 
 type TenantCategoryInput = TenantCategory | null | undefined;
 
-export const PRODUCT_ORDER_READINESS_MILESTONES = [50, 100, 150, 200];
+export const PRODUCT_ORDER_READINESS_MILESTONES = [25, 50, 75, 100];
 export const LIGHTWEIGHT_PRODUCT_ORDER_READINESS_MILESTONES = [10, 25, 50];
 
 export const ACTIVE_PRODUCT_FOR_ORDERS_WHERE = {

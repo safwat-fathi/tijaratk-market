@@ -6,8 +6,8 @@ const PUBLIC_STOREFRONT_REVALIDATE_SECONDS = 60;
 type UpdateTenantDeliverySettingsRequest = {
   delivery_fee: number;
   delivery_available: boolean;
-  delivery_starts_at?: string;
-  delivery_ends_at?: string;
+  delivery_starts_at?: string | null;
+  delivery_ends_at?: string | null;
 };
 
 type UpdateTenantSettingsRequest = {

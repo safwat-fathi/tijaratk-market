@@ -42,7 +42,7 @@ const DEFAULT_PRICE_PRESET_AMOUNTS = [100, 200, 300] as const;
 const DEFAULT_QUANTITY_UNIT_LABEL = 'قطعة';
 const DEFAULT_PHARMACY_QUANTITY_UNIT_LABEL = 'علبة';
 const MAX_ORDER_PRESETS = 6;
-const DEFAULT_BULK_ESSENTIAL_SELECTED_COUNT = 20;
+const DEFAULT_BULK_ESSENTIAL_SELECTED_COUNT = 10;
 
 type QuantityUnitOptionConfig = {
   id: string;
@@ -213,8 +213,21 @@ export class ProductsService {
 
     await this.storeTenantProductCategory(tenantId, product.category);
     await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.bumpCatalogSearchCacheVersion(tenantId);
     await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
     return product;
+  }
+
+  async createForTenantAsAdmin(
+    tenantId: number,
+    createProductDto: CreateProductDto,
+  ): Promise<Product> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+      return DbTenantContext.run({ tenantId, manager: tx }, () =>
+        this.create(tenantId, createProductDto),
+      );
+    });
   }
 
   /**
@@ -275,6 +288,7 @@ export class ProductsService {
 
     await this.storeTenantProductCategory(tenantId, product.category);
     await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.bumpCatalogSearchCacheVersion(tenantId);
     await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
     return product;
   }
@@ -385,6 +399,7 @@ export class ProductsService {
         });
 
         await this.bumpTenantSearchCacheVersion(tenantId);
+        await this.bumpCatalogSearchCacheVersion(tenantId);
         await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
 
         return { count: result.count };
@@ -541,6 +556,7 @@ export class ProductsService {
     });
 
     await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.bumpCatalogSearchCacheVersion(tenantId);
     await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
 
     return { count: result.count };
@@ -1040,6 +1056,19 @@ export class ProductsService {
     }));
   }
 
+  private async getActiveTenantProductNames(tenantId: number): Promise<string[]> {
+    const products = await this.getPrismaClient().product.findMany({
+      where: {
+        tenant_id: tenantId,
+        status: ProductStatus.ACTIVE,
+        deleted_at: null,
+      },
+      select: { name: true },
+    });
+
+    return products.map((product) => product.name);
+  }
+
   /**
    * Returns active catalog items, optionally filtered by category.
    */
@@ -1113,6 +1142,10 @@ export class ProductsService {
         none: { tenant_id: tenantId },
       },
     };
+    const activeProductNames = await this.getActiveTenantProductNames(tenantId);
+    if (activeProductNames.length > 0) {
+      where.name = { notIn: activeProductNames };
+    }
 
     if (category) {
       where.category = isCatalogCategoryAllowedForSource(
@@ -1329,6 +1362,7 @@ export class ProductsService {
       updateData.current_price = this.normalizeCurrentPrice(
         updateProductDto.current_price,
       );
+      updateData.price_needs_review = false;
     }
 
     if (
@@ -1368,6 +1402,7 @@ export class ProductsService {
       await this.storeTenantProductCategory(tenantId, updatedProduct.category);
     }
     await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.bumpCatalogSearchCacheVersion(tenantId);
     await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
 
     if (previousImageUrl && previousImageUrl !== updatedProduct.image_url) {
@@ -1377,6 +1412,28 @@ export class ProductsService {
     }
 
     return updatedProduct;
+  }
+
+  async updateForTenantAsAdmin(
+    productId: number,
+    updateProductDto: UpdateProductDto,
+  ): Promise<Product> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, deleted_at: null },
+      select: { tenant_id: true },
+    });
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${productId} not found`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(product.tenant_id)}, true)`;
+      return DbTenantContext.run(
+        { tenantId: product.tenant_id, manager: tx },
+        () => this.update(productId, product.tenant_id, updateProductDto),
+      );
+    });
   }
 
   /**
@@ -1389,6 +1446,7 @@ export class ProductsService {
       data: { status: ProductStatus.ARCHIVED },
     });
     await this.bumpTenantSearchCacheVersion(tenantId);
+    await this.bumpCatalogSearchCacheVersion(tenantId);
     await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
   }
 
@@ -2121,6 +2179,16 @@ export class ProductsService {
     conditions.push(`source = ${addParam(source)}`);
     conditions.push(
       `NOT EXISTS (SELECT 1 FROM tenant_hidden_catalog_items hidden WHERE hidden.catalog_item_id = catalog_items.id AND hidden.tenant_id = ${addParam(tenantId)})`,
+    );
+    conditions.push(
+      `NOT EXISTS (
+        SELECT 1
+        FROM products product
+        WHERE product.tenant_id = ${addParam(tenantId)}
+          AND product.status = ${addParam(ProductStatus.ACTIVE)}
+          AND product.deleted_at IS NULL
+          AND product.name = catalog_items.name
+      )`,
     );
 
     const allowedCategories = getAllowedCatalogCategoriesForSource(source);

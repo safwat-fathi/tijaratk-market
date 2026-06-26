@@ -1,9 +1,12 @@
 import { useRef } from "react";
+import { Ban, CheckCircle, Pencil, Trash2, X } from "lucide-react";
 import SafeImage from "@/components/ui/SafeImage";
 import { formatArabicInteger } from "@/lib/utils/number";
 import type { Product } from "@/types/models/product";
 import { SECTION_MY_PRODUCTS } from "../_utils/product-onboarding.constants";
-import type { ProductAvailabilityFilter } from "../_utils/product-onboarding.types";
+import type {
+  ProductAvailabilityFilter,
+} from "../_utils/product-onboarding.types";
 import {
   normalizeModeBadge,
   resolveImageUrl,
@@ -25,6 +28,11 @@ type MyProductsSectionProps = {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   onClearSearchQuery: () => void;
+  categoryFilter: string;
+  onCategoryFilterChange: (value: string) => void;
+  categoryFilterCounts: { category: string; count: number }[];
+  categoryFilterTotalCount: number;
+  allCategoryFilterKey: string;
   availabilityFilter: ProductAvailabilityFilter;
   onAvailabilityFilterChange: (value: ProductAvailabilityFilter) => void;
   availabilityFilterCounts: Record<ProductAvailabilityFilter, number>;
@@ -35,8 +43,10 @@ type MyProductsSectionProps = {
   displayedProducts: Product[];
   confirmRemoveProductId: number | null;
   removingProductId: number | null;
+  availabilityPendingProductId: number | null;
   highlightedProductId: number | null;
   onStartEdit: (product: Product) => void;
+  onToggleAvailability: (product: Product) => void;
   onRequestRemove: (productId: number) => void;
   onRemoveProduct: (product: Product) => void;
   onCancelRemove: () => void;
@@ -50,6 +60,11 @@ export default function MyProductsSection({
   searchQuery,
   onSearchQueryChange,
   onClearSearchQuery,
+  categoryFilter,
+  onCategoryFilterChange,
+  categoryFilterCounts,
+  categoryFilterTotalCount,
+  allCategoryFilterKey,
   availabilityFilter,
   onAvailabilityFilterChange,
   availabilityFilterCounts,
@@ -60,8 +75,10 @@ export default function MyProductsSection({
   displayedProducts,
   confirmRemoveProductId,
   removingProductId,
+  availabilityPendingProductId,
   highlightedProductId,
   onStartEdit,
+  onToggleAvailability,
   onRequestRemove,
   onRemoveProduct,
   onCancelRemove,
@@ -69,13 +86,18 @@ export default function MyProductsSection({
   onOpenBulkWizard,
 }: MyProductsSectionProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const allCategoryCountLabel =
+    formatArabicInteger(categoryFilterTotalCount) || categoryFilterTotalCount;
 
   const handleClearSearch = () => {
     onClearSearchQuery();
     searchInputRef.current?.focus();
   };
 
-  const isFilteredList = isSearchActive || availabilityFilter !== "all";
+  const isFilteredList =
+    isSearchActive ||
+    availabilityFilter !== "all" ||
+    categoryFilter !== allCategoryFilterKey;
 
   return (
     <section
@@ -135,6 +157,61 @@ export default function MyProductsSection({
           {!isSearchLoading && searchError && (
             <p className="mt-2 text-xs text-red-600">{searchError}</p>
           )}
+        </div>
+
+        <div
+          className="mt-3 flex gap-2 overflow-x-auto pb-1"
+          aria-label="فلترة المنتجات حسب التصنيف"
+        >
+          <button
+            type="button"
+            onClick={() => onCategoryFilterChange(allCategoryFilterKey)}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+              categoryFilter === allCategoryFilterKey
+                ? "border-brand-primary bg-brand-primary text-white shadow-sm"
+                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+            }`}
+            aria-pressed={categoryFilter === allCategoryFilterKey}
+          >
+            <span>الكل</span>
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[11px] ${
+                categoryFilter === allCategoryFilterKey
+                  ? "bg-white/20 text-white"
+                  : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {allCategoryCountLabel}
+            </span>
+          </button>
+
+          {categoryFilterCounts.map((category) => {
+            const isActive = categoryFilter === category.category;
+            const countLabel = formatArabicInteger(category.count) || category.count;
+
+            return (
+              <button
+                key={category.category}
+                type="button"
+                onClick={() => onCategoryFilterChange(category.category)}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  isActive
+                    ? "border-brand-primary bg-brand-primary text-white shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                }`}
+                aria-pressed={isActive}
+              >
+                <span>{category.category}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[11px] ${
+                    isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {countLabel}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div
@@ -201,20 +278,34 @@ export default function MyProductsSection({
                 const isConfirmingRemoval =
                   confirmRemoveProductId === product.id;
                 const isRemoving = removingProductId === product.id;
+                const isAvailabilityPending =
+                  availabilityPendingProductId === product.id;
                 const isHighlighted = highlightedProductId === product.id;
+                let availabilityActionLabel = "إيقاف";
+                let AvailabilityIcon = Ban;
+                if (isAvailabilityPending) {
+                  availabilityActionLabel = "...جاري";
+                } else if (product.is_available === false) {
+                  availabilityActionLabel = "إتاحة";
+                  AvailabilityIcon = CheckCircle;
+                }
+                const availabilityActionClass =
+                  product.is_available === false
+                    ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                    : "border-amber-200 text-amber-700 hover:bg-amber-50";
 
                 return (
                   <li
                     key={product.id}
                     ref={(node) => setProductRowRef(product.id, node)}
                     tabIndex={-1}
-                    className={`flex items-center justify-between rounded-xl border px-3 py-2 transition ${
+                    className={`flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-3 rounded-xl border px-3 py-3 sm:py-2 transition ${
                       isHighlighted
                         ? "border-amber-300 bg-amber-50 ring-2 ring-amber-200"
                         : "border-gray-100"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 flex-1 items-start sm:items-center gap-3 w-full sm:w-auto">
                       {resolveImageUrl(product.image_url) ? (
                         <SafeImage
                           src={resolveImageUrl(product.image_url)}
@@ -222,21 +313,21 @@ export default function MyProductsSection({
                           width={40}
                           height={40}
                           unoptimized
-                          imageClassName="h-10 w-10 rounded-lg border border-gray-200 bg-gray-50 object-cover"
+                          imageClassName="h-10 w-10 shrink-0 rounded-lg border border-gray-200 bg-gray-50 object-cover"
                           fallback={
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-[10px] text-gray-500">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-[10px] text-gray-500">
                               صورة
                             </div>
                           }
                         />
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-[10px] text-gray-500">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-[10px] text-gray-500">
                           صورة
                         </div>
                       )}
 
-                      <div>
-                        <span className="block text-sm font-medium text-gray-900">
+                      <div className="min-w-0">
+                        <span className="block whitespace-normal break-words text-sm font-medium leading-6 text-gray-900">
                           {product.name}
                         </span>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -261,24 +352,27 @@ export default function MyProductsSection({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2 mt-1 sm:mt-0 self-end sm:self-auto w-full sm:w-auto justify-end border-t border-gray-100 pt-3 sm:border-0 sm:pt-0">
                       {isConfirmingRemoval ? (
                         <>
                           <button
                             type="button"
                             onClick={() => onRemoveProduct(product)}
                             disabled={isRemoving}
-                            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                            className="flex items-center gap-1.5 rounded-lg bg-red-600 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                           >
-                            {isRemoving ? "...جاري الحذف" : "تأكيد الحذف"}
+                            <Trash2 className="h-4 w-4" />
+                            <span className="max-sm:hidden">{isRemoving ? "...جاري الحذف" : "تأكيد الحذف"}</span>
                           </button>
                           <button
                             type="button"
                             onClick={onCancelRemove}
                             disabled={isRemoving}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                            className="flex items-center gap-1.5 rounded-lg border border-gray-300 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                            title="إلغاء"
                           >
-                            إلغاء
+                            <X className="h-4 w-4" />
+                            <span className="max-sm:hidden">إلغاء</span>
                           </button>
                         </>
                       ) : (
@@ -286,18 +380,32 @@ export default function MyProductsSection({
                           <button
                             type="button"
                             onClick={() => onStartEdit(product)}
-                            disabled={isRemoving}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                            disabled={isRemoving || isAvailabilityPending}
+                            className="flex items-center gap-1.5 rounded-lg border border-gray-300 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                            title="تعديل"
                           >
-                            تعديل
+                            <Pencil className="h-4 w-4" />
+                            <span className="max-sm:hidden">تعديل</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onToggleAvailability(product)}
+                            disabled={Boolean(removingProductId) || isAvailabilityPending}
+                            className={`flex items-center gap-1.5 rounded-lg border p-2 sm:px-3 sm:py-1.5 text-xs font-semibold disabled:opacity-60 ${availabilityActionClass}`}
+                            title={availabilityActionLabel}
+                          >
+                            <AvailabilityIcon className="h-4 w-4" />
+                            <span className="max-sm:hidden">{availabilityActionLabel}</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => onRequestRemove(product.id)}
-                            disabled={Boolean(removingProductId)}
-                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                            disabled={Boolean(removingProductId) || isAvailabilityPending}
+                            className="flex items-center gap-1.5 rounded-lg border border-red-200 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                            title="حذف"
                           >
-                            حذف
+                            <Trash2 className="h-4 w-4" />
+                            <span className="max-sm:hidden">حذف</span>
                           </button>
                         </>
                       )}

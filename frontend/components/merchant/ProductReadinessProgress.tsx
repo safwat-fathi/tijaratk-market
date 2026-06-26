@@ -83,8 +83,8 @@ export function buildProductReadinessFromCount(
 ): ProductReadinessMetric {
   const requiresFullCatalog =
     storeType === "grocery" || storeType === "pharmacy";
-  const requiredProductsCount = requiresFullCatalog ? 200 : 50;
-  const milestones = requiresFullCatalog ? [50, 100, 150, 200] : [10, 25, 50];
+  const requiredProductsCount = requiresFullCatalog ? 100 : 50;
+  const milestones = requiresFullCatalog ? [25, 50, 75, 100] : [10, 25, 50];
   const safeActiveProductsCount = Math.max(0, Math.floor(activeProductsCount));
   const remainingProductsCount = Math.max(
     0,
@@ -129,7 +129,7 @@ export default function ProductReadinessProgress({
       <div className={`rounded-md px-3 py-2.5 ${compactTone}`}>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-bold">Product Completion Score</p>
+            <p className="text-sm font-bold">مؤشر إكتمال المنتجات</p>
             <p className="mt-0.5 text-xs font-medium opacity-80">
               {isReady
                 ? "متجرك جاهز لاستقبال الطلبات"
@@ -193,7 +193,7 @@ export default function ProductReadinessProgress({
       <div className="mt-4 rounded-lg border border-white/70 bg-white/70 p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-bold">Product Completion Score</p>
+            <p className="text-sm font-bold">مؤشر إكتمال المنتجات</p>
             <p className="mt-0.5 text-xs font-medium text-gray-600">
               {formatInteger(readiness.active_products_count)} /{" "}
               {formatInteger(readiness.required_products_count)} منتج نشط

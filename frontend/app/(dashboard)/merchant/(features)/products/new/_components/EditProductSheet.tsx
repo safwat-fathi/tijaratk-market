@@ -90,9 +90,21 @@ export default function EditProductSheet({
       isOpen={Boolean(editingProduct)}
       title="تعديل المنتج"
       onClose={onClose}
+      footer={
+        editingProduct ? (
+          <Button
+            type="submit"
+            form="edit-product-form"
+            disabled={isEditPending}
+            className="w-full"
+          >
+            {isEditPending ? "جاري الحفظ…" : "حفظ التعديل"}
+          </Button>
+        ) : undefined
+      }
     >
       {editingProduct ? (
-        <form onSubmit={onSubmit} className="space-y-3">
+        <form id="edit-product-form" onSubmit={onSubmit} className="space-y-3">
           <label className="block">
             <span className="mb-1 block text-sm text-brand-text">اسم المنتج</span>
             <Input
@@ -200,13 +212,6 @@ export default function EditProductSheet({
             )}
           </div>
 
-          <Button
-            type="submit"
-            disabled={isEditPending}
-            className="w-full"
-          >
-            {isEditPending ? "جاري الحفظ…" : "حفظ التعديل"}
-          </Button>
         </form>
       ) : null}
     </BottomSheet>

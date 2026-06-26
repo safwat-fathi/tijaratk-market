@@ -181,6 +181,76 @@ export async function adminBulkAddEssentialItemsAction(tenantId: number, categor
 	};
 }
 
+const parseOptionalPositiveNumber = (value: FormDataEntryValue | null) => {
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const parseProductStatus = (value: FormDataEntryValue | null) => {
+  return value === "archived" ? "archived" : "active";
+};
+
+const parseCheckboxBoolean = (value: FormDataEntryValue | null) =>
+  value === "on" || value === "true";
+
+export async function adminCreateProductAction(formData: FormData): Promise<void> {
+  const tenantId = parsePositiveInteger(formData.get("tenant_id"));
+  const name = typeof formData.get("name") === "string"
+    ? String(formData.get("name")).trim()
+    : "";
+  if (!tenantId || !name) {
+    throw new Error("يجب اختيار التاجر وكتابة اسم المنتج");
+  }
+
+  const category = typeof formData.get("category") === "string"
+    ? String(formData.get("category")).trim()
+    : "";
+
+  const response = await adminService.createTenantProduct(tenantId, {
+    name,
+    current_price: parseOptionalPositiveNumber(formData.get("current_price")),
+    category: category || undefined,
+    is_available: parseCheckboxBoolean(formData.get("is_available")),
+  });
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر إضافة المنتج");
+  }
+
+  revalidatePath("/admin/products");
+}
+
+export async function adminUpdateProductAction(productId: number, formData: FormData): Promise<void> {
+  const name = typeof formData.get("name") === "string"
+    ? String(formData.get("name")).trim()
+    : "";
+  if (!name) {
+    throw new Error("اسم المنتج مطلوب");
+  }
+
+  const category = typeof formData.get("category") === "string"
+    ? String(formData.get("category")).trim()
+    : "";
+
+  const response = await adminService.updateProduct(productId, {
+    name,
+    current_price: parseOptionalPositiveNumber(formData.get("current_price")),
+    category: category || undefined,
+    is_available: parseCheckboxBoolean(formData.get("is_available")),
+    status: parseProductStatus(formData.get("status")),
+  });
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر تحديث المنتج");
+  }
+
+  revalidatePath("/admin/products");
+}
+
 export async function togglePlanStatusAction(id: number, currentStatus: boolean): Promise<void> {
   const response = await adminService.togglePlanStatus(id, !currentStatus);
   if (response.success) {

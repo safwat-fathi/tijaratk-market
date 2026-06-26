@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Tenant } from "@/types/models/tenant";
 import { Field, Input } from "@/components/ui/Field";
 import { tenantsService } from "@/services/api/tenants.service";
+import { merchantDirectoryService } from "@/services/api/stores-directory.service";
+import type { DirectoryArea } from "@/types/models/tenant";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
 const DELIVERY_TIME_PRESETS = [
   { label: "طوال اليوم", start: "", end: "" },
@@ -13,6 +16,28 @@ const DELIVERY_TIME_PRESETS = [
   { label: "فترة بعد الظهر (2 م - 6 م)", start: "14:00", end: "18:00" },
   { label: "فترة المساء (6 م - 10 م)", start: "18:00", end: "22:00" },
 ] as const;
+
+type DeliverySettingsPayload = {
+  delivery_fee: number;
+  delivery_available: boolean;
+  delivery_starts_at: string | null;
+  delivery_ends_at: string | null;
+};
+
+const resolveInitialDeliveryAreaIds = (
+  selectedAreaIds: number[],
+  areaId: number | null,
+) => {
+  if (selectedAreaIds.length > 0) {
+    return selectedAreaIds;
+  }
+
+  if (areaId) {
+    return [areaId];
+  }
+
+  return [];
+};
 
 export default function DeliverySettingsStep({
   tenant,
@@ -26,6 +51,10 @@ export default function DeliverySettingsStep({
   const [fee, setFee] = useState(tenant.delivery_fee?.toString() || "20");
   const [startsAt, setStartsAt] = useState(tenant.delivery_starts_at || "");
   const [endsAt, setEndsAt] = useState(tenant.delivery_ends_at || "");
+  const [profileAreaId, setProfileAreaId] = useState<number | null>(null);
+  const [deliveryAreaIds, setDeliveryAreaIds] = useState<number[]>([]);
+  const [areas, setAreas] = useState<DirectoryArea[]>([]);
+  const [areasLoading, setAreasLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +67,68 @@ export default function DeliverySettingsStep({
     );
     return preset ? preset.label : "custom";
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchDeliveryAreas = async () => {
+      setAreasLoading(true);
+      try {
+        const [profileResponse, areasResponse] = await Promise.all([
+          merchantDirectoryService.getProfile(),
+          merchantDirectoryService.getActiveAreas(),
+        ]);
+
+        if (cancelled) return;
+
+        if (areasResponse.success && areasResponse.data) {
+          setAreas(areasResponse.data);
+        }
+
+        if (profileResponse.success && profileResponse.data) {
+          const areaId = profileResponse.data.area_id ?? null;
+          setProfileAreaId(areaId);
+          const selectedAreaIds = profileResponse.data.delivery_area_ids ?? [];
+          setDeliveryAreaIds(
+            resolveInitialDeliveryAreaIds(selectedAreaIds, areaId),
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load delivery areas", err);
+        if (!cancelled) {
+          setError("تعذر تحميل مناطق التوصيل");
+        }
+      } finally {
+        if (!cancelled) {
+          setAreasLoading(false);
+        }
+      }
+    };
+
+    void fetchDeliveryAreas();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const deliveryAreas = useMemo(() => {
+    if (!profileAreaId) return [];
+
+    return areas
+      .filter(
+        (area) => area.id === profileAreaId || area.parent_area_id === profileAreaId,
+      )
+      .sort((left, right) => left.sort_order - right.sort_order);
+  }, [areas, profileAreaId]);
+
+  const toggleDeliveryArea = (areaId: number) => {
+    setDeliveryAreaIds((current) =>
+      current.includes(areaId)
+        ? current.filter((id) => id !== areaId)
+        : [...current, areaId],
+    );
+  };
 
   const handleTimeChange = (type: 'start' | 'end', val: string) => {
     if (type === 'start') setStartsAt(val);
@@ -60,13 +151,31 @@ export default function DeliverySettingsStep({
     setError(null);
     
     try {
-      const payload: any = {
+      if (!profileAreaId) {
+        setError("يرجى تحديد منطقة المتجر أولاً");
+        return;
+      }
+
+      const uniqueDeliveryAreaIds = Array.from(
+        new Set(deliveryAreaIds.length > 0 ? deliveryAreaIds : [profileAreaId]),
+      );
+
+      const profileResponse = await merchantDirectoryService.updateProfile({
+        area_id: profileAreaId,
+        delivery_area_ids: uniqueDeliveryAreaIds,
+      });
+
+      if (!profileResponse.success) {
+        setError(profileResponse.message || "حدث خطأ أثناء حفظ مناطق التوصيل");
+        return;
+      }
+
+      const payload: DeliverySettingsPayload = {
         delivery_fee: Number(fee) || 0,
         delivery_available: true,
+        delivery_starts_at: startsAt || null,
+        delivery_ends_at: endsAt || null,
       };
-      
-      payload.delivery_starts_at = startsAt || null;
-      payload.delivery_ends_at = endsAt || null;
 
       const response = await tenantsService.updateMyDeliverySettings(payload);
       
@@ -155,10 +264,48 @@ export default function DeliverySettingsStep({
             })}
           </div>
         </div>
+
+        <div className="space-y-3 rounded-lg border border-brand-border p-3">
+          <div>
+            <h3 className="text-sm font-bold text-brand-text">مناطق التوصيل</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              اختر المناطق التي يمكن للعملاء الطلب منها.
+            </p>
+          </div>
+
+          {areasLoading && (
+            <div className="flex justify-center py-4">
+              <LoadingSpinner className="h-6 w-6 text-brand-primary" />
+            </div>
+          )}
+          {!areasLoading && deliveryAreas.length > 0 && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {deliveryAreas.map((area) => (
+                <label
+                  key={area.id}
+                  className="flex items-center gap-2 rounded-md border border-brand-border px-3 py-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={deliveryAreaIds.includes(area.id)}
+                    onChange={() => toggleDeliveryArea(area.id)}
+                    className="h-4 w-4 accent-brand-primary"
+                  />
+                  <span>{area.name_ar}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          {!areasLoading && deliveryAreas.length === 0 && (
+            <p className="rounded-md bg-gray-50 p-3 text-sm text-muted-foreground">
+              لا توجد مناطق توصيل متاحة للمنطقة الأساسية المختارة.
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="pt-4 border-t border-gray-100 flex justify-end">
-        <Button type="submit" disabled={loading} size="lg" className="w-full sm:w-auto px-8">
+        <Button type="submit" disabled={loading || areasLoading} size="lg" className="w-full sm:w-auto px-8">
           {loading ? "جاري الحفظ..." : "حفظ ومتابعة"}
         </Button>
       </div>

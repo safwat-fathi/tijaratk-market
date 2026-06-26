@@ -103,8 +103,29 @@ type AdminPaginatedResponse<T> = {
 	};
 };
 
-type AdminProduct = Record<string, unknown>;
+export type AdminProduct = {
+	id: number;
+	name: string;
+	category?: string | null;
+	current_price?: number | string | null;
+	status?: "active" | "archived" | string | null;
+	is_available?: boolean;
+	price_needs_review?: boolean;
+	tenant_id?: number;
+	tenant?: {
+		id?: number;
+		name?: string | null;
+	} | null;
+};
 type AdminOrder = Record<string, unknown>;
+
+type AdminProductPayload = {
+	name: string;
+	current_price?: number;
+	category?: string;
+	is_available?: boolean;
+	status?: "active" | "archived";
+};
 
 type UpdateTenantDirectoryProfilePayload = {
 	area_id?: number;
@@ -180,6 +201,24 @@ class AdminApiService extends HttpService {
 		return this.post<{ count: number }>(
 			`tenants/${tenantId}/bulk-essentials`,
 			{ categories },
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async createTenantProduct(tenantId: number, payload: AdminProductPayload) {
+		return this.post<AdminProduct>(
+			`tenants/${tenantId}/products`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async updateProduct(productId: number, payload: AdminProductPayload) {
+		return this.patch<AdminProduct>(
+			`products/${productId}`,
+			payload,
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);

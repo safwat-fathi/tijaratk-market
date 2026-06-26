@@ -21,7 +21,7 @@ export default function DocsOverviewPage() {
 				</p>
 				<h2 className="mt-6 text-2xl font-black text-brand-text">لمن يناسب؟</h2>
 				<p className="mt-3 text-muted-foreground">
-					يناسب المحلات التي تستقبل طلبات مباشرة، مثل البقالة والخضار والفاكهة والمخبز والجزارة والصيدلية.
+					يناسب المحلات التي تستقبل طلبات مباشرة، مثل السوبر ماركت والخضار والفاكهة والمخبز والجزارة والصيدلية.
 				</p>
 				<h2 className="mt-6 text-2xl font-black text-brand-text">ما هو ليس عليه؟</h2>
 				<p className="mt-3 text-muted-foreground">

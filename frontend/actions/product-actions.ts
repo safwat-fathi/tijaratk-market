@@ -393,6 +393,15 @@ export async function updateProductAction(productId: number, formData: FormData)
   }
 }
 
+export async function updateProductAvailabilityAction(
+  productId: number,
+  isAvailable: boolean,
+) {
+  const formData = new FormData();
+  formData.set('is_available', String(isAvailable));
+  return updateProductAction(productId, formData);
+}
+
 export async function removeProductAction(productId: number) {
   try {
     const response = await productsService.removeProduct(productId);

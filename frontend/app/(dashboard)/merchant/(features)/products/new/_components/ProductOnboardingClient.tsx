@@ -12,6 +12,7 @@ import {
   unhideCatalogItemAction,
   removeProductAction,
   searchTenantProductsAction,
+  updateProductAvailabilityAction,
   updateProductAction,
 } from "@/actions/product-actions";
 import { formatArabicInteger } from "@/lib/utils/number";
@@ -94,14 +95,6 @@ const removeCatalogItemFromList = (
   catalogItemId: number,
 ) => catalogItemList.filter((item) => item.id !== catalogItemId);
 
-const markCatalogItemInStock = (
-  catalogItemList: CatalogItem[],
-  catalogItemId: number,
-) =>
-  catalogItemList.map((item) =>
-    item.id === catalogItemId ? { ...item, is_in_stock: true } : item,
-  );
-
 const filterProductsByAvailability = (
   productList: Product[],
   availabilityFilter: ProductAvailabilityFilter,
@@ -117,6 +110,28 @@ const filterProductsByAvailability = (
   return productList;
 };
 
+const ALL_PRODUCT_CATEGORIES = "all";
+const UNCATEGORIZED_PRODUCT_CATEGORY = "أخرى";
+
+const normalizeProductCategoryFilter = (category?: string | null) => {
+  const normalized = category?.trim();
+  return normalized || UNCATEGORIZED_PRODUCT_CATEGORY;
+};
+
+const filterProductsByCategory = (
+  productList: Product[],
+  categoryFilter: string,
+) => {
+  if (categoryFilter === ALL_PRODUCT_CATEGORIES) {
+    return productList;
+  }
+
+  return productList.filter(
+    (product) =>
+      normalizeProductCategoryFilter(product.category) === categoryFilter,
+  );
+};
+
 const countProductsByAvailability = (productList: Product[]) => {
   const unavailable = productList.filter(
     (product) => product.is_available === false,
@@ -127,6 +142,19 @@ const countProductsByAvailability = (productList: Product[]) => {
     available: productList.length - unavailable,
     unavailable,
   };
+};
+
+const buildProductCategoryCounts = (productList: Product[]) => {
+  const counts = new Map<string, number>();
+
+  for (const product of productList) {
+    const category = normalizeProductCategoryFilter(product.category);
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .map(([category, count]) => ({ category, count }))
+    .sort((left, right) => left.category.localeCompare(right.category, "ar"));
 };
 
 export default function ProductOnboardingClient({
@@ -222,6 +250,8 @@ export default function ProductOnboardingClient({
   const [removingProductId, setRemovingProductId] = useState<number | null>(
     null,
   );
+  const [availabilityPendingProductId, setAvailabilityPendingProductId] =
+    useState<number | null>(null);
   const [highlightedProductId, setHighlightedProductId] = useState<
     number | null
   >(null);
@@ -233,6 +263,8 @@ export default function ProductOnboardingClient({
   const [searchRefreshKey, setSearchRefreshKey] = useState(0);
   const [availabilityFilter, setAvailabilityFilter] =
     useState<ProductAvailabilityFilter>("all");
+  const [productCategoryFilter, setProductCategoryFilter] =
+    useState<string>(ALL_PRODUCT_CATEGORIES);
 
   const [catalogSearchQuery, setCatalogSearchQuery] = useState("");
   const [debouncedCatalogSearchQuery] = useDebounce(
@@ -316,14 +348,22 @@ export default function ProductOnboardingClient({
     normalizedSearchInput.length < MIN_SEARCH_CHARS;
 
   const productsDisplaySource = isSearchActive ? searchResults : products;
-  const availabilityFilterCounts = useMemo(
-    () => countProductsByAvailability(productsDisplaySource),
+  const productCategoryCounts = useMemo(
+    () => buildProductCategoryCounts(productsDisplaySource),
     [productsDisplaySource],
+  );
+  const categoryFilteredProducts = useMemo(
+    () => filterProductsByCategory(productsDisplaySource, productCategoryFilter),
+    [productCategoryFilter, productsDisplaySource],
+  );
+  const availabilityFilterCounts = useMemo(
+    () => countProductsByAvailability(categoryFilteredProducts),
+    [categoryFilteredProducts],
   );
   const displayedProducts = useMemo(
     () =>
-      filterProductsByAvailability(productsDisplaySource, availabilityFilter),
-    [availabilityFilter, productsDisplaySource],
+      filterProductsByAvailability(categoryFilteredProducts, availabilityFilter),
+    [availabilityFilter, categoryFilteredProducts],
   );
   const displayedProductsCountLabel = isSearchActive
     ? `نتائج البحث: ${formatArabicInteger(displayedProducts.length) || displayedProducts.length}`
@@ -350,6 +390,19 @@ export default function ProductOnboardingClient({
     () => buildProductReadinessFromCount(products.length, storeType),
     [products.length, storeType],
   );
+
+  useEffect(() => {
+    if (
+      productCategoryFilter === ALL_PRODUCT_CATEGORIES ||
+      productCategoryCounts.some(
+        (category) => category.category === productCategoryFilter,
+      )
+    ) {
+      return;
+    }
+
+    setProductCategoryFilter(ALL_PRODUCT_CATEGORIES);
+  }, [productCategoryCounts, productCategoryFilter]);
 
   useEffect(() => {
     if (!message) {
@@ -799,7 +852,11 @@ export default function ProductOnboardingClient({
         }
 
         setProducts((prev) => [response.data, ...prev]);
-        setCatalogItems((prev) => markCatalogItemInStock(prev, catalogItemId));
+        setCatalogItems((prev) => removeCatalogItemFromList(prev, catalogItemId));
+        setCatalogMeta((prev) => ({
+          ...prev,
+          total: Math.max(0, prev.total - 1),
+        }));
         addCategoryOption(response.data.category);
         refreshSearchResultsIfActive();
         setConfirmRemoveProductId(null);
@@ -953,6 +1010,39 @@ export default function ProductOnboardingClient({
       }
       setMessage(response.message || "تم حذف المنتج");
     });
+  };
+
+  const handleToggleProductAvailability = (product: Product) => {
+    if (availabilityPendingProductId) {
+      return;
+    }
+
+    const nextAvailability = product.is_available === false;
+    setAvailabilityPendingProductId(product.id);
+    setMessage(null);
+
+    void (async () => {
+      const response = await updateProductAvailabilityAction(
+        product.id,
+        nextAvailability,
+      );
+
+      setAvailabilityPendingProductId(null);
+
+      if (!response.success || !response.data) {
+        setMessage(response.message || "تعذر تحديث توفر المنتج");
+        return;
+      }
+
+      const updatedProduct = response.data as Product;
+      setProducts((prev) =>
+        replaceProductInList(prev, product.id, updatedProduct),
+      );
+      setSearchResults((prev) =>
+        replaceProductInList(prev, product.id, updatedProduct),
+      );
+      setMessage(nextAvailability ? "تم إتاحة المنتج" : "تم إيقاف المنتج");
+    })();
   };
 
   const handleEditImageChange = (
@@ -1113,6 +1203,9 @@ export default function ProductOnboardingClient({
       setProducts((prev) =>
         replaceProductInList(prev, editingProductId, updatedProduct),
       );
+      setSearchResults((prev) =>
+        replaceProductInList(prev, editingProductId, updatedProduct),
+      );
       addCategoryOption(updatedProduct.category);
       refreshSearchResultsIfActive();
       setEditImageError(null);
@@ -1258,6 +1351,11 @@ export default function ProductOnboardingClient({
         searchQuery={searchQuery}
         onSearchQueryChange={handleSearchQueryChange}
         onClearSearchQuery={handleClearSearchQuery}
+        categoryFilter={productCategoryFilter}
+        onCategoryFilterChange={setProductCategoryFilter}
+        categoryFilterCounts={productCategoryCounts}
+        categoryFilterTotalCount={productsDisplaySource.length}
+        allCategoryFilterKey={ALL_PRODUCT_CATEGORIES}
         availabilityFilter={availabilityFilter}
         onAvailabilityFilterChange={setAvailabilityFilter}
         availabilityFilterCounts={availabilityFilterCounts}
@@ -1268,8 +1366,10 @@ export default function ProductOnboardingClient({
         displayedProducts={displayedProducts}
         confirmRemoveProductId={confirmRemoveProductId}
         removingProductId={removingProductId}
+        availabilityPendingProductId={availabilityPendingProductId}
         highlightedProductId={highlightedProductId}
         onStartEdit={handleStartEdit}
+        onToggleAvailability={handleToggleProductAvailability}
         onRequestRemove={handleRequestRemove}
         onRemoveProduct={handleRemoveProduct}
         onCancelRemove={() => setConfirmRemoveProductId(null)}

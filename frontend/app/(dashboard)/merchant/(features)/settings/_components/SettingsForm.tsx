@@ -168,7 +168,7 @@ export default function SettingsForm({
               defaultValue={tenant.category}
               className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F7F8F6] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/50"
             >
-              <option value="grocery">بقالة / سوبر ماركت</option>
+              <option value="grocery">سوبر ماركت</option>
               <option value="greengrocer">خضار وفاكهة</option>
               <option value="butcher">لحوم ودواجن</option>
               <option value="bakery">مخبز وحلويات</option>
