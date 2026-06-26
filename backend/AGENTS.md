@@ -37,7 +37,7 @@ This file provides guidelines for AI agents and coding assistants when working w
 
 ## Testing and verification
 
-- Do not write spec files at all.
+- Do not write spec/unit test files unless explicitly required to satisfy the request.
 
 ## Database schema
 

@@ -44,6 +44,7 @@ Tijaratk is a **bootstrapped, operations-first SaaS** that enables local merchan
 ## Testing
 
 - After any changes run `npm run lint` to check for lint errors
+- Do not write spec/unit test files unless explicitly required to satisfy the request.
 
 ## Before any changes
 
@@ -63,7 +64,7 @@ Tijaratk is a **bootstrapped, operations-first SaaS** that enables local merchan
 ### Building pages
 
 - Use server-side components for page components
-- NEVER USE CLIENT SIDE PAGES AT ALL. 
+- NEVER USE CLIENT SIDE PAGES AT ALL.
 - Use latest practices for page architecture from Next.js v16 Example:
 - Always fetch data on page level then pass it down to client components as props if needed
 - Always fetch data on try-catch block and use `notFound()` if fetch fails, If error error instanceof AuthenticationError then redirect to login page
@@ -94,7 +95,7 @@ export default async function InvoicesPage({
 ### Typing
 
 - Wherever is possible use object defined as const instead of enums
-- Use type aliases not interfaces 
+- Use type aliases not interfaces
 
 ### State Management
 

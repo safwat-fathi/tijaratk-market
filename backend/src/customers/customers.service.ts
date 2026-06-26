@@ -256,36 +256,43 @@ export class CustomersService {
     }
 
     const phone = formatPhoneNumber(normalizedPhone);
-    const globalCustomer = await this.prisma.globalCustomer.findFirst({
-      where: {
-        access_code: accessCode,
-        phone,
-        deleted_at: null,
-      },
-      select: { id: true },
-    });
+    const orders = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.customer_access_code', ${accessCode}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.customer_access_phone', ${phone}, true)`;
 
-    if (!globalCustomer) {
-      return [];
-    }
-
-    const orders = await this.prisma.order.findMany({
-      where: {
-        customer: {
-          global_customer_id: globalCustomer.id,
+      const globalCustomer = await tx.globalCustomer.findFirst({
+        where: {
+          access_code: accessCode,
+          phone,
+          deleted_at: null,
         },
-      },
-      include: {
-        tenant: { select: { id: true, name: true, slug: true } },
-        order_items: {
-          include: {
-            replaced_by_product: true,
-            pending_replacement_product: true,
+        select: { id: true },
+      });
+
+      if (!globalCustomer) {
+        return [];
+      }
+
+      return tx.order.findMany({
+        where: {
+          deleted_at: null,
+          customer: {
+            global_customer_id: globalCustomer.id,
+            deleted_at: null,
           },
         },
-      },
-      orderBy: { created_at: 'desc' },
-      take: 50,
+        include: {
+          tenant: { select: { id: true, name: true, slug: true } },
+          order_items: {
+            include: {
+              replaced_by_product: true,
+              pending_replacement_product: true,
+            },
+          },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 50,
+      });
     });
 
     return orders.map((order) => ({

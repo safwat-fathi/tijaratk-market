@@ -881,57 +881,60 @@ export class OrdersService {
       throw new BadRequestException('Item price must be a positive number');
     }
 
-    const savedItem = await this.withTenantManager(tenantId, async (manager) => {
-      const orderItemRepository = manager.orderItem;
+    const savedItem = await this.withTenantManager(
+      tenantId,
+      async (manager) => {
+        const orderItemRepository = manager.orderItem;
 
-      const orderItem = await orderItemRepository.findFirst({
-        where: { id: itemId },
-        include: { order: true },
-      });
+        const orderItem = await orderItemRepository.findFirst({
+          where: { id: itemId },
+          include: { order: true },
+        });
 
-      if (!orderItem || orderItem.order.tenant_id !== tenantId) {
-        throw new NotFoundException(`Order item with ID ${itemId} not found`);
-      }
+        if (!orderItem || orderItem.order.tenant_id !== tenantId) {
+          throw new NotFoundException(`Order item with ID ${itemId} not found`);
+        }
 
-      const orderStatus = orderItem.order.status as unknown as OrderStatus;
-      if (
-        orderStatus !== OrderStatus.DRAFT &&
-        orderStatus !== OrderStatus.CONFIRMED
-      ) {
-        throw new BadRequestException(
-          'Item prices can only be updated for draft or confirmed orders',
-        );
-      }
+        const orderStatus = orderItem.order.status as unknown as OrderStatus;
+        if (
+          orderStatus !== OrderStatus.DRAFT &&
+          orderStatus !== OrderStatus.CONFIRMED
+        ) {
+          throw new BadRequestException(
+            'Item prices can only be updated for draft or confirmed orders',
+          );
+        }
 
-      const numericQty = this.parseNumericQuantity(orderItem.quantity);
-      const normalizedUnitPrice =
-        numericQty !== null && numericQty > 0
-          ? this.roundCurrency(normalizedTotal / numericQty)
-          : normalizedTotal;
+        const numericQty = this.parseNumericQuantity(orderItem.quantity);
+        const normalizedUnitPrice =
+          numericQty !== null && numericQty > 0
+            ? this.roundCurrency(normalizedTotal / numericQty)
+            : normalizedTotal;
 
-      const savedItem = (await orderItemRepository.update({
-        where: { id: orderItem.id },
-        data: {
-          total_price: new Prisma.Decimal(normalizedTotal),
-          unit_price: new Prisma.Decimal(normalizedUnitPrice),
-        },
-      })) as unknown as OrderItem;
+        const savedItem = (await orderItemRepository.update({
+          where: { id: orderItem.id },
+          data: {
+            total_price: new Prisma.Decimal(normalizedTotal),
+            unit_price: new Prisma.Decimal(normalizedUnitPrice),
+          },
+        })) as unknown as OrderItem;
 
-      await this.recalculateOrderTotals(manager, orderItem.order_id);
+        await this.recalculateOrderTotals(manager, orderItem.order_id);
 
-      const targetProductId =
-        orderItem.replaced_by_product_id ?? orderItem.product_id ?? null;
-      if (targetProductId) {
-        await this.updateProductPriceHistory(
-          manager,
-          tenantId,
-          targetProductId,
-          normalizedUnitPrice,
-        );
-      }
+        const targetProductId =
+          orderItem.replaced_by_product_id ?? orderItem.product_id ?? null;
+        if (targetProductId) {
+          await this.updateProductPriceHistory(
+            manager,
+            tenantId,
+            targetProductId,
+            normalizedUnitPrice,
+          );
+        }
 
-      return savedItem;
-    });
+        return savedItem;
+      },
+    );
     await this.bumpDashboardCacheVersion(tenantId);
     return savedItem;
   }
@@ -943,49 +946,52 @@ export class OrdersService {
     tenantId: number,
     itemId: number,
   ): Promise<OrderItem> {
-    const savedItem = await this.withTenantManager(tenantId, async (manager) => {
-      const orderItem = await manager.orderItem.findFirst({
-        where: { id: itemId },
-        include: { order: true },
-      });
-
-      if (!orderItem || orderItem.order.tenant_id !== tenantId) {
-        throw new NotFoundException(`Order item with ID ${itemId} not found`);
-      }
-
-      if (
-        orderItem.order.status !== OrderStatus.DRAFT &&
-        orderItem.order.status !== OrderStatus.CONFIRMED
-      ) {
-        throw new BadRequestException(
-          'Order items can only be marked out of stock for draft or confirmed orders',
-        );
-      }
-
-      const savedItem = (await manager.orderItem.update({
-        where: { id: orderItem.id },
-        data: {
-          is_out_of_stock: true,
-          out_of_stock_at: new Date(),
-          unit_price: new Prisma.Decimal(0),
-          total_price: new Prisma.Decimal(0),
-        },
-      })) as unknown as OrderItem;
-
-      if (orderItem.product_id) {
-        await manager.product.updateMany({
-          where: {
-            id: orderItem.product_id,
-            tenant_id: tenantId,
-          },
-          data: { is_available: false },
+    const savedItem = await this.withTenantManager(
+      tenantId,
+      async (manager) => {
+        const orderItem = await manager.orderItem.findFirst({
+          where: { id: itemId },
+          include: { order: true },
         });
-      }
 
-      await this.recalculateOrderTotals(manager, orderItem.order_id);
+        if (!orderItem || orderItem.order.tenant_id !== tenantId) {
+          throw new NotFoundException(`Order item with ID ${itemId} not found`);
+        }
 
-      return savedItem;
-    });
+        if (
+          orderItem.order.status !== OrderStatus.DRAFT &&
+          orderItem.order.status !== OrderStatus.CONFIRMED
+        ) {
+          throw new BadRequestException(
+            'Order items can only be marked out of stock for draft or confirmed orders',
+          );
+        }
+
+        const savedItem = (await manager.orderItem.update({
+          where: { id: orderItem.id },
+          data: {
+            is_out_of_stock: true,
+            out_of_stock_at: new Date(),
+            unit_price: new Prisma.Decimal(0),
+            total_price: new Prisma.Decimal(0),
+          },
+        })) as unknown as OrderItem;
+
+        if (orderItem.product_id) {
+          await manager.product.updateMany({
+            where: {
+              id: orderItem.product_id,
+              tenant_id: tenantId,
+            },
+            data: { is_available: false },
+          });
+        }
+
+        await this.recalculateOrderTotals(manager, orderItem.order_id);
+
+        return savedItem;
+      },
+    );
     await this.bumpDashboardCacheVersion(tenantId);
     return savedItem;
   }
@@ -1007,13 +1013,6 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException(`Order with token ${token} not found`);
-    }
-
-    if (
-      order.status === OrderStatus.CANCELLED ||
-      order.status === OrderStatus.REJECTED_BY_CUSTOMER
-    ) {
       throw new NotFoundException(`Order with token ${token} not found`);
     }
 
