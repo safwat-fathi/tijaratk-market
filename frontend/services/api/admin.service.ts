@@ -1,6 +1,13 @@
 import HttpService from "@/services/base/http.service";
 import { STORAGE_KEYS } from "@/constants";
 import type { ImportRowError, ImportRun } from "@/types/models/import";
+import type {
+	CatalogItemsResponse,
+	Product,
+	ProductOrderConfig,
+	PublicProductCategory,
+	TenantProductsSearchResponse,
+} from "@/types/models/product";
 
 type AdminLoginPayload = {
 	phone: string;
@@ -117,14 +124,56 @@ export type AdminProduct = {
 		name?: string | null;
 	} | null;
 };
+
+export type AdminCatalogItem = {
+	id: number;
+	name: string;
+	image_url?: string | null;
+	original_image_url?: string | null;
+	category: string;
+	price?: number | string | null;
+	currency?: string;
+	is_active: boolean;
+	is_essential: boolean;
+	essential_sort_order?: number | null;
+	source: string;
+	external_id?: string | null;
+	created_at?: string;
+	updated_at?: string;
+};
+
 type AdminOrder = Record<string, unknown>;
 
 type AdminProductPayload = {
 	name: string;
+	image_url?: string;
 	current_price?: number;
 	category?: string;
 	is_available?: boolean;
 	status?: "active" | "archived";
+	order_mode?: "quantity" | "weight" | "price";
+	order_config?: ProductOrderConfig;
+};
+
+type SupermarketEssentialPayload =
+	| {
+			catalog_item_id: number;
+	  }
+	| {
+			name: string;
+			category: string;
+			price?: number;
+			image_url?: string;
+			essential_sort_order?: number;
+	  };
+
+type UpdateSupermarketEssentialPayload = {
+	name?: string;
+	category?: string;
+	price?: number | null;
+	image_url?: string | null;
+	is_active?: boolean;
+	essential_sort_order?: number | null;
 };
 
 type UpdateTenantDirectoryProfilePayload = {
@@ -215,10 +264,172 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async createTenantProductPayload(
+		tenantId: number,
+		payload: FormData | AdminProductPayload,
+	) {
+		return this.post<Product>(
+			`tenants/${tenantId}/products`,
+			payload,
+			undefined,
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: payload instanceof FormData ? 30000 : undefined,
+			}
+		);
+	}
+
+	public async getTenantProducts(tenantId: number) {
+		return this.get<Product[]>(
+			`tenants/${tenantId}/products`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async searchTenantProducts(
+		tenantId: number,
+		params: {
+			search: string;
+			category?: string;
+			page?: number;
+			limit?: number;
+			rank_all?: boolean;
+			exclude_product_ids?: string;
+		},
+	) {
+		return this.get<TenantProductsSearchResponse>(
+			`tenants/${tenantId}/products`,
+			params,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async getTenantProductCategories(tenantId: number) {
+		return this.get<string[]>(
+			`tenants/${tenantId}/products/categories`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async getTenantCatalogCategories(tenantId: number) {
+		return this.get<PublicProductCategory[]>(
+			`tenants/${tenantId}/catalog/categories`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async getTenantCatalogItems(
+		tenantId: number,
+		params?: {
+			search?: string;
+			category?: string;
+			page?: number;
+			limit?: number;
+		},
+	) {
+		return this.get<CatalogItemsResponse>(
+			`tenants/${tenantId}/catalog`,
+			params,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async addTenantProductFromCatalog(
+		tenantId: number,
+		catalogItemId: number,
+	) {
+		return this.post<Product>(
+			`tenants/${tenantId}/products/from-catalog`,
+			{ catalog_item_id: catalogItemId },
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
 	public async updateProduct(productId: number, payload: AdminProductPayload) {
 		return this.patch<AdminProduct>(
 			`products/${productId}`,
 			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async updateProductPayload(productId: number, payload: FormData) {
+		return this.patch<Product>(
+			`products/${productId}`,
+			payload,
+			undefined,
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: 30000,
+			}
+		);
+	}
+
+	public async removeProduct(productId: number) {
+		return this.delete<void>(
+			`products/${productId}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async getSupermarketEssentials(params?: {
+		search?: string;
+		category?: string;
+		page?: number;
+		limit?: number;
+	}) {
+		const qs = this.buildQueryString(params);
+		return this.get<AdminPaginatedResponse<AdminCatalogItem>>(
+			`supermarket-essentials${qs}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async getSupermarketCatalogCandidates(params?: {
+		search?: string;
+		category?: string;
+		page?: number;
+		limit?: number;
+	}) {
+		const qs = this.buildQueryString(params);
+		return this.get<AdminPaginatedResponse<AdminCatalogItem>>(
+			`supermarket-catalog-candidates${qs}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async createSupermarketEssential(payload: SupermarketEssentialPayload) {
+		return this.post<AdminCatalogItem>(
+			"supermarket-essentials",
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async updateSupermarketEssential(
+		id: number,
+		payload: UpdateSupermarketEssentialPayload,
+	) {
+		return this.patch<AdminCatalogItem>(
+			`supermarket-essentials/${id}`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async deleteSupermarketEssential(id: number) {
+		return this.delete<{ success: boolean }>(
+			`supermarket-essentials/${id}`,
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);
@@ -283,6 +494,20 @@ class AdminApiService extends HttpService {
 		if (limit) params.append("limit", String(limit));
 		const qs = params.toString() ? `?${params.toString()}` : '';
 		return this.get<AdminPaginatedResponse<AdminOrder>>(`orders${qs}`, undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	private buildQueryString(params?: {
+		search?: string;
+		category?: string;
+		page?: number;
+		limit?: number;
+	}) {
+		const searchParams = new URLSearchParams();
+		if (params?.search) searchParams.append("search", params.search);
+		if (params?.category) searchParams.append("category", params.category);
+		if (params?.page) searchParams.append("page", String(params.page));
+		if (params?.limit) searchParams.append("limit", String(params.limit));
+		return searchParams.toString() ? `?${searchParams.toString()}` : "";
 	}
 }
 

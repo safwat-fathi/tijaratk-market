@@ -4,11 +4,9 @@ import { Button } from "@/components/ui/Button";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { redirect } from "next/navigation";
 import { AdminPagination } from "../_components/AdminPagination";
-import {
-  adminCreateProductAction,
-  adminUpdateProductAction,
-} from "@/actions/admin-server";
+import { adminUpdateProductAction } from "@/actions/admin-server";
 import type { AdminTenant } from "@/services/api/admin.service";
+import AdminProductsOnboardingClient from "./_components/AdminProductsOnboardingClient";
 
 export const dynamic = "force-dynamic";
 
@@ -148,65 +146,7 @@ export default async function AdminProductsPage(props: Props) {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-brand-text">إدارة المنتجات</h1>
 
-      <Card className="p-4 sm:p-6">
-        <h2 className="mb-4 text-lg font-bold text-brand-text">
-          إضافة منتج لتاجر
-        </h2>
-        <form action={adminCreateProductAction} className="grid gap-4 md:grid-cols-6">
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-sm font-medium text-brand-text">التاجر</span>
-            <select
-              name="tenant_id"
-              required
-              className="h-10 w-full rounded-md border border-brand-border px-3 text-sm"
-            >
-              <option value="">اختر التاجر</option>
-              {merchants.map((merchant) => (
-                <option key={merchant.id} value={merchant.id}>
-                  {merchant.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="space-y-1 md:col-span-2">
-            <span className="text-sm font-medium text-brand-text">اسم المنتج</span>
-            <input
-              name="name"
-              required
-              className="h-10 w-full rounded-md border border-brand-border px-3 text-sm"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-sm font-medium text-brand-text">السعر</span>
-            <input
-              name="current_price"
-              type="number"
-              min="0"
-              step="0.01"
-              className="h-10 w-full rounded-md border border-brand-border px-3 text-sm"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-sm font-medium text-brand-text">التصنيف</span>
-            <input
-              name="category"
-              className="h-10 w-full rounded-md border border-brand-border px-3 text-sm"
-            />
-          </label>
-          <label className="flex items-center gap-2 md:col-span-5">
-            <input
-              name="is_available"
-              type="checkbox"
-              defaultChecked
-              className="h-4 w-4 accent-brand-primary"
-            />
-            <span className="text-sm font-medium text-brand-text">متاح للبيع</span>
-          </label>
-          <Button type="submit" className="w-full md:w-auto">
-            إضافة
-          </Button>
-        </form>
-      </Card>
+      <AdminProductsOnboardingClient merchants={merchants} />
 
       <Card className="p-4 sm:p-6 overflow-hidden">
         <div className="space-y-4">

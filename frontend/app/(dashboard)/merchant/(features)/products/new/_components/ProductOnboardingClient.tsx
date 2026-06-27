@@ -4,24 +4,27 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useDebounce } from "use-debounce";
 import {
-  addProductFromCatalogAction,
-  createProductAction,
-  loadCatalogItemsAction,
-  loadHiddenCatalogItemsAction,
-  hideCatalogItemAction,
-  unhideCatalogItemAction,
-  removeProductAction,
-  searchTenantProductsAction,
-  updateProductAvailabilityAction,
-  updateProductAction,
+  addProductFromCatalogAction as merchantAddProductFromCatalogAction,
+  createProductAction as merchantCreateProductAction,
+  loadCatalogItemsAction as merchantLoadCatalogItemsAction,
+  loadHiddenCatalogItemsAction as merchantLoadHiddenCatalogItemsAction,
+  hideCatalogItemAction as merchantHideCatalogItemAction,
+  unhideCatalogItemAction as merchantUnhideCatalogItemAction,
+  removeProductAction as merchantRemoveProductAction,
+  searchTenantProductsAction as merchantSearchTenantProductsAction,
+  updateProductAvailabilityAction as merchantUpdateProductAvailabilityAction,
+  updateProductAction as merchantUpdateProductAction,
 } from "@/actions/product-actions";
 import { formatArabicInteger } from "@/lib/utils/number";
 import type {
+  CatalogItemsResponse,
   CatalogItem,
   Product,
+  ProductOrderConfig,
   ProductOrderMode,
   PublicProductCategory,
   PublicProductsMeta,
+  TenantProductsSearchResponse,
 } from "@/types/models/product";
 import CatalogSection from "./CatalogSection";
 import EditProductSheet from "./EditProductSheet";
@@ -77,6 +80,85 @@ type ProductOnboardingClientProps = {
   catalogCategories: PublicProductCategory[];
   productCategories: string[];
   storeType?: string;
+  actions?: ProductOnboardingActions;
+  enableCatalogHiding?: boolean;
+  enableBulkWizard?: boolean;
+};
+
+type LoadCatalogItemsParams = {
+  search?: string;
+  category?: string;
+  page?: number;
+  limit?: number;
+};
+
+type ActionResult<T> = {
+  success: boolean;
+  data?: T;
+  message?: string;
+};
+
+export type ProductOnboardingActions = {
+  createProduct: (
+    name: string,
+    imageUrl?: string,
+    currentPrice?: number,
+    category?: string,
+    orderMode?: ProductOrderMode,
+    orderConfig?: ProductOrderConfig,
+    imageFile?: File | null,
+  ) => Promise<ActionResult<Product>>;
+  addProductFromCatalog: (
+    catalogItemId: number,
+  ) => Promise<ActionResult<Product>>;
+  loadCatalogItems: (
+    params: LoadCatalogItemsParams,
+  ) => Promise<ActionResult<CatalogItemsResponse>>;
+  loadHiddenCatalogItems?: (
+    params: { page?: number; limit?: number },
+  ) => Promise<ActionResult<CatalogItemsResponse>>;
+  searchTenantProducts: (
+    search: string,
+    page?: number,
+    limit?: number,
+    categoryOrOptions?:
+      | string
+      | {
+          category?: string;
+          rankAll?: boolean;
+          excludeProductIds?: number[];
+        },
+  ) => Promise<ActionResult<TenantProductsSearchResponse>>;
+  updateProduct: (
+    productId: number,
+    formData: FormData,
+  ) => Promise<ActionResult<Product>>;
+  updateProductAvailability: (
+    productId: number,
+    isAvailable: boolean,
+  ) => Promise<ActionResult<Product>>;
+  removeProduct: (
+    productId: number,
+  ) => Promise<ActionResult<unknown>>;
+  hideCatalogItem?: (
+    catalogItemId: number,
+  ) => Promise<ActionResult<unknown>>;
+  unhideCatalogItem?: (
+    catalogItemId: number,
+  ) => Promise<ActionResult<unknown>>;
+};
+
+const merchantProductOnboardingActions: ProductOnboardingActions = {
+  createProduct: merchantCreateProductAction,
+  addProductFromCatalog: merchantAddProductFromCatalogAction,
+  loadCatalogItems: merchantLoadCatalogItemsAction,
+  loadHiddenCatalogItems: merchantLoadHiddenCatalogItemsAction,
+  searchTenantProducts: merchantSearchTenantProductsAction,
+  updateProduct: merchantUpdateProductAction,
+  updateProductAvailability: merchantUpdateProductAvailabilityAction,
+  removeProduct: merchantRemoveProductAction,
+  hideCatalogItem: merchantHideCatalogItemAction,
+  unhideCatalogItem: merchantUnhideCatalogItemAction,
 };
 
 const CATALOG_PAGE_LIMIT = 40;
@@ -164,6 +246,9 @@ export default function ProductOnboardingClient({
   catalogCategories,
   productCategories,
   storeType,
+  actions = merchantProductOnboardingActions,
+  enableCatalogHiding = true,
+  enableBulkWizard = true,
 }: ProductOnboardingClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -184,7 +269,7 @@ export default function ProductOnboardingClient({
   const [isShowingHidden, setIsShowingHidden] = useState(false);
   const [isBulkWizardOpen, setIsBulkWizardOpen] = useState(false);
 
-  const canUseBulkWizard = storeType === "grocery";
+  const canUseBulkWizard = enableBulkWizard && storeType === "grocery";
   const handleOpenBulkWizard = canUseBulkWizard ? () => setIsBulkWizardOpen(true) : undefined;
 
   const defaultUnitLabel =
@@ -484,9 +569,10 @@ export default function ProductOnboardingClient({
     setIsLoadingCatalog(true);
     setCatalogError(null);
 
-    const loadAction = isShowingHidden
-      ? loadHiddenCatalogItemsAction
-      : loadCatalogItemsAction;
+    const loadAction =
+      isShowingHidden && actions.loadHiddenCatalogItems
+        ? actions.loadHiddenCatalogItems
+        : actions.loadCatalogItems;
     const response = await loadAction({
       search: search?.trim() || undefined,
       category: resolveCatalogCategoryParam(category, search),
@@ -592,7 +678,7 @@ export default function ProductOnboardingClient({
     setSearchError(null);
 
     void (async () => {
-      const response = await searchTenantProductsAction(
+      const response = await actions.searchTenantProducts(
         normalizedDebouncedSearch,
         1,
         SEARCH_RESULTS_LIMIT,
@@ -720,7 +806,7 @@ export default function ProductOnboardingClient({
         pricePresets: manualPricePresets,
       });
 
-      const response = await createProductAction(
+      const response = await actions.createProduct(
         trimmedName,
         undefined,
         parsedPrice.value ?? undefined,
@@ -834,7 +920,7 @@ export default function ProductOnboardingClient({
 
     void (async () => {
       try {
-        const response = await addProductFromCatalogAction(catalogItemId);
+        const response = await actions.addProductFromCatalog(catalogItemId);
 
         if (!response.success || !response.data) {
           if (isDuplicateMessage(response.message)) {
@@ -875,7 +961,12 @@ export default function ProductOnboardingClient({
     setPendingCatalogIds((prev) => ({ ...prev, [catalogItemId]: true }));
     void (async () => {
       try {
-        const response = await hideCatalogItemAction(catalogItemId);
+        if (!actions.hideCatalogItem) {
+          setMessage("إخفاء منتجات الكتالوج غير متاح هنا");
+          return;
+        }
+
+        const response = await actions.hideCatalogItem(catalogItemId);
         if (response.success) {
           setCatalogItems((prev) =>
             removeCatalogItemFromList(prev, catalogItemId),
@@ -899,7 +990,12 @@ export default function ProductOnboardingClient({
     setPendingCatalogIds((prev) => ({ ...prev, [catalogItemId]: true }));
     void (async () => {
       try {
-        const response = await unhideCatalogItemAction(catalogItemId);
+        if (!actions.unhideCatalogItem) {
+          setMessage("إظهار منتجات الكتالوج غير متاح هنا");
+          return;
+        }
+
+        const response = await actions.unhideCatalogItem(catalogItemId);
         if (response.success) {
           setCatalogItems((prev) =>
             removeCatalogItemFromList(prev, catalogItemId),
@@ -919,6 +1015,10 @@ export default function ProductOnboardingClient({
   };
 
   const handleToggleShowingHidden = () => {
+    if (!enableCatalogHiding || !actions.loadHiddenCatalogItems) {
+      return;
+    }
+
     setIsShowingHidden((prev) => !prev);
   };
 
@@ -991,7 +1091,7 @@ export default function ProductOnboardingClient({
     setRemovingProductId(product.id);
 
     startRemoveTransition(async () => {
-      const response = await removeProductAction(product.id);
+      const response = await actions.removeProduct(product.id);
       setRemovingProductId(null);
 
       if (!response.success) {
@@ -1022,7 +1122,7 @@ export default function ProductOnboardingClient({
     setMessage(null);
 
     void (async () => {
-      const response = await updateProductAvailabilityAction(
+      const response = await actions.updateProductAvailability(
         product.id,
         nextAvailability,
       );
@@ -1189,7 +1289,7 @@ export default function ProductOnboardingClient({
         formData.set("file", selectedImageFile);
       }
 
-      const response = await updateProductAction(editingProductId, formData);
+      const response = await actions.updateProduct(editingProductId, formData);
       if (!response.success || !response.data) {
         handleUpdateProductErrorResponse({
           responseMessage: response.message,
@@ -1338,9 +1438,21 @@ export default function ProductOnboardingClient({
           pendingCatalogIds={pendingCatalogIds}
           onAddFromCatalog={handleAddFromCatalog}
           isShowingHidden={isShowingHidden}
-          onToggleShowingHidden={handleToggleShowingHidden}
-          onHideCatalogItem={handleHideCatalogItem}
-          onUnhideCatalogItem={handleUnhideCatalogItem}
+          onToggleShowingHidden={
+            enableCatalogHiding && actions.loadHiddenCatalogItems
+              ? handleToggleShowingHidden
+              : undefined
+          }
+          onHideCatalogItem={
+            enableCatalogHiding && actions.hideCatalogItem
+              ? handleHideCatalogItem
+              : undefined
+          }
+          onUnhideCatalogItem={
+            enableCatalogHiding && actions.unhideCatalogItem
+              ? handleUnhideCatalogItem
+              : undefined
+          }
         />
       )}
 
@@ -1419,14 +1531,16 @@ export default function ProductOnboardingClient({
         storeType={storeType}
       />
 
-      <BulkEssentialWizard
-        isOpen={isBulkWizardOpen}
-        onClose={() => setIsBulkWizardOpen(false)}
-        onSuccess={() => {
-          refreshSearchResultsIfActive();
-          router.refresh();
-        }}
-      />
+      {enableBulkWizard ? (
+        <BulkEssentialWizard
+          isOpen={isBulkWizardOpen}
+          onClose={() => setIsBulkWizardOpen(false)}
+          onSuccess={() => {
+            refreshSearchResultsIfActive();
+            router.refresh();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

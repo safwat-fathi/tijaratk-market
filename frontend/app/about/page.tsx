@@ -151,11 +151,11 @@ export default function LandingPage() {
 
         {/* Problems Section */}
         <section className="bg-[#F7F8F6] px-4 py-16 sm:py-24 lg:px-8">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-6xl">
             <h2 className="mb-12 text-center text-3xl font-bold text-[#222B2E] sm:text-4xl">
               إيه المشاكل اللي بنحلها؟
             </h2>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {/* Card 1 */}
               <div className="flex flex-col items-center rounded-2xl bg-white p-8 text-center shadow-sm border border-gray-100">
                 <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500">
@@ -225,6 +225,30 @@ export default function LandingPage() {
                 </div>
                 <h3 className="text-xl font-bold text-[#222B2E]">
                   مش عارف حسابات اليوم راحت فين
+                </h3>
+              </div>
+
+              {/* Card 4 */}
+              <div className="flex flex-col items-center rounded-2xl bg-white p-8 text-center shadow-sm border border-gray-100">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <line x1="23" y1="11" x2="17" y2="11" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-[#222B2E]">
+                  صعوبة إكتساب عملاء جدد في منطقتك
                 </h3>
               </div>
             </div>
@@ -422,6 +446,35 @@ export default function LandingPage() {
                 </div>
                 <p className="text-[#0F5A3D]/80 leading-relaxed mr-12">
                   بيانات العميل، المنتجات، العنوان، والإجمالي في مكان واحد.
+                </p>
+              </div>
+
+              {/* Solution 7 */}
+              <div className="flex h-full flex-col rounded-2xl bg-[#E8F5ED] p-8 md:col-span-3">
+                <div className="mb-4 flex items-center gap-4">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-[#0F5A3D] flex-none"
+                  >
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <line x1="19" y1="8" x2="19" y2="14" />
+                    <line x1="22" y1="11" x2="16" y2="11" />
+                  </svg>
+                  <h3 className="text-xl font-bold text-[#0F5A3D]">
+                    إكتساب عملاء جدد في منطقتك
+                  </h3>
+                </div>
+                <p className="text-[#0F5A3D]/80 leading-relaxed mr-12">
+                  بمجرد إطلاق متجرك الإلكتروني، ستتمكن من الوصول لشريحة أوسع من الزبائن في منطقتك وتلقي طلباتهم مباشرة بدون تكاليف إضافية أو عمولات.
                 </p>
               </div>
             </div>

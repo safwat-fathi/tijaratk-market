@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   UnauthorizedException,
   NotFoundException,
@@ -9,6 +10,15 @@ import * as bcrypt from 'bcrypt';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { Prisma, TenantStatus } from '../../generated/prisma/client';
 import { TenantCancellationPolicyService } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
+import {
+  CATALOG_SOURCE_TALABAT,
+  buildAllowedCatalogCategoryWhere,
+  isCatalogCategoryAllowedForSource,
+} from 'src/products/catalog-source-policy';
+import {
+  CreateSupermarketEssentialDto,
+  UpdateSupermarketEssentialDto,
+} from './dto/supermarket-essential.dto';
 
 @Injectable()
 export class AdminService {
@@ -242,6 +252,217 @@ export class AdminService {
       where: { id },
       data: { is_active },
     });
+  }
+
+  async getSupermarketEssentials(
+    search?: string,
+    category?: string,
+    page = 1,
+    limit = 20,
+  ) {
+    const pagination = this.getPagination(page, limit);
+    const where = this.buildSupermarketCatalogWhere({
+      search,
+      category,
+      isEssential: true,
+    });
+
+    const [items, total] = await Promise.all([
+      this.prisma.catalogItem.findMany({
+        where,
+        orderBy: [
+          { category: 'asc' },
+          { essential_sort_order: { sort: 'asc', nulls: 'last' } },
+          { id: 'asc' },
+        ],
+        skip: pagination.offset,
+        take: pagination.limit,
+      }),
+      this.prisma.catalogItem.count({ where }),
+    ]);
+
+    return this.paginateItems(
+      items,
+      total,
+      pagination.page,
+      pagination.limit,
+      0,
+    );
+  }
+
+  async getSupermarketCatalogCandidates(
+    search?: string,
+    category?: string,
+    page = 1,
+    limit = 20,
+  ) {
+    const pagination = this.getPagination(page, limit);
+    const where = this.buildSupermarketCatalogWhere({
+      search,
+      category,
+      isEssential: false,
+    });
+
+    const [items, total] = await Promise.all([
+      this.prisma.catalogItem.findMany({
+        where,
+        orderBy: [{ category: 'asc' }, { id: 'asc' }],
+        skip: pagination.offset,
+        take: pagination.limit,
+      }),
+      this.prisma.catalogItem.count({ where }),
+    ]);
+
+    return this.paginateItems(
+      items,
+      total,
+      pagination.page,
+      pagination.limit,
+      0,
+    );
+  }
+
+  async createSupermarketEssential(dto: CreateSupermarketEssentialDto) {
+    if (dto.catalog_item_id) {
+      return this.markCatalogItemAsSupermarketEssential(dto.catalog_item_id);
+    }
+
+    const name = dto.name?.trim();
+    const category = dto.category?.trim();
+    if (!name || !category) {
+      throw new BadRequestException('Name and category are required');
+    }
+
+    this.ensureAllowedSupermarketCategory(category);
+
+    return this.prisma.catalogItem.create({
+      data: {
+        name,
+        category,
+        price: dto.price,
+        image_url: this.normalizeNullableString(dto.image_url),
+        source: CATALOG_SOURCE_TALABAT,
+        is_active: true,
+        is_essential: true,
+        essential_sort_order: dto.essential_sort_order,
+      },
+    });
+  }
+
+  async updateSupermarketEssential(
+    id: number,
+    dto: UpdateSupermarketEssentialDto,
+  ) {
+    await this.findSupermarketCatalogItem(id, true);
+
+    const data: Prisma.CatalogItemUpdateInput = {};
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (!name) throw new BadRequestException('Name is required');
+      data.name = name;
+    }
+    if (dto.category !== undefined) {
+      const category = dto.category.trim();
+      this.ensureAllowedSupermarketCategory(category);
+      data.category = category;
+    }
+    if (dto.price !== undefined) data.price = dto.price;
+    if (dto.image_url !== undefined) {
+      data.image_url = this.normalizeNullableString(dto.image_url);
+    }
+    if (dto.is_active !== undefined) data.is_active = dto.is_active;
+    if (dto.essential_sort_order !== undefined) {
+      data.essential_sort_order = dto.essential_sort_order;
+    }
+
+    return this.prisma.catalogItem.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteSupermarketEssential(id: number) {
+    await this.findSupermarketCatalogItem(id, true);
+
+    await this.prisma.catalogItem.update({
+      where: { id },
+      data: {
+        is_essential: false,
+        essential_sort_order: null,
+      },
+    });
+
+    return { success: true };
+  }
+
+  private buildSupermarketCatalogWhere({
+    search,
+    category,
+    isEssential,
+  }: {
+    search?: string;
+    category?: string;
+    isEssential: boolean;
+  }): Prisma.CatalogItemWhereInput {
+    const normalizedCategory = category?.trim();
+    if (normalizedCategory) {
+      this.ensureAllowedSupermarketCategory(normalizedCategory);
+    }
+
+    return {
+      source: CATALOG_SOURCE_TALABAT,
+      is_essential: isEssential,
+      category: normalizedCategory
+        ? normalizedCategory
+        : buildAllowedCatalogCategoryWhere(CATALOG_SOURCE_TALABAT),
+      ...(search?.trim()
+        ? {
+            name: {
+              contains: search.trim(),
+              mode: 'insensitive',
+            },
+          }
+        : {}),
+    };
+  }
+
+  private async markCatalogItemAsSupermarketEssential(id: number) {
+    await this.findSupermarketCatalogItem(id, false);
+
+    return this.prisma.catalogItem.update({
+      where: { id },
+      data: { is_essential: true },
+    });
+  }
+
+  private async findSupermarketCatalogItem(id: number, requireEssential: boolean) {
+    const item = await this.prisma.catalogItem.findFirst({
+      where: {
+        id,
+        source: CATALOG_SOURCE_TALABAT,
+        ...(requireEssential ? { is_essential: true } : {}),
+      },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Supermarket catalog item not found');
+    }
+
+    this.ensureAllowedSupermarketCategory(item.category);
+    return item;
+  }
+
+  private ensureAllowedSupermarketCategory(category: string) {
+    if (!isCatalogCategoryAllowedForSource(CATALOG_SOURCE_TALABAT, category)) {
+      throw new BadRequestException(
+        'Category is not supported for supermarket essentials',
+      );
+    }
+  }
+
+  private normalizeNullableString(value?: string | null) {
+    const normalized = value?.trim();
+    return normalized || null;
   }
 
   // Products Management

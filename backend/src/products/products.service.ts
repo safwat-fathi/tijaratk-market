@@ -221,13 +221,80 @@ export class ProductsService {
   async createForTenantAsAdmin(
     tenantId: number,
     createProductDto: CreateProductDto,
+    file?: Express.Multer.File,
   ): Promise<Product> {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
-      return DbTenantContext.run({ tenantId, manager: tx }, () =>
-        this.create(tenantId, createProductDto),
-      );
+    return this.runAsTenantForAdmin(tenantId, () =>
+      this.create(tenantId, createProductDto, file),
+    );
+  }
+
+  async createFromCatalogForTenantAsAdmin(
+    tenantId: number,
+    payload: AddProductFromCatalogDto,
+  ): Promise<Product> {
+    return this.runAsTenantForAdmin(tenantId, () =>
+      this.createFromCatalog(tenantId, payload),
+    );
+  }
+
+  async findAllForTenantAsAdmin(tenantId: number): Promise<Product[]> {
+    return this.runAsTenantForAdmin(tenantId, () => this.findAll(tenantId));
+  }
+
+  async searchTenantProductsForAdmin(
+    tenantId: number,
+    search: string,
+    category?: string,
+    page?: number,
+    limit?: number,
+    options?: TenantProductsSearchOptions,
+  ): Promise<TenantProductsSearchResult> {
+    return this.runAsTenantForAdmin(tenantId, () =>
+      this.searchTenantProducts(tenantId, search, category, page, limit, options),
+    );
+  }
+
+  async findTenantProductCategoriesForAdmin(
+    tenantId: number,
+  ): Promise<string[]> {
+    return this.runAsTenantForAdmin(tenantId, () =>
+      this.findTenantProductCategories(tenantId),
+    );
+  }
+
+  async findCatalogCategoriesForAdmin(
+    tenantId: number,
+  ): Promise<PublicProductCategorySummary[]> {
+    return this.runAsTenantForAdmin(tenantId, () =>
+      this.findCatalogCategories(tenantId),
+    );
+  }
+
+  async findCatalogItemsForAdmin(
+    tenantId: number,
+    search?: string,
+    category?: string,
+    page?: number,
+    limit?: number,
+  ): Promise<CatalogItemsResult> {
+    return this.runAsTenantForAdmin(tenantId, () =>
+      this.findCatalogItems(tenantId, search, category, page, limit),
+    );
+  }
+
+  async removeForTenantAsAdmin(productId: number): Promise<void> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, deleted_at: null },
+      select: { tenant_id: true },
     });
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${productId} not found`);
+    }
+
+    return this.runAsTenantForAdmin(product.tenant_id, () =>
+      this.remove(productId, product.tenant_id),
+    );
   }
 
   /**
@@ -342,6 +409,7 @@ export class ProductsService {
           where: {
             source: catalogSource,
             is_active: true,
+            is_essential: true,
             category: { in: categories },
           },
         });
@@ -420,9 +488,14 @@ export class ProductsService {
       where: {
         source: catalogSource,
         is_active: true,
+        is_essential: true,
         category: buildAllowedCatalogCategoryWhere(catalogSource),
       },
-      orderBy: [{ category: 'asc' }, { id: 'asc' }],
+      orderBy: [
+        { category: 'asc' },
+        { essential_sort_order: { sort: 'asc', nulls: 'last' } },
+        { id: 'asc' },
+      ],
     });
 
     const enrichedCatalogItems = await this.enrichCatalogItemsWithStockStatus(
@@ -450,7 +523,6 @@ export class ProductsService {
           category,
           total: rankedItems.length,
           default_selected_catalog_item_ids: rankedItems
-            .slice(0, DEFAULT_BULK_ESSENTIAL_SELECTED_COUNT)
             .map((item) => item.id),
           items: rankedItems,
         };
@@ -479,6 +551,7 @@ export class ProductsService {
             id: { in: catalogItemIds },
             source: catalogSource,
             is_active: true,
+            is_essential: true,
             category,
           },
         });
@@ -570,6 +643,13 @@ export class ProductsService {
 
   private rankEssentialCatalogItems(items: CatalogItem[]): CatalogItem[] {
     return [...items].sort((left, right) => {
+      const leftSortOrder = left.essential_sort_order ?? Number.MAX_SAFE_INTEGER;
+      const rightSortOrder =
+        right.essential_sort_order ?? Number.MAX_SAFE_INTEGER;
+      if (leftSortOrder !== rightSortOrder) {
+        return leftSortOrder - rightSortOrder;
+      }
+
       const leftBrandRank = this.getEssentialBrandRank(left.name);
       const rightBrandRank = this.getEssentialBrandRank(right.name);
       if (leftBrandRank !== rightBrandRank) {
@@ -1417,6 +1497,7 @@ export class ProductsService {
   async updateForTenantAsAdmin(
     productId: number,
     updateProductDto: UpdateProductDto,
+    file?: Express.Multer.File,
   ): Promise<Product> {
     const product = await this.prisma.product.findFirst({
       where: { id: productId, deleted_at: null },
@@ -1427,12 +1508,18 @@ export class ProductsService {
       throw new NotFoundException(`Product with ID ${productId} not found`);
     }
 
+    return this.runAsTenantForAdmin(product.tenant_id, () =>
+      this.update(productId, product.tenant_id, updateProductDto, file),
+    );
+  }
+
+  private async runAsTenantForAdmin<T>(
+    tenantId: number,
+    callback: () => Promise<T>,
+  ): Promise<T> {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(product.tenant_id)}, true)`;
-      return DbTenantContext.run(
-        { tenantId: product.tenant_id, manager: tx },
-        () => this.update(productId, product.tenant_id, updateProductDto),
-      );
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+      return DbTenantContext.run({ tenantId, manager: tx }, callback);
     });
   }
 

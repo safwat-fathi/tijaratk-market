@@ -25,6 +25,7 @@ export default function AdminLayout({
     { label: "الباقات", href: "/admin/plans" },
     { label: "الاستيراد", href: "/admin/imports" },
     { label: "المنتجات", href: "/admin/products" },
+    { label: "أساسيات السوبر ماركت", href: "/admin/supermarket-essentials" },
     { label: "الطلبات", href: "/admin/orders" },
     { label: "المناطق", href: "/admin/areas" },
   ];

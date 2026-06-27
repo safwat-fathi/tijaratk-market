@@ -9,6 +9,8 @@ import {
   ParseIntPipe,
   Res,
   Query,
+  Delete,
+  UploadedFile,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,8 +28,15 @@ import { UpdateTenantPlanDto } from './dto/update-tenant-plan.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { ProductsService } from '../products/products.service';
 import { AddBulkEssentialItemsDto } from '../products/dto/add-bulk-essential.dto';
+import { AddProductFromCatalogDto } from '../products/dto/add-product-from-catalog.dto';
 import { CreateProductDto } from '../products/dto/create-product.dto';
+import { GetCatalogItemsDto } from '../products/dto/get-catalog-items.dto';
+import { GetTenantProductsDto } from '../products/dto/get-tenant-products.dto';
 import { UpdateProductDto } from '../products/dto/update-product.dto';
+import {
+  CreateSupermarketEssentialDto,
+  UpdateSupermarketEssentialDto,
+} from './dto/supermarket-essential.dto';
 import { Response } from 'express';
 import {
   AdminLoginResponseDto,
@@ -37,6 +46,8 @@ import {
   AdminPlanResponseDto,
 } from './dto/admin-responses.dto';
 import CONSTANTS from 'src/common/constants';
+import { UploadFile } from 'src/common/decorators/upload-file.decorator';
+import { imageFileFilter } from 'src/common/utils/file-filters';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -220,11 +231,89 @@ export class AdminController {
   @ApiBody({ type: CreateProductDto })
   @ApiResponse({ status: 201, description: 'Product created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
   createTenantProduct(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateProductDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.productsService.createForTenantAsAdmin(id, dto);
+    return this.productsService.createForTenantAsAdmin(id, dto, file);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('tenants/:id/products')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Get merchant products as admin',
+    description: 'Retrieve or search products for a selected merchant.',
+  })
+  getTenantProducts(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: GetTenantProductsDto,
+  ) {
+    if (query.search?.trim()) {
+      return this.productsService.searchTenantProductsForAdmin(
+        id,
+        query.search,
+        query.category,
+        query.page,
+        query.limit,
+        {
+          rankAll: query.rank_all ?? false,
+          excludeProductIds: query.exclude_product_ids ?? [],
+        },
+      );
+    }
+
+    return this.productsService.findAllForTenantAsAdmin(id);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('tenants/:id/products/categories')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Get merchant product categories as admin' })
+  getTenantProductCategories(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.findTenantProductCategoriesForAdmin(id);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('tenants/:id/catalog/categories')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Get merchant catalog categories as admin' })
+  getTenantCatalogCategories(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.findCatalogCategoriesForAdmin(id);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('tenants/:id/catalog')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Get merchant catalog items as admin' })
+  getTenantCatalogItems(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: GetCatalogItemsDto,
+  ) {
+    return this.productsService.findCatalogItemsForAdmin(
+      id,
+      query.search,
+      query.category,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('tenants/:id/products/from-catalog')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Create merchant product from catalog as admin' })
+  @ApiBody({ type: AddProductFromCatalogDto })
+  createTenantProductFromCatalog(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AddProductFromCatalogDto,
+  ) {
+    return this.productsService.createFromCatalogForTenantAsAdmin(id, dto);
   }
 
   @UseGuards(AdminAuthGuard)
@@ -242,11 +331,24 @@ export class AdminController {
   @ApiBody({ type: UpdateProductDto })
   @ApiResponse({ status: 200, description: 'Product updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
   updateTenantProduct(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateProductDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.productsService.updateForTenantAsAdmin(id, dto);
+    return this.productsService.updateForTenantAsAdmin(id, dto, file);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Delete('products/:id')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Archive a merchant product as admin' })
+  archiveTenantProduct(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.removeForTenantAsAdmin(id);
   }
 
   @UseGuards(AdminAuthGuard)
@@ -294,6 +396,91 @@ export class AdminController {
       id,
       togglePlanStatusDto.is_active,
     );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('supermarket-essentials')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Get supermarket essentials',
+    description: 'Retrieve curated essential supermarket catalog items.',
+  })
+  getSupermarketEssentials(
+    @Query('search') search?: string,
+    @Query('category') category?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.getSupermarketEssentials(
+      search,
+      category,
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('supermarket-catalog-candidates')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Get supermarket catalog candidates',
+    description:
+      'Retrieve active supermarket catalog rows that can be marked essential.',
+  })
+  getSupermarketCatalogCandidates(
+    @Query('search') search?: string,
+    @Query('category') category?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.getSupermarketCatalogCandidates(
+      search,
+      category,
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('supermarket-essentials')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Create or mark supermarket essential',
+    description:
+      'Create a new supermarket catalog item as essential or mark an existing row.',
+  })
+  @ApiBody({ type: CreateSupermarketEssentialDto })
+  createSupermarketEssential(@Body() dto: CreateSupermarketEssentialDto) {
+    return this.adminService.createSupermarketEssential(dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Patch('supermarket-essentials/:id')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Update supermarket essential',
+    description: 'Update a curated supermarket catalog item.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdateSupermarketEssentialDto })
+  updateSupermarketEssential(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSupermarketEssentialDto,
+  ) {
+    return this.adminService.updateSupermarketEssential(id, dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Delete('supermarket-essentials/:id')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Remove supermarket essential',
+    description:
+      'Unmark a supermarket catalog item as essential without deleting it.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  deleteSupermarketEssential(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.deleteSupermarketEssential(id);
   }
 
   @UseGuards(AdminAuthGuard)

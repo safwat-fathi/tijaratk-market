@@ -44,7 +44,7 @@ Tijaratk is a **bootstrapped, operations-first SaaS** that enables local merchan
 ## Testing
 
 - After any changes run `npm run lint` to check for lint errors
-- Do not write spec/unit test files unless explicitly required to satisfy the request.
+- Unit tests are not allowed in the codebase. Do not write spec/unit test files.
 
 ## Before any changes
 

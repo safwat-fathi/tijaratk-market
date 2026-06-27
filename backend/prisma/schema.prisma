@@ -51,6 +51,8 @@ model CatalogItem {
   price              Decimal?  @db.Decimal(10, 2)
   currency           String    @default("EGP") @db.VarChar(3)
   is_active          Boolean   @default(true)
+  is_essential       Boolean   @default(false)
+  essential_sort_order Int?
   source             String    @default("seed") @db.VarChar(64)
   external_id        String?   @db.VarChar(128)
   last_seen_at       DateTime? @db.Timestamp(6)
@@ -58,6 +60,7 @@ model CatalogItem {
   tenant_hidden_catalog_items TenantHiddenCatalogItem[]
 
   @@unique([source, external_id], map: "UQ_catalog_items_source_external_id")
+  @@index([source, is_essential, category], map: "IDX_catalog_items_source_essential_category")
   @@map("catalog_items")
 }
 

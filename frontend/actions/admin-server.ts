@@ -6,6 +6,13 @@ import { setCookieAction, deleteCookieAction } from "@/app/actions/cookie-store"
 import { STORAGE_KEYS } from "@/constants";
 import { revalidatePath } from "next/cache";
 import { loginSchema } from "@/lib/validations/auth";
+import type {
+  CatalogItemsResponse,
+  Product,
+  ProductOrderConfig,
+  ProductOrderMode,
+  PublicProductCategory,
+} from "@/types/models/product";
 
 export type ActionState = {
   success?: boolean;
@@ -17,6 +24,163 @@ export type ActionState = {
 export type DirectoryStatusActionState = {
   success: boolean;
   message?: string;
+};
+
+const UPDATE_PRODUCT_FALLBACK_MESSAGE = "تعذر تعديل المنتج، حاول مرة أخرى.";
+const UPDATE_PRODUCT_IMAGE_SIZE_MESSAGE =
+  "حجم الصورة كبير. الحد الأقصى 15 ميجابايت.";
+const UPDATE_PRODUCT_IMAGE_FORMAT_MESSAGE =
+  "صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP أو HEIC أو HEIF.";
+const UPDATE_PRODUCT_TIMEOUT_MESSAGE =
+  "استغرق رفع/معالجة الصورة وقتًا أطول من المتوقع. حاول مرة أخرى.";
+
+type LoadCatalogItemsParams = {
+  search?: string;
+  category?: string;
+  page?: number;
+  limit?: number;
+};
+
+type AdminProductOnboardingData = {
+  products: Product[];
+  productCategories: string[];
+  catalogItemsResponse: CatalogItemsResponse;
+  catalogCategories: PublicProductCategory[];
+};
+
+const createEmptyCatalogItemsResponse = (
+  limit = 40,
+): CatalogItemsResponse => ({
+  data: [],
+  meta: {
+    total: 0,
+    page: 1,
+    limit,
+    last_page: 1,
+    has_next: false,
+  },
+});
+
+const normalizeUpdateProductErrorMessage = (message?: string): string => {
+  const normalized = message?.trim();
+  if (!normalized) {
+    return UPDATE_PRODUCT_FALLBACK_MESSAGE;
+  }
+
+  if (
+    /(unsupported image format|unsupported codec|صيغة الصورة غير مدعومة)/i.test(
+      normalized,
+    )
+  ) {
+    return UPDATE_PRODUCT_IMAGE_FORMAT_MESSAGE;
+  }
+
+  if (
+    /(limit_file_size|payload too large|entity too large|file too large|حجم الصورة|exceed.*(?:size|limit))/i.test(
+      normalized,
+    )
+  ) {
+    return UPDATE_PRODUCT_IMAGE_SIZE_MESSAGE;
+  }
+
+  if (
+    /(timeout|timed out|aborterror|operation was aborted|signal is aborted)/i.test(
+      normalized,
+    )
+  ) {
+    return UPDATE_PRODUCT_TIMEOUT_MESSAGE;
+  }
+
+  return normalized;
+};
+
+const setTrimmedField = (
+  payload: FormData,
+  key: string,
+  value: FormDataEntryValue | null,
+) => {
+  if (typeof value !== "string") {
+    return;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed) {
+    payload.set(key, trimmed);
+  }
+};
+
+const setNormalizedAvailabilityField = (
+  payload: FormData,
+  value: FormDataEntryValue | null,
+) => {
+  if (typeof value !== "string") {
+    return;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") {
+    payload.set("is_available", "true");
+  } else if (normalized === "false" || normalized === "0") {
+    payload.set("is_available", "false");
+  }
+};
+
+const normalizeProductFormData = (formData: FormData): FormData => {
+  const normalizedPayload = new FormData();
+
+  setTrimmedField(normalizedPayload, "name", formData.get("name"));
+  setTrimmedField(normalizedPayload, "current_price", formData.get("current_price"));
+  setTrimmedField(normalizedPayload, "category", formData.get("category"));
+  setTrimmedField(normalizedPayload, "order_mode", formData.get("order_mode"));
+  setTrimmedField(normalizedPayload, "order_config", formData.get("order_config"));
+  setNormalizedAvailabilityField(normalizedPayload, formData.get("is_available"));
+
+  const file = formData.get("file");
+  if (file instanceof File && file.size > 0) {
+    normalizedPayload.set("file", file);
+  }
+
+  return normalizedPayload;
+};
+
+const buildCreateProductFormData = ({
+  name,
+  imageUrl,
+  currentPrice,
+  category,
+  orderMode,
+  orderConfig,
+  imageFile,
+}: {
+  name: string;
+  imageUrl?: string;
+  currentPrice?: number;
+  category?: string;
+  orderMode?: ProductOrderMode;
+  orderConfig?: ProductOrderConfig;
+  imageFile: File;
+}): FormData => {
+  const payload = new FormData();
+  payload.set("name", name);
+
+  if (imageUrl?.trim()) {
+    payload.set("image_url", imageUrl.trim());
+  }
+  if (typeof currentPrice === "number") {
+    payload.set("current_price", String(currentPrice));
+  }
+  if (category) {
+    payload.set("category", category);
+  }
+  if (orderMode) {
+    payload.set("order_mode", orderMode);
+  }
+  if (orderConfig) {
+    payload.set("order_config", JSON.stringify(orderConfig));
+  }
+
+  payload.set("file", imageFile);
+  return payload;
 };
 
 export async function adminLoginAction(prevState: ActionState, formData: FormData): Promise<ActionState> {
@@ -249,6 +413,428 @@ export async function adminUpdateProductAction(productId: number, formData: Form
   }
 
   revalidatePath("/admin/products");
+}
+
+export async function adminLoadProductOnboardingAction(
+  tenantId: number,
+): Promise<{
+  success: boolean;
+  data?: AdminProductOnboardingData;
+  message?: string;
+}> {
+  try {
+    const [products, productCategories, catalogItems, catalogCategories] =
+      await Promise.all([
+        adminService.getTenantProducts(tenantId),
+        adminService.getTenantProductCategories(tenantId),
+        adminService.getTenantCatalogItems(tenantId, { page: 1, limit: 40 }),
+        adminService.getTenantCatalogCategories(tenantId),
+      ]);
+
+    return {
+      success: true,
+      data: {
+        products: products.success && products.data ? products.data : [],
+        productCategories:
+          productCategories.success && productCategories.data
+            ? productCategories.data
+            : [],
+        catalogItemsResponse:
+          catalogItems.success && catalogItems.data
+            ? catalogItems.data
+            : createEmptyCatalogItemsResponse(),
+        catalogCategories:
+          catalogCategories.success && catalogCategories.data
+            ? catalogCategories.data
+            : [],
+      },
+    };
+  } catch (error) {
+    console.error("Admin product onboarding load failed:", error);
+    return {
+      success: false,
+      message: "تعذر تحميل بيانات منتجات التاجر",
+    };
+  }
+}
+
+export async function adminCreateProductForTenantAction(
+  tenantId: number,
+  name: string,
+  imageUrl?: string,
+  currentPrice?: number,
+  category?: string,
+  orderMode?: ProductOrderMode,
+  orderConfig?: ProductOrderConfig,
+  imageFile?: File | null,
+) {
+  try {
+    const normalizedName = name.trim();
+    const normalizedCategory = category?.trim() || undefined;
+
+    if (imageFile && imageFile.size > 0) {
+      const payload = buildCreateProductFormData({
+        name: normalizedName,
+        imageUrl,
+        currentPrice,
+        category: normalizedCategory,
+        orderMode,
+        orderConfig,
+        imageFile,
+      });
+      const response = await adminService.createTenantProductPayload(
+        tenantId,
+        payload,
+      );
+
+      if (!response.success || !response.data) {
+        return {
+          success: false,
+          message: normalizeUpdateProductErrorMessage(response.message),
+        };
+      }
+
+      revalidatePath("/admin/products");
+      return { success: true, data: response.data };
+    }
+
+    const response = await adminService.createTenantProductPayload(tenantId, {
+      name: normalizedName,
+      image_url: imageUrl,
+      current_price: currentPrice,
+      category: normalizedCategory,
+      order_mode: orderMode,
+      order_config: orderConfig,
+    });
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || "تعذر إضافة المنتج",
+      };
+    }
+
+    revalidatePath("/admin/products");
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error("Admin create product failed:", error);
+    return {
+      success: false,
+      message: normalizeUpdateProductErrorMessage(
+        error instanceof Error ? error.message : undefined,
+      ),
+    };
+  }
+}
+
+export async function adminAddProductFromCatalogAction(
+  tenantId: number,
+  catalogItemId: number,
+) {
+  try {
+    const response = await adminService.addTenantProductFromCatalog(
+      tenantId,
+      catalogItemId,
+    );
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || "تعذر إضافة المنتج من الكتالوج",
+      };
+    }
+
+    revalidatePath("/admin/products");
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error("Admin add product from catalog failed:", error);
+    return {
+      success: false,
+      message: "تعذر إضافة المنتج من الكتالوج",
+    };
+  }
+}
+
+export async function adminLoadCatalogItemsAction(
+  tenantId: number,
+  params: LoadCatalogItemsParams,
+): Promise<{
+  success: boolean;
+  data?: CatalogItemsResponse;
+  message?: string;
+}> {
+  try {
+    const response = await adminService.getTenantCatalogItems(tenantId, params);
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحميل منتجات الكتالوج",
+      };
+    }
+
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error("Admin load catalog items failed:", error);
+    return {
+      success: false,
+      message: "تعذر تحميل منتجات الكتالوج",
+    };
+  }
+}
+
+export async function adminSearchTenantProductsAction(
+  tenantId: number,
+  search: string,
+  page = 1,
+  limit = 20,
+  categoryOrOptions?:
+    | string
+    | {
+        category?: string;
+        rankAll?: boolean;
+        excludeProductIds?: number[];
+      },
+) {
+  try {
+    const normalizedSearch = search.trim();
+    if (normalizedSearch.length < 2) {
+      return {
+        success: true,
+        data: {
+          data: [],
+          meta: {
+            total: 0,
+            page: 1,
+            limit,
+            last_page: 1,
+            has_next: false,
+          },
+        },
+      };
+    }
+
+    const searchOptions =
+      typeof categoryOrOptions === "string"
+        ? { category: categoryOrOptions }
+        : categoryOrOptions || {};
+    const normalizedExcludedProductIds = Array.from(
+      new Set(
+        (searchOptions.excludeProductIds || []).filter(
+          (id): id is number =>
+            Number.isInteger(id) && Number.isFinite(id) && id > 0,
+        ),
+      ),
+    );
+
+    const response = await adminService.searchTenantProducts(tenantId, {
+      search: normalizedSearch,
+      category: searchOptions.category?.trim() || undefined,
+      page,
+      limit,
+      rank_all: searchOptions.rankAll,
+      exclude_product_ids:
+        normalizedExcludedProductIds.length > 0
+          ? normalizedExcludedProductIds.join(",")
+          : undefined,
+    });
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحميل نتائج البحث",
+      };
+    }
+
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error("Admin search tenant products failed:", error);
+    return {
+      success: false,
+      message: "تعذر تحميل نتائج البحث",
+    };
+  }
+}
+
+export async function adminUpdateProductPayloadAction(
+  productId: number,
+  formData: FormData,
+) {
+  try {
+    const normalizedPayload = normalizeProductFormData(formData);
+    const response = await adminService.updateProductPayload(
+      productId,
+      normalizedPayload,
+    );
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: normalizeUpdateProductErrorMessage(response.message),
+      };
+    }
+
+    revalidatePath("/admin/products");
+    return { success: true, data: response.data as Product };
+  } catch (error) {
+    console.error("Admin update product failed:", error);
+    return {
+      success: false,
+      message: normalizeUpdateProductErrorMessage(
+        error instanceof Error ? error.message : undefined,
+      ),
+    };
+  }
+}
+
+export async function adminUpdateProductAvailabilityAction(
+  productId: number,
+  isAvailable: boolean,
+) {
+  const formData = new FormData();
+  formData.set("is_available", String(isAvailable));
+  return adminUpdateProductPayloadAction(productId, formData);
+}
+
+export async function adminRemoveProductAction(productId: number) {
+  try {
+    const response = await adminService.removeProduct(productId);
+
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر حذف المنتج",
+      };
+    }
+
+    revalidatePath("/admin/products");
+    return {
+      success: true,
+      message: "تم حذف المنتج",
+    };
+  } catch (error) {
+    console.error("Admin remove product failed:", error);
+    return {
+      success: false,
+      message: "تعذر حذف المنتج",
+    };
+  }
+}
+
+const SUPERMARKET_ESSENTIALS_PATH = "/admin/supermarket-essentials";
+
+const parseOptionalInteger = (value: FormDataEntryValue | null) => {
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : undefined;
+};
+
+const parseNullableNumber = (value: FormDataEntryValue | null) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
+const parseNullableString = (value: FormDataEntryValue | null) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return value.trim() || null;
+};
+
+export async function adminCreateSupermarketEssentialAction(
+  formData: FormData,
+): Promise<void> {
+  const name = parseNullableString(formData.get("name"));
+  const category = parseNullableString(formData.get("category"));
+  if (!name || !category) {
+    throw new Error("اسم المنتج والتصنيف مطلوبان");
+  }
+
+  const response = await adminService.createSupermarketEssential({
+    name,
+    category,
+    price: parseNullableNumber(formData.get("price")) ?? undefined,
+    image_url: parseNullableString(formData.get("image_url")) ?? undefined,
+    essential_sort_order: parseOptionalInteger(
+      formData.get("essential_sort_order"),
+    ),
+  });
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر إضافة المنتج الأساسي");
+  }
+
+  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
+}
+
+export async function adminMarkCatalogItemEssentialAction(
+  formData: FormData,
+): Promise<void> {
+  const catalogItemId = parsePositiveInteger(formData.get("catalog_item_id"));
+  if (!catalogItemId) {
+    throw new Error("يجب اختيار منتج من الكتالوج");
+  }
+
+  const response = await adminService.createSupermarketEssential({
+    catalog_item_id: catalogItemId,
+  });
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر تمييز المنتج كأساسي");
+  }
+
+  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
+}
+
+export async function adminUpdateSupermarketEssentialAction(
+  catalogItemId: number,
+  formData: FormData,
+): Promise<void> {
+  const name = parseNullableString(formData.get("name"));
+  const category = parseNullableString(formData.get("category"));
+  if (!name || !category) {
+    throw new Error("اسم المنتج والتصنيف مطلوبان");
+  }
+
+  const response = await adminService.updateSupermarketEssential(catalogItemId, {
+    name,
+    category,
+    price: parseNullableNumber(formData.get("price")),
+    image_url: parseNullableString(formData.get("image_url")),
+    is_active: parseCheckboxBoolean(formData.get("is_active")),
+    essential_sort_order:
+      parseOptionalInteger(formData.get("essential_sort_order")) ?? null,
+  });
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر تحديث المنتج الأساسي");
+  }
+
+  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
+}
+
+export async function adminDeleteSupermarketEssentialAction(
+  catalogItemId: number,
+): Promise<void> {
+  const response = await adminService.deleteSupermarketEssential(catalogItemId);
+  if (!response.success) {
+    throw new Error(response.message || "تعذر حذف المنتج من الأساسيات");
+  }
+
+  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
 }
 
 export async function togglePlanStatusAction(id: number, currentStatus: boolean): Promise<void> {

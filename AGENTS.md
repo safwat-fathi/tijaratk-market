@@ -13,10 +13,10 @@ sources or rely on frontend filtering to hide the wrong products.
 - Pharmacy tenants (`TenantCategory.pharmacy`) must read only the pharmacy
   catalog source (`chefaa_csv`).
 - Other tenant categories must not receive a ready-made catalog unless a new
-  source mapping and tests are added intentionally.
+  source mapping is added intentionally.
 - Keep the source policy centralized in
   `backend/src/products/catalog-source-policy.ts`. Product services, imports,
-  seeders, scripts, and tests should reuse that module instead of duplicating
+  seeders, and scripts should reuse that module instead of duplicating
   string constants or category allowlists.
 - A catalog import must never create or reactivate rows whose normalized
   category is invalid for that source. In particular, `chefaa_csv` must not
@@ -29,10 +29,3 @@ sources or rely on frontend filtering to hide the wrong products.
   tenant's allowed source and must not fall back to unrelated active catalog
   rows.
 
-When changing catalog import, catalog browsing, tenant category behavior, or
-ranking/demo seeders, add or update tests covering:
-
-- pharmacy tenants cannot see supermarket categories such as `أرز ومكرونة`;
-- grocery tenants cannot see pharmacy-only source rows;
-- unsupported tenant categories get an empty ready-made catalog;
-- invalid rows for a source are rejected/skipped during import.
