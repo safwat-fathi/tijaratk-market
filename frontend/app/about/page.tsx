@@ -2,18 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { PublicFooter } from "@/components/layout/PublicFooter";
+import JsonLd from "@/components/seo/JsonLd";
 import heroMockup from "@/public/images/hero-mockup.webp";
 import {
   createPublicMetadata,
   faqPageJsonLd,
   faqs,
+  getPublicMarketingPage,
   pricingPlans,
-  publicMarketingPages,
   softwareApplicationJsonLd,
 } from "@/lib/marketing-seo";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 
-export const metadata: Metadata = createPublicMetadata(publicMarketingPages[0]);
+export const metadata: Metadata = createPublicMetadata(
+  getPublicMarketingPage("/about"),
+);
 
 const SVGCheckCircle = ({ className }: { className?: string }) => (
   <svg
@@ -37,16 +40,8 @@ export default function LandingPage() {
       className="flex min-h-screen flex-col font-sans bg-[#F7F8F6]"
       dir="rtl"
     >
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(softwareApplicationJsonLd),
-        }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageJsonLd) }}
-      />
+      <JsonLd id="about-software-application-jsonld" data={softwareApplicationJsonLd} />
+      <JsonLd id="about-faq-jsonld" data={faqPageJsonLd} />
       {/* Header */}
       <PublicHeader />
 

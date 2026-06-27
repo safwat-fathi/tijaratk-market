@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build && mkdir -p .next/standalone/frontend/public .next/standalone/frontend/.next/static && cp -r public/* .next/standalone/frontend/public/ && cp -r .next/static/* .next/standalone/frontend/.next/static/",
     "start": "node .next/standalone/frontend/server.js",
-    "lint": "eslint && tsc --noEmit",
+    "lint": "eslint && tsc --noEmit && node scripts/check-next16-request-apis.mjs",
+    "next16:check": "node scripts/check-next16-request-apis.mjs",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

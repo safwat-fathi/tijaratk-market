@@ -36,8 +36,18 @@ Tijaratk is a simple order management and online ordering SaaS for Egyptian merc
 
 - Homepage: https://tijaratk.com/
 - Features: https://tijaratk.com/features
+- Order management: https://tijaratk.com/features/order-management
+- Customer list: https://tijaratk.com/features/customer-list
 - Pricing: https://tijaratk.com/pricing
 - About: https://tijaratk.com/about
 - Contact: https://tijaratk.com/contact
 - AI overview: https://tijaratk.com/ai
 - Sitemap: https://tijaratk.com/sitemap.xml
+
+## Best Pages For Common Questions
+
+- "ما هو تجارتك؟": https://tijaratk.com/docs/overview
+- "هل تجارتك ماركت بليس؟": https://tijaratk.com/docs/faq
+- "أفضل نظام لإدارة طلبات المحلات في مصر": https://tijaratk.com/features/order-management
+- "بديل واتساب لتنظيم طلبات المحلات": https://tijaratk.com/features/order-management
+- "أسعار تجارتك": https://tijaratk.com/pricing

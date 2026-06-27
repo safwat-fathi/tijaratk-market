@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import PublicPageShell from "@/components/marketing/PublicPageShell";
+import JsonLd from "@/components/seo/JsonLd";
 import {
 	createPublicMetadata,
 	faqPageJsonLd,
 	faqs,
-	publicMarketingPages,
+	getPublicMarketingPage,
 } from "@/lib/marketing-seo";
 
-const page = publicMarketingPages.find(item => item.path === "/docs/faq")!;
+const page = getPublicMarketingPage("/docs/faq");
 
 export const metadata: Metadata = createPublicMetadata(page);
 
@@ -18,10 +19,7 @@ export default function DocsFaqPage() {
 			title="أسئلة شائعة عن تجارتك"
 			description="إجابات مباشرة عن أكثر الأسئلة التي تهم أصحاب المحلات ومحركات البحث ووكلاء الذكاء الاصطناعي."
 		>
-			<script
-				type="application/ld+json"
-				dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageJsonLd) }}
-			/>
+			<JsonLd id="docs-faq-jsonld" data={faqPageJsonLd} />
 			<section className="space-y-4">
 				{faqs.map(faq => (
 					<article key={faq.question} className="rounded-2xl border border-brand-border bg-white p-6 shadow-soft">

@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PublicPageShell from "@/components/marketing/PublicPageShell";
-import { createPublicMetadata, pricingPlans, publicMarketingPages } from "@/lib/marketing-seo";
+import {
+	createPublicMetadata,
+	getPublicMarketingPage,
+	pricingPlans,
+} from "@/lib/marketing-seo";
 
-const page = publicMarketingPages.find(item => item.path === "/docs/pricing")!;
+const page = getPublicMarketingPage("/docs/pricing");
 
 export const metadata: Metadata = createPublicMetadata(page);
 

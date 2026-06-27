@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PublicPageShell from "@/components/marketing/PublicPageShell";
+import JsonLd from "@/components/seo/JsonLd";
 import {
 	createPublicMetadata,
+	getPublicMarketingPage,
 	pricingJsonLd,
 	pricingPlans,
-	publicMarketingPages,
 } from "@/lib/marketing-seo";
 
-const page = publicMarketingPages.find(item => item.path === "/pricing")!;
+const page = getPublicMarketingPage("/pricing");
 
 export const metadata: Metadata = createPublicMetadata(page);
 
@@ -19,10 +20,7 @@ export default function PricingPage() {
 			title="باقات بسيطة للمحلات في مصر"
 			description="ابدأ بفترة مجانية، وبعدها اختار الباقة المناسبة لحجم متجرك. تجارتك لا يأخذ عمولة على الطلبات."
 		>
-			<script
-				type="application/ld+json"
-				dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingJsonLd) }}
-			/>
+			<JsonLd id="pricing-product-jsonld" data={pricingJsonLd} />
 			<section className="grid gap-5 lg:grid-cols-2">
 				{pricingPlans.map(plan => (
 					<article

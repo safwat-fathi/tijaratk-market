@@ -2,12 +2,28 @@ import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/marketing-seo";
 
 export default function robots(): MetadataRoute.Robots {
+	const privatePaths = [
+		"/dashboard/",
+		"/admin/",
+		"/api/",
+		"/checkout/session/",
+		"/merchant/",
+		"/track-order/",
+		"/*/success/",
+	];
+
 	return {
 		rules: [
 			{
-				userAgent: "OAI-SearchBot",
+				userAgent: [
+					"OAI-SearchBot",
+					"ChatGPT-User",
+					"PerplexityBot",
+					"ClaudeBot",
+					"Bingbot",
+				],
 				allow: "/",
-				disallow: ["/dashboard/", "/admin/", "/api/", "/checkout/session/"],
+				disallow: privatePaths,
 			},
 			{
 				userAgent: "GPTBot",
@@ -16,15 +32,7 @@ export default function robots(): MetadataRoute.Robots {
 			{
 				userAgent: "*",
 				allow: "/",
-				disallow: [
-					"/dashboard/",
-					"/admin/",
-					"/api/",
-					"/checkout/session/",
-					"/merchant/",
-					"/track-order/",
-					"/*/success/",
-				],
+				disallow: privatePaths,
 			},
 		],
 		sitemap: `${SITE_URL}/sitemap.xml`,

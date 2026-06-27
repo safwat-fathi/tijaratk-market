@@ -3,8 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
+import JsonLd from "@/components/seo/JsonLd";
 import SafeImage from "@/components/ui/SafeImage";
-import { createPublicMetadata } from "@/lib/marketing-seo";
+import { createPublicMetadata, SITE_URL } from "@/lib/marketing-seo";
 import { storesDirectoryService } from "@/services/api/stores-directory.service";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
 import {
@@ -43,6 +44,9 @@ const resolveStorefrontUrl = (
   return `${store.storefrontUrl}?${params.toString()}`;
 };
 
+const toAbsoluteSiteUrl = (pathOrUrl: string) =>
+  pathOrUrl.startsWith("http") ? pathOrUrl : `${SITE_URL}${pathOrUrl}`;
+
 async function getCategoryPage(
   areaSlug: string,
   categorySlug: string,
@@ -66,6 +70,66 @@ async function getCategoryPage(
 
   return response.data;
 }
+
+const buildCategoryJsonLd = (
+  page: StoresDirectoryCategoryPage,
+  categoryName: string,
+) => {
+  const url = toAbsoluteSiteUrl(
+    page.seo.canonicalUrl || `/stores/${page.area.slug}/${page.category.slug}`,
+  );
+
+  return [
+    {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: page.seo.title,
+      description: page.seo.description,
+      url,
+      inLanguage: "ar-EG",
+      isPartOf: {
+        "@type": "WebSite",
+        name: "تجارتك",
+        url: SITE_URL,
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: `${categoryName} في ${page.area.nameAr}`,
+      itemListElement: page.stores.map((store, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: store.name,
+        url: resolveStorefrontUrl(store, page.category.slug),
+      })),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "دليل المتاجر",
+          item: SITE_URL,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: page.area.nameAr,
+          item: `${SITE_URL}/?area=${encodeURIComponent(page.area.slug)}`,
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: categoryName,
+          item: url,
+        },
+      ],
+    },
+  ];
+};
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { areaSlug, categorySlug } = await params;
@@ -153,9 +217,18 @@ export default async function StoresCategoryPage({
 
   const categoryName = getCategoryName(page.category.slug, page.category.label);
   const storesCount = page.pagination.total;
+  const jsonLd = buildCategoryJsonLd(page, categoryName);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
+      {jsonLd.map((item, index) => (
+        <JsonLd
+          key={`${item["@type"]}-${index}`}
+          id={`stores-category-${String(item["@type"]).toLowerCase()}-${index}-jsonld`}
+          data={item}
+        />
+      ))}
+
       <AppHeader
         title="دليل المتاجر"
         innerClassName="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8"

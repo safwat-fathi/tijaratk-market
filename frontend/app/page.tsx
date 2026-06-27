@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicFooter } from "@/components/layout/PublicFooter";
+import JsonLd from "@/components/seo/JsonLd";
 import SafeImage from "@/components/ui/SafeImage";
 import AreaAutocomplete from "@/components/stores-directory/AreaAutocomplete";
 import { createPublicMetadata, SITE_URL } from "@/lib/marketing-seo";
@@ -297,10 +298,10 @@ export default async function StoresDirectoryPage({
   return (
     <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
       {jsonLd.map((item, index) => (
-        <script
+        <JsonLd
           key={`${item["@type"]}-${index}`}
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(item) }}
+          id={`stores-directory-${String(item["@type"]).toLowerCase()}-${index}-jsonld`}
+          data={item}
         />
       ))}
 

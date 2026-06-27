@@ -1,6 +1,13 @@
+/* eslint-disable @next/next/no-img-element */
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
+import { createNoIndexMetadata } from "@/lib/marketing-seo";
 import ManualOrderAction from "./_components/ManualOrderAction";
+
+export const metadata = createNoIndexMetadata(
+  "صيدلية الشفاء | نموذج متجر",
+  "صفحة نموذجية غير مخصصة للفهرسة تعرض شكل واجهة متجر على تجارتك.",
+);
 
 export default function DummyStorefront() {
   return (

@@ -43,8 +43,12 @@ const STATUS_META: Record<
   },
 };
 
+const STATUS_META_MAP = new Map<OrderStatus, { label: string; hint: string }>(
+  Object.entries(STATUS_META) as Array<[OrderStatus, { label: string; hint: string }]>
+);
+
 function getStatusMeta(status: OrderStatus) {
-  return STATUS_META[status] ?? STATUS_META[OrderStatus.DRAFT];
+  return STATUS_META_MAP.get(status) ?? STATUS_META_MAP.get(OrderStatus.DRAFT)!;
 }
 
 function formatOrderDate(value?: string) {

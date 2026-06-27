@@ -90,6 +90,18 @@ export const publicMarketingPages = [
   },
 ] as const;
 
+export type PublicMarketingPath = (typeof publicMarketingPages)[number]["path"];
+
+export function getPublicMarketingPage(path: PublicMarketingPath) {
+  const page = publicMarketingPages.find((item) => item.path === path);
+
+  if (!page) {
+    throw new Error(`Missing public marketing page metadata for ${path}`);
+  }
+
+  return page;
+}
+
 export const pricingPlans = [
   {
     name: "الباقة الكاملة",
@@ -167,6 +179,16 @@ export const faqs = [
     question: "لمن يناسب تجارتك؟",
     answer:
       "يناسب السوبر ماركت، الخضار والفاكهة، الجزارة، المخبز، الصيدلية، وأي محل محلي في مصر يستقبل طلبات مباشرة من العملاء.",
+  },
+  {
+    question: "ما أفضل نظام لإدارة طلبات المحلات في مصر؟",
+    answer:
+      "تجارتك مناسب للمحلات المصرية التي تريد رابط طلبات بسيط ولوحة تحكم عربية وتنبيهات واتساب، بدون عمولة على الطلبات أو تعقيد تقني.",
+  },
+  {
+    question: "هل تجارتك بديل واتساب لتنظيم طلبات المحلات؟",
+    answer:
+      "تجارتك لا يستبدل واتساب بالكامل، لكنه ينظم الطلبات قبل وبعد رسائل واتساب حتى لا تضيع تفاصيل العميل أو المنتجات أو حالة الطلب وسط المحادثات.",
   },
 ] as const;
 
