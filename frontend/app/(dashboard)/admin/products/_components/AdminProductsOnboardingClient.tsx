@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   adminAddProductFromCatalogAction,
   adminCreateProductForTenantAction,
@@ -46,7 +46,21 @@ export default function AdminProductsOnboardingClient({
   const [onboardingData, setOnboardingData] =
     useState<AdminProductOnboardingData | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const comboboxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (comboboxRef.current && !comboboxRef.current.contains(event.target as Node)) {
+        setIsSelectorOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const filteredMerchants = useMemo(() => {
     const normalizedSearch = normalizeSearchText(merchantSearch);
@@ -66,10 +80,12 @@ export default function AdminProductsOnboardingClient({
     [merchants, selectedMerchantId],
   );
 
-  const handleSelectMerchant = (merchant: AdminTenant) => {
+  const handleSelectMerchant = useCallback((merchant: AdminTenant) => {
     setSelectedMerchantId(merchant.id);
+    setMerchantSearch(merchant.name);
     setOnboardingData(null);
     setMessage(null);
+    setIsSelectorOpen(false);
 
     startTransition(async () => {
       const response = await adminLoadProductOnboardingAction(merchant.id);
@@ -80,7 +96,9 @@ export default function AdminProductsOnboardingClient({
 
       setOnboardingData(response.data);
     });
-  };
+  }, []);
+
+  // Use effect for auto-selection removed as per user request
 
   const actions = useMemo<ProductOnboardingActions | null>(() => {
     if (!selectedMerchantId) {
@@ -109,105 +127,131 @@ export default function AdminProductsOnboardingClient({
   }, [selectedMerchantId]);
 
   return (
-    <div className="space-y-6">
-      <Card className="p-4 sm:p-6">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
-          <div className="space-y-3">
-            <div>
-              <h2 className="text-lg font-bold text-brand-text">
-                اختيار التاجر
+    <div className="space-y-3">
+      <div className="sticky top-0 z-30 rounded-lg border border-gray-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-bold text-brand-text">
+                إدارة منتجات تاجر
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                ابحث باسم المتجر ثم اختر التاجر لإدارة منتجاته.
-              </p>
-            </div>
-            <input
-              value={merchantSearch}
-              onChange={(event) => setMerchantSearch(event.target.value)}
-              placeholder="ابحث باسم المتجر"
-              className="h-11 w-full rounded-md border border-brand-border px-3 text-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
-            />
-            <div className="max-h-80 overflow-y-auto rounded-md border border-brand-border">
-              {filteredMerchants.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  لا توجد متاجر بهذا الاسم
-                </p>
-              ) : (
-                <div className="divide-y divide-brand-border">
-                  {filteredMerchants.map((merchant) => {
-                    const isSelected = merchant.id === selectedMerchantId;
-
-                    return (
-                      <button
-                        key={merchant.id}
-                        type="button"
-                        onClick={() => handleSelectMerchant(merchant)}
-                        className={`flex w-full items-center justify-between gap-3 px-3 py-3 text-start text-sm transition ${
-                          isSelected
-                            ? "bg-brand-soft text-brand-primary"
-                            : "bg-white text-brand-text hover:bg-brand-soft/50"
-                        }`}
-                      >
-                        <span>
-                          <span className="block font-semibold">
-                            {merchant.name}
-                          </span>
-                          <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {merchant.category || "other"} · {merchant.phone}
-                          </span>
-                        </span>
-                        {isSelected ? (
-                          <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-brand-primary">
-                            محدد
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-md border border-dashed border-brand-border bg-brand-soft/30 p-4">
-            {selectedMerchant ? (
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-brand-text">
-                  المتجر المحدد
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="font-bold text-brand-text">
+              {selectedMerchant ? (
+                <>
+                  <span className="rounded-full bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-primary">
                     {selectedMerchant.name}
                   </span>
-                  <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-muted-foreground">
+                  <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">
                     {selectedMerchant.category || "other"}
                   </span>
                   {typeof selectedMerchant._count?.products === "number" ? (
-                    <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-muted-foreground">
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">
                       {selectedMerchant._count.products} منتج
                     </span>
                   ) : null}
-                </div>
-                {isPending ? (
-                  <p className="text-sm text-muted-foreground">
-                    جاري تحميل المنتجات والكتالوج...
-                  </p>
-                ) : null}
-                {message ? (
-                  <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {message}
-                  </p>
-                ) : null}
+                </>
+              ) : null}
+              {isPending ? (
+                <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+                  جاري التحميل
+                </span>
+              ) : null}
+            </div>
+
+            <div className="relative max-w-xl" ref={comboboxRef}>
+              <label className="sr-only" htmlFor="admin-merchant-search">
+                ابحث باسم المتجر
+              </label>
+              <div className="relative">
+                <input
+                  id="admin-merchant-search"
+                  value={merchantSearch}
+                  onFocus={() => setIsSelectorOpen(true)}
+                  onChange={(event) => {
+                    setMerchantSearch(event.target.value);
+                    setIsSelectorOpen(true);
+                  }}
+                  placeholder="ابحث باسم المتجر أو اختر تاجرًا"
+                  className="h-11 w-full rounded-md border border-brand-border bg-white px-3 text-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15 pe-10"
+                />
+                {merchantSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMerchantSearch("");
+                      setSelectedMerchantId(null);
+                      setOnboardingData(null);
+                      setIsSelectorOpen(true);
+                    }}
+                    className="absolute end-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none"
+                    aria-label="مسح البحث"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                اختر تاجرًا لعرض نفس تجربة إضافة المنتجات المتاحة في لوحة
-                التاجر.
-              </p>
-            )}
+              {isSelectorOpen ? (
+                <div className="absolute inset-x-0 top-12 z-40 max-h-80 overflow-y-auto rounded-md border border-brand-border bg-white shadow-lg">
+                  {filteredMerchants.length === 0 ? (
+                    <p className="p-4 text-sm text-muted-foreground">
+                      لا توجد متاجر بهذا الاسم
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-brand-border">
+                      {filteredMerchants.map((merchant) => {
+                        const isSelected = merchant.id === selectedMerchantId;
+
+                        return (
+                          <button
+                            key={merchant.id}
+                            type="button"
+                            onClick={() => handleSelectMerchant(merchant)}
+                            className={`flex w-full items-center justify-between gap-3 px-3 py-3 text-start text-sm transition ${
+                              isSelected
+                                ? "bg-brand-soft text-brand-primary"
+                                : "bg-white text-brand-text hover:bg-brand-soft/50"
+                            }`}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-semibold">
+                                {merchant.name}
+                              </span>
+                              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                {merchant.category || "other"} · {merchant.phone}
+                              </span>
+                            </span>
+                            {isSelected ? (
+                              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-xs font-semibold text-brand-primary">
+                                محدد
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="/admin/products?view=all-products"
+              className="inline-flex h-10 items-center rounded-md border border-brand-border bg-white px-3 text-sm font-semibold text-brand-text hover:bg-brand-soft"
+            >
+              كل منتجات النظام
+            </a>
           </div>
         </div>
-      </Card>
+
+        {message ? (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {message}
+          </p>
+        ) : null}
+      </div>
 
       {selectedMerchant && onboardingData && actions ? (
         <ProductOnboardingClient
@@ -221,8 +265,31 @@ export default function AdminProductsOnboardingClient({
           actions={actions}
           enableCatalogHiding={false}
           enableBulkWizard={false}
+          layoutMode="admin"
         />
-      ) : null}
+      ) : (
+        <Card className="flex min-h-[400px] flex-col items-center justify-center p-8 text-center border-dashed border-2">
+          <div className="mb-4 rounded-full bg-brand-soft p-4 text-brand-primary">
+            <svg
+              className="h-8 w-8"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="1.5"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13.5 21v-7.5a2.25 2.25 0 0 1-2.25-2.25v-1.5a2.25 2.25 0 0 1 2.25-2.25H15M10.5 21v-7.5a2.25 2.25 0 0 0-2.25-2.25v-1.5A2.25 2.25 0 0 0 6 7.5H4.5m15 13.5v-7.5a2.25 2.25 0 0 0-2.25-2.25v-1.5A2.25 2.25 0 0 0 15 7.5h-1.5m-15 13.5V7.5a2.25 2.25 0 0 1 2.25-2.25h15A2.25 2.25 0 0 1 22.5 7.5v13.5"
+              />
+            </svg>
+          </div>
+          <h3 className="mb-2 text-lg font-bold text-brand-text">لا يوجد تاجر محدد</h3>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            يرجى البحث واختيار تاجر من القائمة أعلاه لعرض منتجاته وإدارتها أو الإضافة من الكتالوج.
+          </p>
+        </Card>
+      )}
     </div>
   );
 }

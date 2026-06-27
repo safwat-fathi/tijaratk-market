@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { Prisma, TenantStatus } from '../../generated/prisma/client';
 import { TenantCancellationPolicyService } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
+import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import {
   CATALOG_SOURCE_TALABAT,
   buildAllowedCatalogCategoryWhere,
@@ -26,6 +27,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
+    private readonly imageProcessorService: ImageProcessorService,
   ) {}
 
   async login(loginDto: AdminLoginDto) {
@@ -151,7 +153,10 @@ export class AdminService {
         tenant_delivery_areas: {
           where: { is_active: true, deleted_at: null },
           include: { area: true },
-          orderBy: [{ area: { sort_order: 'asc' } }, { area: { name_ar: 'asc' } }],
+          orderBy: [
+            { area: { sort_order: 'asc' } },
+            { area: { name_ar: 'asc' } },
+          ],
         },
         tenant_subscriptions: {
           where: { is_active: true },
@@ -163,9 +168,8 @@ export class AdminService {
 
     return Promise.all(
       tenants.map(async (tenant) => {
-        const [orders, customers, products, cancellationPolicy] = await this.runWithTenantRls(
-          tenant.id,
-          (tx) =>
+        const [orders, customers, products, cancellationPolicy] =
+          await this.runWithTenantRls(tenant.id, (tx) =>
             Promise.all([
               tx.order.count({ where: { tenant_id: tenant.id } }),
               tx.customer.count({ where: { tenant_id: tenant.id } }),
@@ -176,7 +180,7 @@ export class AdminService {
                 tx,
               ),
             ]),
-        );
+          );
 
         return {
           ...tenant,
@@ -290,6 +294,50 @@ export class AdminService {
     );
   }
 
+  async getSupermarketCatalogCategories() {
+    const rows = await this.prisma.catalogItem.groupBy({
+      by: ['category'],
+      where: {
+        is_active: true,
+        source: CATALOG_SOURCE_TALABAT,
+        category: buildAllowedCatalogCategoryWhere(CATALOG_SOURCE_TALABAT),
+      },
+      _count: { id: true },
+      orderBy: { category: 'asc' },
+    });
+
+    const categories = rows
+      .map((row) => row.category?.trim())
+      .filter((category): category is string => Boolean(category));
+
+    const catalogRows =
+      categories.length > 0
+        ? await this.prisma.catalogItem.findMany({
+            where: {
+              is_active: true,
+              source: CATALOG_SOURCE_TALABAT,
+              category: { in: categories },
+              image_url: { not: null },
+            },
+            select: { category: true, image_url: true },
+            orderBy: [{ category: 'asc' }, { id: 'asc' }],
+          })
+        : [];
+
+    const categoryImages = new Map<string, string>();
+    for (const row of catalogRows) {
+      if (row.category && row.image_url && !categoryImages.has(row.category)) {
+        categoryImages.set(row.category, row.image_url);
+      }
+    }
+
+    return rows.map((row) => ({
+      category: row.category,
+      count: row._count.id,
+      image_url: categoryImages.get(row.category),
+    }));
+  }
+
   async getSupermarketCatalogCandidates(
     search?: string,
     category?: string,
@@ -301,6 +349,7 @@ export class AdminService {
       search,
       category,
       isEssential: false,
+      activeOnly: true,
     });
 
     const [items, total] = await Promise.all([
@@ -322,7 +371,10 @@ export class AdminService {
     );
   }
 
-  async createSupermarketEssential(dto: CreateSupermarketEssentialDto) {
+  async createSupermarketEssential(
+    dto: CreateSupermarketEssentialDto,
+    file?: Express.Multer.File,
+  ) {
     if (dto.catalog_item_id) {
       return this.markCatalogItemAsSupermarketEssential(dto.catalog_item_id);
     }
@@ -335,12 +387,16 @@ export class AdminService {
 
     this.ensureAllowedSupermarketCategory(category);
 
+    const imageUrl = file?.path
+      ? await this.imageProcessorService.processProductThumbnail(file.path)
+      : this.normalizeNullableString(dto.image_url);
+
     return this.prisma.catalogItem.create({
       data: {
         name,
         category,
         price: dto.price,
-        image_url: this.normalizeNullableString(dto.image_url),
+        image_url: imageUrl,
         source: CATALOG_SOURCE_TALABAT,
         is_active: true,
         is_essential: true,
@@ -352,8 +408,9 @@ export class AdminService {
   async updateSupermarketEssential(
     id: number,
     dto: UpdateSupermarketEssentialDto,
+    file?: Express.Multer.File,
   ) {
-    await this.findSupermarketCatalogItem(id, true);
+    const item = await this.findSupermarketCatalogItem(id, true);
 
     const data: Prisma.CatalogItemUpdateInput = {};
     if (dto.name !== undefined) {
@@ -367,7 +424,11 @@ export class AdminService {
       data.category = category;
     }
     if (dto.price !== undefined) data.price = dto.price;
-    if (dto.image_url !== undefined) {
+    if (file?.path) {
+      data.image_url = await this.imageProcessorService.processProductThumbnail(
+        file.path,
+      );
+    } else if (dto.image_url !== undefined) {
       data.image_url = this.normalizeNullableString(dto.image_url);
     }
     if (dto.is_active !== undefined) data.is_active = dto.is_active;
@@ -375,10 +436,18 @@ export class AdminService {
       data.essential_sort_order = dto.essential_sort_order;
     }
 
-    return this.prisma.catalogItem.update({
+    const updatedItem = await this.prisma.catalogItem.update({
       where: { id },
       data,
     });
+
+    if (item.image_url && item.image_url !== updatedItem.image_url) {
+      await this.imageProcessorService.deleteManagedProductImage(
+        item.image_url,
+      );
+    }
+
+    return updatedItem;
   }
 
   async deleteSupermarketEssential(id: number) {
@@ -399,10 +468,12 @@ export class AdminService {
     search,
     category,
     isEssential,
+    activeOnly = false,
   }: {
     search?: string;
     category?: string;
     isEssential: boolean;
+    activeOnly?: boolean;
   }): Prisma.CatalogItemWhereInput {
     const normalizedCategory = category?.trim();
     if (normalizedCategory) {
@@ -412,6 +483,7 @@ export class AdminService {
     return {
       source: CATALOG_SOURCE_TALABAT,
       is_essential: isEssential,
+      ...(activeOnly ? { is_active: true } : {}),
       category: normalizedCategory
         ? normalizedCategory
         : buildAllowedCatalogCategoryWhere(CATALOG_SOURCE_TALABAT),
@@ -435,7 +507,10 @@ export class AdminService {
     });
   }
 
-  private async findSupermarketCatalogItem(id: number, requireEssential: boolean) {
+  private async findSupermarketCatalogItem(
+    id: number,
+    requireEssential: boolean,
+  ) {
     const item = await this.prisma.catalogItem.findFirst({
       where: {
         id,

@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
@@ -11,6 +11,7 @@ import {
 
 export class CreateSupermarketEssentialDto {
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   catalog_item_id?: number;
@@ -34,6 +35,7 @@ export class CreateSupermarketEssentialDto {
   image_url?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   essential_sort_order?: number;
 }
@@ -58,10 +60,12 @@ export class UpdateSupermarketEssentialDto {
   image_url?: string | null;
 
   @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
   @IsBoolean()
   is_active?: boolean;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   essential_sort_order?: number | null;
 }

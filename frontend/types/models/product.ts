@@ -46,6 +46,8 @@ export interface CatalogItem {
   currency?: string;
   category: string;
   is_active: boolean;
+  is_essential?: boolean;
+  essential_sort_order?: number | null;
   is_in_stock?: boolean;
   created_at: string;
 }

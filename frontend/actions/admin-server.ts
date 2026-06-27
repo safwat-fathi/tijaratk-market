@@ -723,35 +723,62 @@ export async function adminRemoveProductAction(productId: number) {
 
 const SUPERMARKET_ESSENTIALS_PATH = "/admin/supermarket-essentials";
 
-const parseOptionalInteger = (value: FormDataEntryValue | null) => {
-  if (typeof value !== "string" || !value.trim()) {
-    return undefined;
-  }
-
-  const parsed = Number(value);
-  return Number.isInteger(parsed) ? parsed : undefined;
-};
-
-const parseNullableNumber = (value: FormDataEntryValue | null) => {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-};
-
 const parseNullableString = (value: FormDataEntryValue | null) => {
   if (typeof value !== "string") {
     return null;
   }
 
   return value.trim() || null;
+};
+
+const appendTrimmedFormDataField = (
+  target: FormData,
+  key: string,
+  value: FormDataEntryValue | null,
+) => {
+  if (typeof value !== "string") {
+    return;
+  }
+
+  const trimmedValue = value.trim();
+  if (trimmedValue) {
+    target.set(key, trimmedValue);
+  }
+};
+
+const appendOptionalFileField = (
+  target: FormData,
+  file: FormDataEntryValue | null,
+) => {
+  if (file instanceof File && file.size > 0) {
+    target.set("file", file);
+  }
+};
+
+const buildSupermarketEssentialFormData = (
+  formData: FormData,
+  includeActive = false,
+) => {
+  const payload = new FormData();
+  appendTrimmedFormDataField(payload, "name", formData.get("name"));
+  appendTrimmedFormDataField(payload, "category", formData.get("category"));
+  appendTrimmedFormDataField(payload, "price", formData.get("price"));
+  appendTrimmedFormDataField(payload, "image_url", formData.get("image_url"));
+  appendTrimmedFormDataField(
+    payload,
+    "essential_sort_order",
+    formData.get("essential_sort_order"),
+  );
+  appendOptionalFileField(payload, formData.get("file"));
+
+  if (includeActive) {
+    payload.set(
+      "is_active",
+      parseCheckboxBoolean(formData.get("is_active")) ? "true" : "false",
+    );
+  }
+
+  return payload;
 };
 
 export async function adminCreateSupermarketEssentialAction(
@@ -763,15 +790,9 @@ export async function adminCreateSupermarketEssentialAction(
     throw new Error("اسم المنتج والتصنيف مطلوبان");
   }
 
-  const response = await adminService.createSupermarketEssential({
-    name,
-    category,
-    price: parseNullableNumber(formData.get("price")) ?? undefined,
-    image_url: parseNullableString(formData.get("image_url")) ?? undefined,
-    essential_sort_order: parseOptionalInteger(
-      formData.get("essential_sort_order"),
-    ),
-  });
+  const response = await adminService.createSupermarketEssential(
+    buildSupermarketEssentialFormData(formData),
+  );
 
   if (!response.success) {
     throw new Error(response.message || "تعذر إضافة المنتج الأساسي");
@@ -809,15 +830,10 @@ export async function adminUpdateSupermarketEssentialAction(
     throw new Error("اسم المنتج والتصنيف مطلوبان");
   }
 
-  const response = await adminService.updateSupermarketEssential(catalogItemId, {
-    name,
-    category,
-    price: parseNullableNumber(formData.get("price")),
-    image_url: parseNullableString(formData.get("image_url")),
-    is_active: parseCheckboxBoolean(formData.get("is_active")),
-    essential_sort_order:
-      parseOptionalInteger(formData.get("essential_sort_order")) ?? null,
-  });
+  const response = await adminService.updateSupermarketEssential(
+    catalogItemId,
+    buildSupermarketEssentialFormData(formData, true),
+  );
 
   if (!response.success) {
     throw new Error(response.message || "تعذر تحديث المنتج الأساسي");

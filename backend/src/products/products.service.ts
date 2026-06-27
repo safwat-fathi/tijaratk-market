@@ -10,7 +10,6 @@ import { ProductSource } from 'src/common/enums/product-source.enum';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { AddProductFromCatalogDto } from './dto/add-product-from-catalog.dto';
 import { AddBulkEssentialItemsDto } from './dto/add-bulk-essential.dto';
-import { ESSENTIAL_LOCAL_BRANDS } from './utils/essential-brands.constant';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
@@ -42,8 +41,6 @@ const DEFAULT_PRICE_PRESET_AMOUNTS = [100, 200, 300] as const;
 const DEFAULT_QUANTITY_UNIT_LABEL = 'قطعة';
 const DEFAULT_PHARMACY_QUANTITY_UNIT_LABEL = 'علبة';
 const MAX_ORDER_PRESETS = 6;
-const DEFAULT_BULK_ESSENTIAL_SELECTED_COUNT = 10;
-
 type QuantityUnitOptionConfig = {
   id: string;
   label: string;
@@ -412,65 +409,22 @@ export class ProductsService {
             is_essential: true,
             category: { in: categories },
           },
+          orderBy: [
+            { category: 'asc' },
+            { essential_sort_order: { sort: 'asc', nulls: 'last' } },
+            { id: 'asc' },
+          ],
         });
 
         if (catalogItems.length === 0) {
           return { count: 0 };
         }
 
-        const existingProducts = await this.getPrismaClient().product.findMany({
-          where: { tenant_id: tenantId, status: ProductStatus.ACTIVE },
-          select: { name: true }
-        });
-        const existingNames = new Set(existingProducts.map(p => p.name));
-
-        const itemsToAdd = catalogItems.filter(item => !existingNames.has(item.name));
-
-        if (itemsToAdd.length === 0) {
-          return { count: 0 };
-        }
-
-        const defaultUnitLabel = this.resolveDefaultQuantityUnitLabelForCatalogSource(catalogSource);
-        const orderConfig = this.normalizeProductOrderConfig(
-          ProductOrderMode.QUANTITY,
-          undefined,
-          defaultUnitLabel,
-        ) as Prisma.InputJsonValue;
-
-        const dataToInsert = itemsToAdd.map(item => ({
-          tenant_id: tenantId,
-          name: item.name,
-          image_url: item.image_url,
-          category: item.category,
-          source: ProductSource.CATALOG,
-          status: ProductStatus.ACTIVE,
-          current_price: item.price,
-          order_mode: ProductOrderMode.QUANTITY,
-          order_config: orderConfig,
-          is_available: true,
-          price_needs_review: true,
-        }));
-
-        const result = await this.getPrismaClient().product.createMany({
-          data: dataToInsert,
-          skipDuplicates: true,
-        });
-
-        const uniqueCategories = Array.from(new Set(itemsToAdd.map(i => i.category).filter((c): c is string => Boolean(c))));
-        for (const cat of uniqueCategories) {
-          await this.storeTenantProductCategory(tenantId, cat);
-        }
-        
-        await this.getPrismaClient().tenant.update({
-          where: { id: tenantId },
-          data: { last_bulk_essentials_added_at: new Date() },
-        });
-
-        await this.bumpTenantSearchCacheVersion(tenantId);
-        await this.bumpCatalogSearchCacheVersion(tenantId);
-        await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
-
-        return { count: result.count };
+        return this.createBulkEssentialProductsFromCatalogItems(
+          tenantId,
+          catalogSource,
+          catalogItems,
+        );
       });
     });
   }
@@ -635,12 +589,6 @@ export class ProductsService {
     return { count: result.count };
   }
 
-  private buildEssentialBrandFilters(): Prisma.CatalogItemWhereInput[] {
-    return ESSENTIAL_LOCAL_BRANDS.map((brand) => ({
-      name: { contains: brand, mode: 'insensitive' as const },
-    }));
-  }
-
   private rankEssentialCatalogItems(items: CatalogItem[]): CatalogItem[] {
     return [...items].sort((left, right) => {
       const leftSortOrder = left.essential_sort_order ?? Number.MAX_SAFE_INTEGER;
@@ -648,12 +596,6 @@ export class ProductsService {
         right.essential_sort_order ?? Number.MAX_SAFE_INTEGER;
       if (leftSortOrder !== rightSortOrder) {
         return leftSortOrder - rightSortOrder;
-      }
-
-      const leftBrandRank = this.getEssentialBrandRank(left.name);
-      const rightBrandRank = this.getEssentialBrandRank(right.name);
-      if (leftBrandRank !== rightBrandRank) {
-        return leftBrandRank - rightBrandRank;
       }
 
       const leftCompleteness = Number(Boolean(left.image_url)) + Number(left.price != null);
@@ -664,15 +606,6 @@ export class ProductsService {
 
       return left.id - right.id;
     });
-  }
-
-  private getEssentialBrandRank(name: string): number {
-    const normalizedName = name.toLowerCase();
-    const index = ESSENTIAL_LOCAL_BRANDS.findIndex((brand) =>
-      normalizedName.includes(brand.toLowerCase()),
-    );
-
-    return index === -1 ? ESSENTIAL_LOCAL_BRANDS.length : index;
   }
 
   private normalizeCatalogItemIds(itemIds?: number[]): number[] {

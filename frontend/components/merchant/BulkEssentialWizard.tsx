@@ -28,8 +28,6 @@ type BulkEssentialWizardProps = {
 
 type StageStatus = "pending" | "added" | "skipped" | "error";
 
-const TOP_SELECTED_COUNT = 10;
-
 const buildInitialSelections = (stages: BulkEssentialStage[]) =>
   stages.reduce<Record<string, Record<number, boolean>>>((acc, stage) => {
     acc[stage.category] = stage.default_selected_catalog_item_ids.reduce<
@@ -343,7 +341,7 @@ export default function BulkEssentialWizard({
                 className="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-200 px-2 py-2 text-xs font-semibold text-gray-700"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                أول {TOP_SELECTED_COUNT}
+                الافتراضي
               </button>
             </div>
 

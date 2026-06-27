@@ -1,6 +1,7 @@
 import { adminService } from "@/services/api/admin.service";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Combobox } from "@/components/ui/Combobox";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { redirect } from "next/navigation";
 import { AdminPagination } from "../_components/AdminPagination";
@@ -53,6 +54,7 @@ type AdminProductsData = {
   products: AdminProduct[];
   merchants: AdminTenant[];
   meta: PaginationMeta;
+  categories: string[];
 };
 
 async function fetchAdminProductsData({
@@ -60,11 +62,13 @@ async function fetchAdminProductsData({
   productName,
   page,
   limit,
+  includeProducts,
 }: {
   tenantName?: string;
   productName?: string;
   page: number;
   limit: number;
+  includeProducts: boolean;
 }): Promise<AdminProductsData> {
   let meta: PaginationMeta = {
     page,
@@ -73,22 +77,25 @@ async function fetchAdminProductsData({
     totalPages: 1,
   };
 
-  const [productsResponse, merchantsResponse] = await Promise.all([
-    adminService.getProducts(
-      tenantName,
-      productName,
-      page,
-      limit,
-    ),
+  const [productsResponse, merchantsResponse, categoriesResponse] = await Promise.all([
+    includeProducts
+      ? adminService.getProducts(
+          tenantName,
+          productName,
+          page,
+          limit,
+        )
+      : Promise.resolve(null),
     adminService.getTenants(),
+    adminService.getSupermarketCatalogCategories(),
   ]);
 
-  if (!productsResponse.success && productsResponse.message === "Unauthorized") {
+  if (productsResponse && !productsResponse.success && productsResponse.message === "Unauthorized") {
     redirect("/admin/login");
   }
 
   let products: AdminProduct[] = [];
-  if (productsResponse.success && productsResponse.data) {
+  if (productsResponse?.success && productsResponse.data) {
     const payload = productsResponse.data as ApiListPayload<AdminProduct>;
     products = Array.isArray(payload) ? payload : payload.data || [];
     if (!Array.isArray(payload) && payload.meta) {
@@ -101,7 +108,12 @@ async function fetchAdminProductsData({
       ? merchantsResponse.data
       : [];
 
-  return { products, merchants, meta };
+  const categories =
+    categoriesResponse.success && categoriesResponse.data
+      ? categoriesResponse.data.map((c) => c.category)
+      : [];
+
+  return { products, merchants, meta, categories };
 }
 
 export default async function AdminProductsPage(props: Props) {
@@ -116,6 +128,7 @@ export default async function AdminProductsPage(props: Props) {
       : undefined;
   const page = parsePositiveInteger(searchParams.page, 1);
   const limit = parsePositiveInteger(searchParams.limit, DEFAULT_PAGE_SIZE);
+  const showAllProducts = searchParams.view === "all-products";
   let data: AdminProductsData;
 
   try {
@@ -124,6 +137,7 @@ export default async function AdminProductsPage(props: Props) {
       productName,
       page,
       limit,
+      includeProducts: showAllProducts,
     });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
@@ -137,58 +151,79 @@ export default async function AdminProductsPage(props: Props) {
         total: 0,
         totalPages: 1,
       },
+      categories: [],
     };
   }
 
-  const { products, merchants, meta } = data;
+  const { products, merchants, meta, categories } = data;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-brand-text">إدارة المنتجات</h1>
 
-      <AdminProductsOnboardingClient merchants={merchants} />
+      {!showAllProducts ? (
+        <AdminProductsOnboardingClient merchants={merchants} />
+      ) : null}
 
-      <Card className="p-4 sm:p-6 overflow-hidden">
-        <div className="space-y-4">
-          <form
-            method="GET"
-            action="/admin/products"
-            className="flex flex-col sm:flex-row gap-4 items-end"
-          >
-            <div className="w-full sm:w-1/3 space-y-1">
-              <label className="text-sm font-medium text-brand-text">
-                اسم المنتج
-              </label>
-              <input
-                type="text"
-                name="productName"
-                defaultValue={productName}
-                className="w-full h-10 px-3 rounded-md border border-brand-border focus:brand-focus text-sm"
-                placeholder="ابحث باسم المنتج"
-              />
-            </div>
-            <div className="w-full sm:w-1/3 space-y-1">
-              <label className="text-sm font-medium text-brand-text">
-                التاجر
-              </label>
-              <input
-                type="text"
-                name="tenantName"
-                defaultValue={tenantName}
-                className="w-full h-10 px-3 rounded-md border border-brand-border focus:brand-focus text-sm"
-                placeholder="ابحث باسم التاجر"
-              />
-            </div>
-            <div className="w-full sm:w-auto">
-              <Button
-                type="submit"
-                variant="primary"
-                className="w-full bg-brand-primary hover:bg-brand-primary-hover"
+      {showAllProducts ? (
+        <Card className="p-4 sm:p-6 overflow-hidden">
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-brand-text">
+                  كل منتجات النظام
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  عرض إداري منفصل للبحث والتعديل عبر كل التجار.
+                </p>
+              </div>
+              <a
+                href="/admin/products"
+                className="inline-flex min-h-11 items-center justify-center rounded-md border border-brand-border bg-white px-5 py-3 text-sm font-semibold text-brand-text transition hover:border-brand-accent hover:bg-brand-soft/60"
               >
-                بحث
-              </Button>
+                الرجوع لإدارة تاجر
+              </a>
             </div>
-          </form>
+            <form
+              method="GET"
+              action="/admin/products"
+              className="flex flex-col sm:flex-row gap-4 items-end"
+            >
+              <input type="hidden" name="view" value="all-products" />
+              <div className="w-full sm:w-1/3 space-y-1">
+                <label className="text-sm font-medium text-brand-text">
+                  اسم المنتج
+                </label>
+                <input
+                  type="text"
+                  name="productName"
+                  defaultValue={productName}
+                  className="w-full h-10 px-3 rounded-md border border-brand-border focus:brand-focus text-sm"
+                  placeholder="ابحث باسم المنتج"
+                />
+              </div>
+              <div className="w-full sm:w-1/3 space-y-1">
+                <label className="text-sm font-medium text-brand-text">
+                  التاجر
+                </label>
+                <input
+                  type="text"
+                  name="tenantName"
+                  defaultValue={tenantName}
+                  className="w-full h-10 px-3 rounded-md border border-brand-border focus:brand-focus text-sm"
+                  placeholder="ابحث باسم التاجر"
+                />
+              </div>
+              <div className="w-full sm:w-auto">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full bg-brand-primary hover:bg-brand-primary-hover"
+                >
+                  بحث
+                </Button>
+              </div>
+            </form>
 
           <div className="overflow-x-auto mt-6">
             <table className="min-w-full divide-y divide-brand-border">
@@ -292,14 +327,16 @@ export default async function AdminProductsPage(props: Props) {
                               className="h-9 w-full rounded-md border border-brand-border px-2 text-xs"
                             />
                           </label>
-                          <label className="space-y-1">
-                            <span className="text-xs font-medium text-brand-text">التصنيف</span>
-                            <input
-                              name="category"
-                              defaultValue={product.category || ""}
-                              className="h-9 w-full rounded-md border border-brand-border px-2 text-xs"
-                            />
-                          </label>
+                          <Combobox
+                            name="category"
+                            label="التصنيف"
+                            options={categories}
+                            defaultValue={product.category || ""}
+                            wrapperClassName="space-y-1"
+                            labelClassName="text-xs"
+                            inputClassName="h-9 px-2 text-xs"
+                            placeholder="اكتب للبحث..."
+                          />
                           <label className="space-y-1">
                             <span className="text-xs font-medium text-brand-text">الحالة</span>
                             <select
@@ -340,10 +377,11 @@ export default async function AdminProductsPage(props: Props) {
             totalPages={meta.totalPages}
             total={meta.total}
             limit={meta.limit}
-            params={{ tenantName, productName }}
+            params={{ tenantName, productName, view: "all-products" }}
           />
-        </div>
-      </Card>
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }

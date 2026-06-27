@@ -142,6 +142,12 @@ export type AdminCatalogItem = {
 	updated_at?: string;
 };
 
+export type AdminCatalogCategory = {
+	category: string;
+	count: number;
+	image_url?: string | null;
+};
+
 type AdminOrder = Record<string, unknown>;
 
 type AdminProductPayload = {
@@ -156,6 +162,7 @@ type AdminProductPayload = {
 };
 
 type SupermarketEssentialPayload =
+	| FormData
 	| {
 			catalog_item_id: number;
 	  }
@@ -167,14 +174,16 @@ type SupermarketEssentialPayload =
 			essential_sort_order?: number;
 	  };
 
-type UpdateSupermarketEssentialPayload = {
-	name?: string;
-	category?: string;
-	price?: number | null;
-	image_url?: string | null;
-	is_active?: boolean;
-	essential_sort_order?: number | null;
-};
+type UpdateSupermarketEssentialPayload =
+	| FormData
+	| {
+			name?: string;
+			category?: string;
+			price?: number | null;
+			image_url?: string | null;
+			is_active?: boolean;
+			essential_sort_order?: number | null;
+	  };
 
 type UpdateTenantDirectoryProfilePayload = {
 	area_id?: number;
@@ -406,12 +415,23 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async getSupermarketCatalogCategories() {
+		return this.get<AdminCatalogCategory[]>(
+			"supermarket-catalog-categories",
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
 	public async createSupermarketEssential(payload: SupermarketEssentialPayload) {
 		return this.post<AdminCatalogItem>(
 			"supermarket-essentials",
 			payload,
 			undefined,
-			ADMIN_AUTH_OPTIONS
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: payload instanceof FormData ? 30000 : undefined,
+			}
 		);
 	}
 
@@ -423,7 +443,10 @@ class AdminApiService extends HttpService {
 			`supermarket-essentials/${id}`,
 			payload,
 			undefined,
-			ADMIN_AUTH_OPTIONS
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: payload instanceof FormData ? 30000 : undefined,
+			}
 		);
 	}
 

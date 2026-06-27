@@ -420,6 +420,17 @@ export class AdminController {
   }
 
   @UseGuards(AdminAuthGuard)
+  @Get('supermarket-catalog-categories')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Get supermarket catalog categories',
+    description: 'Retrieve active supermarket catalog categories and counts.',
+  })
+  getSupermarketCatalogCategories() {
+    return this.adminService.getSupermarketCatalogCategories();
+  }
+
+  @UseGuards(AdminAuthGuard)
   @Get('supermarket-catalog-candidates')
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
@@ -450,8 +461,15 @@ export class AdminController {
       'Create a new supermarket catalog item as essential or mark an existing row.',
   })
   @ApiBody({ type: CreateSupermarketEssentialDto })
-  createSupermarketEssential(@Body() dto: CreateSupermarketEssentialDto) {
-    return this.adminService.createSupermarketEssential(dto);
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
+  createSupermarketEssential(
+    @Body() dto: CreateSupermarketEssentialDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.adminService.createSupermarketEssential(dto, file);
   }
 
   @UseGuards(AdminAuthGuard)
@@ -463,11 +481,16 @@ export class AdminController {
   })
   @ApiParam({ name: 'id', type: Number })
   @ApiBody({ type: UpdateSupermarketEssentialDto })
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
   updateSupermarketEssential(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateSupermarketEssentialDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.adminService.updateSupermarketEssential(id, dto);
+    return this.adminService.updateSupermarketEssential(id, dto, file);
   }
 
   @UseGuards(AdminAuthGuard)

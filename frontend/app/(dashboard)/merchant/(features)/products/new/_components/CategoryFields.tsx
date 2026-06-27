@@ -3,6 +3,7 @@ import {
   CATEGORY_MODE_CUSTOM,
   CATEGORY_MODE_SELECT,
 } from '../_utils/product-onboarding.constants';
+import { Combobox } from "@/components/ui/Combobox";
 
 type CategoryFieldsProps = {
   categoryMode: CategoryMode;
@@ -52,18 +53,12 @@ export default function CategoryFields({
       </div>
 
       {categoryMode === CATEGORY_MODE_SELECT ? (
-        <select
+        <Combobox
           value={categorySelect}
           onChange={(event) => onCategorySelectChange(event.target.value)}
-          className="w-full rounded-md border border-brand-border px-3 py-2 text-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
-        >
-          <option value="">بدون تصنيف محدد</option>
-          {availableCategories.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
+          options={availableCategories}
+          placeholder="اكتب للبحث في التصنيفات"
+        />
       ) : (
         <input
           value={categoryCustom}

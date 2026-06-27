@@ -83,6 +83,7 @@ type ProductOnboardingClientProps = {
   actions?: ProductOnboardingActions;
   enableCatalogHiding?: boolean;
   enableBulkWizard?: boolean;
+  layoutMode?: "merchant" | "admin";
 };
 
 type LoadCatalogItemsParams = {
@@ -249,6 +250,7 @@ export default function ProductOnboardingClient({
   actions = merchantProductOnboardingActions,
   enableCatalogHiding = true,
   enableBulkWizard = true,
+  layoutMode = "merchant",
 }: ProductOnboardingClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -1364,9 +1366,23 @@ export default function ProductOnboardingClient({
     });
   };
 
+  const isAdminLayout = layoutMode === "admin";
+
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 pb-10">
-      <div className="sticky top-[57px] z-20 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-sm backdrop-blur lg:top-0">
+    <div
+      className={
+        isAdminLayout
+          ? "w-full space-y-3 pb-6"
+          : "mx-auto w-full max-w-5xl space-y-4 pb-10"
+      }
+    >
+      <div
+        className={
+          isAdminLayout
+            ? "sticky top-[92px] z-20 rounded-lg border border-gray-200 bg-white/95 p-2 shadow-sm backdrop-blur"
+            : "sticky top-[57px] z-20 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-sm backdrop-blur lg:top-0"
+        }
+      >
         <ProductOnboardingHeader
           activeSectionLabel={activeSectionLabel}
           productsCount={products.length}

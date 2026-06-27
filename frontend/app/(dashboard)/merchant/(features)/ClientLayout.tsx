@@ -10,7 +10,7 @@ import { SupportWidget } from "@/components/ui/SupportWidget";
 
 const navigation = [
   {
-    name: "لوحة التحكم",
+    label: "لوحة التحكم",
     href: "/merchant",
     icon: (
       <svg
@@ -29,7 +29,7 @@ const navigation = [
     ),
   },
   {
-    name: "الطلبات",
+    label: "الطلبات",
     href: "/merchant/orders",
     icon: (
       <svg
@@ -48,7 +48,7 @@ const navigation = [
     ),
   },
   {
-    name: "المنتجات",
+    label: "المنتجات",
     href: "/merchant/products/new",
     icon: (
       <svg
@@ -67,7 +67,7 @@ const navigation = [
     ),
   },
   {
-    name: "العملاء",
+    label: "العملاء",
     href: "/merchant/customers",
     icon: (
       <svg
@@ -86,7 +86,7 @@ const navigation = [
     ),
   },
   {
-    name: "طلبات توفير المنتجات",
+    label: "طلبات توفير المنتجات",
     href: "/merchant/availability-requests",
     icon: (
       <svg
@@ -105,7 +105,7 @@ const navigation = [
     ),
   },
   {
-    name: "الإعدادات",
+    label: "الإعدادات",
     href: "/merchant/settings",
     icon: (
       <svg
@@ -128,26 +128,11 @@ const navigation = [
       </svg>
     ),
   },
-  {
-    name: "تسجيل الخروج",
-    href: "/logout",
-    icon: (
-      <svg
-        className="me-3 h-6 w-6 shrink-0"
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth="2.5"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
-        />
-      </svg>
-    ),
-  },
 ];
+
+import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+
+// ... [previous code, navigation array]
 
 export default function MerchantLayoutClient({
   children,
@@ -205,176 +190,30 @@ export default function MerchantLayoutClient({
         </div>
       </div>
 
-      {/* Static sidebar for desktop */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col lg:start-0">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto border-e border-brand-border bg-white px-6">
-          <div className="flex h-16 shrink-0 items-center">
-            <Logo
-              variant="light"
-              width={150}
-              height={40}
-              className="h-8 w-auto"
-            />
-          </div>
+      <DashboardSidebar
+        title={<Logo variant="light" width={150} height={40} className="h-8 w-auto" />}
+        topContent={
           <InstallPwaAction
             appName={merchantAppName}
             buttonText="تثبيت التطبيق"
             className="w-full justify-start border-brand-border bg-brand-soft/60 text-brand-primary hover:bg-brand-soft focus-visible:ring-brand-accent/20"
             iconClassName="h-5 w-5"
           />
-          <nav className="flex flex-1 flex-col">
-            <ul role="list" className="flex flex-1 flex-col gap-y-7">
-              <li>
-                <ul role="list" className="-mx-2 space-y-1">
-                  {navigation.map((item) => (
-                    <li key={item.name}>
-                      {item.href === "/logout" ? (
-                        <form action={logoutAction}>
-                          <button
-                            type="submit"
-                            className="group flex w-full cursor-pointer gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-brand-text transition-colors hover:bg-brand-soft hover:text-brand-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
-                          >
-                            {item.icon}
-                            {item.name}
-                          </button>
-                        </form>
-                      ) : (
-                        <Link
-                          href={item.href}
-                          className={`
-                            group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20
-                            ${
-                              (item.href !== "/logout" &&
-                                pathname.startsWith(item.href) &&
-                                item.href !== "/merchant" &&
-                                pathname !== "/merchant") ||
-                              (item.href === "/merchant" &&
-                                pathname === "/merchant")
-                                ? "bg-brand-soft text-brand-primary"
-                                : "text-brand-text hover:bg-brand-soft hover:text-brand-primary"
-                            }
-                          `}
-                        >
-                          {/* Icon implementation */}
-                          {item.icon}
-                          {item.name}
-                        </Link>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </div>
+        }
+        navigation={navigation}
+        logoutAction={logoutAction}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        basePath="/merchant"
+        activeClass="bg-brand-soft text-brand-primary"
+        inactiveClass="text-brand-text hover:bg-brand-soft hover:text-brand-primary"
+      />
 
       {/* Main content */}
-      <main className="pt-24 pb-10 lg:py-10 lg:ps-72 w-full min-w-0 max-w-full">
+      <main className="pt-24 pb-10 lg:py-10 lg:ps-72 w-full min-w-0 max-w-full flex-1 flex flex-col">
         <div className="px-4 sm:px-6 lg:px-8 w-full min-w-0">{children}</div>
       </main>
 
-      {/* Mobile Sidebar Overlay (Simple implementation) */}
-      {sidebarOpen && (
-        <div
-          className="relative z-50 lg:hidden"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="fixed inset-0 bg-brand-text/80"
-            onClick={() => setSidebarOpen(false)}
-          ></div>
-          <div className="fixed inset-0 flex">
-            <div className="relative me-16 flex w-full max-w-xs flex-1">
-              <div className="absolute start-full top-0 flex w-16 justify-center pt-5">
-                <button
-                  type="button"
-                  className="-m-2.5 rounded-md p-2.5 text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <span className="sr-only">إغلاق القائمة</span>
-                  <svg
-                    className="h-6 w-6"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth="2.5"
-                    stroke="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-2">
-                <div className="flex h-16 shrink-0 items-center">
-                  <Logo
-                    variant="light"
-                    width={120}
-                    height={32}
-                    className="h-8 w-auto"
-                  />
-                </div>
-                <nav className="flex flex-1 flex-col">
-                  <ul role="list" className="flex flex-1 flex-col gap-y-7">
-                    <li>
-                      <ul role="list" className="-mx-2 space-y-1">
-                        {navigation.map((item) => (
-                          <li key={item.name}>
-                            {item.href === "/logout" ? (
-                              <form action={logoutAction}>
-                                <button
-                                  type="submit"
-                                  className="group flex w-full gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-brand-text transition-colors hover:bg-brand-soft hover:text-brand-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
-                                >
-                                  {item.icon}
-                                  {item.name}
-                                </button>
-                              </form>
-                            ) : (
-                              <Link
-                                href={item.href}
-                                onClick={() => setSidebarOpen(false)}
-                                className={`
-                                                        group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20
-                                                        ${
-                                                          (item.href !==
-                                                            "/logout" &&
-                                                            pathname.startsWith(
-                                                              item.href,
-                                                            ) &&
-                                                            item.href !==
-                                                              "/merchant" &&
-                                                            pathname !==
-                                                              "/merchant") ||
-                                                          (item.href ===
-                                                            "/merchant" &&
-                                                            pathname ===
-                                                              "/merchant")
-                                                            ? "bg-brand-soft text-brand-primary"
-                                                            : "text-brand-text hover:bg-brand-soft hover:text-brand-primary"
-                                                        }
-                                                      `}
-                              >
-                                {item.icon}
-                                {item.name}
-                              </Link>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </li>
-                  </ul>
-                </nav>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Global Support Widget FAB */}
       <SupportWidget />
     </div>
