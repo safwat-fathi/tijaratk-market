@@ -842,8 +842,8 @@ export default function ProductOnboardingClient({
         return;
       }
 
-      setProducts((prev) => [response.data, ...prev]);
-      addCategoryOption(response.data.category);
+      setProducts((prev) => [response.data as Product, ...prev]);
+      addCategoryOption(response.data!.category);
       setManualName("");
       setManualPrice("");
       setManualOrderMode(ORDER_MODE_QUANTITY);
@@ -939,13 +939,13 @@ export default function ProductOnboardingClient({
           return;
         }
 
-        setProducts((prev) => [response.data, ...prev]);
+        setProducts((prev) => [response.data as Product, ...prev]);
         setCatalogItems((prev) => removeCatalogItemFromList(prev, catalogItemId));
         setCatalogMeta((prev) => ({
           ...prev,
           total: Math.max(0, prev.total - 1),
         }));
-        addCategoryOption(response.data.category);
+        addCategoryOption(response.data!.category);
         refreshSearchResultsIfActive();
         setConfirmRemoveProductId(null);
         setMessage("تمت الإضافة");
