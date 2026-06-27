@@ -151,6 +151,7 @@ export const TabButton = React.forwardRef<HTMLElement, TabButtonProps>(
             : defaultStyles[variant].inactive,
           className, // Allows overriding active colors for dynamic badges like StatusTabs
         )}
+        draggable={false}
         {...props}
       >
         {children}
