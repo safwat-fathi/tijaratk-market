@@ -495,6 +495,7 @@ function CategoryTabs({
               loading="lazy"
               quality={70}
               imageClassName="h-8 w-8 rounded object-cover ring-1 ring-gray-200"
+              draggable={false}
               fallback={
                 <span className="flex h-8 w-8 items-center justify-center rounded bg-gray-100 text-xs">
                   🛒
