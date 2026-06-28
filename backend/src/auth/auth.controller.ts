@@ -8,15 +8,19 @@ import {
   UnauthorizedException,
   UseFilters,
   UseGuards,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { AuthService } from './auth.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { VerifyPasswordResetDto } from './dto/verify-password-reset.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
+import { AuthGuard } from '@nestjs/passport';
 @ApiTags('auth')
 @Controller('auth')
 @UseFilters(AuthExceptionFilter)
@@ -87,6 +91,28 @@ export class AuthController {
       dto.phone,
       dto.otp,
       dto.password,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('update-password')
+  @UseGuards(AuthGuard('jwt'), ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update user password',
+    description: 'Updates the password for a logged-in user',
+  })
+  @ApiBody({ type: UpdatePasswordDto })
+  async updatePassword(@Req() req: Request, @Body() dto: UpdatePasswordDto) {
+    const userId = (req as any).user?.sub;
+    if (!userId) {
+      throw new UnauthorizedException('User not found in token');
+    }
+    return this.authService.updatePassword(
+      userId,
+      dto.currentPassword,
+      dto.newPassword,
     );
   }
 }

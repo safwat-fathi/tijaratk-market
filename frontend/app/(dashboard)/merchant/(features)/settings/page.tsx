@@ -2,6 +2,7 @@ import { tenantsService } from "@/services/api/tenants.service";
 import { merchantDirectoryService } from "@/services/api/stores-directory.service";
 import SettingsForm from "./_components/SettingsForm";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
+import Link from "next/link";
 
 export const metadata = createNoIndexMetadata(
   "إعدادات المتجر",
@@ -40,6 +41,12 @@ export default async function SettingsPage() {
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">
           إعدادات المتجر
         </h1>
+        <Link 
+          href="/merchant/settings/security" 
+          className="text-sm font-medium text-brand-primary hover:text-brand-primary/80 transition-colors"
+        >
+          إعدادات الأمان
+        </Link>
       </div>
 
       <SettingsForm 

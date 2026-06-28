@@ -61,7 +61,7 @@ export default function ResetPasswordForm() {
 					إعادة تعيين كلمة المرور
 				</h2>
 				<p className="mt-2 text-sm text-muted-foreground">
-					سنرسل رمز تحقق على واتساب لرقم حساب التاجر.
+					سنرسل رمز تحقق في رسالة نصية (SMS) لرقم حساب التاجر.
 				</p>
 			</div>
 

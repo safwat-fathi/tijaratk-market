@@ -197,6 +197,14 @@ export default async function StorePage({ params, searchParams }: Props) {
             initialOrder={initialOrder}
             savedCustomerProfile={savedCustomerProfile}
           />
+          <div className="p-4 text-center text-xs text-gray-500 mt-4 border-t border-gray-100">
+            <p>
+              هذا المتجر مدعوم تقنياً بواسطة منصة <a href="/" className="text-brand-primary font-bold hover:underline">تجارتك</a>. 
+            </p>
+            <p className="mt-1">
+              التاجر ({tenant.name}) هو المسؤول عن توفر المنتجات، جودتها، التسعير، وسياسة الإرجاع.
+            </p>
+          </div>
         </div>
       )}
     </div>

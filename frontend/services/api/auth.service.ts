@@ -5,6 +5,7 @@ import {
   RegisterRequest,
   RequestPasswordResetRequest,
   VerifyPasswordResetRequest,
+  UpdatePasswordRequest,
 } from "@/types/services/auth";
 
 class AuthService extends HttpService {
@@ -31,6 +32,13 @@ class AuthService extends HttpService {
 	public async verifyPasswordReset(payload: VerifyPasswordResetRequest) {
 		return this.post<{ success: boolean; message?: string }>(
 			"password-reset/verify",
+			payload,
+		);
+	}
+
+	public async updatePassword(payload: UpdatePasswordRequest) {
+		return this.post<{ success: boolean; message?: string }>(
+			"update-password",
 			payload,
 		);
 	}

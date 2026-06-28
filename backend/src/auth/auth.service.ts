@@ -1,5 +1,6 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
+import twilio from 'twilio';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomInt } from 'node:crypto';
@@ -12,8 +13,8 @@ import { WhatsappService } from 'src/whatsapp/whatsapp.service';
 
 @Injectable()
 export class AuthService {
-  private static readonly PASSWORD_RESET_OTP_TTL_MINUTES = 10;
-  private static readonly PASSWORD_RESET_MAX_ATTEMPTS = 5;
+  private readonly logger = new Logger(AuthService.name);
+  private twilioClient: twilio.Twilio | null = null;
 
   constructor(
     private usersService: UsersService,
@@ -93,6 +94,32 @@ export class AuthService {
     return this.login(user);
   }
 
+  private isNotificationsEnabled(): boolean {
+    return String(process.env.WHATSAPP_NOTIFICATIONS_ENABLED) !== 'false';
+  }
+
+  private getTwilioClient(): twilio.Twilio | null {
+    if (this.twilioClient) {
+      return this.twilioClient;
+    }
+
+    const accountSid = process.env.TWILIO_ACCOUNT_SID || process.env.ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN || process.env.AUTH_TOKEN;
+
+    if (!accountSid || !authToken) {
+      this.logger.warn('Twilio env vars are missing; Verify will fail.');
+      return null;
+    }
+
+    this.twilioClient = twilio(accountSid, authToken);
+    return this.twilioClient;
+  }
+
+  private maskPhone(value: string): string {
+    const visibleSuffix = value.slice(-4);
+    return `${'*'.repeat(Math.max(0, value.length - 4))}${visibleSuffix}`;
+  }
+
   async requestPasswordReset(rawPhone: string) {
     const phone = formatPhoneNumber(rawPhone);
     const user = await this.usersService.findOneByPhone(phone);
@@ -104,44 +131,30 @@ export class AuthService {
       };
     }
 
-    const activeOtp = await this.prisma.passwordResetOtp.findFirst({
-      where: {
-        phone,
-        consumed_at: null,
-        expires_at: { gt: new Date() },
-      },
-      orderBy: { created_at: 'desc' },
-    });
+    try {
+      if (!this.isNotificationsEnabled()) {
+        this.logger.log(`Notifications disabled; would send Verify SMS to ${phone}.`);
+      } else {
+        const client = this.getTwilioClient();
+        const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
 
-    if (activeOtp) {
-      return {
-        success: true,
-        message: 'If this phone exists, a reset code has been sent.',
-      };
+        if (!client || !serviceSid) {
+          throw new Error('Twilio client or TWILIO_VERIFY_SERVICE_SID is missing');
+        }
+
+        const to = phone.startsWith('+') ? phone : `+${phone}`;
+        this.logger.log(`Sending Verify SMS to ${this.maskPhone(to)}`);
+        
+        await client.verify.v2
+          .services(serviceSid)
+          .verifications.create({ to, channel: 'sms' });
+          
+        this.logger.log(`Verify SMS sent to ${this.maskPhone(to)}`);
+      }
+    } catch (error) {
+      this.logger.error('Failed to send Verify SMS', error);
+      throw new BadRequestException('Could not send reset code. Please try again later.');
     }
-
-    const otp = String(randomInt(0, 1_000_000)).padStart(6, '0');
-    const otpHash = await bcrypt.hash(otp, 10);
-    const expiresAt = new Date(
-      Date.now() + AuthService.PASSWORD_RESET_OTP_TTL_MINUTES * 60 * 1000,
-    );
-
-    await this.prisma.passwordResetOtp.create({
-      data: {
-        phone,
-        otp_hash: otpHash,
-        expires_at: expiresAt,
-      },
-    });
-
-    await this.whatsappService.sendTemplatedMessage({
-      key: 'merchant_password_reset_otp',
-      to: phone,
-      payload: {
-        otp,
-        expiresInMinutes: AuthService.PASSWORD_RESET_OTP_TTL_MINUTES,
-      },
-    });
 
     return {
       success: true,
@@ -157,48 +170,71 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired reset code');
     }
 
-    const resetOtp = await this.prisma.passwordResetOtp.findFirst({
-      where: {
-        phone,
-        consumed_at: null,
-        expires_at: { gt: new Date() },
-      },
-      orderBy: { created_at: 'desc' },
-    });
+    let isValid = false;
 
-    if (!resetOtp) {
-      throw new BadRequestException('Invalid or expired reset code');
+    if (!this.isNotificationsEnabled()) {
+      this.logger.log(`Notifications disabled; mocking Verify check for ${phone} as true.`);
+      isValid = true;
+    } else {
+      const client = this.getTwilioClient();
+      const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
+
+      if (!client || !serviceSid) {
+        this.logger.warn('Twilio client or TWILIO_VERIFY_SERVICE_SID is missing');
+        throw new BadRequestException('Invalid or expired reset code');
+      }
+
+      const to = phone.startsWith('+') ? phone : `+${phone}`;
+
+      try {
+        const verificationCheck = await client.verify.v2
+          .services(serviceSid)
+          .verificationChecks.create({ to, code: otp });
+        
+        isValid = verificationCheck.status === 'approved';
+      } catch (error) {
+        this.logger.error(`Failed to check Verify token for ${to}`, error);
+        isValid = false;
+      }
     }
 
-    if (resetOtp.attempt_count >= AuthService.PASSWORD_RESET_MAX_ATTEMPTS) {
-      throw new BadRequestException('Invalid or expired reset code');
-    }
-
-    const isValidOtp = await bcrypt.compare(otp, resetOtp.otp_hash);
-    if (!isValidOtp) {
-      await this.prisma.passwordResetOtp.update({
-        where: { id: resetOtp.id },
-        data: { attempt_count: { increment: 1 } },
-      });
+    if (!isValid) {
       throw new BadRequestException('Invalid or expired reset code');
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: user.id },
-        data: { password: passwordHash },
-      }),
-      this.prisma.passwordResetOtp.update({
-        where: { id: resetOtp.id },
-        data: { consumed_at: new Date() },
-      }),
-    ]);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: passwordHash },
+    });
 
     return {
       success: true,
       message: 'Password reset successfully',
+    };
+  }
+
+  async updatePassword(userId: number, currentPass: string, newPass: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const isMatch = await bcrypt.compare(currentPass, user.password);
+    if (!isMatch) {
+      throw new BadRequestException('Incorrect current password');
+    }
+
+    const passwordHash = await bcrypt.hash(newPass, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: passwordHash },
+    });
+
+    return {
+      success: true,
+      message: 'Password updated successfully',
     };
   }
 

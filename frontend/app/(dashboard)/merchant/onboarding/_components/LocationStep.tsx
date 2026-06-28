@@ -10,7 +10,6 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
 type LocationData = {
   cityId: string;
-  areaId: string;
   address: string;
 };
 
@@ -53,22 +52,17 @@ export default function LocationStep({
     return allAreas.filter((a) => a.parent_area_id === null).sort((a, b) => a.sort_order - b.sort_order);
   }, [allAreas]);
 
-  const subAreas = useMemo(() => {
-    if (!locationData.cityId) return [];
-    return allAreas.filter((a) => a.parent_area_id === Number(locationData.cityId)).sort((a, b) => a.sort_order - b.sort_order);
-  }, [allAreas, locationData.cityId]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!locationData.cityId || !locationData.areaId || !locationData.address) {
+    if (!locationData.cityId || !locationData.address) {
       setError("يرجى ملء جميع الحقول");
       return;
     }
     setLoading(true);
     try {
       await merchantDirectoryService.updateProfile({
-        area_id: Number(locationData.areaId),
+        area_id: Number(locationData.cityId),
       });
       await onNext();
     } catch (err) {
@@ -98,29 +92,14 @@ export default function LocationStep({
                 id="city"
                 required
                 value={locationData.cityId}
-                onChange={(e) => setLocationData({ ...locationData, cityId: e.target.value, areaId: "" })}
+                onChange={(e) => {
+                  setLocationData({ ...locationData, cityId: e.target.value });
+                }}
               >
                 <option value="" disabled>اختر المدينة / المحافظة</option>
                 {cities.map((city) => (
                   <option key={city.id} value={city.id}>
                     {city.name_ar}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            
-            <Field label="المنطقة" htmlFor="area">
-              <Select
-                id="area"
-                required
-                value={locationData.areaId}
-                onChange={(e) => setLocationData({ ...locationData, areaId: e.target.value })}
-                disabled={!locationData.cityId || subAreas.length === 0}
-              >
-                <option value="" disabled>اختر المنطقة</option>
-                {subAreas.map((area) => (
-                  <option key={area.id} value={area.id}>
-                    {area.name_ar}
                   </option>
                 ))}
               </Select>

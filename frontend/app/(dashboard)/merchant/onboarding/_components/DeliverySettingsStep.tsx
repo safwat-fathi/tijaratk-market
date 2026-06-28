@@ -279,7 +279,7 @@ export default function DeliverySettingsStep({
             </div>
           )}
           {!areasLoading && deliveryAreas.length > 0 && (
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2 max-h-64 overflow-y-auto pr-2">
               {deliveryAreas.map((area) => (
                 <label
                   key={area.id}

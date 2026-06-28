@@ -6,6 +6,7 @@ import {
   registerSchema,
   requestPasswordResetSchema,
   verifyPasswordResetSchema,
+  updatePasswordSchema,
 } from "@/lib/validations/auth";
 import { redirect } from "next/navigation";
 import { setCookieAction, deleteCookieAction } from "@/app/actions/cookie-store";
@@ -161,7 +162,7 @@ export async function requestPasswordResetAction(
 
     return {
       success: true,
-      message: "تم إرسال رمز إعادة التعيين عبر واتساب",
+      message: "تم إرسال رمز إعادة التعيين في رسالة نصية (SMS)",
       timestamp: Date.now(),
     };
   } catch (error) {
@@ -216,6 +217,51 @@ export async function verifyPasswordResetAction(
     return {
       success: false,
       message: "An unexpected error occurred.",
+      timestamp: Date.now(),
+    };
+  }
+}
+
+export async function updatePasswordAction(
+  prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const rawData = Object.fromEntries(formData.entries());
+  const validated = updatePasswordSchema.safeParse(rawData);
+
+  if (!validated.success) {
+    return {
+      success: false,
+      message: "Please fix the errors below.",
+      errors: validated.error.flatten().fieldErrors,
+      timestamp: Date.now(),
+    };
+  }
+
+  try {
+    const response = await authService.updatePassword({
+      currentPassword: validated.data.currentPassword,
+      newPassword: validated.data.newPassword,
+    });
+
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "Could not update password.",
+        timestamp: Date.now(),
+      };
+    }
+
+    return {
+      success: true,
+      message: "تم تحديث كلمة المرور بنجاح",
+      timestamp: Date.now(),
+    };
+  } catch (error) {
+    console.error("Update password action failed:", error);
+    return {
+      success: false,
+      message: "حدث خطأ غير متوقع",
       timestamp: Date.now(),
     };
   }

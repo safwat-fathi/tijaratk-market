@@ -25,9 +25,11 @@ export default function MerchantOnboardingWizard() {
   const [isLoading, setIsLoading] = useState(true);
 
   // State for LocationStep to persist data when going back and forth
-  const [locationData, setLocationData] = useState({
+  const [locationData, setLocationData] = useState<{
+    cityId: string;
+    address: string;
+  }>({
     cityId: "",
-    areaId: "",
     address: "",
   });
 

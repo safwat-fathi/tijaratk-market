@@ -136,7 +136,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const page = await getCategoryPage(areaSlug, categorySlug);
 
   if (!page) {
-    return { title: "المورد غير موجود" };
+    return { title: "404 - الصفحة غير موجودة" };
   }
 
   return {

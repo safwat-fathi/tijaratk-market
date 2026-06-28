@@ -36,3 +36,8 @@ export interface VerifyPasswordResetRequest {
 	password: string;
 	confirm_password: string;
 }
+
+export interface UpdatePasswordRequest {
+	currentPassword: string;
+	newPassword: string;
+}

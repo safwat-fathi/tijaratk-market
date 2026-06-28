@@ -24,14 +24,14 @@ export function PublicFooter() {
           />
         </div>
         <div className="flex flex-col items-center gap-3">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap justify-center items-center gap-4">
             <Link
               href="/about"
               className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"
             >
               عن تجارتك
             </Link>
-            <span className="text-[#222B2E]/20" aria-hidden="true">
+            <span className="text-[#222B2E]/20 hidden sm:inline" aria-hidden="true">
               •
             </span>
             <Link
@@ -40,8 +40,35 @@ export function PublicFooter() {
             >
               انضم لنا كتاجر
             </Link>
+            <span className="text-[#222B2E]/20 hidden sm:inline" aria-hidden="true">
+              •
+            </span>
+            <Link
+              href="/privacy"
+              className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"
+            >
+              سياسة الخصوصية
+            </Link>
+            <span className="text-[#222B2E]/20 hidden sm:inline" aria-hidden="true">
+              •
+            </span>
+            <Link
+              href="/terms"
+              className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"
+            >
+              شروط الاستخدام
+            </Link>
+            <span className="text-[#222B2E]/20 hidden sm:inline" aria-hidden="true">
+              •
+            </span>
+            <Link
+              href="/return-policy"
+              className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"
+            >
+              سياسة الإرجاع
+            </Link>
           </div>
-          <p className="text-sm font-medium text-[#222B2E]/60">
+          <p className="text-sm font-medium text-[#222B2E]/60 text-center">
             © {new Date().getFullYear()} جميع الحقوق محفوظة لـ{" "}
             <span className="text-brand-primary font-bold">تجارتك</span>.
           </p>

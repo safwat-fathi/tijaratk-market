@@ -34,11 +34,17 @@ export function DashboardSidebar({
 }: DashboardSidebarProps) {
   const pathname = usePathname();
 
+  const activeHref = [...navigation]
+    .sort((a, b) => b.href.length - a.href.length)
+    .find(
+      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+    )?.href;
+
   const isItemActive = (href: string) => {
     if (href === basePath) {
-      return pathname === href;
+      return pathname === href || pathname === `${href}/`;
     }
-    return pathname.startsWith(href);
+    return href === activeHref;
   };
 
   const SidebarContent = () => (
@@ -80,7 +86,6 @@ export function DashboardSidebar({
             type="submit"
             variant="outline"
             className="w-full text-red-600 border-red-200 hover:text-red-700 hover:bg-red-50"
-            onClick={() => setSidebarOpen(false)}
           >
             تسجيل خروج
           </Button>
