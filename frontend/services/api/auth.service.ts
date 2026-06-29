@@ -40,6 +40,8 @@ class AuthService extends HttpService {
 		return this.post<{ success: boolean; message?: string }>(
 			"update-password",
 			payload,
+			undefined,
+			{ authRequired: true },
 		);
 	}
 

@@ -4,10 +4,9 @@ import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { redirect } from "next/navigation";
-import { AdminPagination } from "../_components/AdminPagination";
-import { adminUpdateProductAction } from "@/actions/admin-server";
 import type { AdminTenant } from "@/services/api/admin.service";
 import AdminProductsOnboardingClient from "./_components/AdminProductsOnboardingClient";
+import AdminProductsBulkTable from "./_components/AdminProductsBulkTable";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +39,7 @@ type PaginationMeta = {
 type ApiListPayload<T> = T[] | { data?: T[]; meta?: PaginationMeta };
 
 const DEFAULT_PAGE_SIZE = 20;
+type TenantCategoryFilter = "grocery" | "pharmacy";
 
 function parsePositiveInteger(
   value: string | string[] | undefined,
@@ -57,15 +57,23 @@ type AdminProductsData = {
   categories: string[];
 };
 
+function parseTenantCategoryFilter(
+  value: string | string[] | undefined,
+): TenantCategoryFilter | undefined {
+  return value === "grocery" || value === "pharmacy" ? value : undefined;
+}
+
 async function fetchAdminProductsData({
   tenantName,
   productName,
+  tenantCategory,
   page,
   limit,
   includeProducts,
 }: {
   tenantName?: string;
   productName?: string;
+  tenantCategory?: TenantCategoryFilter;
   page: number;
   limit: number;
   includeProducts: boolean;
@@ -82,6 +90,7 @@ async function fetchAdminProductsData({
       ? adminService.getProducts(
           tenantName,
           productName,
+          tenantCategory,
           page,
           limit,
         )
@@ -126,6 +135,7 @@ export default async function AdminProductsPage(props: Props) {
     typeof searchParams.productName === "string"
       ? searchParams.productName
       : undefined;
+  const tenantCategory = parseTenantCategoryFilter(searchParams.tenantCategory);
   const page = parsePositiveInteger(searchParams.page, 1);
   const limit = parsePositiveInteger(searchParams.limit, DEFAULT_PAGE_SIZE);
   const showAllProducts = searchParams.view === "all-products";
@@ -135,6 +145,7 @@ export default async function AdminProductsPage(props: Props) {
     data = await fetchAdminProductsData({
       tenantName,
       productName,
+      tenantCategory,
       page,
       limit,
       includeProducts: showAllProducts,
@@ -156,6 +167,9 @@ export default async function AdminProductsPage(props: Props) {
   }
 
   const { products, merchants, meta, categories } = data;
+  const merchantNameOptions = Array.from(
+    new Set(merchants.map((merchant) => merchant.name).filter(Boolean)),
+  );
 
   return (
     <div className="space-y-6">
@@ -187,10 +201,10 @@ export default async function AdminProductsPage(props: Props) {
             <form
               method="GET"
               action="/admin/products"
-              className="flex flex-col sm:flex-row gap-4 items-end"
+              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px_auto] lg:items-end"
             >
               <input type="hidden" name="view" value="all-products" />
-              <div className="w-full sm:w-1/3 space-y-1">
+              <div className="space-y-1">
                 <label className="text-sm font-medium text-brand-text">
                   اسم المنتج
                 </label>
@@ -202,19 +216,31 @@ export default async function AdminProductsPage(props: Props) {
                   placeholder="ابحث باسم المنتج"
                 />
               </div>
-              <div className="w-full sm:w-1/3 space-y-1">
+              <Combobox
+                name="tenantName"
+                label="التاجر"
+                options={merchantNameOptions}
+                defaultValue={tenantName}
+                wrapperClassName="space-y-1"
+                labelClassName="text-sm"
+                inputClassName="h-10 px-3 text-sm"
+                placeholder="ابحث باسم التاجر"
+              />
+              <div className="space-y-1">
                 <label className="text-sm font-medium text-brand-text">
-                  التاجر
+                  نوع المتجر
                 </label>
-                <input
-                  type="text"
-                  name="tenantName"
-                  defaultValue={tenantName}
-                  className="w-full h-10 px-3 rounded-md border border-brand-border focus:brand-focus text-sm"
-                  placeholder="ابحث باسم التاجر"
-                />
+                <select
+                  name="tenantCategory"
+                  defaultValue={tenantCategory || ""}
+                  className="h-10 w-full rounded-md border border-brand-border px-3 text-sm focus:brand-focus"
+                >
+                  <option value="">الكل</option>
+                  <option value="grocery">سوبر ماركت</option>
+                  <option value="pharmacy">صيدلية</option>
+                </select>
               </div>
-              <div className="w-full sm:w-auto">
+              <div>
                 <Button
                   type="submit"
                   variant="primary"
@@ -225,159 +251,16 @@ export default async function AdminProductsPage(props: Props) {
               </div>
             </form>
 
-          <div className="overflow-x-auto mt-6">
-            <table className="min-w-full divide-y divide-brand-border">
-              <thead className="bg-brand-soft">
-                <tr>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
-                    المنتج
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
-                    التاجر
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
-                    التصنيف
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
-                    السعر
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
-                    الحالة
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
-                    تعديل
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-brand-border">
-                {products.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-8 text-center text-sm text-gray-500"
-                    >
-                      لا توجد منتجات
-                    </td>
-                  </tr>
-                ) : (
-                  products.map((product) => (
-                    <tr key={product.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-text">
-                        {product.name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                        {product.tenant?.name || "-"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                        {product.category}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                        {product.current_price} EGP
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div className="flex flex-wrap gap-2">
-                          <span
-                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              product.status === "active"
-                                ? "bg-status-success/20 text-status-success"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {product.status === "active" ? "نشط" : "مؤرشف"}
-                          </span>
-                          {product.is_available === false ? (
-                            <span className="inline-flex rounded-full bg-status-error/15 px-2 py-1 text-xs font-semibold text-status-error">
-                              غير متاح
-                            </span>
-                          ) : null}
-                          {product.price_needs_review ? (
-                            <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
-                              راجع السعر
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="min-w-[520px] px-6 py-4 text-sm">
-                        <form
-                          action={adminUpdateProductAction.bind(null, product.id)}
-                          className="grid grid-cols-6 items-end gap-2"
-                        >
-                          <label className="col-span-2 space-y-1">
-                            <span className="text-xs font-medium text-brand-text">الاسم</span>
-                            <input
-                              name="name"
-                              required
-                              defaultValue={product.name}
-                              className="h-9 w-full rounded-md border border-brand-border px-2 text-xs"
-                            />
-                          </label>
-                          <label className="space-y-1">
-                            <span className="text-xs font-medium text-brand-text">السعر</span>
-                            <input
-                              name="current_price"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              defaultValue={
-                                product.current_price !== null &&
-                                product.current_price !== undefined
-                                  ? String(product.current_price)
-                                  : ""
-                              }
-                              className="h-9 w-full rounded-md border border-brand-border px-2 text-xs"
-                            />
-                          </label>
-                          <Combobox
-                            name="category"
-                            label="التصنيف"
-                            options={categories}
-                            defaultValue={product.category || ""}
-                            wrapperClassName="space-y-1"
-                            labelClassName="text-xs"
-                            inputClassName="h-9 px-2 text-xs"
-                            placeholder="اكتب للبحث..."
-                          />
-                          <label className="space-y-1">
-                            <span className="text-xs font-medium text-brand-text">الحالة</span>
-                            <select
-                              name="status"
-                              defaultValue={product.status === "archived" ? "archived" : "active"}
-                              className="h-9 w-full rounded-md border border-brand-border px-2 text-xs"
-                            >
-                              <option value="active">نشط</option>
-                              <option value="archived">مؤرشف</option>
-                            </select>
-                          </label>
-                          <div className="flex items-center justify-between gap-2">
-                            <label className="flex items-center gap-1 text-xs font-medium text-brand-text">
-                              <input
-                                name="is_available"
-                                type="checkbox"
-                                defaultChecked={product.is_available !== false}
-                                className="h-4 w-4 accent-brand-primary"
-                              />
-                              متاح
-                            </label>
-                            <Button type="submit" size="sm">
-                              حفظ
-                            </Button>
-                          </div>
-                        </form>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <AdminPagination
-            basePath="/admin/products"
-            page={meta.page}
-            totalPages={meta.totalPages}
-            total={meta.total}
-            limit={meta.limit}
-            params={{ tenantName, productName, view: "all-products" }}
+          <AdminProductsBulkTable
+            products={products}
+            categories={categories}
+            meta={meta}
+            params={{
+              tenantName,
+              productName,
+              tenantCategory,
+              view: "all-products",
+            }}
           />
           </div>
         </Card>

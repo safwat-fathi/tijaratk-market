@@ -24,7 +24,6 @@ import {
   TenantCategory,
 } from '../../generated/prisma/client';
 import {
-  buildAllowedCatalogCategoryWhere,
   CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
   CatalogSource,
@@ -60,6 +59,13 @@ type ProductOrderConfig = {
     preset_amounts_egp: number[];
     allow_custom_amount: boolean;
   };
+};
+
+type BulkUpdateProductsForAdminPayload = {
+  ids: number[];
+  category?: string;
+  is_available?: boolean;
+  status?: ProductStatus;
 };
 
 type PublicProductsResult = {
@@ -437,13 +443,15 @@ export class ProductsService {
     if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
       return [];
     }
+    const allowedCategories =
+      await this.getActiveCatalogCategoryNames(catalogSource);
 
     const catalogItems = await this.getPrismaClient().catalogItem.findMany({
       where: {
         source: catalogSource,
         is_active: true,
         is_essential: true,
-        category: buildAllowedCatalogCategoryWhere(catalogSource),
+        category: { in: allowedCategories },
       },
       orderBy: [
         { category: 'asc' },
@@ -931,13 +939,15 @@ export class ProductsService {
   ): Promise<PublicProductCategorySummary[]> {
     const catalogSource = await this.resolveTenantCatalogSource(tenantId);
     if (!catalogSource) return [];
+    const allowedCategories =
+      await this.getActiveCatalogCategoryNames(catalogSource);
 
     const rows = await this.getPrismaClient().catalogItem.groupBy({
       by: ['category'],
       where: {
         is_active: true,
         source: catalogSource,
-        category: buildAllowedCatalogCategoryWhere(catalogSource),
+        category: { in: allowedCategories },
       },
       _count: { id: true },
       orderBy: { category: 'asc' },
@@ -957,7 +967,7 @@ export class ProductsService {
         source: catalogSource,
         category: {
           in: categories.filter((category) =>
-            isCatalogCategoryAllowedForSource(catalogSource, category),
+            allowedCategories.includes(category),
           ),
         },
         image_url: { not: null },
@@ -1007,6 +1017,9 @@ export class ProductsService {
    */
   async findTenantProductCategories(tenantId: number): Promise<string[]> {
     const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+    const allowedCategories = catalogSource
+      ? await this.getActiveCatalogCategoryNames(catalogSource)
+      : [];
     const [catalogRows, tenantRows] = await Promise.all([
       this.getPrismaClient().catalogItem.groupBy({
         by: ['category'],
@@ -1014,7 +1027,7 @@ export class ProductsService {
           ? {
               is_active: true,
               source: catalogSource,
-              category: buildAllowedCatalogCategoryWhere(catalogSource),
+              category: { in: allowedCategories },
             }
           : { id: -1 },
       }),
@@ -1101,6 +1114,8 @@ export class ProductsService {
     if (!catalogSource) {
       return this.emptyCatalogItemsResult(normalizedPage, normalizedLimit);
     }
+    const allowedCategories =
+      await this.getActiveCatalogCategoryNames(catalogSource);
 
     if (normalizedSearch.length >= 2) {
       const normalizedCategory = this.normalizeOptionalCategory(category);
@@ -1136,6 +1151,7 @@ export class ProductsService {
         strictMatchThresholds,
         normalizedPage,
         normalizedLimit,
+        allowedCategories,
       );
 
       await this.cacheManager.set(
@@ -1150,7 +1166,7 @@ export class ProductsService {
     const where: Prisma.CatalogItemWhereInput = {
       is_active: true,
       source: catalogSource,
-      category: buildAllowedCatalogCategoryWhere(catalogSource),
+      category: { in: allowedCategories },
       tenant_hidden_catalog_items: {
         none: { tenant_id: tenantId },
       },
@@ -1161,10 +1177,7 @@ export class ProductsService {
     }
 
     if (category) {
-      where.category = isCatalogCategoryAllowedForSource(
-        catalogSource,
-        category,
-      )
+      where.category = allowedCategories.includes(category)
         ? category
         : { in: [] };
     }
@@ -1209,12 +1222,14 @@ export class ProductsService {
       );
     }
 
+    const allowedCategories =
+      await this.getActiveCatalogCategoryNames(catalogSource);
     const catalogItem = await this.getPrismaClient().catalogItem.findFirst({
       where: {
         id: catalogItemId,
         is_active: true,
         source: catalogSource,
-        category: buildAllowedCatalogCategoryWhere(catalogSource),
+        category: { in: allowedCategories },
       },
       select: { id: true },
     });
@@ -1281,11 +1296,13 @@ export class ProductsService {
     if (!catalogSource) {
       return this.emptyCatalogItemsResult(normalizedPage, normalizedLimit);
     }
+    const allowedCategories =
+      await this.getActiveCatalogCategoryNames(catalogSource);
 
     const where: Prisma.CatalogItemWhereInput = {
       is_active: true,
       source: catalogSource,
-      category: buildAllowedCatalogCategoryWhere(catalogSource),
+      category: { in: allowedCategories },
       tenant_hidden_catalog_items: {
         some: { tenant_id: tenantId },
       },
@@ -1444,6 +1461,45 @@ export class ProductsService {
     return this.runAsTenantForAdmin(product.tenant_id, () =>
       this.update(productId, product.tenant_id, updateProductDto, file),
     );
+  }
+
+  async bulkUpdateForTenantAsAdmin(
+    payload: BulkUpdateProductsForAdminPayload,
+  ): Promise<{ success: true; count: number }> {
+    const hasCategory = typeof payload.category === 'string';
+    const hasAvailability = payload.is_available !== undefined;
+    const hasStatus = payload.status !== undefined;
+
+    if (!hasCategory && !hasAvailability && !hasStatus) {
+      throw new BadRequestException('At least one bulk action is required');
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: payload.ids }, deleted_at: null },
+      select: { id: true, tenant_id: true },
+      orderBy: { id: 'asc' },
+    });
+
+    if (products.length !== payload.ids.length) {
+      throw new NotFoundException('One or more products were not found');
+    }
+
+    const dto: UpdateProductDto = {};
+    if (hasCategory) {
+      const category = payload.category?.trim();
+      if (!category) throw new BadRequestException('Category is required');
+      dto.category = category;
+    }
+    if (hasAvailability) dto.is_available = payload.is_available;
+    if (hasStatus) dto.status = payload.status;
+
+    for (const product of products) {
+      await this.runAsTenantForAdmin(product.tenant_id, () =>
+        this.update(product.id, product.tenant_id, dto),
+      );
+    }
+
+    return { success: true, count: products.length };
   }
 
   private async runAsTenantForAdmin<T>(
@@ -2174,6 +2230,22 @@ export class ProductsService {
     return `catalog:search:version:${tenantId}`;
   }
 
+  private async getActiveCatalogCategoryNames(
+    source: CatalogSource,
+  ): Promise<string[]> {
+    const rows = await this.getPrismaClient().catalogCategory.findMany({
+      where: { source, deleted_at: null },
+      select: { name: true },
+      orderBy: { name: 'asc' },
+    });
+
+    if (rows.length > 0) {
+      return rows.map((row) => row.name);
+    }
+
+    return getAllowedCatalogCategoriesForSource(source);
+  }
+
   private async searchWithinCatalogItems(
     tenantId: number,
     normalizedSearch: string,
@@ -2183,6 +2255,7 @@ export class ProductsService {
     strictMatchThresholds: StrictMatchThresholds,
     page: number,
     limit: number,
+    allowedCategories: string[],
   ): Promise<CatalogItemsResult> {
     const prefixPattern = `${normalizedSearch}%`;
     const containsPattern = `%${normalizedSearch}%`;
@@ -2211,14 +2284,13 @@ export class ProductsService {
       )`,
     );
 
-    const allowedCategories = getAllowedCatalogCategoriesForSource(source);
     if (allowedCategories.length > 0) {
       conditions.push(`category = ANY(${addParam(allowedCategories)}::text[])`);
     }
 
     if (category) {
       conditions.push(
-        isCatalogCategoryAllowedForSource(source, category)
+        allowedCategories.includes(category)
           ? `category = ${addParam(category)}`
           : 'false',
       );

@@ -8,6 +8,7 @@ import {
   adminLoadProductOnboardingAction,
   adminRemoveProductAction,
   adminSearchTenantProductsAction,
+  adminBulkUpdateProductsAction,
   adminUpdateProductAvailabilityAction,
   adminUpdateProductPayloadAction,
 } from "@/actions/admin-server";
@@ -122,6 +123,7 @@ export default function AdminProductsOnboardingClient({
         ),
       updateProduct: adminUpdateProductPayloadAction,
       updateProductAvailability: adminUpdateProductAvailabilityAction,
+      bulkUpdateProducts: adminBulkUpdateProductsAction,
       removeProduct: adminRemoveProductAction,
     };
   }, [selectedMerchantId]);

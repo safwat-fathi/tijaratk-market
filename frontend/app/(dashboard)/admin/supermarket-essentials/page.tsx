@@ -384,8 +384,8 @@ export default async function SupermarketEssentialsPage(props: Props) {
           </form>
 
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-brand-border">
-              <thead className="bg-brand-soft">
+            <table className="w-full divide-y divide-brand-border">
+              <thead className="hidden xl:table-header-group bg-brand-soft">
                 <tr>
                   <th className="px-4 py-3 text-right text-xs font-medium uppercase text-brand-text">
                     المنتج
@@ -654,18 +654,25 @@ function CandidatePagination({
 
 function EssentialRow({ item, categoryNames }: { item: AdminCatalogItem; categoryNames: string[] }) {
   return (
-    <tr>
-      <td className="px-4 py-3 text-sm font-medium text-brand-text">
-        {item.name}
+    <tr className="flex flex-col xl:table-row border-b xl:border-none border-brand-border gap-2 py-4 xl:py-0">
+      <td className="px-4 py-1 xl:py-3 text-sm font-medium text-brand-text flex justify-between xl:table-cell">
+        <span className="xl:hidden font-bold text-xs text-brand-text/70">المنتج</span>
+        <span>{item.name}</span>
       </td>
-      <td className="px-4 py-3 text-sm text-brand-text">
-        {formatPrice(item.price) || "-"}
+      <td className="px-4 py-1 xl:py-3 text-sm text-brand-text flex justify-between xl:table-cell">
+        <span className="xl:hidden font-bold text-xs text-brand-text/70">السعر</span>
+        <span>{formatPrice(item.price) || "-"}</span>
       </td>
-      <td className="px-4 py-3 text-sm text-brand-text">{item.category}</td>
-      <td className="px-4 py-3 text-sm text-brand-text">
-        {item.essential_sort_order ?? "-"}
+      <td className="px-4 py-1 xl:py-3 text-sm text-brand-text flex justify-between xl:table-cell">
+        <span className="xl:hidden font-bold text-xs text-brand-text/70">التصنيف</span>
+        <span>{item.category}</span>
       </td>
-      <td className="px-4 py-3 text-sm">
+      <td className="px-4 py-1 xl:py-3 text-sm text-brand-text flex justify-between xl:table-cell">
+        <span className="xl:hidden font-bold text-xs text-brand-text/70">الترتيب</span>
+        <span>{item.essential_sort_order ?? "-"}</span>
+      </td>
+      <td className="px-4 py-1 xl:py-3 text-sm flex justify-between items-center xl:table-cell">
+        <span className="xl:hidden font-bold text-xs text-brand-text/70">الحالة</span>
         <span
           className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
             item.is_active
@@ -676,14 +683,14 @@ function EssentialRow({ item, categoryNames }: { item: AdminCatalogItem; categor
           {item.is_active ? "نشط" : "غير نشط"}
         </span>
       </td>
-      <td className="min-w-[820px] px-4 py-3 text-sm">
-        <div className="flex gap-2">
+      <td className="xl:min-w-[820px] px-4 py-3 text-sm mt-2 xl:mt-0">
+        <div className="flex flex-col xl:flex-row gap-4 xl:gap-2">
           <form
             action={adminUpdateSupermarketEssentialAction.bind(null, item.id)}
             encType="multipart/form-data"
-            className="grid flex-1 grid-cols-9 items-end gap-2"
+            className="flex flex-col xl:grid xl:flex-1 xl:grid-cols-9 items-stretch xl:items-end gap-4 xl:gap-2"
           >
-            <label className="col-span-2 space-y-1">
+            <label className="xl:col-span-2 space-y-1">
               <span className="text-xs font-medium text-brand-text">الاسم</span>
               <input
                 name="name"
@@ -724,7 +731,7 @@ function EssentialRow({ item, categoryNames }: { item: AdminCatalogItem; categor
                 className="h-9 w-full rounded-md border border-brand-border px-2 text-xs"
               />
             </label>
-            <label className="col-span-2 space-y-1">
+            <label className="xl:col-span-2 space-y-1">
               <span className="text-xs font-medium text-brand-text">
                 رفع صورة
               </span>
@@ -745,23 +752,23 @@ function EssentialRow({ item, categoryNames }: { item: AdminCatalogItem; categor
                 className="h-9 w-full rounded-md border border-brand-border px-2 text-xs"
               />
             </label>
-            <div className="flex items-center justify-between gap-2">
-              <label className="flex items-center gap-1 text-xs font-medium text-brand-text">
+            <div className="flex items-center justify-between gap-4 mt-2 xl:mt-0">
+              <label className="flex items-center gap-2 text-sm xl:text-xs font-medium text-brand-text">
                 <input
                   name="is_active"
                   type="checkbox"
                   defaultChecked={item.is_active}
-                  className="h-4 w-4 accent-brand-primary"
+                  className="h-5 w-5 xl:h-4 xl:w-4 accent-brand-primary"
                 />
                 نشط
               </label>
-              <Button type="submit" size="sm">
+              <Button type="submit" size="sm" className="w-full xl:w-auto">
                 حفظ
               </Button>
             </div>
           </form>
-          <form action={adminDeleteSupermarketEssentialAction.bind(null, item.id)}>
-            <Button type="submit" size="sm" variant="destructive">
+          <form action={adminDeleteSupermarketEssentialAction.bind(null, item.id)} className="mt-2 xl:mt-0">
+            <Button type="submit" size="sm" variant="destructive" className="w-full xl:w-auto">
               إزالة
             </Button>
           </form>

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { updatePasswordAction } from "@/actions/auth-server";
+import { PasswordInput } from "@/components/ui/Field";
 import { Lock } from "lucide-react";
 
 export default function UpdatePasswordForm() {
@@ -48,11 +49,10 @@ export default function UpdatePasswordForm() {
           >
             كلمة المرور الحالية
           </label>
-          <input
-            type="password"
+          <PasswordInput
             id="currentPassword"
             name="currentPassword"
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+            className="w-full rounded-xl border border-gray-200 ps-4 pe-12 py-2.5 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             disabled={isPending}
             required
           />
@@ -70,11 +70,10 @@ export default function UpdatePasswordForm() {
           >
             كلمة المرور الجديدة
           </label>
-          <input
-            type="password"
+          <PasswordInput
             id="newPassword"
             name="newPassword"
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+            className="w-full rounded-xl border border-gray-200 ps-4 pe-12 py-2.5 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             disabled={isPending}
             required
             minLength={6}
@@ -93,11 +92,10 @@ export default function UpdatePasswordForm() {
           >
             تأكيد كلمة المرور الجديدة
           </label>
-          <input
-            type="password"
+          <PasswordInput
             id="confirmPassword"
             name="confirmPassword"
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+            className="w-full rounded-xl border border-gray-200 ps-4 pe-12 py-2.5 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             disabled={isPending}
             required
             minLength={6}

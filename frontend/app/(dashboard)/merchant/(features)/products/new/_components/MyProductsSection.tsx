@@ -1,6 +1,8 @@
-import { useRef } from "react";
-import { Ban, CheckCircle, Pencil, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Ban, CheckCircle, CheckSquare, Pencil, Square, Trash2, X } from "lucide-react";
 import SafeImage from "@/components/ui/SafeImage";
+import { Button } from "@/components/ui/Button";
+import { Combobox } from "@/components/ui/Combobox";
 import { formatArabicInteger } from "@/lib/utils/number";
 import type { Product } from "@/types/models/product";
 import { SECTION_MY_PRODUCTS } from "../_utils/product-onboarding.constants";
@@ -52,6 +54,16 @@ type MyProductsSectionProps = {
   onCancelRemove: () => void;
   setProductRowRef: (productId: number, node: HTMLLIElement | null) => void;
   onOpenBulkWizard?: () => void;
+  bulkUpdateProducts?: (payload: {
+    ids: number[];
+    category?: string;
+    is_available?: boolean;
+    status?: "active" | "archived";
+  }) => Promise<{
+    success: boolean;
+    message?: string;
+  }>;
+  bulkCategoryOptions?: string[];
 };
 
 export default function MyProductsSection({
@@ -84,10 +96,29 @@ export default function MyProductsSection({
   onCancelRemove,
   setProductRowRef,
   onOpenBulkWizard,
+  bulkUpdateProducts,
+  bulkCategoryOptions = [],
 }: MyProductsSectionProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [isBulkPending, startBulkTransition] = useTransition();
+  const visibleIds = useMemo(
+    () => displayedProducts.map((product) => product.id),
+    [displayedProducts],
+  );
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
   const allCategoryCountLabel =
     formatArabicInteger(categoryFilterTotalCount) || categoryFilterTotalCount;
+
+  useEffect(() => {
+    setSelectedIds((current) =>
+      current.filter((id) => visibleIds.includes(id)),
+    );
+  }, [visibleIds]);
 
   const handleClearSearch = () => {
     onClearSearchQuery();
@@ -98,6 +129,38 @@ export default function MyProductsSection({
     isSearchActive ||
     availabilityFilter !== "all" ||
     categoryFilter !== allCategoryFilterKey;
+
+  const toggleSelectedProduct = (productId: number) => {
+    setSelectedIds((current) =>
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId],
+    );
+  };
+
+  const runBulkAction = (payload: {
+    category?: string;
+    is_available?: boolean;
+    status?: "active" | "archived";
+  }) => {
+    if (!bulkUpdateProducts) return;
+
+    setBulkMessage(null);
+    startBulkTransition(async () => {
+      const response = await bulkUpdateProducts({
+        ids: selectedIds,
+        ...payload,
+      });
+      if (!response.success) {
+        setBulkMessage(response.message || "تعذر تحديث المنتجات المحددة");
+        return;
+      }
+
+      setSelectedIds([]);
+      setBulkCategory("");
+      setBulkMessage("تم تحديث المنتجات المحددة");
+    });
+  };
 
   return (
     <section
@@ -249,6 +312,30 @@ export default function MyProductsSection({
         </div>
 
         <div className="lg:pe-1">
+          {bulkUpdateProducts && displayedProducts.length > 0 ? (
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2">
+              <button
+                type="button"
+                onClick={() => setSelectedIds(allVisibleSelected ? [] : visibleIds)}
+                className="inline-flex min-h-10 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700"
+              >
+                {allVisibleSelected ? (
+                  <CheckSquare className="h-4 w-4" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+                تحديد الظاهر
+              </button>
+              <span className="text-xs font-semibold text-gray-500">
+                {selectedIds.length > 0 ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}
+              </span>
+            </div>
+          ) : null}
+          {bulkMessage ? (
+            <p className="mt-2 rounded-md bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-primary">
+              {bulkMessage}
+            </p>
+          ) : null}
           {displayedProducts.length === 0 && !isSearchLoading ? (
             <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed border-brand-border bg-gray-50/50 p-8 text-center">
               {isFilteredList ? (
@@ -306,6 +393,24 @@ export default function MyProductsSection({
                     }`}
                   >
                     <div className="flex min-w-0 flex-1 items-start sm:items-center gap-3 w-full sm:w-auto">
+                      {bulkUpdateProducts ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectedProduct(product.id)}
+                          className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border ${
+                            selectedSet.has(product.id)
+                              ? "border-brand-primary bg-brand-primary text-white"
+                              : "border-gray-200 bg-white text-gray-600"
+                          }`}
+                          aria-label="تحديد المنتج"
+                        >
+                          {selectedSet.has(product.id) ? (
+                            <CheckSquare className="h-5 w-5" />
+                          ) : (
+                            <Square className="h-5 w-5" />
+                          )}
+                        </button>
+                      ) : null}
                       {resolveImageUrl(product.image_url) ? (
                         <SafeImage
                           src={resolveImageUrl(product.image_url)}
@@ -417,6 +522,75 @@ export default function MyProductsSection({
           )}
         </div>
       </div>
+      {bulkUpdateProducts && selectedIds.length > 0 ? (
+        <div className="sticky bottom-3 z-40 mt-3 rounded-lg border border-brand-border bg-white p-3 shadow-xl">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-bold text-brand-text">
+                {selectedIds.length} محدد
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-brand-border text-brand-text"
+                aria-label="مسح التحديد"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+              <Combobox
+                name="bulk_category"
+                label="تغيير التصنيف"
+                options={bulkCategoryOptions}
+                defaultValue={bulkCategory}
+                onValueChange={setBulkCategory}
+                inputClassName="h-10 px-3 text-sm"
+                placeholder="اكتب أو اختر التصنيف"
+              />
+              <Button
+                type="button"
+                disabled={isBulkPending || !bulkCategory.trim()}
+                onClick={() => runBulkAction({ category: bulkCategory })}
+              >
+                تطبيق التصنيف
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isBulkPending}
+                onClick={() => runBulkAction({ is_available: true })}
+              >
+                إتاحة
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isBulkPending}
+                onClick={() => runBulkAction({ is_available: false })}
+              >
+                إيقاف
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isBulkPending}
+                onClick={() => runBulkAction({ status: "active" })}
+              >
+                تنشيط
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isBulkPending}
+                onClick={() => runBulkAction({ status: "archived" })}
+              >
+                أرشفة
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -38,6 +38,20 @@ This file provides guidelines for AI agents and coding assistants when working w
 ## Testing and verification
 
 - Unit tests are not allowed in the codebase. Do not write spec/unit test files.
+- Do not run backend verification commands. Prompt the user to run the relevant command themselves and share the output.
+
+## Command execution restrictions for AI agents
+
+AI agents must not run verification, migration, package-manager, dependency, lint, typecheck, test, build, or dev-server commands in this repository.
+
+Do not run commands including, but not limited to:
+
+- `pnpm`, `npm`, `yarn`, or `bun`
+- `prisma migrate`, `prisma generate`, `prisma db`, or `prisma studio`
+- lint, typecheck, test, build, start, or dev commands
+- any command that can create, remove, repair, or reinstall `node_modules`
+
+When verification is needed, do not execute it. Tell the user exactly which command they should run themselves and wait for their output.
 
 ## Database schema
 

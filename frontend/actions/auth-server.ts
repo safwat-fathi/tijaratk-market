@@ -12,6 +12,8 @@ import { redirect } from "next/navigation";
 import { setCookieAction, deleteCookieAction } from "@/app/actions/cookie-store";
 import { STORAGE_KEYS } from "@/constants";
 
+const MERCHANT_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
 // We need a way to set cookies in Server Actions.
 // The existing `authService.login` (Step 140) ALREADY calls `setCookieAction`.
 // So we just need to call `authService.login`.
@@ -47,11 +49,14 @@ export async function loginAction(prevState: ActionState, formData: FormData): P
     const response = await authService.login(payload);
 
     if (response.success && response.data?.access_token) {
-      await setCookieAction(STORAGE_KEYS.ACCESS_TOKEN, response.data.access_token);
+      await setCookieAction(STORAGE_KEYS.ACCESS_TOKEN, response.data.access_token, {
+        maxAge: MERCHANT_SESSION_MAX_AGE_SECONDS,
+      });
       if (response.data.user) {
 				await setCookieAction(
 					STORAGE_KEYS.USER,
 					JSON.stringify(response.data.user),
+					{ maxAge: MERCHANT_SESSION_MAX_AGE_SECONDS },
 				);
 			}
       // Redirect to merchant dashboard

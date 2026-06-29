@@ -5,7 +5,7 @@ import Link from "next/link";
 import { loginAction, ActionState } from "@/actions/auth-server";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Field, Input } from "@/components/ui/Field";
+import { Field, Input, PasswordInput } from "@/components/ui/Field";
 import { Logo } from "@/components/ui/Logo";
 
 const initialState: ActionState = {
@@ -48,10 +48,9 @@ export default function LoginForm() {
 					htmlFor="password"
 					error={state?.errors?.password?.[0]}
 				>
-					<Input
+					<PasswordInput
 						id="password"
 						name="password"
-						type="password"
 						autoComplete="current-password"
 						required
 					/>

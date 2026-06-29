@@ -74,6 +74,8 @@ Seed data:
 
 ## Running Locally
 
+> AI agents: these commands are documented for human developers only. Do not run them. If verification is needed, ask the user to run the relevant command and share the output.
+
 ```bash
 pnpm run start:dev
 ```
@@ -95,6 +97,8 @@ Swagger is mounted by the API at:
 The Swagger server URL is derived from `APP_URL`.
 
 ## Prisma And Database
+
+> AI agents: these commands are documented for human developers only. Do not run them. If verification is needed, ask the user to run the relevant command and share the output.
 
 Prisma is the current database layer for the backend.
 
@@ -171,9 +175,11 @@ To deactivate/cleanup contaminated rows in the catalog (e.g. pharmacy categories
 
 ## Quality Checks
 
+> AI agents: these commands are documented for human developers only. Do not run them. If verification is needed, ask the user to run the relevant command and share the output.
+
 ```bash
-pnpm run lint
-pnpm run lint:ci
+pnpm -C backend lint
+pnpm -C backend lint:ci
 pnpm run test:e2e
 ```
 

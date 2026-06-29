@@ -6,7 +6,7 @@ import { registerAction } from "@/actions/auth-server";
 import { TENANT_CATEGORIES, TENANT_CATEGORY_VALUES } from "@/constants";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Field, Input, Select } from "@/components/ui/Field";
+import { Field, Input, PasswordInput, Select } from "@/components/ui/Field";
 import { Logo } from "@/components/ui/Logo";
 
 const initialState = {
@@ -109,10 +109,9 @@ export default function RegisterForm() {
           htmlFor="password"
           error={state?.errors?.password?.[0]}
         >
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete="new-password"
             required
           />
@@ -123,10 +122,9 @@ export default function RegisterForm() {
           htmlFor="confirmPassword"
           error={state?.errors?.confirmPassword?.[0]}
         >
-          <Input
+          <PasswordInput
             id="confirmPassword"
             name="confirmPassword"
-            type="password"
             autoComplete="new-password"
             required
           />

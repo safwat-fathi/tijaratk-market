@@ -727,7 +727,7 @@ export class StoresDirectoryService {
     areaId: number | null,
     deliveryAreaIds: number[],
   ) {
-    const uniqueDeliveryAreaIds = Array.from(new Set(deliveryAreaIds));
+    console.log("ensureDeliveryAreasInsideMainArea", {areaId, deliveryAreaIds}); const uniqueDeliveryAreaIds = Array.from(new Set(deliveryAreaIds));
 
     if (uniqueDeliveryAreaIds.length === 0) {
       return;

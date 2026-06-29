@@ -52,14 +52,14 @@ export default async function AdminImportsPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">استيراد الكتالوج</h1>
         <p className="mt-1 text-sm text-gray-500">
-          ارفع ملف CSV من Talabat أو Chefaa أو Carrefour لتحديث منتجات الكتالوج العامة. يتم التعرف على الصيغة تلقائيًا وتتم المعالجة في الخلفية بعد الرفع.
+          ارفع ملف CSV من Talabat أو Chefaa أو Carrefour لتحديث منتجات الكتالوج العامة. اختر الصيغة عند رفع ملفات Chefaa لتوجيهها إلى كتالوج الصيدليات.
         </p>
       </div>
 
       <Card className="p-6">
         <form action={uploadCatalogImportAction} className="space-y-4">
           <input type="hidden" name="type" value="catalog_items" />
-          <div className="grid gap-4 md:grid-cols-[1fr_180px_auto] md:items-end">
+          <div className="grid gap-4 md:grid-cols-[1fr_180px_160px_auto] md:items-end">
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-gray-700">
                 ملف CSV من Talabat أو Chefaa أو Carrefour
@@ -83,9 +83,25 @@ export default async function AdminImportsPage() {
                 className="block w-full h-11 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
               >
                 <option value="upsert">إضافة وتحديث</option>
-                <option value="replace_source">استبدال كتالوج السوبرماركت</option>
+                <option value="replace_source">استبدال كتالوج المصدر المحدد</option>
                 <option value="create_only">إضافة فقط</option>
                 <option value="update_only">تحديث فقط</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-gray-700">
+                الصيغة
+              </span>
+              <select
+                name="format"
+                defaultValue=""
+                className="block w-full h-11 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
+              >
+                <option value="">تلقائي (حسب الأعمدة والفئة)</option>
+                <option value="talabat">Talabat</option>
+                <option value="chefaa">Chefaa (صيدليات)</option>
+                <option value="carrefour">Carrefour</option>
               </select>
             </label>
 

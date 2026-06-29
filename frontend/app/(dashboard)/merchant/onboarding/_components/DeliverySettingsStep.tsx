@@ -89,8 +89,14 @@ export default function DeliverySettingsStep({
           const areaId = profileResponse.data.area_id ?? null;
           setProfileAreaId(areaId);
           const selectedAreaIds = profileResponse.data.delivery_area_ids ?? [];
+          
+          const validSelectedAreaIds = selectedAreaIds.filter((id) => {
+            const area = areasResponse.data?.find((a) => a.id === id);
+            return area && (area.id === areaId || area.parent_area_id === areaId);
+          });
+
           setDeliveryAreaIds(
-            resolveInitialDeliveryAreaIds(selectedAreaIds, areaId),
+            resolveInitialDeliveryAreaIds(validSelectedAreaIds, areaId),
           );
         }
       } catch (err) {
@@ -156,8 +162,12 @@ export default function DeliverySettingsStep({
         return;
       }
 
+      // Ensure we only submit IDs that are part of the currently displayed deliveryAreas
+      const validAreaIds = new Set(deliveryAreas.map((a) => a.id));
+      const filteredDeliveryAreaIds = deliveryAreaIds.filter((id) => validAreaIds.has(id));
+
       const uniqueDeliveryAreaIds = Array.from(
-        new Set(deliveryAreaIds.length > 0 ? deliveryAreaIds : [profileAreaId]),
+        new Set(filteredDeliveryAreaIds.length > 0 ? filteredDeliveryAreaIds : [profileAreaId]),
       );
 
       const profileResponse = await merchantDirectoryService.updateProfile({

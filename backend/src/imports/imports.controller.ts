@@ -62,6 +62,10 @@ export class ImportsController {
           type: 'string',
           enum: ['create_only', 'upsert', 'update_only', 'replace_source'],
         },
+        format: {
+          type: 'string',
+          enum: ['talabat', 'chefaa', 'carrefour'],
+        },
       },
     },
   })

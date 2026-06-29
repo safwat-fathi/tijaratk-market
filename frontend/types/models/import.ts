@@ -11,10 +11,12 @@ export type ImportStatus =
   | "failed"
   | "partial_success"
   | "cancelled";
+export type ImportFormat = "talabat" | "chefaa" | "carrefour";
 
 export type ImportRun = {
   id: number;
   type: ImportType;
+  format?: ImportFormat | null;
   mode: ImportMode;
   status: ImportStatus;
   original_file_name: string;

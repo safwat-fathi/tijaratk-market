@@ -12,6 +12,8 @@ const IMPORT_MODES = [
 export type CreateImportType = (typeof IMPORT_TYPES)[number];
 export type CreateImportMode = (typeof IMPORT_MODES)[number];
 
+import { CatalogImportFormat } from '../schemas/catalog-import-row.schema';
+
 /**
  * DTO for creating an admin import run from an uploaded file.
  */
@@ -24,4 +26,9 @@ export class CreateImportDto {
   @IsOptional()
   @IsIn(IMPORT_MODES)
   mode?: CreateImportMode = 'upsert';
+
+  @ApiProperty({ enum: CatalogImportFormat, required: false })
+  @IsOptional()
+  @IsIn(Object.values(CatalogImportFormat))
+  format?: CatalogImportFormat;
 }

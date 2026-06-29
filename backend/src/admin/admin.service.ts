@@ -8,14 +8,29 @@ import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AdminLoginDto } from './dto/admin-login.dto';
-import { Prisma, TenantStatus } from '../../generated/prisma/client';
+import {
+  Prisma,
+  TenantCategory,
+  TenantStatus,
+} from '../../generated/prisma/client';
 import { TenantCancellationPolicyService } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import {
+  CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
-  buildAllowedCatalogCategoryWhere,
+  CatalogSource,
+  getAllowedCatalogCategoriesForSource,
   isCatalogCategoryAllowedForSource,
 } from 'src/products/catalog-source-policy';
+import {
+  BulkUpdateAdminCatalogItemsDto,
+  CreateAdminCatalogItemDto,
+  CreateAdminCatalogCategoryDto,
+  CreateTenantProductCategoryDto,
+  UpdateAdminCatalogCategoryDto,
+  UpdateAdminCatalogItemDto,
+  UpdateTenantProductCategoryDto,
+} from './dto/catalog-item.dto';
 import {
   CreateSupermarketEssentialDto,
   UpdateSupermarketEssentialDto,
@@ -258,6 +273,432 @@ export class AdminService {
     });
   }
 
+  /**
+   * Retrieve global catalog items for a single supported catalog source.
+   */
+  async getAdminCatalogItems(
+    source: CatalogSource,
+    search?: string,
+    category?: string,
+    page = 1,
+    limit = 20,
+  ) {
+    this.ensureSupportedCatalogSource(source);
+    const pagination = this.getPagination(page, limit);
+    const where = this.buildAdminCatalogWhere({ source, search, category });
+
+    const [items, total] = await Promise.all([
+      this.prisma.catalogItem.findMany({
+        where,
+        orderBy: [{ is_active: 'desc' }, { category: 'asc' }, { id: 'asc' }],
+        skip: pagination.offset,
+        take: pagination.limit,
+      }),
+      this.prisma.catalogItem.count({ where }),
+    ]);
+
+    return this.paginateItems(
+      items,
+      total,
+      pagination.page,
+      pagination.limit,
+      0,
+    );
+  }
+
+  /**
+   * Retrieve active category counts for one supported catalog source.
+   */
+  async getAdminCatalogCategories(source: CatalogSource) {
+    this.ensureSupportedCatalogSource(source);
+
+    const [categories, rows] = await Promise.all([
+      this.getActiveCatalogCategoryRows(source),
+      this.prisma.catalogItem.groupBy({
+        by: ['category'],
+        where: {
+          source,
+          is_active: true,
+        },
+        _count: { id: true },
+        orderBy: { category: 'asc' },
+      }),
+    ]);
+
+    const existingCounts = new Map(rows.map((row) => [row.category, row._count.id]));
+
+    return categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      category: category.name,
+      count: existingCounts.get(category.name) || 0,
+    }));
+  }
+
+  async createAdminCatalogCategory(dto: CreateAdminCatalogCategoryDto) {
+    const source = dto.source;
+    this.ensureSupportedCatalogSource(source);
+    const name = this.normalizeCategoryName(dto.name);
+
+    const existing = await this.prisma.catalogCategory.findUnique({
+      where: { source_name: { source, name } },
+    });
+
+    if (existing && !existing.deleted_at) {
+      throw new BadRequestException('Category already exists for source');
+    }
+
+    if (existing) {
+      return this.prisma.catalogCategory.update({
+        where: { id: existing.id },
+        data: { deleted_at: null },
+      });
+    }
+
+    return this.prisma.catalogCategory.create({
+      data: { source, name },
+    });
+  }
+
+  async updateAdminCatalogCategory(
+    id: number,
+    dto: UpdateAdminCatalogCategoryDto,
+  ) {
+    const category = await this.findCatalogCategory(id);
+    const newName = this.normalizeCategoryName(dto.name);
+    if (newName === category.name) return category;
+
+    const duplicate = await this.prisma.catalogCategory.findUnique({
+      where: { source_name: { source: category.source, name: newName } },
+    });
+    if (duplicate && !duplicate.deleted_at) {
+      throw new BadRequestException('Category already exists for source');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (duplicate) {
+        await tx.catalogCategory.delete({ where: { id: duplicate.id } });
+      }
+
+      const updated = await tx.catalogCategory.update({
+        where: { id },
+        data: { name: newName },
+      });
+
+      await tx.catalogItem.updateMany({
+        where: {
+          source: category.source,
+          category: category.name,
+        },
+        data: { category: newName },
+      });
+
+      return updated;
+    });
+  }
+
+  async deleteAdminCatalogCategory(id: number) {
+    const category = await this.findCatalogCategory(id);
+
+    const productCount = await this.prisma.catalogItem.count({
+      where: {
+        source: category.source,
+        category: category.name,
+        is_active: true,
+      },
+    });
+
+    if (productCount > 0) {
+      throw new BadRequestException(
+        'Category cannot be deleted while products are listed under it',
+      );
+    }
+
+    await this.prisma.catalogCategory.update({
+      where: { id },
+      data: { deleted_at: new Date() },
+    });
+
+    return { success: true };
+  }
+
+  async getTenantProductCategories(tenantId: number) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    return this.runWithTenantRls(tenantId, async (tx) => {
+      const [categories, productRows] = await Promise.all([
+        tx.tenantProductCategory.findMany({
+          where: { tenant_id: tenantId, deleted_at: null },
+          orderBy: { name: 'asc' },
+        }),
+        tx.product.groupBy({
+          by: ['category'],
+          where: { tenant_id: tenantId, deleted_at: null },
+          _count: { id: true },
+        }),
+      ]);
+
+      const counts = new Map(productRows.map((row) => [row.category, row._count.id]));
+      return categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        count: counts.get(category.name) || 0,
+      }));
+    });
+  }
+
+  async createTenantProductCategory(
+    tenantId: number,
+    dto: CreateTenantProductCategoryDto,
+  ) {
+    const name = this.normalizeCategoryName(dto.name);
+
+    return this.runWithTenantRls(tenantId, async (tx) => {
+      const tenant = await tx.tenant.findUnique({ where: { id: tenantId } });
+      if (!tenant) throw new NotFoundException('Tenant not found');
+
+      const existing = await tx.tenantProductCategory.findUnique({
+        where: { tenant_id_name: { tenant_id: tenantId, name } },
+      });
+      if (existing && !existing.deleted_at) {
+        throw new BadRequestException('Category already exists for tenant');
+      }
+      if (existing) {
+        return tx.tenantProductCategory.update({
+          where: { id: existing.id },
+          data: { deleted_at: null },
+        });
+      }
+
+      return tx.tenantProductCategory.create({
+        data: { tenant_id: tenantId, name },
+      });
+    });
+  }
+
+  async updateTenantProductCategory(
+    tenantId: number,
+    id: number,
+    dto: UpdateTenantProductCategoryDto,
+  ) {
+    const newName = this.normalizeCategoryName(dto.name);
+
+    return this.runWithTenantRls(tenantId, async (tx) => {
+      const category = await tx.tenantProductCategory.findFirst({
+        where: { id, tenant_id: tenantId, deleted_at: null },
+      });
+      if (!category) throw new NotFoundException('Category not found');
+      if (newName === category.name) return category;
+
+      const duplicate = await tx.tenantProductCategory.findUnique({
+        where: { tenant_id_name: { tenant_id: tenantId, name: newName } },
+      });
+      if (duplicate && !duplicate.deleted_at) {
+        throw new BadRequestException('Category already exists for tenant');
+      }
+      if (duplicate) {
+        await tx.tenantProductCategory.delete({ where: { id: duplicate.id } });
+      }
+
+      const updated = await tx.tenantProductCategory.update({
+        where: { id },
+        data: { name: newName },
+      });
+
+      await tx.product.updateMany({
+        where: {
+          tenant_id: tenantId,
+          category: category.name,
+          deleted_at: null,
+        },
+        data: { category: newName },
+      });
+
+      return updated;
+    });
+  }
+
+  async deleteTenantProductCategory(tenantId: number, id: number) {
+    return this.runWithTenantRls(tenantId, async (tx) => {
+      const category = await tx.tenantProductCategory.findFirst({
+        where: { id, tenant_id: tenantId, deleted_at: null },
+      });
+      if (!category) throw new NotFoundException('Category not found');
+
+      const productCount = await tx.product.count({
+        where: {
+          tenant_id: tenantId,
+          category: category.name,
+          deleted_at: null,
+        },
+      });
+
+      if (productCount > 0) {
+        throw new BadRequestException(
+          'Category cannot be deleted while products are listed under it',
+        );
+      }
+
+      await tx.tenantProductCategory.update({
+        where: { id },
+        data: { deleted_at: new Date() },
+      });
+
+      return { success: true };
+    });
+  }
+
+  /**
+   * Create a global catalog item for a supported source.
+   */
+  async createAdminCatalogItem(
+    dto: CreateAdminCatalogItemDto,
+    file?: Express.Multer.File,
+  ) {
+    const source = dto.source;
+    this.ensureSupportedCatalogSource(source);
+
+    const name = dto.name?.trim();
+    const category = dto.category?.trim();
+    if (!name || !category) {
+      throw new BadRequestException('Name and category are required');
+    }
+    await this.ensureActiveCatalogCategory(source, category);
+
+    const imageUrl = file?.path
+      ? await this.imageProcessorService.processProductThumbnail(file.path)
+      : this.normalizeNullableString(dto.image_url);
+
+    return this.prisma.catalogItem.create({
+      data: {
+        name,
+        category,
+        source,
+        price: dto.price,
+        currency: this.normalizeCurrency(dto.currency),
+        image_url: imageUrl,
+        external_id: this.normalizeNullableString(dto.external_id),
+        is_active: dto.is_active ?? true,
+        is_essential: dto.is_essential ?? false,
+        essential_sort_order: dto.essential_sort_order,
+      },
+    });
+  }
+
+  /**
+   * Update a global catalog item without changing its source.
+   */
+  async updateAdminCatalogItem(
+    id: number,
+    dto: UpdateAdminCatalogItemDto,
+    file?: Express.Multer.File,
+  ) {
+    const item = await this.findAdminCatalogItem(id);
+
+    const data: Prisma.CatalogItemUpdateInput = {};
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (!name) throw new BadRequestException('Name is required');
+      data.name = name;
+    }
+    if (dto.category !== undefined) {
+      const category = dto.category.trim();
+      await this.ensureActiveCatalogCategory(item.source, category);
+      data.category = category;
+    }
+    if (dto.price !== undefined) data.price = dto.price;
+    if (dto.currency !== undefined) {
+      data.currency = this.normalizeCurrency(dto.currency);
+    }
+    if (file?.path) {
+      data.image_url = await this.imageProcessorService.processProductThumbnail(
+        file.path,
+      );
+    } else if (dto.image_url !== undefined) {
+      data.image_url = this.normalizeNullableString(dto.image_url);
+    }
+    if (dto.external_id !== undefined) {
+      data.external_id = this.normalizeNullableString(dto.external_id);
+    }
+    if (dto.is_active !== undefined) data.is_active = dto.is_active;
+    if (dto.is_essential !== undefined) data.is_essential = dto.is_essential;
+    if (dto.essential_sort_order !== undefined) {
+      data.essential_sort_order = dto.essential_sort_order;
+    }
+
+    const updatedItem = await this.prisma.catalogItem.update({
+      where: { id },
+      data,
+    });
+
+    if (item.image_url && item.image_url !== updatedItem.image_url) {
+      await this.imageProcessorService.deleteManagedProductImage(
+        item.image_url,
+      );
+    }
+
+    return updatedItem;
+  }
+
+  async bulkUpdateAdminCatalogItems(dto: BulkUpdateAdminCatalogItemsDto) {
+    const hasCategory = typeof dto.category === 'string';
+    const hasActive = dto.is_active !== undefined;
+    const hasEssential = dto.is_essential !== undefined;
+
+    if (!hasCategory && !hasActive && !hasEssential) {
+      throw new BadRequestException('At least one bulk action is required');
+    }
+
+    const items = await this.prisma.catalogItem.findMany({
+      where: { id: { in: dto.ids } },
+      select: { id: true, source: true },
+    });
+
+    if (items.length !== dto.ids.length) {
+      throw new NotFoundException('One or more catalog items were not found');
+    }
+
+    const data: Prisma.CatalogItemUpdateManyMutationInput = {};
+    if (hasCategory) {
+      const category = dto.category?.trim();
+      if (!category) throw new BadRequestException('Category is required');
+
+      const sources = Array.from(new Set(items.map((item) => item.source)));
+      for (const source of sources) {
+        await this.ensureActiveCatalogCategory(source as CatalogSource, category);
+      }
+
+      data.category = category;
+    }
+    if (hasActive) data.is_active = dto.is_active;
+    if (hasEssential) data.is_essential = dto.is_essential;
+
+    const result = await this.prisma.catalogItem.updateMany({
+      where: { id: { in: dto.ids } },
+      data,
+    });
+
+    return { success: true, count: result.count };
+  }
+
+  /**
+   * Deactivate a global catalog item instead of hard deleting it.
+   */
+  async deleteAdminCatalogItem(id: number) {
+    await this.findAdminCatalogItem(id);
+
+    await this.prisma.catalogItem.update({
+      where: { id },
+      data: { is_active: false },
+    });
+
+    return { success: true };
+  }
+
   async getSupermarketEssentials(
     search?: string,
     category?: string,
@@ -295,12 +736,16 @@ export class AdminService {
   }
 
   async getSupermarketCatalogCategories() {
+    const allowedCategories = await this.getActiveCatalogCategoryRows(
+      CATALOG_SOURCE_TALABAT,
+    );
+    const allowedCategoryNames = allowedCategories.map((category) => category.name);
     const rows = await this.prisma.catalogItem.groupBy({
       by: ['category'],
       where: {
         is_active: true,
         source: CATALOG_SOURCE_TALABAT,
-        category: buildAllowedCatalogCategoryWhere(CATALOG_SOURCE_TALABAT),
+        category: { in: allowedCategoryNames },
       },
       _count: { id: true },
       orderBy: { category: 'asc' },
@@ -331,10 +776,12 @@ export class AdminService {
       }
     }
 
-    return rows.map((row) => ({
-      category: row.category,
-      count: row._count.id,
-      image_url: categoryImages.get(row.category),
+    const existingCounts = new Map(rows.map((row) => [row.category, row._count.id]));
+
+    return allowedCategories.map((category) => ({
+      category: category.name,
+      count: existingCounts.get(category.name) || 0,
+      image_url: categoryImages.get(category.name),
     }));
   }
 
@@ -385,7 +832,7 @@ export class AdminService {
       throw new BadRequestException('Name and category are required');
     }
 
-    this.ensureAllowedSupermarketCategory(category);
+    await this.ensureActiveCatalogCategory(CATALOG_SOURCE_TALABAT, category);
 
     const imageUrl = file?.path
       ? await this.imageProcessorService.processProductThumbnail(file.path)
@@ -420,7 +867,7 @@ export class AdminService {
     }
     if (dto.category !== undefined) {
       const category = dto.category.trim();
-      this.ensureAllowedSupermarketCategory(category);
+      await this.ensureActiveCatalogCategory(CATALOG_SOURCE_TALABAT, category);
       data.category = category;
     }
     if (dto.price !== undefined) data.price = dto.price;
@@ -476,17 +923,12 @@ export class AdminService {
     activeOnly?: boolean;
   }): Prisma.CatalogItemWhereInput {
     const normalizedCategory = category?.trim();
-    if (normalizedCategory) {
-      this.ensureAllowedSupermarketCategory(normalizedCategory);
-    }
 
     return {
       source: CATALOG_SOURCE_TALABAT,
       is_essential: isEssential,
       ...(activeOnly ? { is_active: true } : {}),
-      category: normalizedCategory
-        ? normalizedCategory
-        : buildAllowedCatalogCategoryWhere(CATALOG_SOURCE_TALABAT),
+      ...(normalizedCategory ? { category: normalizedCategory } : {}),
       ...(search?.trim()
         ? {
             name: {
@@ -523,7 +965,7 @@ export class AdminService {
       throw new NotFoundException('Supermarket catalog item not found');
     }
 
-    this.ensureAllowedSupermarketCategory(item.category);
+    await this.ensureActiveCatalogCategory(CATALOG_SOURCE_TALABAT, item.category);
     return item;
   }
 
@@ -535,23 +977,155 @@ export class AdminService {
     }
   }
 
+  private buildAdminCatalogWhere({
+    source,
+    search,
+    category,
+  }: {
+    source: CatalogSource;
+    search?: string;
+    category?: string;
+  }): Prisma.CatalogItemWhereInput {
+    const normalizedCategory = category?.trim();
+
+    return {
+      source,
+      is_active: true,
+      ...(normalizedCategory ? { category: normalizedCategory } : {}),
+      ...(search?.trim()
+        ? {
+            name: {
+              contains: search.trim(),
+              mode: 'insensitive',
+            },
+          }
+        : {}),
+    };
+  }
+
+  private async findAdminCatalogItem(id: number) {
+    const item = await this.prisma.catalogItem.findFirst({
+      where: {
+        id,
+        source: { in: [CATALOG_SOURCE_TALABAT, CATALOG_SOURCE_CHEFAA] },
+      },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Catalog item not found');
+    }
+
+    return item;
+  }
+
+  private async getActiveCatalogCategoryRows(
+    source: CatalogSource,
+  ): Promise<{ id: number; name: string }[]> {
+    const categories = await this.prisma.catalogCategory.findMany({
+      where: { source, deleted_at: null },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+
+    if (categories.length > 0) {
+      return categories;
+    }
+
+    return getAllowedCatalogCategoriesForSource(source).map((name, index) => ({
+      id: -1 - index,
+      name,
+    }));
+  }
+
+  private async findCatalogCategory(id: number) {
+    const category = await this.prisma.catalogCategory.findFirst({
+      where: {
+        id,
+        source: { in: [CATALOG_SOURCE_TALABAT, CATALOG_SOURCE_CHEFAA] },
+        deleted_at: null,
+      },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    this.ensureSupportedCatalogSource(category.source);
+    return category;
+  }
+
+  private ensureSupportedCatalogSource(
+    source: string,
+  ): asserts source is CatalogSource {
+    if (source !== CATALOG_SOURCE_TALABAT && source !== CATALOG_SOURCE_CHEFAA) {
+      throw new BadRequestException('Catalog source is not supported');
+    }
+  }
+
+  private ensureAllowedCatalogCategory(source: string, category: string) {
+    if (!isCatalogCategoryAllowedForSource(source, category)) {
+      throw new BadRequestException('Category is not supported for source');
+    }
+  }
+
+  private async ensureActiveCatalogCategory(source: string, category: string) {
+    this.ensureSupportedCatalogSource(source);
+    const normalizedCategory = this.normalizeCategoryName(category);
+
+    const persisted = await this.prisma.catalogCategory.findFirst({
+      where: {
+        source,
+        name: normalizedCategory,
+        deleted_at: null,
+      },
+      select: { id: true },
+    });
+
+    if (persisted) return;
+
+    if (!isCatalogCategoryAllowedForSource(source, normalizedCategory)) {
+      throw new BadRequestException('Category is not supported for source');
+    }
+  }
+
+  private normalizeCategoryName(name?: string | null) {
+    const normalized = name?.trim().slice(0, 64);
+    if (!normalized) {
+      throw new BadRequestException('Category name is required');
+    }
+
+    return normalized;
+  }
+
   private normalizeNullableString(value?: string | null) {
     const normalized = value?.trim();
     return normalized || null;
+  }
+
+  private normalizeCurrency(value?: string | null) {
+    const normalized = value?.trim().toUpperCase();
+    return normalized || 'EGP';
   }
 
   // Products Management
   async getProducts(
     tenantName?: string,
     productName?: string,
+    tenantCategory?: TenantCategory,
     page = 1,
     limit = 20,
   ) {
     const pagination = this.getPagination(page, limit);
+    const tenantWhere: Prisma.TenantWhereInput = {};
+    if (tenantName) {
+      tenantWhere.name = { contains: tenantName, mode: 'insensitive' };
+    }
+    if (tenantCategory) {
+      tenantWhere.category = tenantCategory;
+    }
+
     const tenants = await this.prisma.tenant.findMany({
-      where: tenantName
-        ? { name: { contains: tenantName, mode: 'insensitive' } }
-        : undefined,
+      where: Object.keys(tenantWhere).length > 0 ? tenantWhere : undefined,
       orderBy: { created_at: 'desc' },
     });
 

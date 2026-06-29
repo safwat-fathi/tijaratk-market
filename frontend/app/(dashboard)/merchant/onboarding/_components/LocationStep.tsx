@@ -61,9 +61,15 @@ export default function LocationStep({
     }
     setLoading(true);
     try {
-      await merchantDirectoryService.updateProfile({
+      const isAreaChanged = tenant.directory_profile?.area_id !== Number(locationData.cityId);
+      const payload: Parameters<typeof merchantDirectoryService.updateProfile>[0] = {
         area_id: Number(locationData.cityId),
-      });
+      };
+      if (isAreaChanged) {
+        payload.delivery_area_ids = [Number(locationData.cityId)];
+      }
+
+      await merchantDirectoryService.updateProfile(payload);
       await onNext();
     } catch (err) {
       console.error(err);

@@ -34,10 +34,23 @@ import { GetCatalogItemsDto } from '../products/dto/get-catalog-items.dto';
 import { GetTenantProductsDto } from '../products/dto/get-tenant-products.dto';
 import { UpdateProductDto } from '../products/dto/update-product.dto';
 import {
+  BulkUpdateAdminCatalogItemsDto,
+  BulkUpdateAdminProductsDto,
+  CreateAdminCatalogCategoryDto,
+  CreateAdminCatalogItemDto,
+  CreateTenantProductCategoryDto,
+  GetAdminCatalogCategoriesDto,
+  GetAdminCatalogItemsDto,
+  UpdateAdminCatalogCategoryDto,
+  UpdateAdminCatalogItemDto,
+  UpdateTenantProductCategoryDto,
+} from './dto/catalog-item.dto';
+import {
   CreateSupermarketEssentialDto,
   UpdateSupermarketEssentialDto,
 } from './dto/supermarket-essential.dto';
 import { Response } from 'express';
+import { TenantCategory } from '../../generated/prisma/client';
 import {
   AdminLoginResponseDto,
   AdminLogoutResponseDto,
@@ -317,6 +330,18 @@ export class AdminController {
   }
 
   @UseGuards(AdminAuthGuard)
+  @Patch('products/bulk')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Bulk update merchant products as admin' })
+  @ApiBody({ type: BulkUpdateAdminProductsDto })
+  @ApiResponse({ status: 200, description: 'Products updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid bulk update payload' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  bulkUpdateProducts(@Body() dto: BulkUpdateAdminProductsDto) {
+    return this.productsService.bulkUpdateForTenantAsAdmin(dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
   @Patch('products/:id')
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
@@ -395,6 +420,204 @@ export class AdminController {
     return this.adminService.togglePlanStatus(
       id,
       togglePlanStatusDto.is_active,
+    );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('catalog-items')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Get catalog items',
+    description: 'Retrieve global catalog items for one supported source.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Catalog items retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getAdminCatalogItems(@Query() query: GetAdminCatalogItemsDto) {
+    return this.adminService.getAdminCatalogItems(
+      query.source,
+      query.search,
+      query.category,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('catalog-items/categories')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Get catalog item categories',
+    description: 'Retrieve category counts for one supported catalog source.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Catalog categories retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getAdminCatalogCategories(@Query() query: GetAdminCatalogCategoriesDto) {
+    return this.adminService.getAdminCatalogCategories(query.source);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('catalog-items/categories')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Create catalog category' })
+  @ApiBody({ type: CreateAdminCatalogCategoryDto })
+  createAdminCatalogCategory(@Body() dto: CreateAdminCatalogCategoryDto) {
+    return this.adminService.createAdminCatalogCategory(dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Patch('catalog-items/categories/:id')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Rename catalog category' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdateAdminCatalogCategoryDto })
+  updateAdminCatalogCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAdminCatalogCategoryDto,
+  ) {
+    return this.adminService.updateAdminCatalogCategory(id, dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Delete('catalog-items/categories/:id')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Delete empty catalog category' })
+  @ApiParam({ name: 'id', type: Number })
+  deleteAdminCatalogCategory(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.deleteAdminCatalogCategory(id);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('catalog-items')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Create catalog item',
+    description: 'Create a global catalog item for a supported source.',
+  })
+  @ApiBody({ type: CreateAdminCatalogItemDto })
+  @ApiResponse({ status: 201, description: 'Catalog item created' })
+  @ApiResponse({ status: 400, description: 'Invalid source or category' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
+  createAdminCatalogItem(
+    @Body() dto: CreateAdminCatalogItemDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.adminService.createAdminCatalogItem(dto, file);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Patch('catalog-items/bulk')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Bulk update catalog items',
+    description: 'Update selected global catalog items without changing source.',
+  })
+  @ApiBody({ type: BulkUpdateAdminCatalogItemsDto })
+  @ApiResponse({ status: 200, description: 'Catalog items updated' })
+  @ApiResponse({ status: 400, description: 'Invalid bulk update payload' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  bulkUpdateAdminCatalogItems(@Body() dto: BulkUpdateAdminCatalogItemsDto) {
+    return this.adminService.bulkUpdateAdminCatalogItems(dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Patch('catalog-items/:id')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Update catalog item',
+    description: 'Update a global catalog item without changing its source.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdateAdminCatalogItemDto })
+  @ApiResponse({ status: 200, description: 'Catalog item updated' })
+  @ApiResponse({ status: 400, description: 'Invalid category' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Catalog item not found' })
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
+  updateAdminCatalogItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAdminCatalogItemDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.adminService.updateAdminCatalogItem(id, dto, file);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Delete('catalog-items/:id')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Deactivate catalog item',
+    description:
+      'Deactivate a global catalog item instead of hard deleting it.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Catalog item deactivated' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Catalog item not found' })
+  deleteAdminCatalogItem(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.deleteAdminCatalogItem(id);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('tenants/:id/product-categories')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Get tenant product categories with counts' })
+  getAdminTenantProductCategories(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.getTenantProductCategories(id);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('tenants/:id/product-categories')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Create tenant product category' })
+  @ApiBody({ type: CreateTenantProductCategoryDto })
+  createAdminTenantProductCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateTenantProductCategoryDto,
+  ) {
+    return this.adminService.createTenantProductCategory(id, dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Patch('tenants/:tenantId/product-categories/:categoryId')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Rename tenant product category' })
+  @ApiBody({ type: UpdateTenantProductCategoryDto })
+  updateAdminTenantProductCategory(
+    @Param('tenantId', ParseIntPipe) tenantId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Body() dto: UpdateTenantProductCategoryDto,
+  ) {
+    return this.adminService.updateTenantProductCategory(
+      tenantId,
+      categoryId,
+      dto,
+    );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Delete('tenants/:tenantId/product-categories/:categoryId')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Delete empty tenant product category' })
+  deleteAdminTenantProductCategory(
+    @Param('tenantId', ParseIntPipe) tenantId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+  ) {
+    return this.adminService.deleteTenantProductCategory(
+      tenantId,
+      categoryId,
     );
   }
 
@@ -521,12 +744,20 @@ export class AdminController {
   getProducts(
     @Query('tenantName') tenantName?: string,
     @Query('productName') productName?: string,
+    @Query('tenantCategory') tenantCategory?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    const supportedTenantCategory =
+      tenantCategory === TenantCategory.grocery ||
+      tenantCategory === TenantCategory.pharmacy
+        ? tenantCategory
+        : undefined;
+
     return this.adminService.getProducts(
       tenantName,
       productName,
+      supportedTenantCategory,
       page ? Number(page) : undefined,
       limit ? Number(limit) : undefined,
     );

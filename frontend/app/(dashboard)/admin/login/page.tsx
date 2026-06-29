@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Field, Input } from '@/components/ui/Field';
+import { Field, Input, PasswordInput } from '@/components/ui/Field';
 import { Logo } from '@/components/ui/Logo';
 import { adminLoginAction, ActionState } from '@/actions/admin-server';
 
@@ -42,10 +42,9 @@ export default function AdminLogin() {
               />
             </Field>
             <Field label="كلمة المرور" htmlFor="password" error={state?.errors?.password?.[0]}>
-              <Input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 required
               />
             </Field>

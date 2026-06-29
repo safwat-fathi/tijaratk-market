@@ -19,6 +19,7 @@ const {
 
 const AUTH_SIGNUP_PATH = '/auth/signup';
 const AUTH_LOGIN_PATH = '/auth/login';
+const AUTH_UPDATE_PASSWORD_PATH = '/auth/update-password';
 const PRODUCTS_PATH = '/products';
 const PRODUCTS_ITEM_PATH = (id) => `${PRODUCTS_PATH}/${id}`;
 
@@ -33,6 +34,7 @@ describe('Security E2E (multi-tenant)', () => {
   let tenantAId;
   let tenantBId;
   let tenantBProductId;
+  const password = 'Passw0rd!';
 
   const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
@@ -68,7 +70,6 @@ describe('Security E2E (multi-tenant)', () => {
     httpServer = app.getHttpServer();
     dataSource = app.get(DataSource);
 
-    const password = 'Passw0rd!';
     const tenantAPhone = generateEgyptPhone(1);
     const tenantBPhone = generateEgyptPhone(2);
 
@@ -129,6 +130,17 @@ describe('Security E2E (multi-tenant)', () => {
 
   it('returns 401 when accessing protected route without token', async () => {
     await request(httpServer).get(PRODUCTS_ITEM_PATH(tenantBProductId)).expect(401);
+  });
+
+  it('updates password for an authenticated merchant token', async () => {
+    await request(httpServer)
+      .post(AUTH_UPDATE_PASSWORD_PATH)
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({
+        currentPassword: password,
+        newPassword: `NewPassw0rd!${runId}`,
+      })
+      .expect(200);
   });
 
   it('prevents cross-tenant READ', async () => {

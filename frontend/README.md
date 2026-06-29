@@ -35,6 +35,8 @@ Use the same backend port configured by `HTTP_SERVER_PORT` in the backend enviro
 
 ## Running Locally
 
+> AI agents: these commands are documented for human developers only. Do not run them. If verification is needed, ask the user to run the relevant command and share the output.
+
 ```bash
 pnpm dev
 ```
@@ -50,12 +52,14 @@ pnpm start
 
 ## Quality Checks
 
+> AI agents: these commands are documented for human developers only. Do not run them. If verification is needed, ask the user to run the relevant command and share the output.
+
 ```bash
-pnpm lint
-pnpm type-check
+pnpm -C frontend lint
+pnpm -C frontend type-check
 ```
 
-`pnpm lint` runs ESLint and TypeScript checking.
+`pnpm -C frontend lint` runs ESLint and TypeScript checking.
 
 ## Main Routes
 

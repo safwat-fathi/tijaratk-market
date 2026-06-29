@@ -12,7 +12,13 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 
 import { LoginDto } from './dto/login.dto';
@@ -21,6 +27,13 @@ import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { VerifyPasswordResetDto } from './dto/verify-password-reset.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { AuthGuard } from '@nestjs/passport';
+
+type AuthenticatedRequest = Request & {
+  user?: {
+    userId?: number;
+  };
+};
+
 @ApiTags('auth')
 @Controller('auth')
 @UseFilters(AuthExceptionFilter)
@@ -104,8 +117,11 @@ export class AuthController {
     description: 'Updates the password for a logged-in user',
   })
   @ApiBody({ type: UpdatePasswordDto })
-  async updatePassword(@Req() req: Request, @Body() dto: UpdatePasswordDto) {
-    const userId = (req as any).user?.sub;
+  async updatePassword(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: UpdatePasswordDto,
+  ) {
+    const userId = req.user?.userId;
     if (!userId) {
       throw new UnauthorizedException('User not found in token');
     }

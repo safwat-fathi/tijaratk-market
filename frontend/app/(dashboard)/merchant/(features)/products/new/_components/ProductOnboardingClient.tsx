@@ -138,6 +138,12 @@ export type ProductOnboardingActions = {
     productId: number,
     isAvailable: boolean,
   ) => Promise<ActionResult<Product>>;
+  bulkUpdateProducts?: (payload: {
+    ids: number[];
+    category?: string;
+    is_available?: boolean;
+    status?: "active" | "archived";
+  }) => Promise<ActionResult<{ success: boolean; count: number }>>;
   removeProduct: (
     productId: number,
   ) => Promise<ActionResult<unknown>>;
@@ -163,6 +169,80 @@ const merchantProductOnboardingActions: ProductOnboardingActions = {
 };
 
 const CATALOG_PAGE_LIMIT = 40;
+
+const parseUploadProxyResponse = async <T,>(
+  response: Response,
+  fallbackMessage: string,
+): Promise<ActionResult<T>> => {
+  let body: ActionResult<T> | undefined;
+
+  try {
+    body = (await response.json()) as ActionResult<T>;
+  } catch {
+    body = undefined;
+  }
+
+  if (!response.ok || !body?.success) {
+    return {
+      success: false,
+      message: body?.message || response.statusText || fallbackMessage,
+    };
+  }
+
+  return body;
+};
+
+const createMerchantProductWithImage = async (
+  formData: FormData,
+): Promise<ActionResult<Product>> => {
+  const response = await fetch("/api/merchant/products", {
+    method: "POST",
+    body: formData,
+  });
+
+  return parseUploadProxyResponse<Product>(response, "تعذر إضافة المنتج");
+};
+
+const updateMerchantProductWithImage = async (
+  productId: number,
+  formData: FormData,
+): Promise<ActionResult<Product>> => {
+  const response = await fetch(`/api/merchant/products/${productId}`, {
+    method: "PATCH",
+    body: formData,
+  });
+
+  return parseUploadProxyResponse<Product>(response, "تعذر تعديل المنتج");
+};
+
+const buildCreateProductImageFormData = ({
+  name,
+  price,
+  category,
+  orderMode,
+  orderConfig,
+  imageFile,
+}: {
+  name: string;
+  price: number | null;
+  category?: string;
+  orderMode: ProductOrderMode;
+  orderConfig: ProductOrderConfig;
+  imageFile: File;
+}): FormData => {
+  const formData = new FormData();
+  formData.set("name", name);
+  formData.set("order_mode", orderMode);
+  formData.set("order_config", JSON.stringify(orderConfig));
+  if (price !== null) {
+    formData.set("current_price", String(price));
+  }
+  if (category) {
+    formData.set("category", category);
+  }
+  formData.set("file", imageFile);
+  return formData;
+};
 
 const removeProductFromList = (productList: Product[], productId: number) =>
   productList.filter((item) => item.id !== productId);
@@ -273,6 +353,7 @@ export default function ProductOnboardingClient({
 
   const canUseBulkWizard = enableBulkWizard && storeType === "grocery";
   const handleOpenBulkWizard = canUseBulkWizard ? () => setIsBulkWizardOpen(true) : undefined;
+  const shouldUseMerchantUploadProxy = actions === merchantProductOnboardingActions;
 
   const defaultUnitLabel =
     storeType === "pharmacy" ? "علبة" : DEFAULT_UNIT_LABEL;
@@ -808,15 +889,29 @@ export default function ProductOnboardingClient({
         pricePresets: manualPricePresets,
       });
 
-      const response = await actions.createProduct(
-        trimmedName,
-        undefined,
-        parsedPrice.value ?? undefined,
-        normalizedCategory,
-        manualOrderMode,
-        orderConfig,
-        manualImageFile,
-      );
+      let response: ActionResult<Product>;
+      if (manualImageFile && shouldUseMerchantUploadProxy) {
+        response = await createMerchantProductWithImage(
+          buildCreateProductImageFormData({
+            name: trimmedName,
+            price: parsedPrice.value,
+            category: normalizedCategory,
+            orderMode: manualOrderMode,
+            orderConfig,
+            imageFile: manualImageFile,
+          }),
+        );
+      } else {
+        response = await actions.createProduct(
+          trimmedName,
+          undefined,
+          parsedPrice.value ?? undefined,
+          normalizedCategory,
+          manualOrderMode,
+          orderConfig,
+          manualImageFile,
+        );
+      }
 
       if (!response.success || !response.data) {
         const imageErrorMessage = normalizeImageUploadErrorMessage(
@@ -1147,6 +1242,48 @@ export default function ProductOnboardingClient({
     })();
   };
 
+  const handleBulkUpdateProducts = async (payload: {
+    ids: number[];
+    category?: string;
+    is_available?: boolean;
+    status?: "active" | "archived";
+  }) => {
+    if (!actions.bulkUpdateProducts) {
+      return {
+        success: false,
+        message: "تعذر تحديث المنتجات المحددة",
+      };
+    }
+
+    const response = await actions.bulkUpdateProducts(payload);
+    if (!response.success) {
+      return response;
+    }
+
+    const selectedIds = new Set(payload.ids);
+    const updateProduct = (product: Product): Product =>
+      selectedIds.has(product.id)
+        ? {
+            ...product,
+            category: payload.category ?? product.category,
+            is_available:
+              payload.is_available !== undefined
+                ? payload.is_available
+                : product.is_available,
+            status: payload.status ?? product.status,
+          }
+        : product;
+
+    setProducts((prev) => prev.map(updateProduct));
+    setSearchResults((prev) => prev.map(updateProduct));
+    if (payload.category) {
+      addCategoryOption(payload.category);
+    }
+    setMessage("تم تحديث المنتجات المحددة");
+
+    return response;
+  };
+
   const handleEditImageChange = (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -1291,7 +1428,10 @@ export default function ProductOnboardingClient({
         formData.set("file", selectedImageFile);
       }
 
-      const response = await actions.updateProduct(editingProductId, formData);
+      const response =
+        selectedImageFile && shouldUseMerchantUploadProxy
+          ? await updateMerchantProductWithImage(editingProductId, formData)
+          : await actions.updateProduct(editingProductId, formData);
       if (!response.success || !response.data) {
         handleUpdateProductErrorResponse({
           responseMessage: response.message,
@@ -1501,6 +1641,12 @@ export default function ProductOnboardingClient({
         onRequestRemove={handleRequestRemove}
         onRemoveProduct={handleRemoveProduct}
         onCancelRemove={() => setConfirmRemoveProductId(null)}
+        bulkUpdateProducts={
+          layoutMode === "admin" && actions.bulkUpdateProducts
+            ? handleBulkUpdateProducts
+            : undefined
+        }
+        bulkCategoryOptions={availableProductCategories}
         setProductRowRef={(productId, node) => {
           if (node) {
             productRowRefs.current.set(productId, node);

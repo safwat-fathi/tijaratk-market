@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
-import { Button } from "@/components/ui/Button";
 import { adminLogoutAction } from "@/actions/admin-server";
 
 import { DashboardSidebar, NavItem } from "@/components/layout/DashboardSidebar";
@@ -27,6 +25,8 @@ export default function AdminLayout({
     { label: "الباقات", href: "/admin/plans" },
     { label: "الاستيراد", href: "/admin/imports" },
     { label: "المنتجات", href: "/admin/products" },
+    { label: "التصنيفات", href: "/admin/categories" },
+    { label: "عناصر الكتالوج", href: "/admin/catalog-items" },
     { label: "أساسيات السوبر ماركت", href: "/admin/supermarket-essentials" },
     { label: "الطلبات", href: "/admin/orders" },
     { label: "المناطق", href: "/admin/areas" },

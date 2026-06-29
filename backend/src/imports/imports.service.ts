@@ -17,6 +17,7 @@ import { CreateImportDto } from './dto/create-import.dto';
 import {
   CatalogImportRow,
   CatalogImportFormat,
+  detectCatalogImportFormat,
   parseCatalogImportRow,
 } from './schemas/catalog-import-row.schema';
 import {
@@ -91,6 +92,7 @@ export class ImportsService {
         status: ImportStatus.pending,
         original_file_name: file.originalname,
         file_path: file.path,
+        format: body.format,
       },
     });
 
@@ -223,6 +225,7 @@ export class ImportsService {
           importRunId,
           batch,
           importRun.mode,
+          importRun.format,
           counters,
           replacementState,
         );
@@ -254,6 +257,7 @@ export class ImportsService {
         importRunId,
         batch,
         importRun.mode,
+        importRun.format,
         counters,
         replacementState,
       );
@@ -276,6 +280,7 @@ export class ImportsService {
     importRunId: number,
     batch: { rowNumber: number; row: Record<string, unknown> }[],
     mode: ImportMode,
+    format: string | null | undefined,
     counters: CatalogImportCounters,
     replacementState: CatalogReplacementState,
   ) {
@@ -286,6 +291,7 @@ export class ImportsService {
           b.rowNumber,
           b.row,
           mode,
+          format,
           counters,
           replacementState,
         ),
@@ -298,6 +304,7 @@ export class ImportsService {
     rowNumber: number,
     row: Record<string, unknown>,
     mode: ImportMode,
+    format: string | null | undefined,
     counters: CatalogImportCounters,
     replacementState: CatalogReplacementState,
   ) {
@@ -307,7 +314,8 @@ export class ImportsService {
       return;
     }
 
-    const parsed = parseCatalogImportRow(row);
+    const effectiveFormat = this.resolveImportFormat(row, format);
+    const parsed = parseCatalogImportRow(row, effectiveFormat);
     if (!parsed.success) {
       counters.failedRows += 1;
       await this.saveRowError(
@@ -472,7 +480,7 @@ export class ImportsService {
 
   private resolveCategorySource(row: CatalogImportRow): string | undefined {
     if (row.format === CatalogImportFormat.chefaa) {
-      return row.data.category_path;
+      return row.data.category_path || row.data.category;
     }
 
     if (row.format === CatalogImportFormat.carrefour) {
@@ -529,6 +537,31 @@ export class ImportsService {
 
   private mapCategory(value: string | undefined): string {
     return normalizeCatalogCategory(value) ?? '';
+  }
+
+  /**
+   * Resolves a row format, preferring the import-run format selected by admin.
+   */
+  private resolveImportFormat(
+    row: Record<string, unknown>,
+    explicitFormat: string | null | undefined,
+  ): CatalogImportFormat | undefined {
+    if (this.isCatalogImportFormat(explicitFormat)) {
+      return explicitFormat;
+    }
+
+    return detectCatalogImportFormat(row) ?? undefined;
+  }
+
+  /**
+   * Checks whether a stored import format is one of the supported CSV formats.
+   */
+  private isCatalogImportFormat(
+    format: string | null | undefined,
+  ): format is CatalogImportFormat {
+    return Object.values(CatalogImportFormat).includes(
+      format as CatalogImportFormat,
+    );
   }
 
   private async saveRowError(

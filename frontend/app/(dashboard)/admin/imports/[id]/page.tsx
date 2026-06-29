@@ -17,6 +17,12 @@ const STATUS_LABELS: Record<ImportStatus, string> = {
   cancelled: "تم الإلغاء",
 };
 
+const FORMAT_LABELS: Record<NonNullable<ImportRun["format"]>, string> = {
+  talabat: "Talabat",
+  chefaa: "Chefaa",
+  carrefour: "Carrefour",
+};
+
 async function getImportData(id: number): Promise<{
   importRun: ImportRun;
   errors: ImportRowError[];
@@ -147,6 +153,12 @@ export default async function AdminImportDetailsPage({
           <div>
             <dt className="text-sm text-gray-500">وضع الاستيراد</dt>
             <dd className="mt-1 font-medium text-gray-900">{importRun.mode}</dd>
+          </div>
+          <div>
+            <dt className="text-sm text-gray-500">صيغة الملف</dt>
+            <dd className="mt-1 font-medium text-gray-900">
+              {importRun.format ? FORMAT_LABELS[importRun.format] : "تلقائي"}
+            </dd>
           </div>
           <div>
             <dt className="text-sm text-gray-500">بدأ في</dt>

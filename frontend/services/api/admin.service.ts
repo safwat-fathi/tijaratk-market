@@ -143,9 +143,19 @@ export type AdminCatalogItem = {
 };
 
 export type AdminCatalogCategory = {
+	id?: number;
+	name?: string;
 	category: string;
 	count: number;
 	image_url?: string | null;
+};
+
+export type AdminCatalogSource = "talabat_csv" | "chefaa_csv";
+
+export type AdminTenantProductCategory = {
+	id: number;
+	name: string;
+	count: number;
 };
 
 type AdminOrder = Record<string, unknown>;
@@ -184,6 +194,49 @@ type UpdateSupermarketEssentialPayload =
 			is_active?: boolean;
 			essential_sort_order?: number | null;
 	  };
+
+type AdminCatalogItemPayload =
+	| FormData
+	| {
+			source: AdminCatalogSource;
+			name: string;
+			category: string;
+			price?: number | null;
+			currency?: string;
+			image_url?: string | null;
+			external_id?: string | null;
+			is_active?: boolean;
+			is_essential?: boolean;
+			essential_sort_order?: number | null;
+	  };
+
+type UpdateAdminCatalogItemPayload =
+	| FormData
+	| {
+			name?: string;
+			category?: string;
+			price?: number | null;
+			currency?: string;
+			image_url?: string | null;
+			external_id?: string | null;
+			is_active?: boolean;
+			is_essential?: boolean;
+			essential_sort_order?: number | null;
+	  };
+
+type BulkUpdateAdminCatalogItemsPayload = {
+	ids: number[];
+	category?: string;
+	is_active?: boolean;
+	is_essential?: boolean;
+};
+
+type BulkUpdateAdminProductsPayload = {
+	ids: number[];
+	category?: string;
+	is_available?: boolean;
+	status?: "active" | "archived";
+};
 
 type UpdateTenantDirectoryProfilePayload = {
 	area_id?: number;
@@ -379,6 +432,15 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async bulkUpdateProducts(payload: BulkUpdateAdminProductsPayload) {
+		return this.patch<{ success: boolean; count: number }>(
+			"products/bulk",
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
 	public async removeProduct(productId: number) {
 		return this.delete<void>(
 			`products/${productId}`,
@@ -458,6 +520,141 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async getAdminCatalogItems(params: {
+		source: AdminCatalogSource;
+		search?: string;
+		category?: string;
+		page?: number;
+		limit?: number;
+	}) {
+		const qs = this.buildQueryString(params);
+		return this.get<AdminPaginatedResponse<AdminCatalogItem>>(
+			`catalog-items${qs}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async getAdminCatalogCategories(source: AdminCatalogSource) {
+		const qs = this.buildQueryString({ source });
+		return this.get<AdminCatalogCategory[]>(
+			`catalog-items/categories${qs}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async createAdminCatalogCategory(payload: {
+		source: AdminCatalogSource;
+		name: string;
+	}) {
+		return this.post<AdminCatalogCategory>(
+			"catalog-items/categories",
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async updateAdminCatalogCategory(id: number, payload: { name: string }) {
+		return this.patch<AdminCatalogCategory>(
+			`catalog-items/categories/${id}`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async deleteAdminCatalogCategory(id: number) {
+		return this.delete<{ success: boolean }>(
+			`catalog-items/categories/${id}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async getAdminTenantProductCategories(tenantId: number) {
+		return this.get<AdminTenantProductCategory[]>(
+			`tenants/${tenantId}/product-categories`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async createAdminTenantProductCategory(tenantId: number, payload: { name: string }) {
+		return this.post<AdminTenantProductCategory>(
+			`tenants/${tenantId}/product-categories`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async updateAdminTenantProductCategory(
+		tenantId: number,
+		categoryId: number,
+		payload: { name: string },
+	) {
+		return this.patch<AdminTenantProductCategory>(
+			`tenants/${tenantId}/product-categories/${categoryId}`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async deleteAdminTenantProductCategory(tenantId: number, categoryId: number) {
+		return this.delete<{ success: boolean }>(
+			`tenants/${tenantId}/product-categories/${categoryId}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async createAdminCatalogItem(payload: AdminCatalogItemPayload) {
+		return this.post<AdminCatalogItem>(
+			"catalog-items",
+			payload,
+			undefined,
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: payload instanceof FormData ? 30000 : undefined,
+			}
+		);
+	}
+
+	public async updateAdminCatalogItem(
+		id: number,
+		payload: UpdateAdminCatalogItemPayload,
+	) {
+		return this.patch<AdminCatalogItem>(
+			`catalog-items/${id}`,
+			payload,
+			undefined,
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: payload instanceof FormData ? 30000 : undefined,
+			}
+		);
+	}
+
+	public async deleteAdminCatalogItem(id: number) {
+		return this.delete<{ success: boolean }>(
+			`catalog-items/${id}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async bulkUpdateAdminCatalogItems(payload: BulkUpdateAdminCatalogItemsPayload) {
+		return this.patch<{ success: boolean; count: number }>(
+			"catalog-items/bulk",
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
 	public async getPlans() {
 		return this.get<AdminPlan[]>("plans", undefined, ADMIN_AUTH_OPTIONS);
 	}
@@ -492,12 +689,14 @@ class AdminApiService extends HttpService {
 	public async getProducts(
 		tenantName?: string,
 		productName?: string,
+		tenantCategory?: "grocery" | "pharmacy",
 		page?: number,
 		limit?: number,
 	) {
 		const params = new URLSearchParams();
 		if (tenantName) params.append("tenantName", tenantName);
 		if (productName) params.append("productName", productName);
+		if (tenantCategory) params.append("tenantCategory", tenantCategory);
 		if (page) params.append("page", String(page));
 		if (limit) params.append("limit", String(limit));
 		const qs = params.toString() ? `?${params.toString()}` : '';
@@ -520,12 +719,14 @@ class AdminApiService extends HttpService {
 	}
 
 	private buildQueryString(params?: {
+		source?: AdminCatalogSource;
 		search?: string;
 		category?: string;
 		page?: number;
 		limit?: number;
 	}) {
 		const searchParams = new URLSearchParams();
+		if (params?.source) searchParams.append("source", params.source);
 		if (params?.search) searchParams.append("search", params.search);
 		if (params?.category) searchParams.append("category", params.category);
 		if (params?.page) searchParams.append("page", String(params.page));

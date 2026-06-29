@@ -29,3 +29,15 @@ sources or rely on frontend filtering to hide the wrong products.
   tenant's allowed source and must not fall back to unrelated active catalog
   rows.
 
+## Command execution restrictions for AI agents
+
+AI agents must not run verification, migration, package-manager, dependency, lint, typecheck, test, build, or dev-server commands in this repository.
+
+Do not run commands including, but not limited to:
+
+- `pnpm`, `npm`, `yarn`, or `bun`
+- `prisma migrate`, `prisma generate`, `prisma db`, or `prisma studio`
+- lint, typecheck, test, build, start, or dev commands
+- any command that can create, remove, repair, or reinstall `node_modules`
+
+When verification is needed, do not execute it. Tell the user exactly which command they should run themselves and wait for their output.

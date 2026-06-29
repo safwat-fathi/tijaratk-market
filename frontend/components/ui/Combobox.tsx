@@ -1,14 +1,27 @@
 "use client";
 
-import { useId, useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 
-export interface ComboboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "list"> {
-  options: string[];
+const normalizeArabic = (text: string) => {
+  return text
+    .toLowerCase()
+    .replace(/[أإآا]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي");
+};
+
+export type ComboboxOption = string | { label: string; value: string | number };
+
+export interface ComboboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "list" | "onChange" | "options" | "value" | "defaultValue"> {
+  options: ComboboxOption[];
   label?: string;
   inputClassName?: string;
   labelClassName?: string;
   wrapperClassName?: string;
   onValueChange?: (value: string) => void;
+  value?: string | number;
+  defaultValue?: string | number;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 export function Combobox({
@@ -21,57 +34,80 @@ export function Combobox({
   value,
   defaultValue,
   onChange,
+  name,
   ...props
 }: ComboboxProps) {
-  const [internalValue, setInternalValue] = useState<string>(
-    (value as string) || (defaultValue as string) || ""
-  );
+  const normalizedOptions = useMemo(() => {
+    return options.map(opt => {
+      if (typeof opt === 'string') return { label: opt, value: opt };
+      return { label: String(opt.label), value: String(opt.value) };
+    });
+  }, [options]);
+
+  const initialValueStr = value !== undefined ? String(value) : (defaultValue !== undefined ? String(defaultValue) : "");
+  const initialOption = normalizedOptions.find(opt => opt.value === initialValueStr);
+
+  const [selectedValue, setSelectedValue] = useState<string>(initialValueStr);
+  const [inputValue, setInputValue] = useState<string>(initialOption ? initialOption.label : initialValueStr);
+  
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hiddenInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync internal value if controlled
   useEffect(() => {
     if (value !== undefined) {
-      setInternalValue(value as string);
+      const valStr = String(value);
+      setSelectedValue(valStr);
+      const opt = normalizedOptions.find(o => o.value === valStr);
+      if (opt) setInputValue(opt.label);
+      else setInputValue(valStr);
     }
-  }, [value]);
+  }, [value, normalizedOptions]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        if (inputValue !== selectedValue && !normalizedOptions.find(o => o.label === inputValue)) {
+          setSelectedValue(inputValue);
+        }
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [inputValue, selectedValue, normalizedOptions]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    setInternalValue(val);
+    setInputValue(val);
     setIsOpen(true);
-    if (onChange) onChange(e);
-    if (onValueChange) onValueChange(val);
+    
+    const matchingOption = normalizedOptions.find(opt => opt.label.toLowerCase() === val.toLowerCase());
+    const newVal = matchingOption ? matchingOption.value : val;
+    setSelectedValue(newVal);
+    
+    if (onValueChange) onValueChange(newVal);
   };
 
-  const handleSelect = (option: string) => {
-    setInternalValue(option);
+  const handleSelect = (option: { label: string; value: string }) => {
+    setInputValue(option.label);
+    setSelectedValue(option.value);
     setIsOpen(false);
     
-    // Simulate change event if needed by parent
-    const syntheticEvent = {
-      target: { value: option, name: props.name }
-    } as React.ChangeEvent<HTMLInputElement>;
-    
-    if (onChange) onChange(syntheticEvent);
-    if (onValueChange) onValueChange(option);
+    if (onChange) {
+      const syntheticEvent = {
+        target: { value: option.value, name: name }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(syntheticEvent);
+    }
+    if (onValueChange) onValueChange(option.value);
   };
 
   const filteredOptions = useMemo(() => {
-    const search = internalValue.toLowerCase();
-    if (!search) return options;
-    return options.filter((opt) => opt.toLowerCase().includes(search));
-  }, [internalValue, options]);
+    const search = normalizeArabic(inputValue);
+    if (!search) return normalizedOptions;
+    return normalizedOptions.filter((opt) => normalizeArabic(opt.label).includes(search));
+  }, [inputValue, normalizedOptions]);
 
   return (
     <div className={`block space-y-1 relative ${wrapperClassName}`} ref={containerRef}>
@@ -81,35 +117,54 @@ export function Combobox({
         </span>
       )}
       <div className="relative">
+        {name && (
+          <input
+            type="hidden"
+            name={name}
+            value={selectedValue}
+            ref={hiddenInputRef}
+          />
+        )}
         <input
           {...props}
-          value={internalValue}
-          onChange={handleChange}
+          value={inputValue}
+          onChange={handleInputChange}
           onFocus={() => setIsOpen(true)}
+          onClick={() => setIsOpen(true)}
           className={`w-full rounded-md border border-brand-border focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15 pe-10 ${inputClassName}`}
         />
-        <div className="absolute inset-y-0 end-0 flex items-center pe-3 pointer-events-none text-gray-400">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute inset-y-0 end-0 flex items-center pe-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+        >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
           </svg>
-        </div>
+        </button>
       </div>
       
-      {isOpen && filteredOptions.length > 0 && (
+      {isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-brand-border rounded-md shadow-lg max-h-60 overflow-auto">
-          <ul className="py-1 text-sm text-brand-text divide-y divide-brand-border/50">
-            {filteredOptions.map((option) => (
-              <li key={option}>
-                <button
-                  type="button"
-                  className="w-full text-right px-4 py-2 hover:bg-brand-soft hover:text-brand-primary transition-colors focus:bg-brand-soft focus:outline-none"
-                  onClick={() => handleSelect(option)}
-                >
-                  {option}
-                </button>
-              </li>
-            ))}
-          </ul>
+          {filteredOptions.length > 0 ? (
+            <ul className="py-1 text-sm text-brand-text divide-y divide-brand-border/50">
+              {filteredOptions.map((option) => (
+                <li key={option.value}>
+                  <button
+                    type="button"
+                    className="w-full text-right px-4 py-2 hover:bg-brand-soft hover:text-brand-primary transition-colors focus:bg-brand-soft focus:outline-none"
+                    onClick={() => handleSelect(option)}
+                  >
+                    {option.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="px-4 py-3 text-sm text-brand-muted text-center">
+              لا توجد نتائج
+            </div>
+          )}
         </div>
       )}
     </div>

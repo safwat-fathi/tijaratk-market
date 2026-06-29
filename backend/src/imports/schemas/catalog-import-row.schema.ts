@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isCatalogCategoryHintForChefaa } from 'src/products/catalog-source-policy';
 
 export enum CatalogImportFormat {
   talabat = 'talabat',
@@ -36,6 +37,7 @@ export const ChefaaCatalogImportRowSchema = z.object({
   product_slug: optionalText,
   product_url: optionalText,
   category_path: optionalText,
+  category: optionalText,
 });
 
 /**
@@ -106,6 +108,10 @@ export function detectCatalogImportFormat(
     return CatalogImportFormat.chefaa;
   }
 
+  if (hasChefaaOnlyCategory(row)) {
+    return CatalogImportFormat.chefaa;
+  }
+
   if ('category' in row || 'store_id' in row || 'area_id' in row) {
     return CatalogImportFormat.talabat;
   }
@@ -113,10 +119,24 @@ export function detectCatalogImportFormat(
   return null;
 }
 
+/**
+ * Detects Chefaa files that only expose the generic `category` header.
+ */
+function hasChefaaOnlyCategory(row: Record<string, unknown>): boolean {
+  if ('store_id' in row || 'area_id' in row) return false;
+
+  const category =
+    typeof row.category === 'string' ? row.category.trim() : undefined;
+  if (!category) return false;
+
+  return isCatalogCategoryHintForChefaa(category);
+}
+
 export function parseCatalogImportRow(
   row: Record<string, unknown>,
+  explicitFormat?: CatalogImportFormat,
 ): CatalogImportRowParseResult {
-  const format = detectCatalogImportFormat(row);
+  const format = explicitFormat || detectCatalogImportFormat(row);
 
   if (format === CatalogImportFormat.chefaa) {
     const parsed = ChefaaCatalogImportRowSchema.safeParse(row);

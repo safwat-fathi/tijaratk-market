@@ -13,6 +13,7 @@ import type {
   ProductOrderMode,
   PublicProductCategory,
 } from "@/types/models/product";
+import type { AdminCatalogSource } from "@/services/api/admin.service";
 
 export type ActionState = {
   success?: boolean;
@@ -696,6 +697,58 @@ export async function adminUpdateProductAvailabilityAction(
   return adminUpdateProductPayloadAction(productId, formData);
 }
 
+export async function adminBulkUpdateProductsAction(payload: {
+  ids: number[];
+  category?: string;
+  is_available?: boolean;
+  status?: "active" | "archived";
+}) {
+  try {
+    const ids = Array.from(
+      new Set(
+        payload.ids.filter(
+          (id) => Number.isInteger(id) && Number.isFinite(id) && id > 0,
+        ),
+      ),
+    );
+    const category = payload.category?.trim();
+    const hasAction =
+      Boolean(category) ||
+      payload.is_available !== undefined ||
+      payload.status !== undefined;
+
+    if (ids.length === 0 || !hasAction) {
+      return {
+        success: false,
+        message: "اختر منتجات وإجراء للتطبيق",
+      };
+    }
+
+    const response = await adminService.bulkUpdateProducts({
+      ids,
+      category: category || undefined,
+      is_available: payload.is_available,
+      status: payload.status,
+    });
+
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحديث المنتجات المحددة",
+      };
+    }
+
+    revalidatePath("/admin/products");
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error("Admin bulk update products failed:", error);
+    return {
+      success: false,
+      message: "تعذر تحديث المنتجات المحددة",
+    };
+  }
+}
+
 export async function adminRemoveProductAction(productId: number) {
   try {
     const response = await adminService.removeProduct(productId);
@@ -722,6 +775,9 @@ export async function adminRemoveProductAction(productId: number) {
 }
 
 const SUPERMARKET_ESSENTIALS_PATH = "/admin/supermarket-essentials";
+const ADMIN_CATALOG_ITEMS_PATH = "/admin/catalog-items";
+const ADMIN_CATEGORIES_PATH = "/admin/categories";
+const ADMIN_CATALOG_SOURCES = new Set(["talabat_csv", "chefaa_csv"]);
 
 const parseNullableString = (value: FormDataEntryValue | null) => {
   if (typeof value !== "string") {
@@ -753,6 +809,16 @@ const appendOptionalFileField = (
   if (file instanceof File && file.size > 0) {
     target.set("file", file);
   }
+};
+
+const parseAdminCatalogSource = (
+  value: FormDataEntryValue | null,
+): AdminCatalogSource | null => {
+  if (typeof value !== "string" || !ADMIN_CATALOG_SOURCES.has(value)) {
+    return null;
+  }
+
+  return value as AdminCatalogSource;
 };
 
 const buildSupermarketEssentialFormData = (
@@ -853,6 +919,266 @@ export async function adminDeleteSupermarketEssentialAction(
   revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
 }
 
+const buildAdminCatalogItemFormData = (
+  formData: FormData,
+  includeSource: boolean,
+) => {
+  const payload = new FormData();
+  if (includeSource) {
+    appendTrimmedFormDataField(payload, "source", formData.get("source"));
+  }
+  appendTrimmedFormDataField(payload, "name", formData.get("name"));
+  appendTrimmedFormDataField(payload, "category", formData.get("category"));
+  appendTrimmedFormDataField(payload, "price", formData.get("price"));
+  appendTrimmedFormDataField(payload, "currency", formData.get("currency"));
+  appendTrimmedFormDataField(payload, "image_url", formData.get("image_url"));
+  appendTrimmedFormDataField(payload, "external_id", formData.get("external_id"));
+  appendTrimmedFormDataField(
+    payload,
+    "essential_sort_order",
+    formData.get("essential_sort_order"),
+  );
+  appendOptionalFileField(payload, formData.get("file"));
+  payload.set(
+    "is_active",
+    parseCheckboxBoolean(formData.get("is_active")) ? "true" : "false",
+  );
+  payload.set(
+    "is_essential",
+    parseCheckboxBoolean(formData.get("is_essential")) ? "true" : "false",
+  );
+
+  return payload;
+};
+
+export async function adminCreateCatalogItemAction(
+  formData: FormData,
+): Promise<void> {
+  const source = parseAdminCatalogSource(formData.get("source"));
+  const name = parseNullableString(formData.get("name"));
+  const category = parseNullableString(formData.get("category"));
+  if (!source || !name || !category) {
+    throw new Error("المصدر واسم المنتج والتصنيف مطلوبة");
+  }
+
+  const response = await adminService.createAdminCatalogItem(
+    buildAdminCatalogItemFormData(formData, true),
+  );
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر إضافة عنصر الكتالوج");
+  }
+
+  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+}
+
+export async function adminUpdateCatalogItemAction(
+  catalogItemId: number,
+  formData: FormData,
+): Promise<void> {
+  const name = parseNullableString(formData.get("name"));
+  const category = parseNullableString(formData.get("category"));
+  if (!name || !category) {
+    throw new Error("اسم المنتج والتصنيف مطلوبان");
+  }
+
+  const response = await adminService.updateAdminCatalogItem(
+    catalogItemId,
+    buildAdminCatalogItemFormData(formData, false),
+  );
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر تحديث عنصر الكتالوج");
+  }
+
+  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+}
+
+export async function adminDeleteCatalogItemAction(
+  catalogItemId: number,
+): Promise<void> {
+  const response = await adminService.deleteAdminCatalogItem(catalogItemId);
+  if (!response.success) {
+    throw new Error(response.message || "تعذر تعطيل عنصر الكتالوج");
+  }
+
+  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+}
+
+export async function adminBulkUpdateCatalogItemsAction(payload: {
+  ids: number[];
+  category?: string;
+  is_active?: boolean;
+  is_essential?: boolean;
+}) {
+  try {
+    const ids = Array.from(
+      new Set(
+        payload.ids.filter(
+          (id) => Number.isInteger(id) && Number.isFinite(id) && id > 0,
+        ),
+      ),
+    );
+    const category = payload.category?.trim();
+    const hasAction =
+      Boolean(category) ||
+      payload.is_active !== undefined ||
+      payload.is_essential !== undefined;
+
+    if (ids.length === 0 || !hasAction) {
+      return {
+        success: false,
+        message: "اختر عناصر كتالوج وإجراء للتطبيق",
+      };
+    }
+
+    const response = await adminService.bulkUpdateAdminCatalogItems({
+      ids,
+      category: category || undefined,
+      is_active: payload.is_active,
+      is_essential: payload.is_essential,
+    });
+
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحديث عناصر الكتالوج المحددة",
+      };
+    }
+
+    revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+    revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error("Admin bulk update catalog items failed:", error);
+    return {
+      success: false,
+      message: "تعذر تحديث عناصر الكتالوج المحددة",
+    };
+  }
+}
+
+export async function adminCreateCatalogCategoryAction(
+  formData: FormData,
+): Promise<void> {
+  const source = parseAdminCatalogSource(formData.get("source"));
+  const name = parseNullableString(formData.get("name"));
+  if (!source || !name) {
+    throw new Error("المصدر واسم التصنيف مطلوبان");
+  }
+
+  const response = await adminService.createAdminCatalogCategory({
+    source,
+    name,
+  });
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر إضافة التصنيف");
+  }
+
+  revalidatePath(ADMIN_CATEGORIES_PATH);
+  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
+}
+
+export async function adminUpdateCatalogCategoryAction(
+  categoryId: number,
+  formData: FormData,
+): Promise<void> {
+  const name = parseNullableString(formData.get("name"));
+  if (!name) {
+    throw new Error("اسم التصنيف مطلوب");
+  }
+
+  const response = await adminService.updateAdminCatalogCategory(categoryId, {
+    name,
+  });
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر تعديل التصنيف");
+  }
+
+  revalidatePath(ADMIN_CATEGORIES_PATH);
+  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
+}
+
+export async function adminDeleteCatalogCategoryAction(
+  categoryId: number,
+): Promise<void> {
+  const response = await adminService.deleteAdminCatalogCategory(categoryId);
+  if (!response.success) {
+    throw new Error(response.message || "تعذر حذف التصنيف");
+  }
+
+  revalidatePath(ADMIN_CATEGORIES_PATH);
+  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
+}
+
+export async function adminCreateTenantProductCategoryAction(
+  tenantId: number,
+  formData: FormData,
+): Promise<void> {
+  const name = parseNullableString(formData.get("name"));
+  if (!name) {
+    throw new Error("اسم التصنيف مطلوب");
+  }
+
+  const response = await adminService.createAdminTenantProductCategory(
+    tenantId,
+    { name },
+  );
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر إضافة تصنيف التاجر");
+  }
+
+  revalidatePath(ADMIN_CATEGORIES_PATH);
+  revalidatePath("/admin/products");
+}
+
+export async function adminUpdateTenantProductCategoryAction(
+  tenantId: number,
+  categoryId: number,
+  formData: FormData,
+): Promise<void> {
+  const name = parseNullableString(formData.get("name"));
+  if (!name) {
+    throw new Error("اسم التصنيف مطلوب");
+  }
+
+  const response = await adminService.updateAdminTenantProductCategory(
+    tenantId,
+    categoryId,
+    { name },
+  );
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر تعديل تصنيف التاجر");
+  }
+
+  revalidatePath(ADMIN_CATEGORIES_PATH);
+  revalidatePath("/admin/products");
+}
+
+export async function adminDeleteTenantProductCategoryAction(
+  tenantId: number,
+  categoryId: number,
+): Promise<void> {
+  const response = await adminService.deleteAdminTenantProductCategory(
+    tenantId,
+    categoryId,
+  );
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر حذف تصنيف التاجر");
+  }
+
+  revalidatePath(ADMIN_CATEGORIES_PATH);
+  revalidatePath("/admin/products");
+}
+
 export async function togglePlanStatusAction(id: number, currentStatus: boolean): Promise<void> {
   const response = await adminService.togglePlanStatus(id, !currentStatus);
   if (response.success) {
@@ -870,6 +1196,11 @@ export async function uploadCatalogImportAction(formData: FormData): Promise<voi
   cleanFormData.set("file", file);
   cleanFormData.set("type", "catalog_items");
   cleanFormData.set("mode", String(formData.get("mode") || "upsert"));
+
+  const format = formData.get("format");
+  if (format) {
+    cleanFormData.set("format", String(format));
+  }
 
   const response = await adminService.createImport(cleanFormData);
   if (response.success && response.data?.id) {

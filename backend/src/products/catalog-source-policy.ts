@@ -47,6 +47,18 @@ const GROCERY_CATALOG_CATEGORY_SET = new Set<string>(
 const PHARMACY_CATALOG_CATEGORY_SET = new Set<string>(
   PHARMACY_CATALOG_CATEGORIES,
 );
+const CHEFAA_CATALOG_CATEGORY_HINT_SET = new Set<string>([
+  ...PHARMACY_CATALOG_CATEGORIES,
+  'الأدوية',
+  'العناية بالشعر',
+  'العناية بالبشرة',
+  'العناية اليومية',
+  'الأم والطفل',
+  'المكياج و الاكسسوارات',
+  'المستلزمات الطبية',
+  'الفيتامينات والمكملات',
+  'الصحة الجنسية',
+]);
 
 const CATALOG_SOURCE_BY_IMPORT_FORMAT: Record<
   CatalogImportSourceFormat,
@@ -147,6 +159,16 @@ export function isCatalogCategoryAllowedForSource(
   }
 
   return false;
+}
+
+/**
+ * Returns whether a raw CSV category value is a known Chefaa category hint.
+ */
+export function isCatalogCategoryHintForChefaa(category: string): boolean {
+  const categoryHint = category.trim();
+  if (!categoryHint) return false;
+
+  return CHEFAA_CATALOG_CATEGORY_HINT_SET.has(categoryHint);
 }
 
 export function buildAllowedCatalogCategoryWhere(source: string) {
