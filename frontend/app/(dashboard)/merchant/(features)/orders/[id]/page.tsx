@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/utils/currency";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getImageUrl } from "@/lib/utils/image";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import {
 	formatPrescriptionUnavailabilityAction,
 } from "@/lib/orders/prescription-unavailability";
@@ -169,10 +170,12 @@ export default async function OrderDetailsPage({
 						)}
 						{order.prescription_mime_type?.startsWith("image/") ? (
 							<div className="relative mt-2 flex justify-center w-full overflow-hidden rounded-md border border-brand-border bg-brand-soft/20">
-								<img
+								<ImageThumbnail
 									src={getImageUrl(order.prescription_file_url)}
 									alt="Prescription"
-									className="max-h-96 object-contain"
+									imageClassName="max-h-96 object-contain"
+									thumbnailWrapperClassName="block max-h-96 w-full"
+									fallback={<span className="text-gray-500">لا توجد صورة</span>}
 								/>
 							</div>
 						) : (

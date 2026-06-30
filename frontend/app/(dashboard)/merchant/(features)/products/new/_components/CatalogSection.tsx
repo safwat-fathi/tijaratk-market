@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import SafeImage from "@/components/ui/SafeImage";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import type { CatalogItem, PublicProductsMeta } from "@/types/models/product";
 import { formatArabicInteger, formatArabicNumber } from "@/lib/utils/number";
 import { ScrollableTabList, TabButton } from "@/components/ui/ScrollableTabs";
@@ -153,7 +153,7 @@ export default function CatalogSection({
               className="rounded-2xl"
             >
               <span className="flex items-center gap-2">
-                <SafeImage
+                <ImageThumbnail
                   src={category.imageUrl}
                   alt={category.label}
                   width={40}
@@ -198,7 +198,7 @@ export default function CatalogSection({
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         {catalogItemImageUrl ? (
-                          <SafeImage
+                          <ImageThumbnail
                             src={catalogItemImageUrl}
                             alt={item.name}
                             width={56}

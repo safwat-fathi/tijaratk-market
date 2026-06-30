@@ -11,6 +11,8 @@ import {
   Query,
   Delete,
   UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -51,6 +53,10 @@ import {
 } from './dto/supermarket-essential.dto';
 import { Response } from 'express';
 import { TenantCategory } from '../../generated/prisma/client';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import { mkdirSync } from 'fs';
 import {
   AdminLoginResponseDto,
   AdminLogoutResponseDto,
@@ -61,6 +67,15 @@ import {
 import CONSTANTS from 'src/common/constants';
 import { UploadFile } from 'src/common/decorators/upload-file.decorator';
 import { imageFileFilter } from 'src/common/utils/file-filters';
+
+const ADMIN_PRODUCT_SHEET_UPLOAD_DIR = join(
+  process.cwd(),
+  'uploads',
+  'admin-product-sheets',
+);
+const MAX_ADMIN_PRODUCT_SHEET_SIZE_BYTES = 10 * 1024 * 1024;
+
+mkdirSync(ADMIN_PRODUCT_SHEET_UPLOAD_DIR, { recursive: true });
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -330,6 +345,51 @@ export class AdminController {
   }
 
   @UseGuards(AdminAuthGuard)
+  @Post('tenants/:id/products/catalog-sheet')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Upload merchant products from catalog CSV',
+    description:
+      'Create or update products for a selected merchant from an admin catalog export CSV.',
+  })
+  @ApiResponse({ status: 201, description: 'Product sheet processed' })
+  @ApiResponse({ status: 400, description: 'Invalid CSV or tenant category' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: ADMIN_PRODUCT_SHEET_UPLOAD_DIR,
+        filename: (_req, file, callback) => {
+          const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-');
+          callback(null, `${Date.now()}-${safeName}`);
+        },
+      }),
+      limits: { fileSize: MAX_ADMIN_PRODUCT_SHEET_SIZE_BYTES },
+      fileFilter: (_req, file, callback) => {
+        const extension = extname(file.originalname).toLowerCase();
+        if (extension !== '.csv') {
+          callback(
+            new BadRequestException('Only CSV files are supported'),
+            false,
+          );
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  uploadTenantProductCatalogSheet(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Product sheet file is required');
+    }
+
+    return this.adminService.uploadTenantProductCatalogSheet(id, file);
+  }
+
+  @UseGuards(AdminAuthGuard)
   @Patch('products/bulk')
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Bulk update merchant products as admin' })
@@ -440,9 +500,36 @@ export class AdminController {
       query.source,
       query.search,
       query.category,
+      query.status,
       query.page,
       query.limit,
     );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('catalog-items/export')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Export catalog items as CSV',
+    description:
+      'Download active catalog items for one supported source as an Excel-compatible CSV.',
+  })
+  @ApiResponse({ status: 200, description: 'CSV file returned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async exportAdminCatalogItems(
+    @Query() query: GetAdminCatalogItemsDto,
+    @Res() res: Response,
+  ) {
+    const exportFile = await this.adminService.exportAdminCatalogItems(
+      query.source,
+    );
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${exportFile.filename}"`,
+    );
+    res.send(exportFile.content);
   }
 
   @UseGuards(AdminAuthGuard)

@@ -54,7 +54,7 @@ import ProductList, {
 	type AvailabilityRequestOutcome,
 	type ProductCartSelection,
 } from "./ProductList";
-import Toast from "./Toast";
+import Toast from "@/components/ui/Toast";
 import CategoryEntryGrid from "./CategoryEntryGrid";
 import CategoryProductsView from "./CategoryProductsView";
 import OrderNotesSection from "./OrderNotesSection";

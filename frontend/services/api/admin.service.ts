@@ -158,6 +158,18 @@ export type AdminTenantProductCategory = {
 	count: number;
 };
 
+export type AdminProductSheetUploadSummary = {
+	total_rows: number;
+	created_rows: number;
+	updated_rows: number;
+	skipped_rows: number;
+	failed_rows: number;
+	errors: Array<{
+		row_number: number;
+		message: string;
+	}>;
+};
+
 type AdminOrder = Record<string, unknown>;
 
 type AdminProductPayload = {
@@ -210,7 +222,7 @@ type AdminCatalogItemPayload =
 			essential_sort_order?: number | null;
 	  };
 
-type UpdateAdminCatalogItemPayload =
+export type UpdateAdminCatalogItemPayload =
 	| FormData
 	| {
 			name?: string;
@@ -411,6 +423,21 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async uploadTenantProductCatalogSheet(
+		tenantId: number,
+		formData: FormData,
+	) {
+		return this.post<AdminProductSheetUploadSummary>(
+			`tenants/${tenantId}/products/catalog-sheet`,
+			formData,
+			undefined,
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: 30000,
+			}
+		);
+	}
+
 	public async updateProduct(productId: number, payload: AdminProductPayload) {
 		return this.patch<AdminProduct>(
 			`products/${productId}`,
@@ -524,6 +551,7 @@ class AdminApiService extends HttpService {
 		source: AdminCatalogSource;
 		search?: string;
 		category?: string;
+		status?: "all" | "active" | "inactive";
 		page?: number;
 		limit?: number;
 	}) {
@@ -542,6 +570,11 @@ class AdminApiService extends HttpService {
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);
+	}
+
+	public getAdminCatalogExportPath(source: AdminCatalogSource) {
+		const qs = this.buildQueryString({ source });
+		return `/api/admin/catalog-items/export${qs}`;
 	}
 
 	public async createAdminCatalogCategory(payload: {
@@ -722,6 +755,7 @@ class AdminApiService extends HttpService {
 		source?: AdminCatalogSource;
 		search?: string;
 		category?: string;
+		status?: "all" | "active" | "inactive";
 		page?: number;
 		limit?: number;
 	}) {
@@ -729,6 +763,7 @@ class AdminApiService extends HttpService {
 		if (params?.source) searchParams.append("source", params.source);
 		if (params?.search) searchParams.append("search", params.search);
 		if (params?.category) searchParams.append("category", params.category);
+		if (params?.status && params.status !== "all") searchParams.append("status", params.status);
 		if (params?.page) searchParams.append("page", String(params.page));
 		if (params?.limit) searchParams.append("limit", String(params.limit));
 		return searchParams.toString() ? `?${searchParams.toString()}` : "";

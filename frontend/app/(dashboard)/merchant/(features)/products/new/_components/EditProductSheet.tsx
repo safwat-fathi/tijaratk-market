@@ -1,6 +1,6 @@
 import type { ChangeEvent, FormEvent } from "react";
 import BottomSheet from "@/components/ui/BottomSheet";
-import SafeImage from "@/components/ui/SafeImage";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import type { Product, ProductOrderMode } from "@/types/models/product";
@@ -192,7 +192,7 @@ export default function EditProductSheet({
           <div className="rounded-md border border-dashed border-brand-border p-3">
             <p className="mb-2 text-xs text-muted-foreground">معاينة الصورة</p>
             {currentImageUrl ? (
-              <SafeImage
+              <ImageThumbnail
                 src={currentImageUrl}
                 alt={editingProduct.name}
                 width={96}

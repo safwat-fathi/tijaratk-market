@@ -12,7 +12,7 @@ import {
   createProductAction,
   searchTenantProductsAction,
 } from '@/actions/product-actions';
-import SafeImage from "@/components/ui/SafeImage";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import { formatCurrency } from '@/lib/utils/currency';
 import { useBodyScrollLock } from '@/lib/hooks/useBodyScrollLock';
 import { useDragToClose } from '@/lib/hooks/useDragToClose';
@@ -48,13 +48,14 @@ const ProductThumbnail = memo(({
 }) => {
   if (imageUrl?.trim()) {
     return (
-			<SafeImage
+			<ImageThumbnail
 				src={getImageUrl(imageUrl)}
 				alt={name}
 				width={size}
 				height={size}
 				unoptimized
 				imageClassName="rounded-lg border border-gray-200 bg-gray-50 object-cover"
+				thumbnailWrapperClassName={`h-[${size}px] w-[${size}px]`}
 				fallback={
 					<div
 						className="flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-[10px] text-gray-500"

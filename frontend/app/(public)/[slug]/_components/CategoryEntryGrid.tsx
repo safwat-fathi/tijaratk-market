@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import SafeImage from "@/components/ui/SafeImage";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import { getImageUrl } from "@/lib/utils/image";
 import type { CategoryTab } from "../_utils/order-form";
 
@@ -98,7 +98,7 @@ export default function CategoryEntryGrid({
               onClick={() => onSelectCategory(category.key)}
               className="flex min-h-[120px] flex-col items-center justify-center rounded-lg border border-brand-border bg-brand-soft/50 px-2 py-3 text-center shadow-sm transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
             >
-              <SafeImage
+              <ImageThumbnail
                 src={
                   category.image_url ? getImageUrl(category.image_url) : null
                 }

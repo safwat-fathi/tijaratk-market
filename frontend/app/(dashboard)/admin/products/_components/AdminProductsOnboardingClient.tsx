@@ -9,6 +9,7 @@ import {
   adminRemoveProductAction,
   adminSearchTenantProductsAction,
   adminBulkUpdateProductsAction,
+  adminUploadProductCatalogSheetAction,
   adminUpdateProductAvailabilityAction,
   adminUpdateProductPayloadAction,
 } from "@/actions/admin-server";
@@ -30,6 +31,18 @@ type AdminProductOnboardingData = {
   catalogCategories: PublicProductCategory[];
 };
 
+type ProductSheetUploadResult = {
+  total_rows: number;
+  created_rows: number;
+  updated_rows: number;
+  skipped_rows: number;
+  failed_rows: number;
+  errors: Array<{
+    row_number: number;
+    message: string;
+  }>;
+};
+
 type AdminProductsOnboardingClientProps = {
   merchants: AdminTenant[];
 };
@@ -47,8 +60,14 @@ export default function AdminProductsOnboardingClient({
   const [onboardingData, setOnboardingData] =
     useState<AdminProductOnboardingData | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [sheetUploadResult, setSheetUploadResult] =
+    useState<ProductSheetUploadResult | null>(null);
+  const [sheetUploadMessage, setSheetUploadMessage] = useState<string | null>(
+    null,
+  );
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [isSheetUploadPending, startSheetUploadTransition] = useTransition();
   const comboboxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,6 +105,8 @@ export default function AdminProductsOnboardingClient({
     setMerchantSearch(merchant.name);
     setOnboardingData(null);
     setMessage(null);
+    setSheetUploadResult(null);
+    setSheetUploadMessage(null);
     setIsSelectorOpen(false);
 
     startTransition(async () => {
@@ -98,6 +119,46 @@ export default function AdminProductsOnboardingClient({
       setOnboardingData(response.data);
     });
   }, []);
+
+  const reloadSelectedMerchant = useCallback((merchantId: number) => {
+    startTransition(async () => {
+      const response = await adminLoadProductOnboardingAction(merchantId);
+      if (!response.success || !response.data) {
+        setMessage(response.message || "تعذر تحميل بيانات منتجات التاجر");
+        return;
+      }
+
+      setOnboardingData(response.data);
+    });
+  }, []);
+
+  const handleUploadProductSheet = useCallback(
+    (formData: FormData) => {
+      if (!selectedMerchantId) {
+        setSheetUploadMessage("يجب اختيار تاجر أولًا");
+        return;
+      }
+
+      setSheetUploadMessage(null);
+      setSheetUploadResult(null);
+
+      startSheetUploadTransition(async () => {
+        const response = await adminUploadProductCatalogSheetAction(
+          selectedMerchantId,
+          formData,
+        );
+
+        if (!response.success || !response.data) {
+          setSheetUploadMessage(response.message || "تعذر رفع ملف المنتجات");
+          return;
+        }
+
+        setSheetUploadResult(response.data);
+        reloadSelectedMerchant(selectedMerchantId);
+      });
+    },
+    [reloadSelectedMerchant, selectedMerchantId],
+  );
 
   // Use effect for auto-selection removed as per user request
 
@@ -248,10 +309,64 @@ export default function AdminProductsOnboardingClient({
           </div>
         </div>
 
+        {selectedMerchant ? (
+          <form
+            action={handleUploadProductSheet}
+            className="mt-3 grid gap-2 rounded-md border border-brand-border bg-gray-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+          >
+            <label className="space-y-1">
+              <span className="text-xs font-semibold text-brand-text">
+                رفع CSV لتحديث منتجات التاجر
+              </span>
+              <input
+                type="file"
+                name="file"
+                accept=".csv,text/csv"
+                className="block h-10 w-full rounded-md border border-brand-border bg-white px-3 py-2 text-sm file:me-3 file:rounded-md file:border-0 file:bg-brand-soft file:px-3 file:py-1 file:text-xs file:font-semibold file:text-brand-primary"
+                required
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={isSheetUploadPending}
+              className="inline-flex h-10 items-center justify-center self-end rounded-md bg-brand-primary px-4 text-sm font-semibold text-white transition hover:bg-brand-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSheetUploadPending ? "جاري الرفع" : "رفع الملف"}
+            </button>
+          </form>
+        ) : null}
+
         {message ? (
           <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {message}
           </p>
+        ) : null}
+
+        {sheetUploadMessage ? (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {sheetUploadMessage}
+          </p>
+        ) : null}
+
+        {sheetUploadResult ? (
+          <div className="mt-3 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+            <p className="font-semibold">
+              تم معالجة {sheetUploadResult.total_rows} صف: تم إنشاء{" "}
+              {sheetUploadResult.created_rows} وتحديث{" "}
+              {sheetUploadResult.updated_rows} وتخطي{" "}
+              {sheetUploadResult.skipped_rows} وفشل{" "}
+              {sheetUploadResult.failed_rows}.
+            </p>
+            {sheetUploadResult.errors.length > 0 ? (
+              <ul className="mt-2 space-y-1 text-xs text-red-700">
+                {sheetUploadResult.errors.slice(0, 5).map((error) => (
+                  <li key={`${error.row_number}-${error.message}`}>
+                    صف {error.row_number}: {error.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

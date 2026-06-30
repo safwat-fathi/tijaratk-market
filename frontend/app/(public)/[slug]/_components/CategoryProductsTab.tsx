@@ -1,5 +1,5 @@
 import { ScrollableTabList, TabButton } from "@/components/ui/ScrollableTabs";
-import SafeImage from "@/components/ui/SafeImage";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import { formatArabicInteger } from "@/lib/utils/number";
 import { ALL_PRODUCTS_CATEGORY, type CategoryTab } from "../_utils/order-form";
 
@@ -42,7 +42,7 @@ export default function CategoryProductsTab({
 								: ""
 						}
 					>
-						<SafeImage
+						<ImageThumbnail
 							src={category.image_url}
 							alt={category.label}
 							width={40}

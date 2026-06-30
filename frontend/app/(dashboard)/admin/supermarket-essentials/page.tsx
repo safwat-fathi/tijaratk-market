@@ -7,7 +7,7 @@ import type {
 } from "@/services/api/admin.service";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import SafeImage from "@/components/ui/SafeImage";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import { ScrollableTabList, TabButton } from "@/components/ui/ScrollableTabs";
 import { Combobox } from "@/components/ui/Combobox";
 import { AdminPagination } from "../_components/AdminPagination";
@@ -486,7 +486,7 @@ function CategoryTabs({
           className="rounded-2xl"
         >
           <span className="flex items-center gap-2">
-            <SafeImage
+            <ImageThumbnail
               src={resolveImageUrl(item.image_url)}
               alt={item.category}
               width={32}
@@ -548,7 +548,7 @@ function CandidateTable({ candidates }: { candidates: AdminCatalogItem[] }) {
               <tr key={item.id}>
                 <td className="px-4 py-3 text-sm font-medium text-brand-text">
                   <div className="flex items-center gap-3">
-                    <SafeImage
+                    <ImageThumbnail
                       src={resolveImageUrl(item.image_url)}
                       alt={item.name}
                       width={44}

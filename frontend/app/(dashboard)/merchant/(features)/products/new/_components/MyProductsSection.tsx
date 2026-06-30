@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Ban, CheckCircle, CheckSquare, Pencil, Square, Trash2, X } from "lucide-react";
-import SafeImage from "@/components/ui/SafeImage";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { formatArabicInteger } from "@/lib/utils/number";
@@ -412,7 +412,7 @@ export default function MyProductsSection({
                         </button>
                       ) : null}
                       {resolveImageUrl(product.image_url) ? (
-                        <SafeImage
+                        <ImageThumbnail
                           src={resolveImageUrl(product.image_url)}
                           alt={product.name}
                           width={40}

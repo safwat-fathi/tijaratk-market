@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent } from 'react';
-import SafeImage from '@/components/ui/SafeImage';
+import ImageThumbnail from '@/components/ui/ImageThumbnail';
 import type { ProductOrderMode } from '@/types/models/product';
 import type { CategoryMode } from '../_utils/product-onboarding.types';
 import { SECTION_QUICK_ADD } from '../_utils/product-onboarding.constants';
@@ -142,7 +142,7 @@ export default function QuickAddSection({
 						) : null}
 						{manualImagePreview ? (
 							<div className="mt-3">
-								<SafeImage
+								<ImageThumbnail
 									src={manualImagePreview}
 									alt="معاينة صورة المنتج"
 									width={96}

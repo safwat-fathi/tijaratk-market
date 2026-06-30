@@ -26,6 +26,8 @@ const ADMIN_CATALOG_SOURCES = [
   CATALOG_SOURCE_CHEFAA,
 ] as const;
 
+const ADMIN_CATALOG_ITEM_STATUSES = ['all', 'active', 'inactive'] as const;
+
 /**
  * Query parameters for source-scoped admin catalog item listing.
  */
@@ -54,6 +56,15 @@ export class GetAdminCatalogItemsDto {
   @IsString()
   @MaxLength(120)
   search?: string;
+
+  @ApiPropertyOptional({
+    enum: ADMIN_CATALOG_ITEM_STATUSES,
+    description: 'Filter items by activity status',
+    default: 'all',
+  })
+  @IsOptional()
+  @IsIn(ADMIN_CATALOG_ITEM_STATUSES)
+  status?: (typeof ADMIN_CATALOG_ITEM_STATUSES)[number] = 'all';
 
   @ApiPropertyOptional({
     description: 'Page number',

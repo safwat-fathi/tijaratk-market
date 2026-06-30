@@ -7,12 +7,18 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { createReadStream } from 'fs';
+import { parse } from 'csv-parse';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import {
+  CatalogItem,
   Prisma,
   TenantCategory,
   TenantStatus,
 } from '../../generated/prisma/client';
+import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
+import { ProductSource } from 'src/common/enums/product-source.enum';
+import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { TenantCancellationPolicyService } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import {
@@ -21,6 +27,7 @@ import {
   CatalogSource,
   getAllowedCatalogCategoriesForSource,
   isCatalogCategoryAllowedForSource,
+  resolveCatalogSourceForTenantCategory,
 } from 'src/products/catalog-source-policy';
 import {
   BulkUpdateAdminCatalogItemsDto,
@@ -35,6 +42,39 @@ import {
   CreateSupermarketEssentialDto,
   UpdateSupermarketEssentialDto,
 } from './dto/supermarket-essential.dto';
+import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
+
+const CATALOG_EXPORT_COLUMNS = [
+  'catalog_item_id',
+  'product_id',
+  'name',
+  'category',
+  'current_price',
+  'currency',
+  'image_url',
+  'is_available',
+  'status',
+  'order_mode',
+] as const;
+
+type CatalogExportColumn = (typeof CATALOG_EXPORT_COLUMNS)[number];
+
+type ProductSheetRow = Partial<Record<CatalogExportColumn, string>> &
+  Record<string, unknown>;
+
+type ProductSheetRowError = {
+  row_number: number;
+  message: string;
+};
+
+type ProductSheetUploadSummary = {
+  total_rows: number;
+  created_rows: number;
+  updated_rows: number;
+  skipped_rows: number;
+  failed_rows: number;
+  errors: ProductSheetRowError[];
+};
 
 @Injectable()
 export class AdminService {
@@ -43,6 +83,7 @@ export class AdminService {
     private readonly jwtService: JwtService,
     private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
     private readonly imageProcessorService: ImageProcessorService,
+    private readonly storesDirectoryService: StoresDirectoryService,
   ) {}
 
   async login(loginDto: AdminLoginDto) {
@@ -280,12 +321,18 @@ export class AdminService {
     source: CatalogSource,
     search?: string,
     category?: string,
+    status: 'all' | 'active' | 'inactive' = 'all',
     page = 1,
     limit = 20,
   ) {
     this.ensureSupportedCatalogSource(source);
     const pagination = this.getPagination(page, limit);
-    const where = this.buildAdminCatalogWhere({ source, search, category });
+    const where = this.buildAdminCatalogWhere({
+      source,
+      search,
+      category,
+      status,
+    });
 
     const [items, total] = await Promise.all([
       this.prisma.catalogItem.findMany({
@@ -304,6 +351,84 @@ export class AdminService {
       pagination.limit,
       0,
     );
+  }
+
+  async exportAdminCatalogItems(source: CatalogSource) {
+    this.ensureSupportedCatalogSource(source);
+
+    const items = await this.prisma.catalogItem.findMany({
+      where: {
+        source,
+        is_active: true,
+        category: { in: getAllowedCatalogCategoriesForSource(source) },
+      },
+      orderBy: [{ category: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+    });
+
+    const rows = items.map((item) =>
+      this.buildCatalogExportRow(item, {
+        product_id: '',
+        is_available: 'true',
+        status: ProductStatus.ACTIVE,
+        order_mode: ProductOrderMode.QUANTITY,
+      }),
+    );
+
+    return {
+      filename: `catalog-${source}-${this.formatDateForFilename(new Date())}.csv`,
+      content: this.encodeCsv(CATALOG_EXPORT_COLUMNS, rows),
+    };
+  }
+
+  async uploadTenantProductCatalogSheet(
+    tenantId: number,
+    file: Express.Multer.File,
+  ): Promise<ProductSheetUploadSummary> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, category: true },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    const allowedSource = resolveCatalogSourceForTenantCategory(tenant.category);
+    if (!allowedSource) {
+      throw new BadRequestException(
+        'Tenant category does not support catalog sheet uploads',
+      );
+    }
+
+    const summary: ProductSheetUploadSummary = {
+      total_rows: 0,
+      created_rows: 0,
+      updated_rows: 0,
+      skipped_rows: 0,
+      failed_rows: 0,
+      errors: [],
+    };
+
+    const parser = createReadStream(file.path).pipe(
+      parse({ columns: true, skip_empty_lines: true, trim: true, bom: true }),
+    );
+
+    for await (const row of parser) {
+      summary.total_rows += 1;
+      await this.processTenantProductSheetRow(
+        tenantId,
+        allowedSource,
+        summary.total_rows,
+        row as ProductSheetRow,
+        summary,
+      );
+    }
+
+    if (summary.created_rows > 0 || summary.updated_rows > 0) {
+      await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+    }
+
+    return summary;
   }
 
   /**
@@ -911,6 +1036,288 @@ export class AdminService {
     return { success: true };
   }
 
+  private async processTenantProductSheetRow(
+    tenantId: number,
+    allowedSource: CatalogSource,
+    rowNumber: number,
+    row: ProductSheetRow,
+    summary: ProductSheetUploadSummary,
+  ): Promise<void> {
+    try {
+      const catalogItemId = this.parseOptionalPositiveInteger(
+        row.catalog_item_id,
+      );
+      const productId = this.parseOptionalPositiveInteger(row.product_id);
+      const name = this.normalizeNullableString(row.name);
+
+      if (!catalogItemId && !name) {
+        summary.skipped_rows += 1;
+        return;
+      }
+
+      const catalogItem = catalogItemId
+        ? await this.findSheetCatalogItem(catalogItemId, allowedSource)
+        : null;
+      const nextName = name || catalogItem?.name;
+      if (!nextName) {
+        throw new BadRequestException('Product name is required');
+      }
+
+      const category = this.resolveSheetProductCategory(
+        allowedSource,
+        row.category,
+        catalogItem,
+      );
+      const currentPrice = this.parseOptionalPrice(row.current_price);
+      const imageUrl =
+        this.normalizeNullableString(row.image_url) || catalogItem?.image_url;
+      const isAvailable = this.parseOptionalBoolean(row.is_available) ?? true;
+      const status = this.parseOptionalProductStatus(row.status);
+      const orderMode = this.parseOptionalProductOrderMode(row.order_mode);
+
+      await this.runWithTenantRls(tenantId, async (tx) => {
+        const existingProduct = productId
+          ? await tx.product.findFirst({
+              where: { id: productId, tenant_id: tenantId, deleted_at: null },
+            })
+          : await this.findTenantProductBySheetName(tx, tenantId, nextName);
+
+        if (productId && !existingProduct) {
+          throw new NotFoundException(`Product ${productId} not found`);
+        }
+
+        if (existingProduct) {
+          const duplicateProduct = await this.findTenantProductBySheetName(
+            tx,
+            tenantId,
+            nextName,
+          );
+          if (duplicateProduct && duplicateProduct.id !== existingProduct.id) {
+            throw new BadRequestException(
+              'Product with this name already exists',
+            );
+          }
+
+          await tx.product.update({
+            where: { id: existingProduct.id },
+            data: {
+              name: nextName,
+              category,
+              current_price: currentPrice ?? existingProduct.current_price,
+              image_url: imageUrl ?? existingProduct.image_url,
+              is_available: isAvailable,
+              status: status ?? existingProduct.status,
+              order_mode: orderMode ?? existingProduct.order_mode,
+              price_needs_review:
+                currentPrice !== undefined
+                  ? false
+                  : existingProduct.price_needs_review,
+            },
+          });
+          summary.updated_rows += 1;
+        } else {
+          await tx.product.create({
+            data: {
+              tenant_id: tenantId,
+              name: nextName,
+              category,
+              current_price: currentPrice,
+              image_url: imageUrl,
+              is_available: isAvailable,
+              status: status ?? ProductStatus.ACTIVE,
+              order_mode: orderMode ?? ProductOrderMode.QUANTITY,
+              source: catalogItem
+                ? ProductSource.CATALOG
+                : ProductSource.MANUAL,
+              price_needs_review: currentPrice === undefined,
+            },
+          });
+          summary.created_rows += 1;
+        }
+
+        await tx.$executeRaw`
+          INSERT INTO tenant_product_categories (tenant_id, name)
+          VALUES (${tenantId}, ${category})
+          ON CONFLICT DO NOTHING
+        `;
+      });
+
+    } catch (error) {
+      summary.failed_rows += 1;
+      summary.errors.push({
+        row_number: rowNumber,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async findSheetCatalogItem(
+    id: number,
+    source: CatalogSource,
+  ): Promise<CatalogItem> {
+    const catalogItem = await this.prisma.catalogItem.findFirst({
+      where: {
+        id,
+        source,
+        is_active: true,
+        category: { in: getAllowedCatalogCategoriesForSource(source) },
+      },
+    });
+
+    if (!catalogItem) {
+      throw new BadRequestException(
+        `Catalog item ${id} is not available for this merchant source`,
+      );
+    }
+
+    if (!isCatalogCategoryAllowedForSource(source, catalogItem.category)) {
+      throw new BadRequestException(
+        `Catalog item ${id} has an invalid category for this source`,
+      );
+    }
+
+    return catalogItem;
+  }
+
+  private resolveSheetProductCategory(
+    source: CatalogSource,
+    rawCategory: string | undefined,
+    catalogItem: CatalogItem | null,
+  ): string {
+    const category =
+      this.normalizeNullableString(rawCategory) || catalogItem?.category;
+    if (!category) {
+      throw new BadRequestException('Product category is required');
+    }
+
+    if (!isCatalogCategoryAllowedForSource(source, category)) {
+      throw new BadRequestException(
+        `Category "${category}" is not allowed for this merchant source`,
+      );
+    }
+
+    return category;
+  }
+
+  private async findTenantProductBySheetName(
+    tx: Prisma.TransactionClient,
+    tenantId: number,
+    name: string,
+  ) {
+    const comparableName = this.normalizeSheetProductName(name);
+    const products = await tx.product.findMany({
+      where: { tenant_id: tenantId, deleted_at: null },
+    });
+
+    return products.find(
+      (product) =>
+        this.normalizeSheetProductName(product.name) === comparableName,
+    );
+  }
+
+  private buildCatalogExportRow(
+    item: CatalogItem,
+    defaults: {
+      product_id: string;
+      is_available: string;
+      status: ProductStatus;
+      order_mode: ProductOrderMode;
+    },
+  ): Record<CatalogExportColumn, string> {
+    return {
+      catalog_item_id: String(item.id),
+      product_id: defaults.product_id,
+      name: item.name,
+      category: item.category,
+      current_price: item.price === null ? '' : String(item.price),
+      currency: item.currency || 'EGP',
+      image_url: item.image_url || '',
+      is_available: defaults.is_available,
+      status: defaults.status,
+      order_mode: defaults.order_mode,
+    };
+  }
+
+  private encodeCsv<T extends string>(
+    columns: readonly T[],
+    rows: Array<Record<T, string>>,
+  ): string {
+    const lines = [
+      columns.join(','),
+      ...rows.map((row) =>
+        columns.map((column) => this.escapeCsvCell(row[column])).join(','),
+      ),
+    ];
+
+    return `\uFEFF${lines.join('\n')}\n`;
+  }
+
+  private escapeCsvCell(value: string): string {
+    if (/[",\n\r]/.test(value)) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+
+    return value;
+  }
+
+  private formatDateForFilename(date: Date): string {
+    return date.toISOString().slice(0, 10);
+  }
+
+  private normalizeSheetProductName(value: string): string {
+    return value.trim().replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  private parseOptionalPositiveInteger(value: unknown): number | undefined {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+  }
+
+  private parseOptionalPrice(value: unknown): number | undefined {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new BadRequestException('Product price must be a positive number');
+    }
+
+    return Number(parsed.toFixed(2));
+  }
+
+  private parseOptionalBoolean(value: unknown): boolean | undefined {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'available'].includes(normalized)) {
+      return true;
+    }
+    if (['false', '0', 'no', 'n', 'unavailable'].includes(normalized)) {
+      return false;
+    }
+    throw new BadRequestException('Availability must be true or false');
+  }
+
+  private parseOptionalProductStatus(value: unknown): ProductStatus | undefined {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    if (value === ProductStatus.ACTIVE || value === ProductStatus.ARCHIVED) {
+      return value;
+    }
+    throw new BadRequestException('Status must be active or archived');
+  }
+
+  private parseOptionalProductOrderMode(
+    value: unknown,
+  ): ProductOrderMode | undefined {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    if (
+      value === ProductOrderMode.QUANTITY ||
+      value === ProductOrderMode.WEIGHT ||
+      value === ProductOrderMode.PRICE
+    ) {
+      return value;
+    }
+    throw new BadRequestException('Order mode must be quantity, weight, or price');
+  }
+
   private buildSupermarketCatalogWhere({
     search,
     category,
@@ -981,16 +1388,22 @@ export class AdminService {
     source,
     search,
     category,
+    status = 'all',
   }: {
     source: CatalogSource;
     search?: string;
     category?: string;
+    status?: 'all' | 'active' | 'inactive';
   }): Prisma.CatalogItemWhereInput {
     const normalizedCategory = category?.trim();
 
     return {
       source,
-      is_active: true,
+      ...(status === 'active'
+        ? { is_active: true }
+        : status === 'inactive'
+          ? { is_active: false }
+          : {}),
       ...(normalizedCategory ? { category: normalizedCategory } : {}),
       ...(search?.trim()
         ? {
