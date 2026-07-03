@@ -6,7 +6,9 @@ import { setCookieAction, deleteCookieAction } from "@/app/actions/cookie-store"
 import { STORAGE_KEYS } from "@/constants";
 import { revalidatePath } from "next/cache";
 import { loginSchema } from "@/lib/validations/auth";
+import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import type {
+  BulkEssentialStage,
   CatalogItemsResponse,
   Product,
   ProductOrderConfig,
@@ -335,20 +337,81 @@ export async function updateTenantDirectoryStatusAction(
   };
 }
 
-export async function adminBulkAddEssentialItemsAction(tenantId: number, categories: string[]) {
-	const response = await adminService.adminBulkAddEssentialItems(tenantId, categories);
-	if (!response.success) {
-		return {
-			success: false,
-			message: response.message || "تعذر إضافة التشكيلة الأساسية",
-		};
-	}
+export async function adminLoadBulkEssentialStagesAction(
+  tenantId: number,
+): Promise<{
+  success: boolean;
+  data?: BulkEssentialStage[];
+  message?: string;
+}> {
+  try {
+    const response = await adminService.getTenantBulkEssentialStages(tenantId);
 
-	revalidatePath("/admin/merchants");
-	return {
-		success: true,
-		data: response.data,
-	};
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحميل مجموعات المنتجات الأساسية",
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error("Admin load bulk essential stages failed:", error);
+    return {
+      success: false,
+      message: "تعذر تحميل مجموعات المنتجات الأساسية",
+    };
+  }
+}
+
+export async function adminBulkAddEssentialItemsAction(
+  tenantId: number,
+  payload:
+    | {
+        category: string;
+        catalogItemIds: number[];
+      }
+    | string[],
+) {
+  try {
+    const response = await adminService.adminBulkAddEssentialItems(
+      tenantId,
+      Array.isArray(payload)
+        ? { categories: payload }
+        : {
+            category: payload.category,
+            catalog_item_ids: payload.catalogItemIds,
+          },
+    );
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر إضافة التشكيلة الأساسية",
+      };
+    }
+
+    revalidatePath("/admin/merchants");
+    revalidatePath("/admin/products");
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error("Admin bulk add essential items failed:", error);
+    return {
+      success: false,
+      message: "تعذر إضافة التشكيلة الأساسية",
+    };
+  }
 }
 
 export async function adminUploadProductCatalogSheetAction(
@@ -833,7 +896,6 @@ export async function adminRemoveProductAction(productId: number) {
   }
 }
 
-const SUPERMARKET_ESSENTIALS_PATH = "/admin/supermarket-essentials";
 const ADMIN_CATALOG_ITEMS_PATH = "/admin/catalog-items";
 const ADMIN_CATEGORIES_PATH = "/admin/categories";
 const ADMIN_CATALOG_SOURCES = new Set(["talabat_csv", "chefaa_csv"]);
@@ -880,103 +942,6 @@ const parseAdminCatalogSource = (
   return value as AdminCatalogSource;
 };
 
-const buildSupermarketEssentialFormData = (
-  formData: FormData,
-  includeActive = false,
-) => {
-  const payload = new FormData();
-  appendTrimmedFormDataField(payload, "name", formData.get("name"));
-  appendTrimmedFormDataField(payload, "category", formData.get("category"));
-  appendTrimmedFormDataField(payload, "price", formData.get("price"));
-  appendTrimmedFormDataField(payload, "image_url", formData.get("image_url"));
-  appendTrimmedFormDataField(
-    payload,
-    "essential_sort_order",
-    formData.get("essential_sort_order"),
-  );
-  appendOptionalFileField(payload, formData.get("file"));
-
-  if (includeActive) {
-    payload.set(
-      "is_active",
-      parseCheckboxBoolean(formData.get("is_active")) ? "true" : "false",
-    );
-  }
-
-  return payload;
-};
-
-export async function adminCreateSupermarketEssentialAction(
-  formData: FormData,
-): Promise<void> {
-  const name = parseNullableString(formData.get("name"));
-  const category = parseNullableString(formData.get("category"));
-  if (!name || !category) {
-    throw new Error("اسم المنتج والتصنيف مطلوبان");
-  }
-
-  const response = await adminService.createSupermarketEssential(
-    buildSupermarketEssentialFormData(formData),
-  );
-
-  if (!response.success) {
-    throw new Error(response.message || "تعذر إضافة المنتج الأساسي");
-  }
-
-  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
-}
-
-export async function adminMarkCatalogItemEssentialAction(
-  formData: FormData,
-): Promise<void> {
-  const catalogItemId = parsePositiveInteger(formData.get("catalog_item_id"));
-  if (!catalogItemId) {
-    throw new Error("يجب اختيار منتج من الكتالوج");
-  }
-
-  const response = await adminService.createSupermarketEssential({
-    catalog_item_id: catalogItemId,
-  });
-
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تمييز المنتج كأساسي");
-  }
-
-  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
-}
-
-export async function adminUpdateSupermarketEssentialAction(
-  catalogItemId: number,
-  formData: FormData,
-): Promise<void> {
-  const name = parseNullableString(formData.get("name"));
-  const category = parseNullableString(formData.get("category"));
-  if (!name || !category) {
-    throw new Error("اسم المنتج والتصنيف مطلوبان");
-  }
-
-  const response = await adminService.updateSupermarketEssential(
-    catalogItemId,
-    buildSupermarketEssentialFormData(formData, true),
-  );
-
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تحديث المنتج الأساسي");
-  }
-
-  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
-}
-
-export async function adminDeleteSupermarketEssentialAction(
-  catalogItemId: number,
-): Promise<void> {
-  const response = await adminService.deleteSupermarketEssential(catalogItemId);
-  if (!response.success) {
-    throw new Error(response.message || "تعذر حذف المنتج من الأساسيات");
-  }
-
-  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
-}
 
 const buildAdminCatalogItemFormData = (
   formData: FormData,
@@ -1131,7 +1096,6 @@ export async function adminBulkUpdateCatalogItemsAction(payload: {
     }
 
     revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
-    revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
     return { success: true, data: response.data };
   } catch (error) {
     console.error("Admin bulk update catalog items failed:", error);
@@ -1162,7 +1126,6 @@ export async function adminCreateCatalogCategoryAction(
 
   revalidatePath(ADMIN_CATEGORIES_PATH);
   revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
-  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
 }
 
 export async function adminUpdateCatalogCategoryAction(
@@ -1184,7 +1147,6 @@ export async function adminUpdateCatalogCategoryAction(
 
   revalidatePath(ADMIN_CATEGORIES_PATH);
   revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
-  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
 }
 
 export async function adminDeleteCatalogCategoryAction(
@@ -1197,7 +1159,6 @@ export async function adminDeleteCatalogCategoryAction(
 
   revalidatePath(ADMIN_CATEGORIES_PATH);
   revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
-  revalidatePath(SUPERMARKET_ESSENTIALS_PATH);
 }
 
 export async function adminCreateTenantProductCategoryAction(

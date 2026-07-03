@@ -1,7 +1,8 @@
-import HttpService from "@/services/base/http.service";
+import HttpService, { type ServiceResponse } from "@/services/base/http.service";
 import { STORAGE_KEYS } from "@/constants";
 import type { ImportRowError, ImportRun } from "@/types/models/import";
 import type {
+	BulkEssentialStage,
 	CatalogItemsResponse,
 	Product,
 	ProductOrderConfig,
@@ -78,13 +79,21 @@ type AdminTenantCancellationPolicy = {
 	last_suspension_policy: boolean;
 };
 
+export type AdminTenantCategory =
+	| "grocery"
+	| "greengrocer"
+	| "butcher"
+	| "bakery"
+	| "pharmacy"
+	| "other";
+
 export type AdminTenant = {
 	id: number;
 	name: string;
 	phone: string;
 	slug: string;
 	status: "active" | "inactive" | "suspended";
-	category?: "grocery" | "pharmacy" | "other";
+	category?: AdminTenantCategory;
 	last_bulk_essentials_added_at?: string | null;
 	_count?: AdminTenantCount;
 	tenant_subscriptions?: AdminTenantSubscription[];
@@ -109,6 +118,8 @@ type AdminPaginatedResponse<T> = {
 		totalPages: number;
 	};
 };
+
+type AdminTenantsResponse = AdminTenant[] | AdminPaginatedResponse<AdminTenant>;
 
 export type AdminProduct = {
 	id: number;
@@ -182,31 +193,6 @@ type AdminProductPayload = {
 	order_mode?: "quantity" | "weight" | "price";
 	order_config?: ProductOrderConfig;
 };
-
-type SupermarketEssentialPayload =
-	| FormData
-	| {
-			catalog_item_id: number;
-	  }
-	| {
-			name: string;
-			category: string;
-			price?: number;
-			image_url?: string;
-			essential_sort_order?: number;
-	  };
-
-type UpdateSupermarketEssentialPayload =
-	| FormData
-	| {
-			name?: string;
-			category?: string;
-			price?: number | null;
-			image_url?: string | null;
-			is_active?: boolean;
-			essential_sort_order?: number | null;
-	  };
-
 type AdminCatalogItemPayload =
 	| FormData
 	| {
@@ -285,8 +271,35 @@ class AdminApiService extends HttpService {
 		return this.get<AdminDashboardStats>("dashboard-stats", undefined, ADMIN_AUTH_OPTIONS);
 	}
 
-	public async getTenants() {
-		return this.get<AdminTenant[]>("tenants", undefined, ADMIN_AUTH_OPTIONS);
+	public async getTenants(): Promise<ServiceResponse<AdminTenant[]>>;
+	public async getTenants(params: {
+		page?: number;
+		limit?: number;
+		search?: string;
+		tenantId?: number;
+		category?: string;
+		status?: string;
+		areaId?: number;
+	}): Promise<ServiceResponse<AdminTenantsResponse>>;
+	public async getTenants(params?: { 
+		page?: number; 
+		limit?: number; 
+		search?: string; 
+		tenantId?: number; 
+		category?: string; 
+		status?: string; 
+		areaId?: number; 
+	}) {
+		const searchParams = new URLSearchParams();
+		if (params?.page) searchParams.append("page", String(params.page));
+		if (params?.limit) searchParams.append("limit", String(params.limit));
+		if (params?.search) searchParams.append("search", params.search);
+		if (params?.tenantId) searchParams.append("tenantId", String(params.tenantId));
+		if (params?.category) searchParams.append("category", params.category);
+		if (params?.status) searchParams.append("status", params.status);
+		if (params?.areaId) searchParams.append("areaId", String(params.areaId));
+		const qs = searchParams.toString() ? `?${searchParams.toString()}` : "";
+		return this.get<AdminTenantsResponse>(`tenants${qs}`, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	public async getDirectoryAreas() {
@@ -320,10 +333,23 @@ class AdminApiService extends HttpService {
 		return this.patch<AdminTenant>(`tenants/${id}/directory-profile`, payload, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
-	public async adminBulkAddEssentialItems(tenantId: number, categories: string[]) {
+	public async getTenantBulkEssentialStages(tenantId: number) {
+		return this.get<BulkEssentialStage[]>(
+			`tenants/${tenantId}/bulk-essentials/stages`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async adminBulkAddEssentialItems(
+		tenantId: number,
+		payload:
+			| { category: string; catalog_item_ids: number[] }
+			| { categories: string[] },
+	) {
 		return this.post<{ count: number }>(
 			`tenants/${tenantId}/bulk-essentials`,
-			{ categories },
+			payload,
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);
@@ -471,77 +497,6 @@ class AdminApiService extends HttpService {
 	public async removeProduct(productId: number) {
 		return this.delete<void>(
 			`products/${productId}`,
-			undefined,
-			ADMIN_AUTH_OPTIONS
-		);
-	}
-
-	public async getSupermarketEssentials(params?: {
-		search?: string;
-		category?: string;
-		page?: number;
-		limit?: number;
-	}) {
-		const qs = this.buildQueryString(params);
-		return this.get<AdminPaginatedResponse<AdminCatalogItem>>(
-			`supermarket-essentials${qs}`,
-			undefined,
-			ADMIN_AUTH_OPTIONS
-		);
-	}
-
-	public async getSupermarketCatalogCandidates(params?: {
-		search?: string;
-		category?: string;
-		page?: number;
-		limit?: number;
-	}) {
-		const qs = this.buildQueryString(params);
-		return this.get<AdminPaginatedResponse<AdminCatalogItem>>(
-			`supermarket-catalog-candidates${qs}`,
-			undefined,
-			ADMIN_AUTH_OPTIONS
-		);
-	}
-
-	public async getSupermarketCatalogCategories() {
-		return this.get<AdminCatalogCategory[]>(
-			"supermarket-catalog-categories",
-			undefined,
-			ADMIN_AUTH_OPTIONS
-		);
-	}
-
-	public async createSupermarketEssential(payload: SupermarketEssentialPayload) {
-		return this.post<AdminCatalogItem>(
-			"supermarket-essentials",
-			payload,
-			undefined,
-			{
-				...ADMIN_AUTH_OPTIONS,
-				timeoutMs: payload instanceof FormData ? 30000 : undefined,
-			}
-		);
-	}
-
-	public async updateSupermarketEssential(
-		id: number,
-		payload: UpdateSupermarketEssentialPayload,
-	) {
-		return this.patch<AdminCatalogItem>(
-			`supermarket-essentials/${id}`,
-			payload,
-			undefined,
-			{
-				...ADMIN_AUTH_OPTIONS,
-				timeoutMs: payload instanceof FormData ? 30000 : undefined,
-			}
-		);
-	}
-
-	public async deleteSupermarketEssential(id: number) {
-		return this.delete<{ success: boolean }>(
-			`supermarket-essentials/${id}`,
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);

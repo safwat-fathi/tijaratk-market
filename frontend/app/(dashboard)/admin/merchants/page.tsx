@@ -1,32 +1,115 @@
-import { adminService } from '@/services/api/admin.service';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { toggleTenantStatusAction } from '@/actions/admin-server';
-import { isNextRedirectError } from '@/lib/auth/navigation-errors';
-import { redirect } from 'next/navigation';
-import { PlanSelect } from './_components/PlanSelect';
-import { TenantAreaForm } from './_components/TenantAreaForm';
-import { DirectoryStatusForm } from './_components/DirectoryStatusForm';
-import { AdminBulkEssentialsButton } from './_components/AdminBulkEssentialsButton';
-import { ExternalLink } from 'lucide-react';
-import type { AdminDirectoryArea, AdminPlan, AdminTenant } from '@/services/api/admin.service';
+import { adminService } from "@/services/api/admin.service";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { toggleTenantStatusAction } from "@/actions/admin-server";
+import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import { redirect } from "next/navigation";
+import { PlanSelect } from "./_components/PlanSelect";
+import { TenantAreaForm } from "./_components/TenantAreaForm";
+import { DirectoryStatusForm } from "./_components/DirectoryStatusForm";
+import { AdminBulkEssentialsButton } from "./_components/AdminBulkEssentialsButton";
+import { ExternalLink } from "lucide-react";
+import type {
+  AdminDirectoryArea,
+  AdminPlan,
+  AdminTenant,
+} from "@/services/api/admin.service";
+import { AdminPagination } from "../_components/AdminPagination";
+import { AdminMerchantFilters } from "./_components/AdminMerchantFilters";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-async function getTenants() {
+type Props = {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+};
+
+type PaginationMeta = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
+type SearchParamValue = string | string[] | undefined;
+
+const DEFAULT_PAGE_SIZE = 20;
+
+const emptyMeta = (page: number, limit: number): PaginationMeta => ({
+  page,
+  limit,
+  total: 0,
+  totalPages: 1,
+});
+
+const parsePositiveInteger = (value: SearchParamValue, fallback: number) => {
+  if (typeof value !== "string") return fallback;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const parseOptionalPositiveInteger = (value: SearchParamValue) => {
+  if (typeof value !== "string") return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const parseOptionalText = (value: SearchParamValue) => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
+async function getTenants(
+  page: number,
+  limit: number,
+  search?: string,
+  tenantId?: number,
+  category?: string,
+  status?: string,
+  areaId?: number,
+) {
   try {
-    const response = await adminService.getTenants();
+    const response = await adminService.getTenants({
+      page,
+      limit,
+      search,
+      tenantId,
+      category,
+      status,
+      areaId,
+    });
     if (response.success && response.data) {
-      return response.data;
+      if (Array.isArray(response.data)) {
+        return {
+          merchants: response.data,
+          meta: {
+            page,
+            limit,
+            total: response.data.length,
+            totalPages: Math.max(1, Math.ceil(response.data.length / limit)),
+          },
+        };
+      }
+
+      return {
+        merchants: response.data.data,
+        meta: response.data.meta,
+      };
     }
-    if (!response.success && response.message === 'Unauthorized') {
-      redirect('/admin/login');
+    if (!response.success && response.message === "Unauthorized") {
+      redirect("/admin/login");
     }
-    return [];
+    return {
+      merchants: [],
+      meta: emptyMeta(page, limit),
+    };
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    console.error('Failed to fetch tenants:', error);
-    return [];
+    console.error("Failed to fetch tenants:", error);
+    return {
+      merchants: [],
+      meta: emptyMeta(page, limit),
+    };
   }
 }
 
@@ -39,7 +122,7 @@ async function getPlansList() {
     return [];
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    console.error('Failed to fetch plans:', error);
+    console.error("Failed to fetch plans:", error);
     return [];
   }
 }
@@ -53,15 +136,29 @@ async function getDirectoryAreas() {
     return [];
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
-    console.error('Failed to fetch directory areas:', error);
+    console.error("Failed to fetch directory areas:", error);
     return [];
   }
 }
 
-function MerchantStatusBadge({ status }: { status: AdminTenant['status'] }) {
+function MerchantStatusBadge({ status }: { status: AdminTenant["status"] }) {
+  const labels: Record<AdminTenant["status"], string> = {
+    active: "نشط",
+    inactive: "غير نشط",
+    suspended: "موقوف",
+  };
+  const className =
+    status === "active"
+      ? "bg-green-100 text-green-800"
+      : status === "inactive"
+        ? "bg-gray-100 text-gray-800"
+        : "bg-red-100 text-red-800";
+
   return (
-    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-      {status === 'active' ? 'نشط' : 'موقوف'}
+    <span
+      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${className}`}
+    >
+      {labels[status]}
     </span>
   );
 }
@@ -80,7 +177,9 @@ function CancellationPolicySummary({ merchant }: { merchant: AdminTenant }) {
   }
 
   return (
-    <div className={`rounded-md border px-2 py-2 text-xs font-semibold ${tone}`}>
+    <div
+      className={`rounded-md border px-2 py-2 text-xs font-semibold ${tone}`}
+    >
       <div>
         إلغاءات: {policy.count} / {policy.suspension_threshold}
       </div>
@@ -98,26 +197,54 @@ function CancellationPolicySummary({ merchant }: { merchant: AdminTenant }) {
 
 function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
   return (
-    <form action={toggleTenantStatusAction.bind(null, merchant.id, merchant.status)}>
+    <form
+      action={toggleTenantStatusAction.bind(null, merchant.id, merchant.status)}
+    >
       <Button
         type="submit"
-        variant={merchant.status === 'active' ? 'outline' : 'primary'}
+        variant={merchant.status === "active" ? "outline" : "primary"}
         size="sm"
         className="w-full md:w-auto"
       >
-        {merchant.status === 'active' ? 'إيقاف' : 'تفعيل'}
+        {merchant.status === "active" ? "إيقاف" : "تفعيل"}
       </Button>
     </form>
   );
 }
 
-export default async function AdminMerchants() {
-  const [merchants, plans, areas]: [AdminTenant[], AdminPlan[], AdminDirectoryArea[]] =
-    await Promise.all([getTenants(), getPlansList(), getDirectoryAreas()]);
+export default async function AdminMerchants(props: Props) {
+  const searchParams = await props.searchParams;
+  const page = parsePositiveInteger(searchParams.page, 1);
+  const limit = parsePositiveInteger(searchParams.limit, DEFAULT_PAGE_SIZE);
+  const search = parseOptionalText(searchParams.search);
+  const tenantId = parseOptionalPositiveInteger(searchParams.tenantId);
+  const category = parseOptionalText(searchParams.category);
+  const status = parseOptionalText(searchParams.status);
+  const areaId = parseOptionalPositiveInteger(searchParams.areaId);
+  const paginationParams = {
+    search,
+    tenantId: tenantId ? String(tenantId) : undefined,
+    category,
+    status,
+    areaId: areaId ? String(areaId) : undefined,
+  };
+
+  const [tenantsData, plans, areas]: [
+    { merchants: AdminTenant[]; meta: PaginationMeta },
+    AdminPlan[],
+    AdminDirectoryArea[],
+  ] = await Promise.all([
+    getTenants(page, limit, search, tenantId, category, status, areaId),
+    getPlansList(),
+    getDirectoryAreas(),
+  ]);
+  const { merchants, meta } = tenantsData;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">إدارة التجار</h1>
+
+      <AdminMerchantFilters areas={areas} />
 
       <div className="space-y-4 md:hidden">
         {merchants.length === 0 ? (
@@ -145,24 +272,32 @@ export default async function AdminMerchants() {
                   </div>
                   <MerchantStatusBadge status={merchant.status} />
                 </div>
-                <p className="break-all text-sm text-gray-600">{merchant.phone}</p>
+                <p className="break-all text-sm text-gray-600">
+                  {merchant.phone}
+                </p>
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-md bg-gray-50 px-2 py-3">
-                  <div className="text-xs font-medium text-gray-500">المنتجات</div>
+                  <div className="text-xs font-medium text-gray-500">
+                    المنتجات
+                  </div>
                   <div className="mt-1 text-sm font-bold text-gray-900">
                     {merchant._count?.products || 0}
                   </div>
                 </div>
                 <div className="rounded-md bg-gray-50 px-2 py-3">
-                  <div className="text-xs font-medium text-gray-500">الطلبات</div>
+                  <div className="text-xs font-medium text-gray-500">
+                    الطلبات
+                  </div>
                   <div className="mt-1 text-sm font-bold text-gray-900">
                     {merchant._count?.orders || 0}
                   </div>
                 </div>
                 <div className="rounded-md bg-gray-50 px-2 py-3">
-                  <div className="text-xs font-medium text-gray-500">العملاء</div>
+                  <div className="text-xs font-medium text-gray-500">
+                    العملاء
+                  </div>
                   <div className="mt-1 text-sm font-bold text-gray-900">
                     {merchant._count?.customers || 0}
                   </div>
@@ -173,17 +308,23 @@ export default async function AdminMerchants() {
                 <TenantAreaForm tenant={merchant} areas={areas} />
 
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-gray-600">حالة الدليل</div>
+                  <div className="text-xs font-semibold text-gray-600">
+                    حالة الدليل
+                  </div>
                   <DirectoryStatusForm tenant={merchant} />
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-gray-600">سياسة الإلغاء</div>
+                  <div className="text-xs font-semibold text-gray-600">
+                    سياسة الإلغاء
+                  </div>
                   <CancellationPolicySummary merchant={merchant} />
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-gray-600">الباقة</div>
+                  <div className="text-xs font-semibold text-gray-600">
+                    الباقة
+                  </div>
                   <PlanSelect
                     tenantId={merchant.id}
                     currentPlanId={merchant.tenant_subscriptions?.[0]?.plan_id}
@@ -191,94 +332,161 @@ export default async function AdminMerchants() {
                   />
                 </div>
 
-                <div className="flex gap-2 items-center flex-wrap">
+                <div className="flex gap-2 items-start flex-wrap">
                   <ToggleTenantStatusForm merchant={merchant} />
-                  <AdminBulkEssentialsButton 
-                    tenantId={merchant.id} 
-                    tenantName={merchant.name} 
-                    category={merchant.category} 
-                    lastBulkEssentialsAddedAt={merchant.last_bulk_essentials_added_at}
+                  <AdminBulkEssentialsButton
+                    tenantId={merchant.id}
+                    tenantName={merchant.name}
+                    category={merchant.category}
+                    lastBulkEssentialsAddedAt={
+                      merchant.last_bulk_essentials_added_at
+                    }
                   />
                 </div>
               </div>
             </Card>
           ))
         )}
+        <AdminPagination
+          basePath="/admin/merchants"
+          page={meta.page}
+          totalPages={meta.totalPages}
+          total={meta.total}
+          limit={meta.limit}
+          params={paginationParams}
+        />
       </div>
 
       <Card className="hidden overflow-hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاسم</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">رقم الهاتف</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">المنتجات</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الطلبات</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">العملاء</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">المناطق</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">حالة الدليل</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">سياسة الإلغاء</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الباقة</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحالة</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {merchants.map((merchant) => (
-              <tr key={merchant.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {merchant.name}
-                  <div className="mt-0.5">
-                    <a
-                      href={`/${merchant.slug}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+        <div className="space-y-4">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    الاسم
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    رقم الهاتف
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    المنتجات
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    الطلبات
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    العملاء
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    المناطق
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    حالة الدليل
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    سياسة الإلغاء
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    الباقة
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    الحالة
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    إجراءات
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {merchants.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={11}
+                      className="px-6 py-8 text-center text-sm text-gray-500"
                     >
-                      /{merchant.slug}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant.phone}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant._count?.products || 0}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant._count?.orders || 0}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant._count?.customers || 0}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  <TenantAreaForm tenant={merchant} areas={areas} />
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <DirectoryStatusForm tenant={merchant} />
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <CancellationPolicySummary merchant={merchant} />
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <PlanSelect
-                    tenantId={merchant.id}
-                    currentPlanId={merchant.tenant_subscriptions?.[0]?.plan_id}
-                    plans={plans}
-                  />
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <MerchantStatusBadge status={merchant.status} />
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex items-center gap-2">
-                    <ToggleTenantStatusForm merchant={merchant} />
-                    <AdminBulkEssentialsButton 
-                      tenantId={merchant.id} 
-                      tenantName={merchant.name} 
-                      category={merchant.category} 
-                      lastBulkEssentialsAddedAt={merchant.last_bulk_essentials_added_at}
-                    />
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      لا يوجد تجار
+                    </td>
+                  </tr>
+                ) : (
+                  merchants.map((merchant) => (
+                    <tr key={merchant.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {merchant.name}
+                        <div className="mt-0.5">
+                          <a
+                            href={`/${merchant.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            /{merchant.slug}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {merchant.phone}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {merchant._count?.products || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {merchant._count?.orders || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {merchant._count?.customers || 0}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        <TenantAreaForm tenant={merchant} areas={areas} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <DirectoryStatusForm tenant={merchant} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <CancellationPolicySummary merchant={merchant} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <PlanSelect
+                          tenantId={merchant.id}
+                          currentPlanId={
+                            merchant.tenant_subscriptions?.[0]?.plan_id
+                          }
+                          plans={plans}
+                        />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <MerchantStatusBadge status={merchant.status} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-start gap-2">
+                          <ToggleTenantStatusForm merchant={merchant} />
+                          <AdminBulkEssentialsButton
+                            tenantId={merchant.id}
+                            tenantName={merchant.name}
+                            category={merchant.category}
+                            lastBulkEssentialsAddedAt={
+                              merchant.last_bulk_essentials_added_at
+                            }
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-6 pb-4">
+            <AdminPagination
+              basePath="/admin/merchants"
+              page={meta.page}
+              totalPages={meta.totalPages}
+              total={meta.total}
+              limit={meta.limit}
+              params={paginationParams}
+            />
+          </div>
         </div>
       </Card>
     </div>

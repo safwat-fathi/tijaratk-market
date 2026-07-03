@@ -22,6 +22,7 @@ export interface ComboboxProps extends Omit<React.InputHTMLAttributes<HTMLInputE
   value?: string | number;
   defaultValue?: string | number;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  disableFiltering?: boolean;
 }
 
 export function Combobox({
@@ -35,6 +36,7 @@ export function Combobox({
   defaultValue,
   onChange,
   name,
+  disableFiltering,
   ...props
 }: ComboboxProps) {
   const normalizedOptions = useMemo(() => {
@@ -44,23 +46,29 @@ export function Combobox({
     });
   }, [options]);
 
-  const initialValueStr = value !== undefined ? String(value) : (defaultValue !== undefined ? String(defaultValue) : "");
-  const initialOption = normalizedOptions.find(opt => opt.value === initialValueStr);
+  // Try to find the initial label based on defaultValue or value
+  const initialValue = value !== undefined ? value : defaultValue;
+  const initialOption = initialValue !== undefined 
+    ? normalizedOptions.find(opt => opt.value === String(initialValue))
+    : undefined;
 
-  const [selectedValue, setSelectedValue] = useState<string>(initialValueStr);
-  const [inputValue, setInputValue] = useState<string>(initialOption ? initialOption.label : initialValueStr);
-  
   const [isOpen, setIsOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(initialOption ? initialOption.label : "");
+  const [selectedValue, setSelectedValue] = useState(initialValue !== undefined ? String(initialValue) : "");
   const containerRef = useRef<HTMLDivElement>(null);
   const hiddenInputRef = useRef<HTMLInputElement>(null);
 
+  // Sync internal state if controlled value changes
   useEffect(() => {
     if (value !== undefined) {
-      const valStr = String(value);
-      setSelectedValue(valStr);
-      const opt = normalizedOptions.find(o => o.value === valStr);
-      if (opt) setInputValue(opt.label);
-      else setInputValue(valStr);
+      const option = normalizedOptions.find(opt => opt.value === String(value));
+      if (option) {
+        setInputValue(option.label);
+        setSelectedValue(option.value);
+      } else {
+        // If value doesn't match any option, we might want to clear or keep it.
+        // Usually, we'd clear it if it's invalid, but for a combobox, maybe custom value is allowed.
+      }
     }
   }, [value, normalizedOptions]);
 
@@ -68,11 +76,17 @@ export function Combobox({
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
-        if (inputValue !== selectedValue && !normalizedOptions.find(o => o.label === inputValue)) {
-          setSelectedValue(inputValue);
+        // On blur, if the input value doesn't match any option, revert to selected option's label
+        const currentOption = normalizedOptions.find(opt => opt.value === selectedValue);
+        if (currentOption && inputValue !== currentOption.label) {
+          setInputValue(currentOption.label);
+        } else if (!currentOption) {
+          // If no option selected, clear input
+          setInputValue("");
         }
       }
     }
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [inputValue, selectedValue, normalizedOptions]);
@@ -104,10 +118,11 @@ export function Combobox({
   };
 
   const filteredOptions = useMemo(() => {
+    if (disableFiltering) return normalizedOptions;
     const search = normalizeArabic(inputValue);
     if (!search) return normalizedOptions;
     return normalizedOptions.filter((opt) => normalizeArabic(opt.label).includes(search));
-  }, [inputValue, normalizedOptions]);
+  }, [inputValue, normalizedOptions, disableFiltering]);
 
   return (
     <div className={`block space-y-1 relative ${wrapperClassName}`} ref={containerRef}>
@@ -138,7 +153,7 @@ export function Combobox({
           onClick={() => setIsOpen(!isOpen)}
           className="absolute inset-y-0 end-0 flex items-center pe-3 text-gray-400 hover:text-gray-600 focus:outline-none"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
           </svg>
         </button>

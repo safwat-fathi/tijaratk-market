@@ -158,6 +158,79 @@ export class AdminService {
     };
   }
 
+  private parsePositiveIntegerFilter(value?: number) {
+    return Number.isInteger(value) && value && value > 0 ? value : undefined;
+  }
+
+  private normalizeTextFilter(value?: string) {
+    const normalized = value?.trim();
+    return normalized || undefined;
+  }
+
+  private normalizeTenantCategoryFilter(value?: string) {
+    return Object.values(TenantCategory).includes(value as TenantCategory)
+      ? (value as TenantCategory)
+      : undefined;
+  }
+
+  private normalizeTenantStatusFilter(value?: string) {
+    return Object.values(TenantStatus).includes(value as TenantStatus)
+      ? (value as TenantStatus)
+      : undefined;
+  }
+
+  private buildTenantPhoneSearchTerms(search: string) {
+    const terms = new Set<string>([search]);
+    const digits = search.replace(/\D/g, '');
+
+    if (!digits) return Array.from(terms);
+
+    terms.add(digits);
+
+    if (digits.startsWith('0')) {
+      const withoutLocalPrefix = digits.replace(/^0+/, '');
+      if (withoutLocalPrefix) {
+        terms.add(withoutLocalPrefix);
+        terms.add(`20${withoutLocalPrefix}`);
+        terms.add(`+20${withoutLocalPrefix}`);
+      }
+    } else if (digits.startsWith('20')) {
+      const withoutCountryCode = digits.slice(2);
+      terms.add(`+${digits}`);
+      if (withoutCountryCode) {
+        terms.add(withoutCountryCode);
+        terms.add(`0${withoutCountryCode}`);
+      }
+    } else {
+      terms.add(`0${digits}`);
+      terms.add(`20${digits}`);
+      terms.add(`+20${digits}`);
+    }
+
+    return Array.from(terms);
+  }
+
+  private buildTenantSearchFilter(search?: string): Prisma.TenantWhereInput {
+    if (!search) return {};
+
+    const orFilters: Prisma.TenantWhereInput[] = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { slug: { contains: search, mode: 'insensitive' } },
+      ...this.buildTenantPhoneSearchTerms(search).map((phoneTerm) => ({
+        phone: { contains: phoneTerm },
+      })),
+    ];
+
+    if (/^\d+$/.test(search)) {
+      const id = Number(search);
+      if (Number.isSafeInteger(id) && id > 0 && id <= 2147483647) {
+        orFilters.push({ id });
+      }
+    }
+
+    return { OR: orFilters };
+  }
+
   // Dashboard Stats
   async getDashboardStats() {
     const [tenants, activeMerchants, totalPlans] = await Promise.all([
@@ -189,8 +262,39 @@ export class AdminService {
   }
 
   // Tenants Management
-  async getTenants() {
+  async getTenants(
+    page?: number,
+    limit?: number,
+    search?: string,
+    tenantId?: number,
+    category?: string,
+    status?: string,
+    areaId?: number,
+  ) {
+    const shouldPaginate = page !== undefined || limit !== undefined;
+    const pagination = shouldPaginate
+      ? this.getPagination(page, limit)
+      : undefined;
+    const normalizedSearch = this.normalizeTextFilter(search);
+    const normalizedTenantId = this.parsePositiveIntegerFilter(tenantId);
+    const normalizedCategory = this.normalizeTenantCategoryFilter(category);
+    const normalizedStatus = this.normalizeTenantStatusFilter(status);
+    const normalizedAreaId = this.parsePositiveIntegerFilter(areaId);
+
+    const where: Prisma.TenantWhereInput = {
+      ...(normalizedTenantId && { id: normalizedTenantId }),
+      ...this.buildTenantSearchFilter(normalizedSearch),
+      ...(normalizedCategory && { category: normalizedCategory }),
+      ...(normalizedStatus && { status: normalizedStatus }),
+      ...(normalizedAreaId && {
+        directory_profile: {
+          area_id: normalizedAreaId,
+        },
+      }),
+    };
+
     const tenants = await this.prisma.tenant.findMany({
+      where,
       select: {
         id: true,
         name: true,
@@ -220,9 +324,12 @@ export class AdminService {
         },
       },
       orderBy: { created_at: 'desc' },
+      ...(pagination
+        ? { skip: pagination.offset, take: pagination.limit }
+        : {}),
     });
 
-    return Promise.all(
+    const data = await Promise.all(
       tenants.map(async (tenant) => {
         const [orders, customers, products, cancellationPolicy] =
           await this.runWithTenantRls(tenant.id, (tx) =>
@@ -249,6 +356,22 @@ export class AdminService {
         };
       }),
     );
+
+    if (!pagination) {
+      return data;
+    }
+
+    const total = await this.prisma.tenant.count({ where });
+
+    return {
+      data,
+      meta: {
+        page: pagination.page,
+        limit: pagination.limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pagination.limit)),
+      },
+    };
   }
 
   async updateTenantStatus(id: number, status: TenantStatus) {

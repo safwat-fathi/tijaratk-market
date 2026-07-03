@@ -16,6 +16,7 @@ import {
   loadBulkEssentialStagesAction,
 } from "@/actions/product-actions";
 import { formatCurrency } from "@/lib/utils/currency";
+import { resolveImageUrl } from "@/app/(dashboard)/merchant/(features)/products/new/_utils/product-onboarding";
 import type { BulkEssentialStage } from "@/types/models/product";
 
 type BulkEssentialWizardProps = {
@@ -24,6 +25,8 @@ type BulkEssentialWizardProps = {
   onSuccess: () => void;
   onSkip?: () => void;
   onCategoryAdded?: (count: number) => void;
+  loadStagesAction?: typeof loadBulkEssentialStagesAction;
+  addEssentialItemsAction?: typeof bulkAddEssentialItemsAction;
 };
 
 type StageStatus = "pending" | "added" | "skipped" | "error";
@@ -45,6 +48,8 @@ export default function BulkEssentialWizard({
   onSuccess,
   onSkip,
   onCategoryAdded,
+  loadStagesAction = loadBulkEssentialStagesAction,
+  addEssentialItemsAction = bulkAddEssentialItemsAction,
 }: BulkEssentialWizardProps) {
   const [stages, setStages] = useState<BulkEssentialStage[]>([]);
   const [activeStageIndex, setActiveStageIndex] = useState(0);
@@ -60,6 +65,15 @@ export default function BulkEssentialWizard({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasLoadedStagesRef = useRef(false);
   const requestIdRef = useRef(0);
+  const itemsScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollItemsToTop = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (itemsScrollRef.current) {
+        itemsScrollRef.current.scrollTop = 0;
+      }
+    });
+  }, []);
 
   const loadStages = useCallback(async () => {
     const requestId = requestIdRef.current + 1;
@@ -74,7 +88,7 @@ export default function BulkEssentialWizard({
     setStageResults({});
 
     try {
-      const result = await loadBulkEssentialStagesAction();
+      const result = await loadStagesAction();
       if (requestIdRef.current !== requestId) return;
 
       if (!result.success || !result.data) {
@@ -85,6 +99,7 @@ export default function BulkEssentialWizard({
 
       setStages(result.data);
       setSelectedByCategory(buildInitialSelections(result.data));
+      scrollItemsToTop();
     } catch {
       if (requestIdRef.current === requestId) {
         setErrorMessage("تعذر تحميل المنتجات الأساسية");
@@ -95,7 +110,7 @@ export default function BulkEssentialWizard({
         setIsLoadingStages(false);
       }
     }
-  }, []);
+  }, [loadStagesAction, scrollItemsToTop]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -185,6 +200,14 @@ export default function BulkEssentialWizard({
   const goToNextStage = () => {
     if (canGoNext) {
       setActiveStageIndex((current) => current + 1);
+      scrollItemsToTop();
+    }
+  };
+
+  const goToPreviousStage = () => {
+    if (canGoPrevious) {
+      setActiveStageIndex((current) => current - 1);
+      scrollItemsToTop();
     }
   };
 
@@ -196,7 +219,7 @@ export default function BulkEssentialWizard({
     setIsAddingStage(true);
     setErrorMessage(null);
 
-    const result = await bulkAddEssentialItemsAction({
+    const result = await addEssentialItemsAction({
       category: activeStage.category,
       catalogItemIds: selectedIds,
     });
@@ -358,9 +381,13 @@ export default function BulkEssentialWizard({
               </p>
             ) : null}
 
-            <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+            <div
+              ref={itemsScrollRef}
+              className="max-h-[52vh] space-y-2 overflow-y-auto pr-1"
+            >
               {activeStage.items.map((item) => {
                 const isSelected = Boolean(activeSelection[item.id]);
+                const imageUrl = resolveImageUrl(item.image_url);
                 return (
                   <label
                     key={item.id}
@@ -377,7 +404,7 @@ export default function BulkEssentialWizard({
                       className="h-5 w-5 shrink-0 accent-brand-primary"
                     />
                     <SafeImage
-                      src={item.image_url}
+                      src={imageUrl}
                       alt={item.name}
                       width={48}
                       height={48}
@@ -412,7 +439,7 @@ export default function BulkEssentialWizard({
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setActiveStageIndex((current) => current - 1)}
+                  onClick={goToPreviousStage}
                   disabled={!canGoPrevious || isAddingStage}
                   className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 disabled:opacity-40"
                 >

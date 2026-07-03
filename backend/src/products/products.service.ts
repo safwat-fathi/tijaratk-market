@@ -450,7 +450,6 @@ export class ProductsService {
       where: {
         source: catalogSource,
         is_active: true,
-        is_essential: true,
         category: { in: allowedCategories },
       },
       orderBy: [
@@ -485,6 +484,7 @@ export class ProductsService {
           category,
           total: rankedItems.length,
           default_selected_catalog_item_ids: rankedItems
+            .filter((item) => item.is_essential)
             .map((item) => item.id),
           items: rankedItems,
         };
@@ -513,7 +513,6 @@ export class ProductsService {
             id: { in: catalogItemIds },
             source: catalogSource,
             is_active: true,
-            is_essential: true,
             category,
           },
         });
@@ -599,6 +598,12 @@ export class ProductsService {
 
   private rankEssentialCatalogItems(items: CatalogItem[]): CatalogItem[] {
     return [...items].sort((left, right) => {
+      const leftEssential = Number(Boolean(left.is_essential));
+      const rightEssential = Number(Boolean(right.is_essential));
+      if (leftEssential !== rightEssential) {
+        return rightEssential - leftEssential;
+      }
+
       const leftSortOrder = left.essential_sort_order ?? Number.MAX_SAFE_INTEGER;
       const rightSortOrder =
         right.essential_sort_order ?? Number.MAX_SAFE_INTEGER;

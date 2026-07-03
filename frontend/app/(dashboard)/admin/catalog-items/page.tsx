@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Download } from "lucide-react";
+import { Download, Search, X } from "lucide-react";
 import { adminService } from "@/services/api/admin.service";
 import type {
   AdminCatalogCategory,
@@ -176,7 +176,7 @@ export default async function AdminCatalogItemsPage(props: Props) {
         </p>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-wrap gap-2">
           {SOURCE_TABS.map((tab) => (
             <Link
@@ -260,13 +260,19 @@ export default async function AdminCatalogItemsPage(props: Props) {
                 <option value="inactive">غير نشط</option>
               </select>
             </label>
-            <Button type="submit">بحث</Button>
-            <Link
-              href={buildUrl({ source, page: 1, limit })}
-              className="inline-flex h-10 items-center justify-center rounded-md border border-brand-border px-4 text-sm font-semibold text-brand-text transition-colors hover:bg-brand-soft"
-            >
-              مسح
-            </Link>
+            <div className="flex items-center gap-2 mr-auto">
+              <Button type="submit" size="sm" className="px-4">
+                <Search className="h-4 w-4" />
+                بحث
+              </Button>
+              <Link
+                href={buildUrl({ source, page: 1, limit })}
+                className="inline-flex items-center justify-center gap-2 min-h-10 rounded-md border border-brand-border bg-white px-4 py-2 text-sm font-semibold text-brand-text transition-colors hover:bg-brand-soft"
+              >
+                <X className="h-4 w-4" />
+                مسح
+              </Link>
+            </div>
           </form>
 
           <AdminCatalogItemsBulkClient

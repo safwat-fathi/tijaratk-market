@@ -164,8 +164,24 @@ export class AdminController {
     description: 'List of tenants retrieved successfully',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getTenants() {
-    return this.adminService.getTenants();
+  getTenants(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('tenantId') tenantId?: string,
+    @Query('category') category?: string,
+    @Query('status') status?: string,
+    @Query('areaId') areaId?: string,
+  ) {
+    return this.adminService.getTenants(
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
+      search,
+      tenantId ? Number(tenantId) : undefined,
+      category,
+      status,
+      areaId ? Number(areaId) : undefined,
+    );
   }
 
   @UseGuards(AdminAuthGuard)
@@ -242,6 +258,31 @@ export class AdminController {
     @Body() dto: AddBulkEssentialItemsDto,
   ) {
     return this.productsService.bulkAddEssentials(id, dto);
+  }
+
+  /**
+   * Returns staged essential catalog candidates for a selected tenant.
+   */
+  @UseGuards(AdminAuthGuard)
+  @Get('tenants/:id/bulk-essentials/stages')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Get staged essential bulk import candidates for a merchant',
+    description:
+      'Return staged essential catalog categories and selected candidates for a supermarket tenant.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The unique ID of the tenant',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Essential product stages returned successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findTenantBulkEssentialStages(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.findBulkEssentialStages(id);
   }
 
   @UseGuards(AdminAuthGuard)

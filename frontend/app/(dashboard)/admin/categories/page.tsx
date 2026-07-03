@@ -19,6 +19,7 @@ import {
   adminUpdateTenantProductCategoryAction,
 } from "@/actions/admin-server";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import { EditCategorySheet } from "./_components/EditCategorySheet";
 
 export const dynamic = "force-dynamic";
 
@@ -673,28 +674,22 @@ function CatalogCategoryRow({ category }: { category: AdminCatalogCategory }) {
 
   return (
     <tr>
-      <td className="px-4 py-3 text-sm font-semibold text-brand-text">
-        {category.category}
+      <td className="px-4 py-3">
+        <div className="text-sm font-semibold text-brand-text">
+          {category.name || category.category}
+        </div>
+        {category.name && category.name !== category.category && (
+          <div className="text-xs text-brand-muted">{category.category}</div>
+        )}
       </td>
       <td className="px-4 py-3 text-sm text-brand-muted">{category.count}</td>
-      <td className="min-w-80 px-4 py-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <form
+      <td className="min-w-32 px-4 py-3">
+        <div className="flex items-center justify-end gap-2">
+          <EditCategorySheet
+            initialName={category.name || category.category}
             action={adminUpdateCatalogCategoryAction.bind(null, categoryId)}
-            className="flex flex-1 gap-2"
-          >
-            <input
-              name="name"
-              defaultValue={category.name || category.category}
-              required
-              maxLength={64}
-              disabled={!canMutate}
-              className="h-10 min-w-0 flex-1 rounded-md border border-brand-border px-3 text-sm"
-            />
-            <Button type="submit" size="sm" disabled={!canMutate}>
-              حفظ
-            </Button>
-          </form>
+            disabled={!canMutate}
+          />
           <form action={adminDeleteCatalogCategoryAction.bind(null, categoryId)}>
             <Button type="submit" size="sm" variant="destructive" disabled={!canDelete}>
               حذف
@@ -752,27 +747,16 @@ function TenantCategoryRow({
         {category.name}
       </td>
       <td className="px-4 py-3 text-sm text-brand-muted">{category.count}</td>
-      <td className="min-w-80 px-4 py-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <form
+      <td className="min-w-32 px-4 py-3">
+        <div className="flex items-center justify-end gap-2">
+          <EditCategorySheet
+            initialName={category.name}
             action={adminUpdateTenantProductCategoryAction.bind(
               null,
               tenantId,
               category.id,
             )}
-            className="flex flex-1 gap-2"
-          >
-            <input
-              name="name"
-              defaultValue={category.name}
-              required
-              maxLength={64}
-              className="h-10 min-w-0 flex-1 rounded-md border border-brand-border px-3 text-sm"
-            />
-            <Button type="submit" size="sm">
-              حفظ
-            </Button>
-          </form>
+          />
           <form
             action={adminDeleteTenantProductCategoryAction.bind(
               null,
