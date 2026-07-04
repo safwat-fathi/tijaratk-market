@@ -13,6 +13,7 @@ import {
   UploadedFile,
   UseGuards,
   Res,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,

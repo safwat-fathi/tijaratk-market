@@ -20,6 +20,7 @@ const CONSTANTS = {
   ],
   UPLOAD: {
     MAX_IMAGE_SIZE_BYTES: 15 * 1024 * 1024, // 15 MB
+    MAX_CSV_SIZE_BYTES: 5 * 1024 * 1024, // 5 MB
   },
 };
 
