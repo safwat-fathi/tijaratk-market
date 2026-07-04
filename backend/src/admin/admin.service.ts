@@ -498,7 +498,7 @@ export class AdminService {
     );
 
     return {
-      filename: `catalog-${source}-${this.formatDateForFilename(new Date())}.csv`,
+      filename: `${source === CATALOG_SOURCE_TALABAT ? 'grocery-items' : source === CATALOG_SOURCE_CHEFAA ? 'pharmacy-items' : 'catalog-items'}-${this.formatDateForFilename(new Date())}.csv`,
       content: this.encodeCsv(CATALOG_EXPORT_COLUMNS, rows),
     };
   }
@@ -1193,7 +1193,7 @@ export class AdminService {
       );
       const currentPrice = this.parseOptionalPrice(row.current_price);
       const imageUrl =
-        this.normalizeNullableString(row.image_url) || catalogItem?.image_url;
+        this.normalizeNullableString(row.image_url as string | undefined) || catalogItem?.image_url;
       const isAvailable = this.parseOptionalBoolean(row.is_available) ?? true;
       const status = this.parseOptionalProductStatus(row.status);
       const orderMode = this.parseOptionalProductOrderMode(row.order_mode);

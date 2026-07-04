@@ -52,7 +52,7 @@ export async function GET(request: Request) {
         response.headers.get("content-type") || "text/csv; charset=utf-8",
       "Content-Disposition":
         response.headers.get("content-disposition") ||
-        `attachment; filename="catalog-${source}.csv"`,
+        `attachment; filename="${source === "talabat_csv" ? "grocery-items" : source === "chefaa_csv" ? "pharmacy-items" : "catalog-items"}.csv"`,
     },
   });
 }
