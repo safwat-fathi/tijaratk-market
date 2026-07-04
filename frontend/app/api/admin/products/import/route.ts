@@ -5,7 +5,8 @@ import { STORAGE_KEYS } from "@/constants";
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 export async function POST(request: NextRequest) {
-  const token = cookies().get(STORAGE_KEYS.ADMIN_ACCESS_TOKEN)?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(STORAGE_KEYS.ADMIN_ACCESS_TOKEN)?.value;
   if (!token) {
     return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
   }
