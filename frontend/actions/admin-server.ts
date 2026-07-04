@@ -378,7 +378,18 @@ export async function adminBulkAddEssentialItemsAction(
         catalogItemIds: number[];
       }
     | string[],
-) {
+): Promise<
+  | {
+      success: false;
+      message: string;
+      data?: undefined;
+    }
+  | {
+      success: true;
+      data: { count: number };
+      message?: undefined;
+    }
+> {
   try {
     const response = await adminService.adminBulkAddEssentialItems(
       tenantId,
@@ -389,7 +400,7 @@ export async function adminBulkAddEssentialItemsAction(
             catalog_item_ids: payload.catalogItemIds,
           },
     );
-    if (!response.success) {
+    if (!response.success || !response.data) {
       return {
         success: false,
         message: response.message || "تعذر إضافة التشكيلة الأساسية",
