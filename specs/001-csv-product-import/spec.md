@@ -53,7 +53,7 @@ Users need clear feedback when their uploaded CSV contains errors (e.g., missing
 ### Edge Cases
 
 - What happens if the CSV file exceeds the maximum allowed file size?
-- How does the system handle importing products with identifiers (e.g., SKU) that already exist in the store?
+- How does the system handle importing products with identical names that already exist in the store?
 - What happens if a merchant tries to upload a CSV file with tens of thousands of rows (timeout considerations)?
 - How does the system handle special characters or different text encodings (e.g., UTF-8 vs ISO-8859-1) in the CSV?
 
@@ -70,10 +70,11 @@ Users need clear feedback when their uploaded CSV contains errors (e.g., missing
 - **FR-007**: System MUST handle duplicate products by updating them (upsert), inserting new ones, and creating a price history record if the price has changed.
 - **FR-008**: System MUST support a maximum file size limit for CSV uploads to prevent abuse.
 - **FR-009**: System MUST normalize Arabic and English numerals during the validation step to ensure consistent data processing.
+- **FR-010**: System MUST automatically create a new category if the category name provided in the CSV does not exist in the database.
 
 ### Key Entities
 
-- **Product**: The main entity being imported, containing attributes like name, price, description, SKU, etc.
+- **Product**: The main entity being imported, containing attributes like name, price, description, category, etc.
 - **ProductPriceHistory**: A record of price changes over time.
 - **Store**: The destination where the imported products will be associated.
 - **Import Job/Log**: A record of the import process, capturing success, failure, and error details for auditing and user feedback.

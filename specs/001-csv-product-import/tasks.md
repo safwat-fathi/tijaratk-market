@@ -54,8 +54,8 @@
 
 - [ ] T008 [P] [US2] Create API endpoint `POST /import` with `FileInterceptor` in `backend/src/admin/admin.controller.ts` (and merchant controller)
 - [ ] T009 [US2] Implement streaming CSV parsing logic using `csv-parser` in `backend/src/admin/admin.service.ts`
-- [ ] T009.5 [US2] Implement validation and Arabic/English numeral normalization for parsed rows.
-- [ ] T010 [US2] Implement database upsert logic (Update/Insert) and create price history on price change in `backend/src/admin/admin.service.ts`
+- [ ] T009.5 [US2] Implement validation and Arabic/English numeral normalization for parsed rows, and resolve `category` name to a valid database ID (finding existing or creating a new category if it doesn't exist).
+- [ ] T010 [US2] Implement database upsert logic (Update/Insert matching by `name` and `storeId`) and create price history on price change in `backend/src/admin/admin.service.ts`
 - [ ] T011 [P] [US2] Implement frontend route handler to forward CSV upload in `frontend/app/api/admin/products/import/route.ts`
 - [ ] T012 [P] [US2] Create CSV Upload UI component (file input + submit button) in `frontend/app/(dashboard)/admin/products/page.tsx`
 - [ ] T013 [P] [US2] Create CSV Upload UI component in `frontend/app/(dashboard)/merchant/products/page.tsx`

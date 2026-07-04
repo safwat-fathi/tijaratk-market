@@ -6,8 +6,8 @@
 - **Alternatives considered**: `papaparse` (excellent for browsers/frontend parsing but we require backend-enforced streaming).
 
 ## Decision 2: Duplicate Handling Mechanism
-- **Decision**: Upsert products based on `sku` and `storeId`.
-- **Rationale**: Products may evolve; updating existing products is necessary to support price updates and other changes. If the price changes, a price history record must be created.
+- **Decision**: Upsert products based on `name` and `storeId`.
+- **Rationale**: Products may evolve; updating existing products by their name within a specific store is necessary to support price updates and other changes. If the price changes, a price history record must be created.
 - **Alternatives considered**: Skipping duplicates (rejected as it prevents users from doing bulk updates).
 
 ## Decision 3: File Upload Handling
