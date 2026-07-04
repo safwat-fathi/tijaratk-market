@@ -143,21 +143,26 @@ export default function AdminProductsOnboardingClient({
       setSheetUploadResult(null);
 
       startSheetUploadTransition(async () => {
-        const response = await adminUploadProductCatalogSheetAction(
-          selectedMerchantId,
-          formData,
-        );
-
-        if (!response.success || !response.data) {
-          setSheetUploadMessage(response.message || "تعذر رفع ملف المنتجات");
-          return;
+        try {
+          formData.append('tenantId', selectedMerchantId.toString());
+          const response = await fetch('/api/admin/products/import', {
+            method: 'POST',
+            body: formData,
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            setSheetUploadMessage(result.message || "تعذر رفع ملف المنتجات");
+            return;
+          }
+          setSheetUploadResult(result.data);
+          reloadSelectedMerchant(selectedMerchantId);
+        } catch (error) {
+          console.error("Error uploading CSV:", error);
+          setSheetUploadMessage("حدث خطأ أثناء الاتصال بالخادم");
         }
-
-        setSheetUploadResult(response.data);
-        reloadSelectedMerchant(selectedMerchantId);
       });
     },
-    [reloadSelectedMerchant, selectedMerchantId],
+    [selectedMerchantId, reloadSelectedMerchant],
   );
 
   // Use effect for auto-selection removed as per user request
@@ -314,10 +319,19 @@ export default function AdminProductsOnboardingClient({
             action={handleUploadProductSheet}
             className="mt-3 grid gap-2 rounded-md border border-brand-border bg-gray-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
           >
-            <label className="space-y-1">
-              <span className="text-xs font-semibold text-brand-text">
-                رفع CSV لتحديث منتجات التاجر
-              </span>
+            <label className="space-y-1 block">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-brand-text">
+                  رفع CSV لتحديث منتجات التاجر
+                </span>
+                <a
+                  href="/api/admin/products/import-template"
+                  download
+                  className="text-brand-primary hover:underline text-[11px]"
+                >
+                  تحميل قالب CSV
+                </a>
+              </div>
               <input
                 type="file"
                 name="file"

@@ -56,6 +56,9 @@ importers:
       csv-parse:
         specifier: ^6.2.1
         version: 6.2.1
+      csv-parser:
+        specifier: ^3.2.1
+        version: 3.2.1
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -2180,6 +2183,11 @@ packages:
 
   csv-parse@6.2.1:
     resolution: {integrity: sha512-LRLMV+UCyfMokp8Wb411duBf1gaBKJfOfBWU9eHMJ+b+cJYZsNu3AFmjJf3+yPGd59Exz1TsMjaSFyxnYB9+IQ==}
+
+  csv-parser@3.2.1:
+    resolution: {integrity: sha512-v8RPMSglouR9od735SnwSxLBbCJqEPSbgm1R5qfr8yIiMUCEFjox56kRZid0SvgHJEkxeIEu3+a9QS3YRh7CuA==}
+    engines: {node: '>= 10'}
+    hasBin: true
 
   dayjs@1.11.19:
     resolution: {integrity: sha512-t5EcLVS6QPBNqM2z8fakk/NKel+Xzshgt8FFKAn+qwlD1pzZWxh0nVCrvFK7ZDb6XucZeF9z8C7CBWTRIVApAw==}
@@ -6497,6 +6505,8 @@ snapshots:
   csstype@3.2.3: {}
 
   csv-parse@6.2.1: {}
+
+  csv-parser@3.2.1: {}
 
   dayjs@1.11.19: {}
 

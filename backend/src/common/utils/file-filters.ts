@@ -90,3 +90,32 @@ export const prescriptionFileFilter = (
 
   callback(null, true);
 };
+
+const UNSUPPORTED_CSV_FORMAT_MESSAGE = 'Unsupported file format. Please upload a CSV file.';
+
+/**
+ * Multer file filter for CSV uploads.
+ */
+export const csvFileFilter = (
+  _req: Request,
+  file: MulterLikeFile,
+  callback: (error: Error | null, acceptFile: boolean) => void,
+) => {
+  const mimeType = file.mimetype?.trim().toLowerCase() || '';
+  const fileExtension = extname(file.originalname || '').toLowerCase();
+
+  if (
+    mimeType === 'text/csv' || 
+    mimeType === 'application/csv' || 
+    mimeType === 'application/vnd.ms-excel' ||
+    fileExtension === '.csv'
+  ) {
+    callback(null, true);
+    return;
+  }
+
+  callback(
+    new BadRequestException(UNSUPPORTED_CSV_FORMAT_MESSAGE),
+    false,
+  );
+};

@@ -503,6 +503,14 @@ export class AdminService {
     };
   }
 
+  generateProductImportTemplate() {
+    const columns = ['name', 'price', 'category', 'description', 'stock', 'imageUrl'] as const;
+    return {
+      filename: `product-import-template.csv`,
+      content: this.encodeCsv(columns, []),
+    };
+  }
+
   async uploadTenantProductCatalogSheet(
     tenantId: number,
     file: Express.Multer.File,

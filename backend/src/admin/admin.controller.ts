@@ -431,6 +431,57 @@ export class AdminController {
   }
 
   @UseGuards(AdminAuthGuard)
+  @Post('tenants/:id/products/import')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Import products from CSV for a tenant',
+    description: 'Upload a CSV template file to bulk create or update products for a merchant.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary', description: 'CSV file to upload' },
+      },
+      required: ['file'],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: ADMIN_PRODUCT_SHEET_UPLOAD_DIR,
+        filename: (_req, file, callback) => {
+          const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-');
+          callback(null, `import-${Date.now()}-${safeName}`);
+        },
+      }),
+      limits: { fileSize: MAX_ADMIN_PRODUCT_SHEET_SIZE_BYTES },
+      fileFilter: (_req, file, callback) => {
+        const extension = extname(file.originalname).toLowerCase();
+        if (extension !== '.csv') {
+          callback(
+            new BadRequestException('Only CSV files are supported'),
+            false,
+          );
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  importProducts(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Product sheet file is required');
+    }
+
+    return this.productsService.importProductsFromCsv(id, file);
+  }
+
+  @UseGuards(AdminAuthGuard)
   @Patch('products/bulk')
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Bulk update merchant products as admin' })
@@ -571,6 +622,26 @@ export class AdminController {
       `attachment; filename="${exportFile.filename}"`,
     );
     res.send(exportFile.content);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Get('products/import-template')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Download product import template',
+    description: 'Download an empty CSV template for product imports.',
+  })
+  @ApiResponse({ status: 200, description: 'CSV file returned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  downloadProductImportTemplate(@Res() res: Response) {
+    const template = this.adminService.generateProductImportTemplate();
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${template.filename}"`,
+    );
+    res.send(template.content);
   }
 
   @UseGuards(AdminAuthGuard)

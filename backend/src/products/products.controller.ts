@@ -12,6 +12,7 @@ import {
   UnauthorizedException,
   UploadedFile,
   UseGuards,
+  Res,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -23,7 +24,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import CONSTANTS from 'src/common/constants';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -31,7 +32,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { AddProductFromCatalogDto } from './dto/add-product-from-catalog.dto';
 import { AddBulkEssentialItemsDto } from './dto/add-bulk-essential.dto';
 import { UploadFile } from 'src/common/decorators/upload-file.decorator';
-import { imageFileFilter } from 'src/common/utils/file-filters';
+import { imageFileFilter, csvFileFilter } from 'src/common/utils/file-filters';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { GetPublicProductsDto } from './dto/get-public-products.dto';
 import { GetTenantProductsDto } from './dto/get-tenant-products.dto';
@@ -110,6 +111,38 @@ export class ProductsController {
     }
 
     return this.productsService.createFromCatalog(tenantId, body);
+  }
+
+  @Post('import')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Import products from CSV template' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary', description: 'CSV file to upload' },
+      },
+      required: ['file'],
+    },
+  })
+  @UploadFile('file', {
+    fileFilter: csvFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_CSV_SIZE_BYTES },
+  })
+  async importProducts(
+    @Req() req: Request,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+    if (!file) {
+      throw new BadRequestException('Product sheet file is required');
+    }
+    return this.productsService.importProductsFromCsv(tenantId, file);
   }
 
   @Post('bulk-essentials')
@@ -283,6 +316,23 @@ export class ProductsController {
     }
 
     return this.productsService.findAll(tenantId);
+  }
+
+  @Get('import-template')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Download product import template' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'CSV file returned' })
+  downloadProductImportTemplate(@Res() res: Response) {
+    const filename = `product-import-template.csv`;
+    const content = '\ufeffname,price,category,description,stock,imageUrl\n';
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${filename}"`,
+    );
+    res.send(content);
   }
 
   @Get('public/:slug')

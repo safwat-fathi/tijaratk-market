@@ -174,7 +174,24 @@ export default async function AdminProductsPage(props: Props) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-brand-text">إدارة المنتجات</h1>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h1 className="text-2xl font-bold text-brand-text">منتجات النظام</h1>
+          <a
+            href="/api/admin/products/import-template"
+            download
+            className="inline-flex items-center justify-center rounded-md border border-brand-border bg-white px-4 py-2 text-sm font-semibold text-brand-text transition hover:border-brand-accent hover:bg-brand-soft/60 shadow-sm"
+          >
+            <svg className="me-2 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            تحميل قالب الاستيراد CSV
+          </a>
+        </div>
+        <p className="text-sm text-brand-muted">
+          إدارة جميع المنتجات عبر المتاجر أو التركيز على تاجر محدد
+        </p>
+      </div>
 
       {!showAllProducts ? (
         <AdminProductsOnboardingClient merchants={merchants} />

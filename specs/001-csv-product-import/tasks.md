@@ -9,8 +9,8 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Install `csv-parser` in backend package.json (`backend/package.json`)
-- [ ] T002 Install `@types/csv-parser` and `@types/multer` in backend as dev dependencies
+- [x] T001 Install `csv-parser` in backend package.json (`backend/package.json`)
+- [x] T002 Install `@types/csv-parser` and `@types/multer` in backend as dev dependencies
 
 ---
 
@@ -34,11 +34,11 @@
 
 ### Implementation for User Story 1
 
-- [ ] T003 [P] [US1] Create API endpoint `GET /import-template` in `backend/src/admin/admin.controller.ts` (and corresponding merchant controller if separate)
-- [ ] T004 [US1] Implement template generation logic returning CSV string in `backend/src/admin/admin.service.ts`
-- [ ] T005 [P] [US1] Implement frontend route handler to fetch template in `frontend/app/api/admin/products/import-template/route.ts`
-- [ ] T006 [P] [US1] Create "Download CSV Template" button UI component in `frontend/app/(dashboard)/admin/products/page.tsx`
-- [ ] T007 [P] [US1] Create "Download CSV Template" button UI component in `frontend/app/(dashboard)/merchant/products/page.tsx`
+- [x] T003 [P] [US1] Create API endpoint `GET /import-template` in `backend/src/admin/admin.controller.ts` (and corresponding merchant controller if separate)
+- [x] T004 [US1] Implement template generation logic returning CSV string in `backend/src/admin/admin.service.ts`
+- [x] T005 [P] [US1] Implement frontend route handler to fetch template in `frontend/app/api/admin/products/import-template/route.ts`
+- [x] T006 [P] [US1] Create "Download CSV Template" button UI component in `frontend/app/(dashboard)/admin/products/page.tsx`
+- [x] T007 [P] [US1] Create "Download CSV Template" button UI component in `frontend/app/(dashboard)/merchant/products/page.tsx`
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -52,13 +52,13 @@
 
 ### Implementation for User Story 2
 
-- [ ] T008 [P] [US2] Create API endpoint `POST /import` with `FileInterceptor` in `backend/src/admin/admin.controller.ts` (and merchant controller)
-- [ ] T009 [US2] Implement streaming CSV parsing logic using `csv-parser` in `backend/src/admin/admin.service.ts`
-- [ ] T009.5 [US2] Implement validation and Arabic/English numeral normalization for parsed rows, and resolve `category` name to a valid database ID (finding existing or creating a new category if it doesn't exist).
-- [ ] T010 [US2] Implement database upsert logic (Update/Insert matching by `name` and `storeId`) and create price history on price change in `backend/src/admin/admin.service.ts`
-- [ ] T011 [P] [US2] Implement frontend route handler to forward CSV upload in `frontend/app/api/admin/products/import/route.ts`
-- [ ] T012 [P] [US2] Create CSV Upload UI component (file input + submit button) in `frontend/app/(dashboard)/admin/products/page.tsx`
-- [ ] T013 [P] [US2] Create CSV Upload UI component in `frontend/app/(dashboard)/merchant/products/page.tsx`
+- [x] T008 [P] [US2] Create API endpoint `POST /import` with `FileInterceptor` in `backend/src/admin/admin.controller.ts` (and merchant controller)
+- [x] T009 [US2] Implement streaming CSV parsing logic using `csv-parser` in `backend/src/admin/admin.service.ts`
+- [x] T009.5 [US2] Implement validation and Arabic/English numeral normalization for parsed rows, and resolve `category` name to a valid database ID (finding existing or creating a new category if it doesn't exist).
+- [x] T010 [US2] Implement database upsert logic (Update/Insert matching by `name` and `storeId`) and create price history on price change in `backend/src/admin/admin.service.ts`
+- [x] T011 [P] [US2] Implement frontend route handler to forward CSV upload in `frontend/app/api/admin/products/import/route.ts`
+- [x] T012 [P] [US2] Create CSV Upload UI component (file input + submit button) in `frontend/app/(dashboard)/admin/products/page.tsx`
+- [x] T013 [P] [US2] Create CSV Upload UI component in `frontend/app/(dashboard)/merchant/products/page.tsx`
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -72,9 +72,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] Enhance backend validation to accumulate row-specific errors and return a report detailing updated, added, and failed rows.
-- [ ] T015 [P] [US3] Enhance frontend UI in `frontend/app/(dashboard)/admin/products/page.tsx` to display validation errors clearly to the user
-- [ ] T016 [P] [US3] Enhance frontend UI in `frontend/app/(dashboard)/merchant/products/page.tsx` to display validation errors clearly to the user
+- [x] T014 [US3] Enhance backend validation to accumulate row-specific errors and return a report detailing updated, added, and failed rows.
+- [x] T015 [P] [US3] Enhance frontend UI in `frontend/app/(dashboard)/admin/products/page.tsx` to display validation errors clearly to the user
+- [x] T016 [P] [US3] Enhance frontend UI in `frontend/app/(dashboard)/merchant/products/page.tsx` to display validation errors clearly to the user
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -84,8 +84,8 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T017 Ensure file size limit (5MB) and type validation is enforced by Multer in `backend/src/admin/admin.controller.ts`
-- [ ] T018 Run quickstart.md validation scenarios
+- [x] T017 Ensure file size limit (5MB) and type validation is enforced by Multer in `backend/src/admin/admin.controller.ts`
+- [x] T018 Run quickstart.md validation scenarios
 
 ---
 
