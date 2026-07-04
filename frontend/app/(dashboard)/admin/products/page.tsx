@@ -39,6 +39,7 @@ type PaginationMeta = {
 type ApiListPayload<T> = T[] | { data?: T[]; meta?: PaginationMeta };
 
 const DEFAULT_PAGE_SIZE = 20;
+const SUPERMARKET_CATALOG_SOURCE = "talabat_csv";
 type TenantCategoryFilter = "grocery" | "pharmacy";
 
 function parsePositiveInteger(
@@ -96,7 +97,7 @@ async function fetchAdminProductsData({
         )
       : Promise.resolve(null),
     adminService.getTenants(),
-    adminService.getSupermarketCatalogCategories(),
+    adminService.getAdminCatalogCategories(SUPERMARKET_CATALOG_SOURCE),
   ]);
 
   if (productsResponse && !productsResponse.success && productsResponse.message === "Unauthorized") {
