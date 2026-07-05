@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
+    "build": "nest build && pnpm sentry:sourcemaps",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "NODE_ENV=development nest start --watch",
@@ -27,7 +27,8 @@
     "prisma:generate": "prisma generate",
     "prisma:reset:dev": "NODE_ENV=development prisma migrate reset && NODE_ENV=development ts-node -r tsconfig-paths/register ./src/common/scripts/grant-permissions.ts",
     "prisma:reset:prod": "NODE_ENV=production prisma migrate reset && NODE_ENV=production ts-node -r tsconfig-paths/register ./src/common/scripts/grant-permissions.ts",
-    "prisma:studio": "NODE_ENV=development prisma studio"
+    "prisma:studio": "NODE_ENV=development prisma studio",
+    "sentry:sourcemaps": "sentry-cli sourcemaps inject --org tijaratk --project tijaratk-backend ./dist && sentry-cli sourcemaps upload --org tijaratk --project tijaratk-backend ./dist"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^3.1.0",
@@ -40,6 +41,9 @@
     "@nestjs/throttler": "^6.5.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@sentry/cli": "^2.58.6",
+    "@sentry/nestjs": "^8.47.0",
+    "@sentry/profiling-node": "^8.47.0",
     "@types/sharp": "^0.32.0",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",

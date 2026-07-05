@@ -1,3 +1,4 @@
+import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { NestInterceptor, ValidationPipe } from '@nestjs/common';
 import { NextFunction, Request, Response, urlencoded } from 'express';

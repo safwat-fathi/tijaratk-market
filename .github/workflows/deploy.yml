@@ -66,7 +66,7 @@ jobs:
       - name: Deploy Backend
         if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.backend == 'true'
         run: |
-          ssh -T ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh -T ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "SENTRY_AUTH_TOKEN='${{ secrets.SENTRY_AUTH_TOKEN }}' bash -s" << 'EOF'
             set -euo pipefail
 
             cd ${{secrets.DEPLOY_PATH}}
@@ -104,7 +104,7 @@ jobs:
       - name: Deploy Frontend
         if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.frontend == 'true'
         run: |
-          ssh -T ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh -T ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "SENTRY_AUTH_TOKEN='${{ secrets.SENTRY_AUTH_TOKEN }}' bash -s" << 'EOF'
             set -euo pipefail
 
             cd ${{secrets.DEPLOY_PATH}}

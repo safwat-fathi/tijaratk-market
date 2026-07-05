@@ -35,4 +35,10 @@ export class HealthController {
       },
     };
   }
+
+  @Get('/debug-sentry')
+  @ApiOperation({ summary: 'Test Sentry error reporting' })
+  getError() {
+    throw new Error('My first Sentry error!');
+  }
 }
