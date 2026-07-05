@@ -1645,7 +1645,7 @@ export class ProductsService {
     const searchParam = addParam(normalizedSearch);
     const prefixParam = addParam(prefixPattern);
     const containsParam = addParam(containsPattern);
-    const searchTextParam = `arabic_normalize(${searchParam}::text)`;
+    const searchTextParam = this.buildNormalizedSearchTextParam(searchParam);
     const prefixTextParam = `${prefixParam}::text`;
     const containsTextParam = `${containsParam}::text`;
 
@@ -1747,7 +1747,7 @@ export class ProductsService {
       strictMatchThresholds.strictWordSimilarityThreshold,
     );
 
-    const searchTextParam = `arabic_normalize(${searchParam}::text)`;
+    const searchTextParam = this.buildNormalizedSearchTextParam(searchParam);
     const comparableNameSql = 'product.name_normalized';
 
     const rankSql = `(word_similarity(${comparableNameSql}, ${searchTextParam}) * 0.55) + (similarity(${comparableNameSql}, ${searchTextParam}) * 0.30) + (CASE WHEN ${comparableNameSql} LIKE ${prefixParam} THEN 1 ELSE 0 END) * 0.15`;
@@ -1978,6 +1978,13 @@ export class ProductsService {
         )
       )
     `;
+  }
+
+  /**
+   * Builds the shared SQL expression for normalized product search input.
+   */
+  private buildNormalizedSearchTextParam(searchParam: string): string {
+    return `arabic_normalize(${searchParam}::text)`;
   }
 
   private normalizeCurrentPrice(price: number): number {
@@ -2353,7 +2360,7 @@ export class ProductsService {
     const searchParam = addParam(normalizedSearch);
     const prefixParam = addParam(prefixPattern);
     const containsParam = addParam(containsPattern);
-    const searchTextParam = `${searchParam}::text`;
+    const searchTextParam = this.buildNormalizedSearchTextParam(searchParam);
     const prefixTextParam = `${prefixParam}::text`;
     const containsTextParam = `${containsParam}::text`;
 
