@@ -4,6 +4,8 @@ import { STORAGE_KEYS } from "@/constants";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
+import * as Sentry from '@sentry/nextjs';
+
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const token = cookieStore.get(STORAGE_KEYS.ADMIN_ACCESS_TOKEN)?.value;
@@ -32,6 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data, { status: res.status });
   } catch (error) {
     console.error('Proxy error uploading products:', error);
+    Sentry.captureException(error);
     return NextResponse.json({ success: false, message: 'Internal Server Error' }, { status: 500 });
   }
 }
