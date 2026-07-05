@@ -8,6 +8,7 @@ import type { Product } from "@/types/models/product";
 import { SECTION_MY_PRODUCTS } from "../_utils/product-onboarding.constants";
 import type {
   ProductAvailabilityFilter,
+  ProductStatusFilter,
 } from "../_utils/product-onboarding.types";
 import {
   normalizeModeBadge,
@@ -24,6 +25,14 @@ const availabilityFilters: {
   { id: "unavailable", label: "غير متاح" },
 ];
 
+const productStatusFilters: {
+  id: ProductStatusFilter;
+  label: string;
+}[] = [
+  { id: "active", label: "نشطة" },
+  { id: "archived", label: "مؤرشفة" },
+];
+
 type MyProductsSectionProps = {
   active: boolean;
   displayedProductsCountLabel: string;
@@ -38,6 +47,8 @@ type MyProductsSectionProps = {
   availabilityFilter: ProductAvailabilityFilter;
   onAvailabilityFilterChange: (value: ProductAvailabilityFilter) => void;
   availabilityFilterCounts: Record<ProductAvailabilityFilter, number>;
+  productStatusFilter: ProductStatusFilter;
+  onProductStatusFilterChange: (value: ProductStatusFilter) => void;
   needsMoreSearchChars: boolean;
   isSearchLoading: boolean;
   searchError: string | null;
@@ -80,6 +91,8 @@ export default function MyProductsSection({
   availabilityFilter,
   onAvailabilityFilterChange,
   availabilityFilterCounts,
+  productStatusFilter,
+  onProductStatusFilterChange,
   needsMoreSearchChars,
   isSearchLoading,
   searchError,
@@ -103,6 +116,7 @@ export default function MyProductsSection({
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [isConfirmingBulkArchive, setIsConfirmingBulkArchive] = useState(false);
   const [isBulkPending, startBulkTransition] = useTransition();
   const visibleIds = useMemo(
     () => displayedProducts.map((product) => product.id),
@@ -120,6 +134,17 @@ export default function MyProductsSection({
     );
   }, [visibleIds]);
 
+  useEffect(() => {
+    setIsConfirmingBulkArchive(false);
+    setBulkMessage(null);
+  }, [productStatusFilter]);
+
+  useEffect(() => {
+    if (selectedIds.length === 0) {
+      setIsConfirmingBulkArchive(false);
+    }
+  }, [selectedIds.length]);
+
   const handleClearSearch = () => {
     onClearSearchQuery();
     searchInputRef.current?.focus();
@@ -127,6 +152,7 @@ export default function MyProductsSection({
 
   const isFilteredList =
     isSearchActive ||
+    productStatusFilter !== "active" ||
     availabilityFilter !== "all" ||
     categoryFilter !== allCategoryFilterKey;
 
@@ -158,8 +184,24 @@ export default function MyProductsSection({
 
       setSelectedIds([]);
       setBulkCategory("");
-      setBulkMessage("تم تحديث المنتجات المحددة");
+      setIsConfirmingBulkArchive(false);
+      if (payload.status === "archived") {
+        setBulkMessage("تمت أرشفة المنتجات المحددة");
+      } else if (payload.status === "active") {
+        setBulkMessage("تم تنشيط المنتجات المحددة");
+      } else {
+        setBulkMessage("تم تحديث المنتجات المحددة");
+      }
     });
+  };
+
+  const handleRequestBulkArchive = () => {
+    if (!isConfirmingBulkArchive) {
+      setIsConfirmingBulkArchive(true);
+      return;
+    }
+
+    runBulkAction({ status: "archived" });
   };
 
   return (
@@ -220,6 +262,31 @@ export default function MyProductsSection({
           {!isSearchLoading && searchError && (
             <p className="mt-2 text-xs text-red-600">{searchError}</p>
           )}
+        </div>
+
+        <div
+          className="mt-3 flex gap-2 overflow-x-auto pb-1"
+          aria-label="فلترة المنتجات حسب الحالة"
+        >
+          {productStatusFilters.map((filter) => {
+            const isActive = productStatusFilter === filter.id;
+
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => onProductStatusFilterChange(filter.id)}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
+                  isActive
+                    ? "border-brand-primary bg-brand-primary text-white shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                }`}
+                aria-pressed={isActive}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
         </div>
 
         <div
@@ -539,54 +606,69 @@ export default function MyProductsSection({
               </button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-              <Combobox
-                name="bulk_category"
-                label="تغيير التصنيف"
-                options={bulkCategoryOptions}
-                defaultValue={bulkCategory}
-                onValueChange={setBulkCategory}
-                inputClassName="h-10 px-3 text-sm"
-                placeholder="اكتب أو اختر التصنيف"
-              />
-              <Button
-                type="button"
-                disabled={isBulkPending || !bulkCategory.trim()}
-                onClick={() => runBulkAction({ category: bulkCategory })}
-              >
-                تطبيق التصنيف
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={isBulkPending}
-                onClick={() => runBulkAction({ is_available: true })}
-              >
-                إتاحة
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={isBulkPending}
-                onClick={() => runBulkAction({ is_available: false })}
-              >
-                إيقاف
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={isBulkPending}
-                onClick={() => runBulkAction({ status: "active" })}
-              >
-                تنشيط
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={isBulkPending}
-                onClick={() => runBulkAction({ status: "archived" })}
-              >
-                أرشفة
-              </Button>
+              {productStatusFilter === "active" ? (
+                <>
+                  <Combobox
+                    name="bulk_category"
+                    label="تغيير التصنيف"
+                    options={bulkCategoryOptions}
+                    defaultValue={bulkCategory}
+                    onValueChange={setBulkCategory}
+                    inputClassName="h-10 px-3 text-sm"
+                    placeholder="اكتب أو اختر التصنيف"
+                  />
+                  <Button
+                    type="button"
+                    disabled={isBulkPending || !bulkCategory.trim()}
+                    onClick={() => runBulkAction({ category: bulkCategory })}
+                  >
+                    تطبيق التصنيف
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={isBulkPending}
+                    onClick={() => runBulkAction({ is_available: true })}
+                  >
+                    إتاحة
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={isBulkPending}
+                    onClick={() => runBulkAction({ is_available: false })}
+                  >
+                    إيقاف
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={isConfirmingBulkArchive ? "primary" : "secondary"}
+                    disabled={isBulkPending}
+                    onClick={handleRequestBulkArchive}
+                  >
+                    {isConfirmingBulkArchive ? "تأكيد الأرشفة" : "أرشفة"}
+                  </Button>
+                  {isConfirmingBulkArchive ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={isBulkPending}
+                      onClick={() => setIsConfirmingBulkArchive(false)}
+                    >
+                      إلغاء
+                    </Button>
+                  ) : null}
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={isBulkPending}
+                  onClick={() => runBulkAction({ status: "active" })}
+                >
+                  تنشيط
+                </Button>
+              )}
             </div>
           </div>
         </div>

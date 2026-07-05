@@ -6,6 +6,7 @@ import type {
 	CatalogItemsResponse,
 	Product,
 	ProductOrderConfig,
+	ProductStatus,
 	PublicProductCategory,
 	TenantProductsSearchResponse,
 } from "@/types/models/product";
@@ -162,6 +163,11 @@ export type AdminCatalogCategory = {
 };
 
 export type AdminCatalogSource = "talabat_csv" | "chefaa_csv";
+export type AdminCatalogType = "grocery" | "pharmacy";
+
+const isAdminCatalogType = (
+	value: AdminCatalogType | AdminCatalogSource,
+): value is AdminCatalogType => value === "grocery" || value === "pharmacy";
 
 export type AdminTenantProductCategory = {
 	id: number;
@@ -379,10 +385,13 @@ class AdminApiService extends HttpService {
 		);
 	}
 
-	public async getTenantProducts(tenantId: number) {
+	public async getTenantProducts(
+		tenantId: number,
+		params?: { status?: ProductStatus },
+	) {
 		return this.get<Product[]>(
 			`tenants/${tenantId}/products`,
-			undefined,
+			params,
 			ADMIN_AUTH_OPTIONS
 		);
 	}
@@ -396,6 +405,7 @@ class AdminApiService extends HttpService {
 			limit?: number;
 			rank_all?: boolean;
 			exclude_product_ids?: string;
+			status?: ProductStatus;
 		},
 	) {
 		return this.get<TenantProductsSearchResponse>(
@@ -503,10 +513,11 @@ class AdminApiService extends HttpService {
 	}
 
 	public async getAdminCatalogItems(params: {
-		source: AdminCatalogSource;
+		catalogType: AdminCatalogType;
 		search?: string;
 		category?: string;
 		status?: "all" | "active" | "inactive";
+		essentialStatus?: "all" | "essential" | "non_essential";
 		page?: number;
 		limit?: number;
 	}) {
@@ -518,8 +529,14 @@ class AdminApiService extends HttpService {
 		);
 	}
 
-	public async getAdminCatalogCategories(source: AdminCatalogSource) {
-		const qs = this.buildQueryString({ source });
+	public async getAdminCatalogCategories(catalogType: AdminCatalogType): Promise<ServiceResponse<AdminCatalogCategory[]>>;
+	public async getAdminCatalogCategories(source: AdminCatalogSource): Promise<ServiceResponse<AdminCatalogCategory[]>>;
+	public async getAdminCatalogCategories(
+		catalogTypeOrSource: AdminCatalogType | AdminCatalogSource,
+	) {
+		const qs = isAdminCatalogType(catalogTypeOrSource)
+			? this.buildQueryString({ catalogType: catalogTypeOrSource })
+			: this.buildQueryString({ source: catalogTypeOrSource });
 		return this.get<AdminCatalogCategory[]>(
 			`catalog-items/categories${qs}`,
 			undefined,
@@ -527,8 +544,8 @@ class AdminApiService extends HttpService {
 		);
 	}
 
-	public getAdminCatalogExportPath(source: AdminCatalogSource) {
-		const qs = this.buildQueryString({ source });
+	public getAdminCatalogExportPath(catalogType: AdminCatalogType) {
+		const qs = this.buildQueryString({ catalogType });
 		return `/api/admin/catalog-items/export${qs}`;
 	}
 
@@ -707,18 +724,28 @@ class AdminApiService extends HttpService {
 	}
 
 	private buildQueryString(params?: {
+		catalogType?: AdminCatalogType;
 		source?: AdminCatalogSource;
 		search?: string;
 		category?: string;
 		status?: "all" | "active" | "inactive";
+		essentialStatus?: "all" | "essential" | "non_essential";
 		page?: number;
 		limit?: number;
 	}) {
 		const searchParams = new URLSearchParams();
+		if (params?.catalogType) {
+			searchParams.append("catalogType", params.catalogType);
+		}
 		if (params?.source) searchParams.append("source", params.source);
 		if (params?.search) searchParams.append("search", params.search);
 		if (params?.category) searchParams.append("category", params.category);
-		if (params?.status && params.status !== "all") searchParams.append("status", params.status);
+		if (params?.status && params.status !== "all") {
+			searchParams.append("status", params.status);
+		}
+		if (params?.essentialStatus && params.essentialStatus !== "all") {
+			searchParams.append("essentialStatus", params.essentialStatus);
+		}
 		if (params?.page) searchParams.append("page", String(params.page));
 		if (params?.limit) searchParams.append("limit", String(params.limit));
 		return searchParams.toString() ? `?${searchParams.toString()}` : "";

@@ -179,6 +179,14 @@ export default function AdminProductsOnboardingClient({
         adminAddProductFromCatalogAction(selectedMerchantId, catalogItemId),
       loadCatalogItems: (params) =>
         adminLoadCatalogItemsAction(selectedMerchantId, params),
+      loadProducts: (status) =>
+        adminLoadProductOnboardingAction(selectedMerchantId, status).then(
+          (response) => ({
+            success: response.success,
+            data: response.data?.products,
+            message: response.message,
+          }),
+        ),
       searchTenantProducts: (search, page, limit, categoryOrOptions) =>
         adminSearchTenantProductsAction(
           selectedMerchantId,
@@ -324,13 +332,6 @@ export default function AdminProductsOnboardingClient({
                 <span className="text-xs font-semibold text-brand-text">
                   رفع CSV لتحديث منتجات التاجر
                 </span>
-                <a
-                  href="/api/admin/products/import-template"
-                  download
-                  className="text-brand-primary hover:underline text-[11px]"
-                >
-                  تحميل قالب CSV
-                </a>
               </div>
               <input
                 type="file"

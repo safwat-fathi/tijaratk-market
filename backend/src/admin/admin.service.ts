@@ -445,6 +445,7 @@ export class AdminService {
     search?: string,
     category?: string,
     status: 'all' | 'active' | 'inactive' = 'all',
+    essentialStatus: 'all' | 'essential' | 'non_essential' = 'all',
     page = 1,
     limit = 20,
   ) {
@@ -455,6 +456,7 @@ export class AdminService {
       search,
       category,
       status,
+      essentialStatus,
     });
 
     const [items, total] = await Promise.all([
@@ -1520,11 +1522,13 @@ export class AdminService {
     search,
     category,
     status = 'all',
+    essentialStatus = 'all',
   }: {
     source: CatalogSource;
     search?: string;
     category?: string;
     status?: 'all' | 'active' | 'inactive';
+    essentialStatus?: 'all' | 'essential' | 'non_essential';
   }): Prisma.CatalogItemWhereInput {
     const normalizedCategory = category?.trim();
 
@@ -1534,6 +1538,11 @@ export class AdminService {
         ? { is_active: true }
         : status === 'inactive'
           ? { is_active: false }
+          : {}),
+      ...(essentialStatus === 'essential'
+        ? { is_essential: true }
+        : essentialStatus === 'non_essential'
+          ? { is_essential: false }
           : {}),
       ...(normalizedCategory ? { category: normalizedCategory } : {}),
       ...(search?.trim()

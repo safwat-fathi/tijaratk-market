@@ -68,6 +68,14 @@ import {
 import CONSTANTS from 'src/common/constants';
 import { UploadFile } from 'src/common/decorators/upload-file.decorator';
 import { imageFileFilter } from 'src/common/utils/file-filters';
+import {
+  CATALOG_SOURCE_CHEFAA,
+  CATALOG_SOURCE_TALABAT,
+  resolveCatalogSourceForAdminCatalogType,
+  type AdminCatalogType,
+  type CatalogSource,
+} from 'src/products/catalog-source-policy';
+import { ProductStatus } from 'src/common/enums/product-status.enum';
 
 const ADMIN_PRODUCT_SHEET_UPLOAD_DIR = join(
   process.cwd(),
@@ -85,6 +93,24 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly productsService: ProductsService,
   ) {}
+
+  private resolveAdminCatalogSource(query: {
+    catalogType?: AdminCatalogType;
+    source?: CatalogSource;
+  }): CatalogSource {
+    if (query.catalogType) {
+      return resolveCatalogSourceForAdminCatalogType(query.catalogType);
+    }
+
+    if (
+      query.source === CATALOG_SOURCE_TALABAT ||
+      query.source === CATALOG_SOURCE_CHEFAA
+    ) {
+      return query.source;
+    }
+
+    throw new BadRequestException('Catalog type is required');
+  }
 
   @Post('login')
   @ApiOperation({
@@ -334,11 +360,12 @@ export class AdminController {
         {
           rankAll: query.rank_all ?? false,
           excludeProductIds: query.exclude_product_ids ?? [],
+          status: query.status ?? ProductStatus.ACTIVE,
         },
       );
     }
 
-    return this.productsService.findAllForTenantAsAdmin(id);
+    return this.productsService.findAllForTenantAsAdmin(id, query.status);
   }
 
   @UseGuards(AdminAuthGuard)
@@ -581,7 +608,7 @@ export class AdminController {
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Get catalog items',
-    description: 'Retrieve global catalog items for one supported source.',
+    description: 'Retrieve global catalog items for one supported catalog type.',
   })
   @ApiResponse({
     status: 200,
@@ -589,11 +616,13 @@ export class AdminController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getAdminCatalogItems(@Query() query: GetAdminCatalogItemsDto) {
+    const source = this.resolveAdminCatalogSource(query);
     return this.adminService.getAdminCatalogItems(
-      query.source,
+      source,
       query.search,
       query.category,
       query.status,
+      query.essentialStatus,
       query.page,
       query.limit,
     );
@@ -605,7 +634,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Export catalog items as CSV',
     description:
-      'Download active catalog items for one supported source as an Excel-compatible CSV.',
+      'Download active catalog items for one supported catalog type as an Excel-compatible CSV.',
   })
   @ApiResponse({ status: 200, description: 'CSV file returned' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -613,8 +642,9 @@ export class AdminController {
     @Query() query: GetAdminCatalogItemsDto,
     @Res() res: Response,
   ) {
+    const source = this.resolveAdminCatalogSource(query);
     const exportFile = await this.adminService.exportAdminCatalogItems(
-      query.source,
+      source,
     );
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -650,7 +680,7 @@ export class AdminController {
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Get catalog item categories',
-    description: 'Retrieve category counts for one supported catalog source.',
+    description: 'Retrieve category counts for one supported catalog type.',
   })
   @ApiResponse({
     status: 200,
@@ -658,7 +688,8 @@ export class AdminController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getAdminCatalogCategories(@Query() query: GetAdminCatalogCategoriesDto) {
-    return this.adminService.getAdminCatalogCategories(query.source);
+    const source = this.resolveAdminCatalogSource(query);
+    return this.adminService.getAdminCatalogCategories(source);
   }
 
   @UseGuards(AdminAuthGuard)

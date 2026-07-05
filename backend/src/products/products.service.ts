@@ -10,6 +10,7 @@ import { ProductSource } from 'src/common/enums/product-source.enum';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { AddProductFromCatalogDto } from './dto/add-product-from-catalog.dto';
 import { AddBulkEssentialItemsDto } from './dto/add-bulk-essential.dto';
+import { BulkUpdateProductsDto } from './dto/bulk-update-products.dto';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
@@ -117,6 +118,14 @@ type BulkEssentialStage = {
 type TenantProductsSearchOptions = {
   rankAll?: boolean;
   excludeProductIds?: number[];
+  status?: ProductStatus;
+};
+
+type BulkUpdateProductsPayload = {
+  ids: number[];
+  category?: string;
+  is_available?: boolean;
+  status?: ProductStatus;
 };
 
 type StrictMatchThresholds = {
@@ -240,8 +249,13 @@ export class ProductsService {
     );
   }
 
-  async findAllForTenantAsAdmin(tenantId: number): Promise<Product[]> {
-    return this.runAsTenantForAdmin(tenantId, () => this.findAll(tenantId));
+  async findAllForTenantAsAdmin(
+    tenantId: number,
+    status?: ProductStatus,
+  ): Promise<Product[]> {
+    return this.runAsTenantForAdmin(tenantId, () =>
+      this.findAll(tenantId, status),
+    );
   }
 
   async searchTenantProductsForAdmin(
@@ -636,11 +650,14 @@ export class ProductsService {
   /**
    * Returns all active products for the authenticated tenant.
    */
-  async findAll(tenantId: number): Promise<Product[]> {
+  async findAll(
+    tenantId: number,
+    status: ProductStatus = ProductStatus.ACTIVE,
+  ): Promise<Product[]> {
     return this.getPrismaClient().product.findMany({
       where: {
         tenant_id: tenantId,
-        status: ProductStatus.ACTIVE,
+        status,
         deleted_at: null,
       },
       orderBy: {
@@ -673,6 +690,7 @@ export class ProductsService {
       : 20;
     const normalizedCategory = this.normalizeOptionalCategory(category);
     const rankAll = options?.rankAll ?? false;
+    const status = options?.status ?? ProductStatus.ACTIVE;
     const normalizedExcludedProductIds = this.normalizeExcludedProductIds(
       options?.excludeProductIds,
     );
@@ -692,6 +710,7 @@ export class ProductsService {
       normalizedExcludedProductIds,
       normalizedPage,
       normalizedLimit,
+      status,
       searchVersion,
     );
 
@@ -711,6 +730,7 @@ export class ProductsService {
       normalizedExcludedProductIds,
       normalizedPage,
       normalizedLimit,
+      status,
     );
 
     await this.cacheManager.set(
@@ -1468,35 +1488,26 @@ export class ProductsService {
     );
   }
 
+  async bulkUpdate(
+    tenantId: number,
+    payload: BulkUpdateProductsDto,
+  ): Promise<{ success: true; count: number }> {
+    const { productIds, dto } = await this.prepareBulkProductUpdate(
+      payload,
+      { tenantId },
+    );
+
+    for (const productId of productIds) {
+      await this.update(productId, tenantId, dto);
+    }
+
+    return { success: true, count: productIds.length };
+  }
+
   async bulkUpdateForTenantAsAdmin(
     payload: BulkUpdateProductsForAdminPayload,
   ): Promise<{ success: true; count: number }> {
-    const hasCategory = typeof payload.category === 'string';
-    const hasAvailability = payload.is_available !== undefined;
-    const hasStatus = payload.status !== undefined;
-
-    if (!hasCategory && !hasAvailability && !hasStatus) {
-      throw new BadRequestException('At least one bulk action is required');
-    }
-
-    const products = await this.prisma.product.findMany({
-      where: { id: { in: payload.ids }, deleted_at: null },
-      select: { id: true, tenant_id: true },
-      orderBy: { id: 'asc' },
-    });
-
-    if (products.length !== payload.ids.length) {
-      throw new NotFoundException('One or more products were not found');
-    }
-
-    const dto: UpdateProductDto = {};
-    if (hasCategory) {
-      const category = payload.category?.trim();
-      if (!category) throw new BadRequestException('Category is required');
-      dto.category = category;
-    }
-    if (hasAvailability) dto.is_available = payload.is_available;
-    if (hasStatus) dto.status = payload.status;
+    const { products, dto } = await this.prepareBulkProductUpdate(payload);
 
     for (const product of products) {
       await this.runAsTenantForAdmin(product.tenant_id, () =>
@@ -1505,6 +1516,65 @@ export class ProductsService {
     }
 
     return { success: true, count: products.length };
+  }
+
+  private async prepareBulkProductUpdate(
+    payload: BulkUpdateProductsPayload,
+    options?: { tenantId?: number },
+  ): Promise<{
+    products: { id: number; tenant_id: number }[];
+    productIds: number[];
+    dto: UpdateProductDto;
+  }> {
+    const productIds = this.normalizeBulkProductIds(payload.ids);
+    if (productIds.length === 0) {
+      throw new BadRequestException('At least one product is required');
+    }
+
+    const hasCategory = typeof payload.category === 'string';
+    const hasAvailability = payload.is_available !== undefined;
+    const hasStatus = payload.status !== undefined;
+
+    if (!hasCategory && !hasAvailability && !hasStatus) {
+      throw new BadRequestException('At least one bulk action is required');
+    }
+
+    const dto: UpdateProductDto = {};
+    if (hasCategory) {
+      const category = payload.category?.trim();
+      if (!category) {
+        throw new BadRequestException('Category is required');
+      }
+      dto.category = category;
+    }
+    if (hasAvailability) dto.is_available = payload.is_available;
+    if (hasStatus) dto.status = payload.status;
+
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        tenant_id: options?.tenantId,
+        deleted_at: null,
+      },
+      select: { id: true, tenant_id: true },
+      orderBy: { id: 'asc' },
+    });
+
+    if (products.length !== productIds.length) {
+      throw new NotFoundException('One or more products were not found');
+    }
+
+    return { products, productIds, dto };
+  }
+
+  private normalizeBulkProductIds(ids: number[] | undefined): number[] {
+    if (!Array.isArray(ids)) {
+      return [];
+    }
+
+    return Array.from(
+      new Set(ids.filter((id) => Number.isInteger(id) && id > 0)),
+    );
   }
 
   private async runAsTenantForAdmin<T>(
@@ -1541,6 +1611,7 @@ export class ProductsService {
     excludedProductIds: number[],
     page: number,
     limit: number,
+    status: ProductStatus = ProductStatus.ACTIVE,
   ): Promise<TenantProductsSearchResult> {
     const useCategoryAsFilter = rankAll && !!category;
     const useCategoryAsBoost = !rankAll && !!category;
@@ -1557,7 +1628,7 @@ export class ProductsService {
     };
 
     conditions.push(`tenant_id = ${addParam(tenantId)}`);
-    conditions.push(`status = ${addParam(ProductStatus.ACTIVE)}`);
+    conditions.push(`status = ${addParam(status)}`);
     conditions.push(`deleted_at IS NULL`);
 
     if (useCategoryAsFilter) {
@@ -2180,13 +2251,14 @@ export class ProductsService {
     excludedProductIds: number[],
     page: number,
     limit: number,
+    status: ProductStatus,
     version: string,
   ): string {
     const normalizedCategory = category || 'all';
     const normalizedExcludedIds =
       excludedProductIds.length > 0 ? excludedProductIds.join(',') : 'none';
     const rankingMode = rankAll ? 'rank_all' : 'strict';
-    return `merchant:products:search:${tenantId}:${version}:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${rankingMode}:${normalizedExcludedIds}:${page}:${limit}`;
+    return `merchant:products:search:${tenantId}:${version}:${status}:${normalizedCategory}:${normalizedSearch}:${similarityThreshold}:${strictMatchThresholds.strictSimilarityThreshold}:${strictMatchThresholds.strictWordSimilarityThreshold}:${rankingMode}:${normalizedExcludedIds}:${page}:${limit}`;
   }
 
   private buildCatalogSearchCacheKey(

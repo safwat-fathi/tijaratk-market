@@ -16,10 +16,13 @@ import {
   Min,
 } from 'class-validator';
 import {
+  ADMIN_CATALOG_TYPES,
+  type AdminCatalogType,
   CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
 } from 'src/products/catalog-source-policy';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
+import { parseBooleanLike } from 'src/products/utils/parse-boolean-like';
 
 const ADMIN_CATALOG_SOURCES = [
   CATALOG_SOURCE_TALABAT,
@@ -27,17 +30,31 @@ const ADMIN_CATALOG_SOURCES = [
 ] as const;
 
 const ADMIN_CATALOG_ITEM_STATUSES = ['all', 'active', 'inactive'] as const;
+const ADMIN_CATALOG_ITEM_ESSENTIAL_STATUSES = [
+  'all',
+  'essential',
+  'non_essential',
+] as const;
 
 /**
- * Query parameters for source-scoped admin catalog item listing.
+ * Query parameters for catalog-type-scoped admin catalog item listing.
  */
 export class GetAdminCatalogItemsDto {
-  @ApiProperty({
-    enum: ADMIN_CATALOG_SOURCES,
-    description: 'Catalog source to manage',
+  @ApiPropertyOptional({
+    enum: ADMIN_CATALOG_TYPES,
+    description: 'Admin-facing catalog type to manage',
   })
+  @IsOptional()
+  @IsIn(ADMIN_CATALOG_TYPES)
+  catalogType?: AdminCatalogType;
+
+  @ApiPropertyOptional({
+    enum: ADMIN_CATALOG_SOURCES,
+    description: 'Legacy catalog source query parameter',
+  })
+  @IsOptional()
   @IsIn(ADMIN_CATALOG_SOURCES)
-  source!: (typeof ADMIN_CATALOG_SOURCES)[number];
+  source?: (typeof ADMIN_CATALOG_SOURCES)[number];
 
   @ApiPropertyOptional({
     description: 'Filter items by normalized category',
@@ -67,6 +84,16 @@ export class GetAdminCatalogItemsDto {
   status?: (typeof ADMIN_CATALOG_ITEM_STATUSES)[number] = 'all';
 
   @ApiPropertyOptional({
+    enum: ADMIN_CATALOG_ITEM_ESSENTIAL_STATUSES,
+    description: 'Filter items by essential curation status',
+    default: 'all',
+  })
+  @IsOptional()
+  @IsIn(ADMIN_CATALOG_ITEM_ESSENTIAL_STATUSES)
+  essentialStatus?: (typeof ADMIN_CATALOG_ITEM_ESSENTIAL_STATUSES)[number] =
+    'all';
+
+  @ApiPropertyOptional({
     description: 'Page number',
     default: 1,
   })
@@ -90,15 +117,24 @@ export class GetAdminCatalogItemsDto {
 }
 
 /**
- * Query parameters for source-scoped admin catalog category listing.
+ * Query parameters for catalog-type-scoped admin catalog category listing.
  */
 export class GetAdminCatalogCategoriesDto {
-  @ApiProperty({
-    enum: ADMIN_CATALOG_SOURCES,
-    description: 'Catalog source to inspect',
+  @ApiPropertyOptional({
+    enum: ADMIN_CATALOG_TYPES,
+    description: 'Admin-facing catalog type to inspect',
   })
+  @IsOptional()
+  @IsIn(ADMIN_CATALOG_TYPES)
+  catalogType?: AdminCatalogType;
+
+  @ApiPropertyOptional({
+    enum: ADMIN_CATALOG_SOURCES,
+    description: 'Legacy catalog source query parameter',
+  })
+  @IsOptional()
   @IsIn(ADMIN_CATALOG_SOURCES)
-  source!: (typeof ADMIN_CATALOG_SOURCES)[number];
+  source?: (typeof ADMIN_CATALOG_SOURCES)[number];
 }
 
 export class CreateAdminCatalogCategoryDto {
@@ -320,7 +356,17 @@ export class BulkUpdateAdminProductsDto {
 
   @ApiPropertyOptional({ description: 'Whether selected products are available' })
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @Transform(
+    ({ obj, value }: { obj?: Record<string, unknown>; value: unknown }) => {
+      const fromRawObject = parseBooleanLike(obj?.is_available);
+      if (fromRawObject !== undefined) {
+        return fromRawObject;
+      }
+
+      const parsedValue = parseBooleanLike(value);
+      return parsedValue !== undefined ? parsedValue : value;
+    },
+  )
   @IsBoolean()
   is_available?: boolean;
 

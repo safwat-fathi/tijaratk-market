@@ -4,6 +4,14 @@ import { NextResponse } from "next/server";
 import { STORAGE_KEYS } from "@/constants";
 
 const SUPPORTED_SOURCES = new Set(["talabat_csv", "chefaa_csv"]);
+const CATALOG_TYPE_TO_SOURCE = {
+  grocery: "talabat_csv",
+  pharmacy: "chefaa_csv",
+} as const;
+type CatalogType = keyof typeof CATALOG_TYPE_TO_SOURCE;
+
+const isCatalogType = (value: string): value is CatalogType =>
+  value in CATALOG_TYPE_TO_SOURCE;
 
 export async function GET(request: Request) {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -14,10 +22,17 @@ export async function GET(request: Request) {
     );
   }
 
-  const source = new URL(request.url).searchParams.get("source") || "";
+  const searchParams = new URL(request.url).searchParams;
+  const catalogType = searchParams.get("catalogType") || "";
+  const legacySource = searchParams.get("source") || "";
+  const hasCatalogType = isCatalogType(catalogType);
+  const source = hasCatalogType
+    ? CATALOG_TYPE_TO_SOURCE[catalogType]
+    : legacySource;
+
   if (!SUPPORTED_SOURCES.has(source)) {
     return NextResponse.json(
-      { success: false, message: "Unsupported catalog source" },
+      { success: false, message: "Unsupported catalog type" },
       { status: 400 },
     );
   }
@@ -35,7 +50,11 @@ export async function GET(request: Request) {
   const backendUrl = new URL(
     `${apiBaseUrl.replace(/\/$/, "")}/admin/catalog-items/export`,
   );
-  backendUrl.searchParams.set("source", source);
+  if (hasCatalogType) {
+    backendUrl.searchParams.set("catalogType", catalogType);
+  } else {
+    backendUrl.searchParams.set("source", source);
+  }
 
   const response = await fetch(backendUrl, {
     headers: {

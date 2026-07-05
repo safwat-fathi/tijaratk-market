@@ -7,6 +7,18 @@ export type CatalogSource =
   | typeof CATALOG_SOURCE_TALABAT
   | typeof CATALOG_SOURCE_CHEFAA;
 
+export const ADMIN_CATALOG_TYPE_GROCERY = 'grocery';
+export const ADMIN_CATALOG_TYPE_PHARMACY = 'pharmacy';
+
+export type AdminCatalogType =
+  | typeof ADMIN_CATALOG_TYPE_GROCERY
+  | typeof ADMIN_CATALOG_TYPE_PHARMACY;
+
+export const ADMIN_CATALOG_TYPES = [
+  ADMIN_CATALOG_TYPE_GROCERY,
+  ADMIN_CATALOG_TYPE_PHARMACY,
+] as const;
+
 export const CATALOG_IMPORT_FORMAT_TALABAT = 'talabat';
 export const CATALOG_IMPORT_FORMAT_CHEFAA = 'chefaa';
 export const CATALOG_IMPORT_FORMAT_CARREFOUR = 'carrefour';
@@ -141,6 +153,14 @@ export function resolveCatalogSourceForTenantCategory(
   if (category === TenantCategory.grocery) return CATALOG_SOURCE_TALABAT;
   if (category === TenantCategory.pharmacy) return CATALOG_SOURCE_CHEFAA;
   return null;
+}
+
+export function resolveCatalogSourceForAdminCatalogType(
+  catalogType: AdminCatalogType,
+): CatalogSource {
+  return catalogType === ADMIN_CATALOG_TYPE_PHARMACY
+    ? CATALOG_SOURCE_CHEFAA
+    : CATALOG_SOURCE_TALABAT;
 }
 
 export function isCatalogCategoryAllowedForSource(

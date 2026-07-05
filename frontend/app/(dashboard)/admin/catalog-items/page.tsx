@@ -5,7 +5,7 @@ import { adminService } from "@/services/api/admin.service";
 import type {
   AdminCatalogCategory,
   AdminCatalogItem,
-  AdminCatalogSource,
+  AdminCatalogType,
 } from "@/services/api/admin.service";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -36,25 +36,28 @@ type PageData = {
 };
 
 type CatalogItemStatusFilter = "all" | "active" | "inactive";
+type CatalogItemEssentialStatusFilter = "all" | "essential" | "non_essential";
 
 const DEFAULT_PAGE_SIZE = 20;
-const SUPERMARKET_SOURCE = "talabat_csv";
-const PHARMACY_SOURCE = "chefaa_csv";
+const GROCERY_CATALOG_TYPE = "grocery";
+const PHARMACY_CATALOG_TYPE = "pharmacy";
+const LEGACY_SUPERMARKET_SOURCE = "talabat_csv";
+const LEGACY_PHARMACY_SOURCE = "chefaa_csv";
 
 const SOURCE_TABS: Array<{
   label: string;
-  source: AdminCatalogSource;
+  catalogType: AdminCatalogType;
   description: string;
 }> = [
   {
     label: "سوبر ماركت",
-    source: SUPERMARKET_SOURCE,
-    description: "كتالوج السوبر ماركت المستورد من talabat_csv",
+    catalogType: GROCERY_CATALOG_TYPE,
+    description: "كتالوج منتجات السوبر ماركت",
   },
   {
     label: "صيدلية",
-    source: PHARMACY_SOURCE,
-    description: "كتالوج الصيدليات المستورد من chefaa_csv",
+    catalogType: PHARMACY_CATALOG_TYPE,
+    description: "كتالوج منتجات الصيدليات",
   },
 ];
 
@@ -74,11 +77,26 @@ const parsePositiveInteger = (value: SearchParamValue, fallback: number) => {
 const getSearchValue = (value: SearchParamValue) =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
 
-const parseSource = (value: SearchParamValue): AdminCatalogSource =>
-  value === PHARMACY_SOURCE ? PHARMACY_SOURCE : SUPERMARKET_SOURCE;
+const parseCatalogType = ({
+  catalogType,
+  legacySource,
+}: {
+  catalogType: SearchParamValue;
+  legacySource: SearchParamValue;
+}): AdminCatalogType => {
+  if (catalogType === PHARMACY_CATALOG_TYPE) return PHARMACY_CATALOG_TYPE;
+  if (catalogType === GROCERY_CATALOG_TYPE) return GROCERY_CATALOG_TYPE;
+  if (legacySource === LEGACY_PHARMACY_SOURCE) return PHARMACY_CATALOG_TYPE;
+  return GROCERY_CATALOG_TYPE;
+};
 
 const parseStatus = (value: SearchParamValue): CatalogItemStatusFilter =>
   value === "active" || value === "inactive" ? value : "all";
+
+const parseEssentialStatus = (
+  value: SearchParamValue,
+): CatalogItemEssentialStatusFilter =>
+  value === "essential" || value === "non_essential" ? value : "all";
 
 const buildUrl = (params: Record<string, string | number | undefined>) => {
   const query = new URLSearchParams();
@@ -93,30 +111,33 @@ const buildUrl = (params: Record<string, string | number | undefined>) => {
 };
 
 async function fetchData({
-  source,
+  catalogType,
   search,
   category,
   status,
+  essentialStatus,
   page,
   limit,
 }: {
-  source: AdminCatalogSource;
+  catalogType: AdminCatalogType;
   search?: string;
   category?: string;
   status: CatalogItemStatusFilter;
+  essentialStatus: CatalogItemEssentialStatusFilter;
   page: number;
   limit: number;
 }): Promise<PageData> {
   const [itemsResponse, categoriesResponse] = await Promise.all([
     adminService.getAdminCatalogItems({
-      source,
+      catalogType,
       search,
       category,
       status,
+      essentialStatus,
       page,
       limit,
     }),
-    adminService.getAdminCatalogCategories(source),
+    adminService.getAdminCatalogCategories(catalogType),
   ]);
 
   if (!itemsResponse.success && itemsResponse.message === "Unauthorized") {
@@ -141,18 +162,31 @@ async function fetchData({
 
 export default async function AdminCatalogItemsPage(props: Props) {
   const searchParams = await props.searchParams;
-  const source = parseSource(searchParams.source);
+  const catalogType = parseCatalogType({
+    catalogType: searchParams.catalogType,
+    legacySource: searchParams.source,
+  });
   const search = getSearchValue(searchParams.search);
   const category = getSearchValue(searchParams.category);
   const status = parseStatus(searchParams.status);
+  const essentialStatus = parseEssentialStatus(searchParams.essentialStatus);
   const page = parsePositiveInteger(searchParams.page, 1);
   const limit = parsePositiveInteger(searchParams.limit, DEFAULT_PAGE_SIZE);
   const activeTab =
-    SOURCE_TABS.find((tab) => tab.source === source) || SOURCE_TABS[0];
+    SOURCE_TABS.find((tab) => tab.catalogType === catalogType) ||
+    SOURCE_TABS[0];
 
   let data: PageData;
   try {
-    data = await fetchData({ source, search, category, status, page, limit });
+    data = await fetchData({
+      catalogType,
+      search,
+      category,
+      status,
+      essentialStatus,
+      page,
+      limit,
+    });
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
     console.error("Failed to fetch admin catalog items:", error);
@@ -164,7 +198,7 @@ export default async function AdminCatalogItemsPage(props: Props) {
   }
 
   const categoryNames = data.categories.map((item) => item.category);
-  const exportHref = adminService.getAdminCatalogExportPath(source);
+  const exportHref = adminService.getAdminCatalogExportPath(catalogType);
 
   return (
     <div className="space-y-6">
@@ -180,10 +214,14 @@ export default async function AdminCatalogItemsPage(props: Props) {
         <div className="flex flex-wrap gap-2">
           {SOURCE_TABS.map((tab) => (
             <Link
-              key={tab.source}
-              href={buildUrl({ source: tab.source, page: 1, limit })}
+              key={tab.catalogType}
+              href={buildUrl({
+                catalogType: tab.catalogType,
+                page: 1,
+                limit,
+              })}
               className={`rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
-                source === tab.source
+                catalogType === tab.catalogType
                   ? "border-brand-primary bg-brand-primary text-white"
                   : "border-brand-border bg-white text-brand-text hover:bg-brand-soft"
               }`}
@@ -201,7 +239,11 @@ export default async function AdminCatalogItemsPage(props: Props) {
             تنزيل CSV للمنتجات
           </a>
           <AdminCatalogItemCreateClient
-            source={source}
+            source={
+              catalogType === PHARMACY_CATALOG_TYPE
+                ? LEGACY_PHARMACY_SOURCE
+                : LEGACY_SUPERMARKET_SOURCE
+            }
             activeTabLabel={activeTab.label}
             activeTabDescription={activeTab.description}
             categoryNames={categoryNames}
@@ -225,7 +267,7 @@ export default async function AdminCatalogItemsPage(props: Props) {
             action="/admin/catalog-items"
             className="flex flex-col gap-4 sm:flex-row sm:items-end"
           >
-            <input type="hidden" name="source" value={source} />
+            <input type="hidden" name="catalogType" value={catalogType} />
             <label className="w-full space-y-1 sm:w-1/4">
               <span className="text-sm font-medium text-brand-text">
                 اسم المنتج
@@ -260,13 +302,27 @@ export default async function AdminCatalogItemsPage(props: Props) {
                 <option value="inactive">غير نشط</option>
               </select>
             </label>
+            <label className="w-full space-y-1 sm:w-48">
+              <span className="text-sm font-medium text-brand-text">
+                حالة الأساسي
+              </span>
+              <select
+                name="essentialStatus"
+                defaultValue={essentialStatus}
+                className="h-10 w-full rounded-md border border-brand-border px-3 text-sm"
+              >
+                <option value="all">الكل</option>
+                <option value="essential">أساسي فقط</option>
+                <option value="non_essential">غير أساسي</option>
+              </select>
+            </label>
             <div className="flex items-center gap-2 mr-auto">
               <Button type="submit" size="sm" className="px-4">
                 <Search className="h-4 w-4" />
                 بحث
               </Button>
               <Link
-                href={buildUrl({ source, page: 1, limit })}
+                href={buildUrl({ catalogType, page: 1, limit })}
                 className="inline-flex items-center justify-center gap-2 min-h-10 rounded-md border border-brand-border bg-white px-4 py-2 text-sm font-semibold text-brand-text transition-colors hover:bg-brand-soft"
               >
                 <X className="h-4 w-4" />
@@ -279,7 +335,7 @@ export default async function AdminCatalogItemsPage(props: Props) {
             items={data.items}
             categoryNames={categoryNames}
             meta={data.meta}
-            params={{ source, search, category, status }}
+            params={{ catalogType, search, category, status, essentialStatus }}
           />
         </div>
       </Card>

@@ -1,4 +1,14 @@
 /node_modules
+node_modules/
+dist/
+build/
+coverage/
+*.log
+.env*
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
 
 /catalog-items.csv
 /chefaa-items.csv

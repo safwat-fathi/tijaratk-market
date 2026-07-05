@@ -30,10 +30,11 @@ type Props = {
   categoryNames: string[];
   meta: PaginationMeta;
   params: {
-    source: string;
+    catalogType: string;
     search?: string;
     category?: string;
     status?: "all" | "active" | "inactive";
+    essentialStatus?: "all" | "essential" | "non_essential";
   };
 };
 

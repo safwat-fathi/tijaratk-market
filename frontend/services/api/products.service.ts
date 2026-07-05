@@ -1,8 +1,11 @@
 import HttpService from '@/services/base/http.service';
 import {
   CatalogItemsResponse,
+  BulkUpdateProductsPayload,
+  BulkUpdateProductsResponse,
   BulkEssentialStage,
   Product,
+  ProductStatus,
   ProductOrderConfig,
   PublicProductCategory,
   PublicProductsResponse,
@@ -16,8 +19,8 @@ class ProductsService extends HttpService {
     super('/products');
   }
 
-  public async getProducts() {
-    return this.get<Product[]>('', undefined, {
+  public async getProducts(params?: { status?: ProductStatus }) {
+    return this.get<Product[]>('', params, {
       cache: 'no-store',
       authRequired: true,
     });
@@ -30,6 +33,7 @@ class ProductsService extends HttpService {
     limit?: number;
     rank_all?: boolean;
     exclude_product_ids?: string;
+    status?: ProductStatus;
   }) {
     return this.get<TenantProductsSearchResponse>('', params, {
       cache: 'no-store',
@@ -100,6 +104,12 @@ class ProductsService extends HttpService {
     return this.patch<Product>(`${productId}`, payload, undefined, {
       authRequired: true,
       timeoutMs: 30000,
+    });
+  }
+
+  public async bulkUpdateProducts(payload: BulkUpdateProductsPayload) {
+    return this.patch<BulkUpdateProductsResponse>('bulk', payload, undefined, {
+      authRequired: true,
     });
   }
 

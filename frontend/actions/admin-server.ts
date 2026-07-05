@@ -13,6 +13,7 @@ import type {
   Product,
   ProductOrderConfig,
   ProductOrderMode,
+  ProductStatus,
   PublicProductCategory,
 } from "@/types/models/product";
 import type {
@@ -551,6 +552,7 @@ export async function adminUpdateProductAction(productId: number, formData: Form
 
 export async function adminLoadProductOnboardingAction(
   tenantId: number,
+  status: ProductStatus = "active",
 ): Promise<{
   success: boolean;
   data?: AdminProductOnboardingData;
@@ -559,7 +561,7 @@ export async function adminLoadProductOnboardingAction(
   try {
     const [products, productCategories, catalogItems, catalogCategories] =
       await Promise.all([
-        adminService.getTenantProducts(tenantId),
+        adminService.getTenantProducts(tenantId, { status }),
         adminService.getTenantProductCategories(tenantId),
         adminService.getTenantCatalogItems(tenantId, { page: 1, limit: 40 }),
         adminService.getTenantCatalogCategories(tenantId),
@@ -728,6 +730,7 @@ export async function adminSearchTenantProductsAction(
         category?: string;
         rankAll?: boolean;
         excludeProductIds?: number[];
+        status?: ProductStatus;
       },
 ) {
   try {
@@ -771,6 +774,7 @@ export async function adminSearchTenantProductsAction(
         normalizedExcludedProductIds.length > 0
           ? normalizedExcludedProductIds.join(",")
           : undefined,
+      status: searchOptions.status,
     });
 
     if (!response.success || !response.data) {

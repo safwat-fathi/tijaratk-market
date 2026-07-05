@@ -32,6 +32,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { AddProductFromCatalogDto } from './dto/add-product-from-catalog.dto';
 import { AddBulkEssentialItemsDto } from './dto/add-bulk-essential.dto';
+import { BulkUpdateProductsDto } from './dto/bulk-update-products.dto';
 import { UploadFile } from 'src/common/decorators/upload-file.decorator';
 import { imageFileFilter, csvFileFilter } from 'src/common/utils/file-filters';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
@@ -312,11 +313,30 @@ export class ProductsController {
         {
           rankAll: query.rank_all ?? false,
           excludeProductIds: query.exclude_product_ids ?? [],
+          status: query.status ?? ProductStatus.ACTIVE,
         },
       );
     }
 
-    return this.productsService.findAll(tenantId);
+    return this.productsService.findAll(tenantId, query.status);
+  }
+
+  @Patch('bulk')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Bulk update tenant products' })
+  @ApiBody({ type: BulkUpdateProductsDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Products updated successfully',
+  })
+  bulkUpdate(@Req() req: Request, @Body() body: BulkUpdateProductsDto) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.productsService.bulkUpdate(tenantId, body);
   }
 
   @Get('import-template')

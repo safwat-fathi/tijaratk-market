@@ -87,3 +87,15 @@ export interface PublicProductCategory {
   count: number;
   image_url?: string;
 }
+
+export type BulkUpdateProductsPayload = {
+  ids: number[];
+  category?: string;
+  is_available?: boolean;
+  status?: ProductStatus;
+};
+
+export type BulkUpdateProductsResponse = {
+  success: boolean;
+  count: number;
+};

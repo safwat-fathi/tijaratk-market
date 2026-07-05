@@ -5,7 +5,9 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useDebounce } from "use-debounce";
 import {
   addProductFromCatalogAction as merchantAddProductFromCatalogAction,
+  bulkUpdateProductsAction as merchantBulkUpdateProductsAction,
   createProductAction as merchantCreateProductAction,
+  loadProductsAction as merchantLoadProductsAction,
   loadCatalogItemsAction as merchantLoadCatalogItemsAction,
   loadHiddenCatalogItemsAction as merchantLoadHiddenCatalogItemsAction,
   hideCatalogItemAction as merchantHideCatalogItemAction,
@@ -22,6 +24,7 @@ import type {
   Product,
   ProductOrderConfig,
   ProductOrderMode,
+  ProductStatus,
   PublicProductCategory,
   PublicProductsMeta,
   TenantProductsSearchResponse,
@@ -71,6 +74,7 @@ import type {
   CategoryMode,
   ProductAvailabilityFilter,
   ProductSection,
+  ProductStatusFilter,
 } from "../_utils/product-onboarding.types";
 
 type ProductOnboardingClientProps = {
@@ -115,6 +119,9 @@ export type ProductOnboardingActions = {
   loadCatalogItems: (
     params: LoadCatalogItemsParams,
   ) => Promise<ActionResult<CatalogItemsResponse>>;
+  loadProducts?: (
+    status?: ProductStatus,
+  ) => Promise<ActionResult<Product[]>>;
   loadHiddenCatalogItems?: (
     params: { page?: number; limit?: number },
   ) => Promise<ActionResult<CatalogItemsResponse>>;
@@ -128,6 +135,7 @@ export type ProductOnboardingActions = {
           category?: string;
           rankAll?: boolean;
           excludeProductIds?: number[];
+          status?: ProductStatus;
         },
   ) => Promise<ActionResult<TenantProductsSearchResponse>>;
   updateProduct: (
@@ -159,10 +167,12 @@ const merchantProductOnboardingActions: ProductOnboardingActions = {
   createProduct: merchantCreateProductAction,
   addProductFromCatalog: merchantAddProductFromCatalogAction,
   loadCatalogItems: merchantLoadCatalogItemsAction,
+  loadProducts: merchantLoadProductsAction,
   loadHiddenCatalogItems: merchantLoadHiddenCatalogItemsAction,
   searchTenantProducts: merchantSearchTenantProductsAction,
   updateProduct: merchantUpdateProductAction,
   updateProductAvailability: merchantUpdateProductAvailabilityAction,
+  bulkUpdateProducts: merchantBulkUpdateProductsAction,
   removeProduct: merchantRemoveProductAction,
   hideCatalogItem: merchantHideCatalogItemAction,
   unhideCatalogItem: merchantUnhideCatalogItemAction,
@@ -337,10 +347,15 @@ export default function ProductOnboardingClient({
   const searchParams = useSearchParams();
 
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [productStatusFilter, setProductStatusFilter] =
+    useState<ProductStatusFilter>("active");
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
   useEffect(() => {
-    setProducts(initialProducts);
-  }, [initialProducts]);
+    if (productStatusFilter === "active") {
+      setProducts(initialProducts);
+    }
+  }, [initialProducts, productStatusFilter]);
 
   const [catalogItems, setCatalogItems] =
     useState<CatalogItem[]>(initialCatalogItems);
@@ -573,6 +588,46 @@ export default function ProductOnboardingClient({
   }, [productCategoryCounts, productCategoryFilter]);
 
   useEffect(() => {
+    if (productStatusFilter === "active") {
+      setProducts(initialProducts);
+      setIsLoadingProducts(false);
+      refreshSearchResultsIfActive();
+      return;
+    }
+
+    if (!actions.loadProducts) {
+      setProducts([]);
+      setIsLoadingProducts(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsLoadingProducts(true);
+    setSearchResults([]);
+    setSearchError(null);
+
+    void (async () => {
+      const response = await actions.loadProducts(productStatusFilter);
+      if (isCancelled) {
+        return;
+      }
+
+      setIsLoadingProducts(false);
+      if (!response.success || !response.data) {
+        setProducts([]);
+        setMessage(response.message || "تعذر تحميل المنتجات");
+        return;
+      }
+
+      setProducts(response.data);
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [actions, initialProducts, productStatusFilter]);
+
+  useEffect(() => {
     if (!message) {
       return;
     }
@@ -765,6 +820,7 @@ export default function ProductOnboardingClient({
         normalizedDebouncedSearch,
         1,
         SEARCH_RESULTS_LIMIT,
+        { status: productStatusFilter },
       );
 
       if (isCancelled) {
@@ -785,7 +841,13 @@ export default function ProductOnboardingClient({
     return () => {
       isCancelled = true;
     };
-  }, [isSearchActive, normalizedDebouncedSearch, searchRefreshKey]);
+  }, [
+    actions,
+    isSearchActive,
+    normalizedDebouncedSearch,
+    productStatusFilter,
+    searchRefreshKey,
+  ]);
 
   const refreshSearchResultsIfActive = () => {
     if (!isSearchActive) {
@@ -805,6 +867,20 @@ export default function ProductOnboardingClient({
     setSearchResults([]);
     setSearchError(null);
     setIsSearching(false);
+  };
+
+  const handleProductStatusFilterChange = (value: ProductStatusFilter) => {
+    if (value === productStatusFilter) {
+      return;
+    }
+
+    setProductStatusFilter(value);
+    setAvailabilityFilter("all");
+    setProductCategoryFilter(ALL_PRODUCT_CATEGORIES);
+    setSearchResults([]);
+    setSearchError(null);
+    setIsSearching(false);
+    setConfirmRemoveProductId(null);
   };
 
   const handleClearSearchQuery = () => {
@@ -937,7 +1013,9 @@ export default function ProductOnboardingClient({
         return;
       }
 
-      setProducts((prev) => [response.data as Product, ...prev]);
+      if (productStatusFilter === "active") {
+        setProducts((prev) => [response.data as Product, ...prev]);
+      }
       addCategoryOption(response.data!.category);
       setManualName("");
       setManualPrice("");
@@ -1034,7 +1112,9 @@ export default function ProductOnboardingClient({
           return;
         }
 
-        setProducts((prev) => [response.data as Product, ...prev]);
+        if (productStatusFilter === "active") {
+          setProducts((prev) => [response.data as Product, ...prev]);
+        }
         setCatalogItems((prev) => removeCatalogItemFromList(prev, catalogItemId));
         setCatalogMeta((prev) => ({
           ...prev,
@@ -1261,6 +1341,9 @@ export default function ProductOnboardingClient({
     }
 
     const selectedIds = new Set(payload.ids);
+    const nextStatus = payload.status;
+    const shouldRemoveFromCurrentView =
+      nextStatus !== undefined && nextStatus !== productStatusFilter;
     const updateProduct = (product: Product): Product =>
       selectedIds.has(product.id)
         ? {
@@ -1274,12 +1357,26 @@ export default function ProductOnboardingClient({
           }
         : product;
 
-    setProducts((prev) => prev.map(updateProduct));
-    setSearchResults((prev) => prev.map(updateProduct));
+    setProducts((prev) =>
+      shouldRemoveFromCurrentView
+        ? prev.filter((product) => !selectedIds.has(product.id))
+        : prev.map(updateProduct),
+    );
+    setSearchResults((prev) =>
+      shouldRemoveFromCurrentView
+        ? prev.filter((product) => !selectedIds.has(product.id))
+        : prev.map(updateProduct),
+    );
     if (payload.category) {
       addCategoryOption(payload.category);
     }
-    setMessage("تم تحديث المنتجات المحددة");
+    if (payload.status === "archived") {
+      setMessage("تمت أرشفة المنتجات المحددة");
+    } else if (payload.status === "active") {
+      setMessage("تم تنشيط المنتجات المحددة");
+    } else {
+      setMessage("تم تحديث المنتجات المحددة");
+    }
 
     return response;
   };
@@ -1628,7 +1725,7 @@ export default function ProductOnboardingClient({
         onAvailabilityFilterChange={setAvailabilityFilter}
         availabilityFilterCounts={availabilityFilterCounts}
         needsMoreSearchChars={needsMoreSearchChars}
-        isSearchLoading={isSearchLoading}
+        isSearchLoading={isSearchLoading || isLoadingProducts}
         searchError={searchError}
         isSearchActive={isSearchActive}
         displayedProducts={displayedProducts}
@@ -1641,8 +1738,10 @@ export default function ProductOnboardingClient({
         onRequestRemove={handleRequestRemove}
         onRemoveProduct={handleRemoveProduct}
         onCancelRemove={() => setConfirmRemoveProductId(null)}
+        productStatusFilter={productStatusFilter}
+        onProductStatusFilterChange={handleProductStatusFilterChange}
         bulkUpdateProducts={
-          layoutMode === "admin" && actions.bulkUpdateProducts
+          actions.bulkUpdateProducts
             ? handleBulkUpdateProducts
             : undefined
         }

@@ -6,10 +6,13 @@ import { productsService } from '@/services/api/products.service';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import {
   BulkEssentialStage,
+  BulkUpdateProductsPayload,
+  BulkUpdateProductsResponse,
   Product,
   CatalogItemsResponse,
   ProductOrderConfig,
   ProductOrderMode,
+  ProductStatus,
 } from '@/types/models/product';
 
 const UPDATE_PRODUCT_FALLBACK_MESSAGE = 'تعذر تعديل المنتج، حاول مرة أخرى.';
@@ -26,6 +29,40 @@ type LoadCatalogItemsParams = {
   page?: number;
   limit?: number;
 };
+
+export async function loadProductsAction(
+  status: ProductStatus = 'active',
+): Promise<{
+  success: boolean;
+  data?: Product[];
+  message?: string;
+}> {
+  try {
+    const response = await productsService.getProducts({ status });
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || 'تعذر تحميل المنتجات',
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+
+    console.error('Load products failed:', error);
+    return {
+      success: false,
+      message: 'تعذر تحميل المنتجات',
+    };
+  }
+}
 
 const normalizeUpdateProductErrorMessage = (
   message?: string,
@@ -402,6 +439,66 @@ export async function updateProductAvailabilityAction(
   return updateProductAction(productId, formData);
 }
 
+export async function bulkUpdateProductsAction(
+  payload: BulkUpdateProductsPayload,
+): Promise<{
+  success: boolean;
+  data?: BulkUpdateProductsResponse;
+  message?: string;
+}> {
+  try {
+    const ids = Array.from(
+      new Set(
+        payload.ids.filter(
+          (id) => Number.isInteger(id) && Number.isFinite(id) && id > 0,
+        ),
+      ),
+    );
+    const category = payload.category?.trim();
+    const hasAction =
+      Boolean(category) ||
+      payload.is_available !== undefined ||
+      payload.status !== undefined;
+
+    if (ids.length === 0 || !hasAction) {
+      return {
+        success: false,
+        message: 'اختر منتجات وإجراء للتطبيق',
+      };
+    }
+
+    const response = await productsService.bulkUpdateProducts({
+      ids,
+      category: category || undefined,
+      is_available: payload.is_available,
+      status: payload.status,
+    });
+
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || 'تعذر تحديث المنتجات المحددة',
+      };
+    }
+
+    revalidatePath('/merchant/products/new');
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+
+    console.error('Bulk update products failed:', error);
+    return {
+      success: false,
+      message: 'تعذر تحديث المنتجات المحددة',
+    };
+  }
+}
+
 export async function removeProductAction(productId: number) {
   try {
     const response = await productsService.removeProduct(productId);
@@ -440,6 +537,7 @@ export async function searchTenantProductsAction(
         category?: string;
         rankAll?: boolean;
         excludeProductIds?: number[];
+        status?: ProductStatus;
       },
 ) {
   try {
@@ -483,6 +581,7 @@ export async function searchTenantProductsAction(
         normalizedExcludedProductIds.length > 0
           ? normalizedExcludedProductIds.join(',')
           : undefined,
+      status: searchOptions.status,
     });
 
     if (!response.success || !response.data) {

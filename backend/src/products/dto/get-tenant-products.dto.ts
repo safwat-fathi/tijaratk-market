@@ -3,6 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -11,6 +12,7 @@ import {
   Min,
 } from 'class-validator';
 import { parseBooleanLike } from '../utils/parse-boolean-like';
+import { ProductStatus } from 'src/common/enums/product-status.enum';
 
 export class GetTenantProductsDto {
   @ApiPropertyOptional({
@@ -86,6 +88,15 @@ export class GetTenantProductsDto {
   @IsInt({ each: true })
   @Min(1, { each: true })
   exclude_product_ids?: number[];
+
+  @ApiPropertyOptional({
+    description: 'Dashboard product lifecycle status',
+    enum: ProductStatus,
+    default: ProductStatus.ACTIVE,
+  })
+  @IsOptional()
+  @IsEnum(ProductStatus)
+  status?: ProductStatus = ProductStatus.ACTIVE;
 
   @ApiPropertyOptional({
     description: 'Page number for search results',
