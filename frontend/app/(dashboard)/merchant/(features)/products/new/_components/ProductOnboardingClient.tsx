@@ -595,7 +595,8 @@ export default function ProductOnboardingClient({
       return;
     }
 
-    if (!actions.loadProducts) {
+    const loadProducts = actions.loadProducts;
+    if (!loadProducts) {
       setProducts([]);
       setIsLoadingProducts(false);
       return;
@@ -607,7 +608,7 @@ export default function ProductOnboardingClient({
     setSearchError(null);
 
     void (async () => {
-      const response = await actions.loadProducts(productStatusFilter);
+      const response = await loadProducts(productStatusFilter);
       if (isCancelled) {
         return;
       }
