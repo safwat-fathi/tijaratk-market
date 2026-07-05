@@ -298,6 +298,7 @@ model ProductPriceHistory {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+/// The products.name_normalized generated column is DB-managed by the Arabic search migration and intentionally queried through raw SQL.
 model Product {
   created_at    DateTime         @default(now()) @db.Timestamp(6)
   updated_at    DateTime         @default(now()) @db.Timestamp(6)
@@ -314,6 +315,8 @@ model Product {
   order_config  Json?
   is_available       Boolean          @default(true)
   price_needs_review Boolean          @default(false)
+  /// DB-managed generated column. Queried through raw SQL only.
+  name_normalized    Unsupported("text")?
 
   availability_requests           AvailabilityRequest[]
   order_items                     OrderItem[]           @relation("order_items_product_idToproducts")

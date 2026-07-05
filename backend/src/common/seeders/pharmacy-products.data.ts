@@ -8,6 +8,27 @@ const quantityConfig = (unitLabel = 'علبة') => ({
 
 export const pharmacyProducts: PharmacyProductSeed[] = [
   {
+    name: 'آيه كريم مرطب 50 جم',
+    category: 'عناية شخصية',
+    current_price: 42,
+    order_mode: ProductOrderMode.QUANTITY,
+    order_config: quantityConfig('علبة'),
+  },
+  {
+    name: 'ايه كريم مرطب 50 جم',
+    category: 'عناية شخصية',
+    current_price: 42,
+    order_mode: ProductOrderMode.QUANTITY,
+    order_config: quantityConfig('علبة'),
+  },
+  {
+    name: 'اية كريم مرطب 50 جم',
+    category: 'عناية شخصية',
+    current_price: 42,
+    order_mode: ProductOrderMode.QUANTITY,
+    order_config: quantityConfig('علبة'),
+  },
+  {
     name: 'بنادول إكسترا 24 قرص',
     category: 'أدوية',
     current_price: 35,

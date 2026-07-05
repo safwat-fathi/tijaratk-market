@@ -32,6 +32,7 @@ import {
   isCatalogCategoryAllowedForSource,
   resolveCatalogSourceForTenantCategory,
 } from './catalog-source-policy';
+import { arabicNormalize } from './utils/arabic-normalize.util';
 
 const DEFAULT_PRODUCT_CATEGORY = 'أخرى';
 const DUPLICATE_PRODUCT_NAME_MESSAGE = 'Product with this name already exists';
@@ -1644,12 +1645,13 @@ export class ProductsService {
     const searchParam = addParam(normalizedSearch);
     const prefixParam = addParam(prefixPattern);
     const containsParam = addParam(containsPattern);
-    const searchTextParam = `${searchParam}::text`;
+    const searchTextParam = `arabic_normalize(${searchParam}::text)`;
     const prefixTextParam = `${prefixParam}::text`;
     const containsTextParam = `${containsParam}::text`;
 
-    const comparableNameSql = this.buildComparableProductNameExpression('name');
+    const comparableNameSql = '"name_normalized"';
 
+    // If search volume or relevance needs grow, move this ranking behind a dedicated search engine such as Meilisearch.
     let rankSql = `(word_similarity(${comparableNameSql}, ${searchTextParam}) * 0.55) + (similarity(${comparableNameSql}, ${searchTextParam}) * 0.30) + (CASE WHEN ${comparableNameSql} LIKE ${prefixTextParam} THEN 1 ELSE 0 END) * 0.15`;
 
     if (!rankAll) {
@@ -1745,17 +1747,17 @@ export class ProductsService {
       strictMatchThresholds.strictWordSimilarityThreshold,
     );
 
-    const comparableNameSql =
-      this.buildComparableProductNameExpression('product.name');
+    const searchTextParam = `arabic_normalize(${searchParam}::text)`;
+    const comparableNameSql = 'product.name_normalized';
 
-    const rankSql = `(word_similarity(${comparableNameSql}, ${searchParam}) * 0.55) + (similarity(${comparableNameSql}, ${searchParam}) * 0.30) + (CASE WHEN ${comparableNameSql} LIKE ${prefixParam} THEN 1 ELSE 0 END) * 0.15`;
+    const rankSql = `(word_similarity(${comparableNameSql}, ${searchTextParam}) * 0.55) + (similarity(${comparableNameSql}, ${searchTextParam}) * 0.30) + (CASE WHEN ${comparableNameSql} LIKE ${prefixParam} THEN 1 ELSE 0 END) * 0.15`;
 
     conditions.push(`(
       ${comparableNameSql} LIKE ${prefixParam}
       OR ${comparableNameSql} LIKE ${containsParam}
       OR (
-        similarity(${comparableNameSql}, ${searchParam}) >= ${strictSimParam}
-        AND word_similarity(${comparableNameSql}, ${searchParam}) >= ${strictWordSimParam}
+        similarity(${comparableNameSql}, ${searchTextParam}) >= ${strictSimParam}
+        AND word_similarity(${comparableNameSql}, ${searchTextParam}) >= ${strictWordSimParam}
       )
     )`);
 
@@ -1767,8 +1769,8 @@ export class ProductsService {
     const dataQuery = `
       SELECT product.*, 
         ${rankSql} as search_rank,
-        word_similarity(${comparableNameSql}, ${searchParam}) as word_sim,
-        similarity(${comparableNameSql}, ${searchParam}) as name_similarity,
+        word_similarity(${comparableNameSql}, ${searchTextParam}) as word_sim,
+        similarity(${comparableNameSql}, ${searchTextParam}) as name_similarity,
         CASE WHEN ${comparableNameSql} LIKE ${containsParam} THEN 1 ELSE 0 END as contains_score
       FROM products product
       INNER JOIN tenants tenant ON product.tenant_id = tenant.id
@@ -1881,7 +1883,7 @@ export class ProductsService {
   }
 
   private normalizeSearchTerm(search: string): string {
-    return this.normalizeArabic(search);
+    return arabicNormalize(search);
   }
 
   private resolveSimilarityThreshold(normalizedSearch: string): number {
@@ -1928,31 +1930,6 @@ export class ProductsService {
     }
 
     return normalizedCategory.slice(0, 64);
-  }
-
-  private normalizeArabic(input: string): string {
-    return (
-      input
-        .toLowerCase()
-        // Strip Arabic diacritics (tashkeel/harakat)
-        .replace(
-          /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g,
-          '',
-        )
-        .replace(/[أإآ]/g, 'ا')
-        .replace(/ى/g, 'ي')
-        .replace(/ة/g, 'ه')
-        // eslint-disable-next-line sonarjs/slow-regex -- false positive: negated char class [^)]* is O(n)
-        .replace(/\([^)]*\)/g, ' ')
-        // eslint-disable-next-line sonarjs/slow-regex
-        .replace(/\d+\s*(?:جم|جرام|كجم|كيلو|ك|g|kg)/gi, ' ')
-        .replace(/(?:جم|جرام|كجم|كيلو|ك|g|kg)\s*\d+/gi, ' ')
-        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-        // Strip Arabic definite article "ال" at Unicode-aware word starts.
-        .replace(/(^|\s)ال(?=\p{L})/gu, '$1')
-        .replace(/\s+/g, ' ')
-        .trim()
-    );
   }
 
   private buildComparableProductNameExpression(columnName: string): string {

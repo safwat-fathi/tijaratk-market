@@ -12,6 +12,27 @@ const weightConfig = {
 
 export const supermarketProducts: SupermarketProductSeed[] = [
   {
+    name: 'آيه عصير تفاح 1 لتر',
+    category: 'مشروبات',
+    current_price: 32,
+    order_mode: ProductOrderMode.QUANTITY,
+    order_config: quantityConfig('عبوة'),
+  },
+  {
+    name: 'ايه عصير تفاح 1 لتر',
+    category: 'مشروبات',
+    current_price: 32,
+    order_mode: ProductOrderMode.QUANTITY,
+    order_config: quantityConfig('عبوة'),
+  },
+  {
+    name: 'اية عصير تفاح 1 لتر',
+    category: 'مشروبات',
+    current_price: 32,
+    order_mode: ProductOrderMode.QUANTITY,
+    order_config: quantityConfig('عبوة'),
+  },
+  {
     name: 'بيض أبيض 30 بيضة',
     category: 'ألبان و بيض',
     current_price: 165,
