@@ -19,6 +19,7 @@ declare global {
       TWILIO_CONTENT_SID_MERCHANT_DAY_CLOSURE_SUMMARY: string;
       TWILIO_VERIFY_SERVICE_SID: string;
       SEED_SUPERMARKET_OWNER_CREDENTIAL: string;
+      SENTRY_DSN: string;
     }
   }
 }

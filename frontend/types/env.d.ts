@@ -9,6 +9,7 @@ declare module "bun" {
 			NEXT_PUBLIC_ACCESS_TOKEN: string;
 			NEXT_PUBLIC_REFRESH_TOKEN: string;
 			NEXT_PUBLIC_CSRF_COOKIE_NAME: string;
+			NEXT_PUBLIC_SENTRY_DSN: string;
 			SESSION_SECRET: string;
 			CSRF_SECRET: string;
 		}

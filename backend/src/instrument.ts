@@ -1,12 +1,15 @@
-import * as Sentry from "@sentry/nestjs";
-import { nodeProfilingIntegration } from "@sentry/profiling-node";
+import * as dotenv from 'dotenv';
+import * as Sentry from '@sentry/nestjs';
+import { nodeProfilingIntegration } from '@sentry/profiling-node';
+
+dotenv.config({
+  path: process.env.NODE_ENV ? `.env.${process.env.NODE_ENV}` : '.env',
+});
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
-  integrations: [
-    nodeProfilingIntegration(),
-  ],
+  environment: process.env.NODE_ENV || 'development',
+  integrations: [nodeProfilingIntegration()],
   tracesSampleRate: 1.0,
   profilesSampleRate: 1.0,
-
 });
