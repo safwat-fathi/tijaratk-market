@@ -232,7 +232,7 @@ export class ImportsService {
     sessionImagesDir: string,
   ) {
     const parser = createReadStream(importRun.file_path).pipe(
-      parse({ columns: true, skip_empty_lines: true, trim: true }),
+      parse({ columns: true, skip_empty_lines: true, trim: true, bom: true }),
     );
 
     const batchSize = 10;
@@ -419,7 +419,8 @@ export class ImportsService {
       let isLocalFile = false;
 
       if (!incomingExternalUrl.startsWith('http')) {
-        const localImagePath = join(sessionImagesDir, incomingExternalUrl);
+        const sanitizedFileName = incomingExternalUrl.replace(/[^a-zA-Z0-9._-]/g, '-');
+        const localImagePath = join(sessionImagesDir, sanitizedFileName);
         try {
           await stat(localImagePath);
           isLocalFile = true;
