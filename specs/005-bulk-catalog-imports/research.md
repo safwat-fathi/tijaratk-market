@@ -1,32 +1,11 @@
-# Phase 0: Research & Technical Decisions
+# Phase 0: Research & Findings
 
-**Branch**: `005-bulk-catalog-imports`
+## 1. CSV Template Alignment
+- **Decision**: Redefine `CATALOG_EXPORT_COLUMNS` in `admin.service.ts` into format-specific arrays (`TALABAT_EXPORT_COLUMNS`, `CHEFAA_EXPORT_COLUMNS`) matching exactly the Zod schema keys used in `catalog-import-row.schema.ts`.
+- **Rationale**: The downloadable CSV template for catalog items must strictly align with the expected columns for the upload format to prevent admin confusion and friction during updates.
+- **Alternatives considered**: Keeping a generic export list and dynamically rewriting headers in the frontend (rejected because it adds unnecessary complexity and divergence from the backend schema).
 
-## 1. File Upload Handling
-
-- **Decision**: Use NestJS `@UseInterceptors(FileFieldsInterceptor(...))` to handle multipart/form-data containing both the CSV file and the array of images.
-- **Rationale**: `FileInterceptor` only supports a single file. `FilesInterceptor` supports multiple files but all under the same field name. `FileFieldsInterceptor` allows distinct schema validation: exactly 1 `file` (the CSV) and up to 1000 `images`.
-- **Alternatives considered**: 
-  - Submitting images and CSV in separate endpoints (requires complex session management and tracking upload completion).
-  - Base64 encoding images inside the CSV (drastically inflates payload size and breaks CSV structure).
-
-## 2. Temporary Staging Strategy
-
-- **Decision**: Stage all incoming files for a specific import task in a dedicated session directory (e.g., `uploads/imports/session-{timestamp}-{randomId}/`).
-- **Rationale**: Bulk uploads are asynchronous. Saving directly to the final `uploads/products/` folder before verifying the catalog format could leave orphaned files. A session directory makes cleanup trivial—if the import fails or succeeds, the worker just recursively deletes the session folder.
-- **Alternatives considered**: 
-  - Staging in OS temporary directory (`/tmp`). Rejected because if the worker restarts, OS-level cleanup could interfere, and it's cleaner to keep application state inside its own work directory.
-
-## 3. Catalog Type Inference
-
-- **Decision**: The frontend passes the `catalogType` (`grocery` or `pharmacy`) instead of specific sources. The backend uses existing logic (from `catalog-source-policy.ts`) to map this to `talabat`, `carrefour`, or `chefaa`.
-- **Rationale**: Decouples the admin UI from internal source details. Reduces cognitive load on administrators and prevents mapping errors.
-- **Alternatives considered**: 
-  - Making admins select `talabat` or `carrefour` manually. Rejected because it violates domain isolation rules and user experience guidelines.
-
-## 4. Payload Size Limits
-
-- **Decision**: Next.js Server Actions limit is configured to 15MB, and NestJS is configured to 25MB. We will enforce these limits and recommend users batch large catalogs.
-- **Rationale**: High payload limits can cause Node.js event loop starvation. 500 WebP/JPEG thumbnails should comfortably fit within 15-25MB.
-- **Alternatives considered**: 
-  - Streaming uploads directly to S3. Rejected because the system architecture currently relies on local disk storage (`uploads/`).
+## 2. Essential Item Processing
+- **Decision**: Add `is_essential` as an optional boolean-parsable field (`optionalText`) to `TalabatCatalogImportRowSchema` and `ChefaaCatalogImportRowSchema`. During import processing (`import-worker.service.ts`), parse this string value ("true", "1", "yes") into the `CatalogItem.is_essential` Boolean field in Prisma.
+- **Rationale**: Meets the new FR-009 requirement directly from the CSV input, enabling bulk tagging of essential products alongside standard catalog details.
+- **Alternatives considered**: Adding a separate bulk-essential endpoint (rejected because the user explicitly requested handling this from the CSV file).

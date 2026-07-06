@@ -27,8 +27,8 @@ export class CreateImportDto {
   @IsIn(IMPORT_MODES)
   mode?: CreateImportMode = 'upsert';
 
-  @ApiProperty({ enum: CatalogImportFormat, required: false })
+  @ApiProperty({ enum: ['grocery', 'pharmacy'], required: false })
   @IsOptional()
-  @IsIn(Object.values(CatalogImportFormat))
-  format?: CatalogImportFormat;
+  @IsIn(['grocery', 'pharmacy'])
+  catalogType?: 'grocery' | 'pharmacy';
 }

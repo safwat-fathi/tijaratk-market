@@ -33,11 +33,11 @@ description: "Task list template for feature implementation"
 
 ### Implementation for User Story 1
 
-- [ ] T001 [P] [US1] Update ImportsController to use FileFieldsInterceptor for `file` and `images` arrays in `backend/src/imports/imports.controller.ts`
-- [ ] T002 [US1] Update ImportsService to manage session-based staging directories and infer the catalog format from the provided type in `backend/src/imports/imports.service.ts`
-- [ ] T003 [US1] Update ImportWorker to map local image files, process thumbnails via ImageProcessorService, and assign WebP paths to products in `backend/src/imports/import-worker.service.ts`
-- [ ] T004 [P] [US1] Update Next.js Server Action to proxy the multipart payload with images in `frontend/actions/admin-server.ts`
-- [ ] T005 [P] [US1] Update frontend UI form to allow multiple image selection for the import in `frontend/app/(dashboard)/admin/imports/page.tsx`
+- [x] T001 [P] [US1] Update ImportsController to use FileFieldsInterceptor for `file` and `images` arrays in `backend/src/imports/imports.controller.ts`
+- [x] T002 [US1] Update ImportsService to manage session-based staging directories and infer the catalog format from the provided type in `backend/src/imports/imports.service.ts`
+- [x] T003 [US1] Update ImportWorker to map local image files, process thumbnails via ImageProcessorService, and assign WebP paths to products in `backend/src/imports/import-worker.service.ts`
+- [x] T004 [P] [US1] Update Next.js Server Action to proxy the multipart payload with images in `frontend/actions/admin-server.ts`
+- [x] T005 [P] [US1] Update frontend UI form to allow multiple image selection for the import in `frontend/app/(dashboard)/admin/imports/page.tsx`
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently.
 

@@ -1257,9 +1257,16 @@ export async function uploadCatalogImportAction(formData: FormData): Promise<voi
   cleanFormData.set("type", "catalog_items");
   cleanFormData.set("mode", String(formData.get("mode") || "upsert"));
 
-  const format = formData.get("format");
-  if (format) {
-    cleanFormData.set("format", String(format));
+  const catalogType = formData.get("catalogType");
+  if (catalogType) {
+    cleanFormData.set("catalogType", String(catalogType));
+  }
+
+  const images = formData.getAll("images");
+  for (const image of images) {
+    if (image instanceof File && image.size > 0) {
+      cleanFormData.append("images", image);
+    }
   }
 
   const response = await adminService.createImport(cleanFormData);

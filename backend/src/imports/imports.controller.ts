@@ -7,11 +7,11 @@ import {
   Param,
   ParseIntPipe,
   Post,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -57,14 +57,15 @@ export class ImportsController {
       required: ['file', 'type'],
       properties: {
         file: { type: 'string', format: 'binary' },
+        images: { type: 'array', items: { type: 'string', format: 'binary' } },
         type: { type: 'string', enum: ['catalog_items'] },
         mode: {
           type: 'string',
           enum: ['create_only', 'upsert', 'update_only', 'replace_source'],
         },
-        format: {
+        catalogType: {
           type: 'string',
-          enum: ['talabat', 'chefaa', 'carrefour'],
+          enum: ['grocery', 'pharmacy'],
         },
       },
     },
@@ -74,39 +75,78 @@ export class ImportsController {
     description: 'Import run created successfully',
   })
   @UseInterceptors(
-    FileInterceptor('file', {
-      // Admin-only local storage under uploads/imports; filenames are sanitized.
-      // eslint-disable-next-line sonarjs/content-length
-      storage: diskStorage({
-        destination: IMPORT_UPLOAD_DIR,
-        filename: (_req, file, callback) => {
-          const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-');
-          callback(null, `${Date.now()}-${safeName}`);
+    FileFieldsInterceptor(
+      [
+        { name: 'file', maxCount: 1 },
+        { name: 'images', maxCount: 1000 },
+      ],
+      {
+        storage: diskStorage({
+          destination: (req: any, file, callback) => {
+            if (!req.importSessionId) {
+              req.importSessionId = `session-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+            }
+            const dest = join(IMPORT_UPLOAD_DIR, req.importSessionId);
+            mkdirSync(dest, { recursive: true });
+
+            if (file.fieldname === 'images') {
+              const imagesDest = join(dest, 'images');
+              mkdirSync(imagesDest, { recursive: true });
+              callback(null, imagesDest);
+            } else {
+              callback(null, dest);
+            }
+          },
+          filename: (_req, file, callback) => {
+            const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-');
+            if (file.fieldname === 'file') {
+              callback(null, `${Date.now()}-${safeName}`);
+            } else {
+              callback(null, safeName);
+            }
+          },
+        }),
+        limits: { fileSize: MAX_IMPORT_FILE_SIZE_BYTES },
+        fileFilter: (_req, file, callback) => {
+          const extension = extname(file.originalname).toLowerCase();
+          if (file.fieldname === 'file' && extension !== '.csv') {
+            callback(
+              new BadRequestException(
+                'Only CSV files are supported for the catalog file',
+              ),
+              false,
+            );
+            return;
+          }
+          if (
+            file.fieldname === 'images' &&
+            !['.jpg', '.jpeg', '.png', '.webp', '.heic'].includes(extension)
+          ) {
+            callback(
+              new BadRequestException(`Unsupported image format: ${extension}`),
+              false,
+            );
+            return;
+          }
+          callback(null, true);
         },
-      }),
-      limits: { fileSize: MAX_IMPORT_FILE_SIZE_BYTES },
-      fileFilter: (_req, file, callback) => {
-        const extension = extname(file.originalname).toLowerCase();
-        if (extension !== '.csv') {
-          callback(
-            new BadRequestException('Only CSV files are supported'),
-            false,
-          );
-          return;
-        }
-        callback(null, true);
       },
-    }),
+    ),
   )
   createImport(
-    @UploadedFile() file: Express.Multer.File | undefined,
+    @UploadedFiles()
+    files: { file?: Express.Multer.File[]; images?: Express.Multer.File[] },
     @Body() body: CreateImportDto,
   ) {
-    if (!file) {
+    if (!files || !files.file || files.file.length === 0) {
       throw new BadRequestException('Import file is required');
     }
 
-    return this.importsService.createImport(file, body);
+    return this.importsService.createImport(
+      files.file[0],
+      body,
+      files.images || [],
+    );
   }
 
   /**
@@ -147,7 +187,10 @@ export class ImportsController {
   @Post(':id/cancel')
   @ApiOperation({ summary: 'Cancel a running import run' })
   @ApiParam({ name: 'id', type: Number })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Import cancelled successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Import cancelled successfully',
+  })
   cancelImport(@Param('id', ParseIntPipe) id: number) {
     return this.importsService.cancelImport(id);
   }

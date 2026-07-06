@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createReadStream } from 'fs';
-import { parse } from 'csv-parse';
+import { stat, rm } from 'fs/promises';
+import { dirname, join } from 'path';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   ImportMode,
@@ -20,6 +21,7 @@ import {
   detectCatalogImportFormat,
   parseCatalogImportRow,
 } from './schemas/catalog-import-row.schema';
+import { parse } from 'csv-parse';
 import {
   isCatalogCategoryAllowedForSource,
   normalizeCatalogCategory,
@@ -80,9 +82,20 @@ export class ImportsService {
   /**
    * Creates an import run from an uploaded file and starts processing in-process.
    */
-  async createImport(file: Express.Multer.File, body: CreateImportDto) {
+  async createImport(
+    file: Express.Multer.File,
+    body: CreateImportDto,
+    images: Express.Multer.File[] = [],
+  ) {
     if (body.type !== ImportType.catalog_items) {
       throw new BadRequestException('Only catalog item imports are supported');
+    }
+
+    let inferredFormat: CatalogImportFormat | undefined = undefined;
+    if (body.catalogType === 'grocery') {
+      inferredFormat = CatalogImportFormat.talabat;
+    } else if (body.catalogType === 'pharmacy') {
+      inferredFormat = CatalogImportFormat.chefaa;
     }
 
     const importRun = await this.prisma.importRun.create({
@@ -92,7 +105,7 @@ export class ImportsService {
         status: ImportStatus.pending,
         original_file_name: file.originalname,
         file_path: file.path,
-        format: body.format,
+        format: inferredFormat,
       },
     });
 
@@ -166,6 +179,9 @@ export class ImportsService {
       throw new Error(`Import run ${importRunId} has no file path`);
     }
 
+    const sessionDir = dirname(importRun.file_path);
+    const sessionImagesDir = join(sessionDir, 'images');
+
     const counters: CatalogImportCounters = {
       totalRows: 0,
       successRows: 0,
@@ -185,7 +201,7 @@ export class ImportsService {
     });
 
     try {
-      await this.doProcessCatalogImport(importRunId, importRun, counters, replacementState);
+      await this.doProcessCatalogImport(importRunId, importRun, counters, replacementState, sessionImagesDir);
     } catch (error) {
       await this.flushRowErrors(importRunId);
       await this.prisma.importRun.update({
@@ -197,6 +213,12 @@ export class ImportsService {
         },
       });
       throw error;
+    } finally {
+      try {
+        await rm(sessionDir, { recursive: true, force: true });
+      } catch (cleanupError) {
+        this.logger.error(`Failed to clean up session dir ${sessionDir}`, cleanupError);
+      }
     }
   }
 
@@ -205,6 +227,7 @@ export class ImportsService {
     importRun: any,
     counters: CatalogImportCounters,
     replacementState: CatalogReplacementState,
+    sessionImagesDir: string,
   ) {
     const parser = createReadStream(importRun.file_path).pipe(
       parse({ columns: true, skip_empty_lines: true, trim: true }),
@@ -228,6 +251,7 @@ export class ImportsService {
           importRun.format,
           counters,
           replacementState,
+          sessionImagesDir,
         );
         batch = [];
 
@@ -260,6 +284,7 @@ export class ImportsService {
         importRun.format,
         counters,
         replacementState,
+        sessionImagesDir,
       );
       await this.flushRowErrors(importRunId);
       await this.updateImportProgress(importRunId, counters);
@@ -283,6 +308,7 @@ export class ImportsService {
     format: string | null | undefined,
     counters: CatalogImportCounters,
     replacementState: CatalogReplacementState,
+    sessionImagesDir: string,
   ) {
     await Promise.all(
       batch.map((b) =>
@@ -294,6 +320,7 @@ export class ImportsService {
           format,
           counters,
           replacementState,
+          sessionImagesDir,
         ),
       ),
     );
@@ -307,6 +334,7 @@ export class ImportsService {
     format: string | null | undefined,
     counters: CatalogImportCounters,
     replacementState: CatalogReplacementState,
+    sessionImagesDir: string,
   ) {
     if (this.isDuplicateHeaderRow(row)) {
       counters.skippedRows += 1;
@@ -347,7 +375,7 @@ export class ImportsService {
 
       const incomingExternalUrl = itemData.image_url;
       const { finalImageUrl, finalOriginalImageUrl } =
-        await this.processCatalogItemImage(incomingExternalUrl, existingItem as any);
+        await this.processCatalogItemImage(incomingExternalUrl, existingItem as any, sessionImagesDir);
 
       itemData.image_url = finalImageUrl;
       itemData.original_image_url = finalOriginalImageUrl;
@@ -379,16 +407,30 @@ export class ImportsService {
   private async processCatalogItemImage(
     incomingExternalUrl: string | null,
     existingItem: any,
+    sessionImagesDir: string,
   ) {
     let finalImageUrl = existingItem?.image_url || null;
     let finalOriginalImageUrl = existingItem?.original_image_url || null;
 
-    if (
-      incomingExternalUrl &&
-      incomingExternalUrl !== existingItem?.original_image_url
-    ) {
-      const processedUrl =
-        await this.imageDownloaderService.downloadImage(incomingExternalUrl);
+    if (incomingExternalUrl) {
+      let processedUrl: string | null = null;
+      let isLocalFile = false;
+
+      if (!incomingExternalUrl.startsWith('http')) {
+        const localImagePath = join(sessionImagesDir, incomingExternalUrl);
+        try {
+          await stat(localImagePath);
+          isLocalFile = true;
+          processedUrl = await this.imageProcessorService.processProductThumbnail(localImagePath);
+        } catch (e) {
+          throw new Error(`Local image matching '${incomingExternalUrl}' was not uploaded in the payload.`);
+        }
+      }
+
+      if (!isLocalFile && incomingExternalUrl.startsWith('http') && incomingExternalUrl !== existingItem?.original_image_url) {
+        processedUrl = await this.imageDownloaderService.downloadImage(incomingExternalUrl);
+      }
+
       if (processedUrl) {
         finalImageUrl = processedUrl;
         finalOriginalImageUrl = incomingExternalUrl;
@@ -398,7 +440,7 @@ export class ImportsService {
             existingItem.image_url,
           );
         }
-      } else {
+      } else if (!isLocalFile && incomingExternalUrl.startsWith('http')) {
         finalImageUrl = incomingExternalUrl;
         finalOriginalImageUrl = incomingExternalUrl;
       }

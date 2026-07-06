@@ -59,16 +59,29 @@ export default async function AdminImportsPage() {
       <Card className="p-6">
         <form action={uploadCatalogImportAction} className="space-y-4">
           <input type="hidden" name="type" value="catalog_items" />
-          <div className="grid gap-4 md:grid-cols-[1fr_180px_160px_auto] md:items-end">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1fr_180px_160px_auto] lg:items-end">
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-gray-700">
-                ملف CSV من Talabat أو Chefaa أو Carrefour
+                ملف CSV
               </span>
               <input
                 required
                 type="file"
                 name="file"
                 accept=".csv,text/csv"
+                className="block w-full h-11 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 file:ml-3 file:rounded-md file:border-0 file:bg-gray-900 file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-gray-700">
+                صور المنتجات (اختياري)
+              </span>
+              <input
+                type="file"
+                name="images"
+                multiple
+                accept="image/jpeg,image/png,image/webp,image/heic"
                 className="block w-full h-11 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 file:ml-3 file:rounded-md file:border-0 file:bg-gray-900 file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white"
               />
             </label>
@@ -91,17 +104,15 @@ export default async function AdminImportsPage() {
 
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-gray-700">
-                الصيغة
+                نوع الكتالوج
               </span>
               <select
-                name="format"
-                defaultValue=""
+                name="catalogType"
+                defaultValue="grocery"
                 className="block w-full h-11 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
               >
-                <option value="">تلقائي (حسب الأعمدة والفئة)</option>
-                <option value="talabat">Talabat</option>
-                <option value="chefaa">Chefaa (صيدليات)</option>
-                <option value="carrefour">Carrefour</option>
+                <option value="grocery">بقالة (سوبر ماركت)</option>
+                <option value="pharmacy">صيدلية</option>
               </select>
             </label>
 

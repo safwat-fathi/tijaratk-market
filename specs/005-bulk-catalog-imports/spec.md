@@ -8,6 +8,8 @@
 ## Clarifications
 ### Session 2026-07-06
 - Q: How should the catalog format/source be selected? → A: It should be identified by the current opened tab (Grocery, Pharmacy). The backend will align it with the handled catalog items without the admin selecting specific sources like talabat or carrefour.
+- Q: How should we determine if a catalog item is essential? → A: The CSV file should include a column indicating whether the item is essential, and this should be processed and saved accordingly during import.
+- Q: How should the downloadable CSV template be structured? → A: The downloadable CSV template for catalog items must strictly align with the expected columns for the upload format (e.g., matching the required columns for Grocery or Pharmacy).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -46,12 +48,14 @@ Administrators need the ability to upload a catalog CSV and multiple product ima
 - **FR-006**: System MUST record row-level errors for entries where a local filename is specified but the corresponding file was not uploaded.
 - **FR-007**: System MUST completely clean up and remove the temporary session directory upon completion, cancellation, or failure of the import.
 - **FR-008**: System MUST infer the specific catalog source (e.g., talabat, carrefour) automatically based on the selected catalog type (Grocery, Pharmacy) and enforce existing isolation rules, rather than requiring the admin to explicitly select the source.
+- **FR-009**: System MUST read an "is_essential" (or similar) column from the CSV to set whether the imported catalog item is part of the essential assortment.
+- **FR-010**: System MUST provide a downloadable CSV template on the catalog items page that exactly matches the expected column format for uploads (aligned by catalog type).
 
 ### Key Entities
 
 - **ImportRun**: Tracks the overarching import task, mode, format, and overall success metrics.
 - **ImportRowError**: Records validation or processing errors for specific rows, including missing images.
-- **CatalogItem**: The target product record updated or created with the resolved `image_url`.
+- **CatalogItem**: The target product record updated or created with the resolved `image_url` and essential flag.
 
 ## Success Criteria *(mandatory)*
 
