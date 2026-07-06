@@ -1932,54 +1932,6 @@ export class ProductsService {
     return normalizedCategory.slice(0, 64);
   }
 
-  private buildComparableProductNameExpression(columnName: string): string {
-    return `
-      BTRIM(
-        REGEXP_REPLACE(
-          REGEXP_REPLACE(
-            REGEXP_REPLACE(
-              REGEXP_REPLACE(
-                REGEXP_REPLACE(
-                  REGEXP_REPLACE(
-                    REGEXP_REPLACE(
-                      REGEXP_REPLACE(
-                        LOWER(${columnName}),
-                        '[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]',
-                        '',
-                        'g'
-                      ),
-                      '[أإآ]',
-                      'ا',
-                      'g'
-                    ),
-                    'ى',
-                    'ي',
-                    'g'
-                  ),
-                  'ة',
-                  'ه',
-                  'g'
-                ),
-                '\\\\([^\\\\)]*\\\\)',
-                ' ',
-                'g'
-              ),
-              '(\\\\m\\\\d+\\\\s*(جم|جرام|كجم|كيلو|ك|g|kg)\\\\M)|(\\\\m(جم|جرام|كجم|كيلو|ك|g|kg)\\\\s*\\\\d+\\\\M)',
-              ' ',
-              'gi'
-            ),
-            '(^|\\\\s)ال([[:alpha:]])',
-            '\\\\1\\\\2',
-            'g'
-          ),
-          '\\\\s+',
-          ' ',
-          'g'
-        )
-      )
-    `;
-  }
-
   /**
    * Builds the shared SQL expression for normalized product search input.
    */
@@ -2364,7 +2316,7 @@ export class ProductsService {
     const prefixTextParam = `${prefixParam}::text`;
     const containsTextParam = `${containsParam}::text`;
 
-    const comparableNameSql = this.buildComparableProductNameExpression('name');
+    const comparableNameSql = 'arabic_normalize(name)';
 
     const rankSql = `(word_similarity(${comparableNameSql}, ${searchTextParam}) * 0.55) + (similarity(${comparableNameSql}, ${searchTextParam}) * 0.30) + (CASE WHEN ${comparableNameSql} LIKE ${prefixTextParam} THEN 1 ELSE 0 END) * 0.15`;
 

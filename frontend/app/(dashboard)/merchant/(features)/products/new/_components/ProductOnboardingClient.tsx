@@ -347,6 +347,9 @@ export default function ProductOnboardingClient({
   const searchParams = useSearchParams();
 
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [totalActiveProductsCount, setTotalActiveProductsCount] = useState<number>(
+    () => initialProducts.filter((p) => p.status === "active").length || initialProducts.length,
+  );
   const [productStatusFilter, setProductStatusFilter] =
     useState<ProductStatusFilter>("active");
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
@@ -570,8 +573,8 @@ export default function ProductOnboardingClient({
     [products],
   );
   const productReadiness = useMemo(
-    () => buildProductReadinessFromCount(products.length, storeType),
-    [products.length, storeType],
+    () => buildProductReadinessFromCount(totalActiveProductsCount, storeType),
+    [totalActiveProductsCount, storeType],
   );
 
   useEffect(() => {
@@ -1017,6 +1020,7 @@ export default function ProductOnboardingClient({
       if (productStatusFilter === "active") {
         setProducts((prev) => [response.data as Product, ...prev]);
       }
+      setTotalActiveProductsCount((prev) => prev + 1);
       addCategoryOption(response.data!.category);
       setManualName("");
       setManualPrice("");
@@ -1116,6 +1120,7 @@ export default function ProductOnboardingClient({
         if (productStatusFilter === "active") {
           setProducts((prev) => [response.data as Product, ...prev]);
         }
+        setTotalActiveProductsCount((prev) => prev + 1);
         setCatalogItems((prev) => removeCatalogItemFromList(prev, catalogItemId));
         setCatalogMeta((prev) => ({
           ...prev,
@@ -1278,6 +1283,9 @@ export default function ProductOnboardingClient({
       }
 
       setProducts((prev) => removeProductFromList(prev, product.id));
+      if (product.status === "active") {
+        setTotalActiveProductsCount((prev) => Math.max(0, prev - 1));
+      }
       refreshSearchResultsIfActive();
       setConfirmRemoveProductId((prev) => (prev === product.id ? null : prev));
       if (editingProduct?.id === product.id) {
@@ -1357,6 +1365,12 @@ export default function ProductOnboardingClient({
             status: payload.status ?? product.status,
           }
         : product;
+
+    if (payload.status === "archived") {
+      setTotalActiveProductsCount((prev) => Math.max(0, prev - selectedIds.size));
+    } else if (payload.status === "active") {
+      setTotalActiveProductsCount((prev) => prev + selectedIds.size);
+    }
 
     setProducts((prev) =>
       shouldRemoveFromCurrentView

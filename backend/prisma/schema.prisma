@@ -316,7 +316,7 @@ model Product {
   is_available       Boolean          @default(true)
   price_needs_review Boolean          @default(false)
   /// DB-managed generated column. Queried through raw SQL only.
-  name_normalized    Unsupported("text")?
+  name_normalized    String?
 
   availability_requests           AvailabilityRequest[]
   order_items                     OrderItem[]           @relation("order_items_product_idToproducts")
