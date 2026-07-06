@@ -350,6 +350,7 @@ class AdminApiService extends HttpService {
 	public async adminBulkAddEssentialItems(
 		tenantId: number,
 		payload:
+			| { all_essential_items: boolean }
 			| { category: string; catalog_item_ids: number[] }
 			| { categories: string[] },
 	) {

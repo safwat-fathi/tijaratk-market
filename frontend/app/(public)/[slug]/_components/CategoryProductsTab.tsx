@@ -48,6 +48,7 @@ export default function CategoryProductsTab({
 							width={40}
 							height={40}
 							draggable={false}
+							disableEnlarge={true}
 							sizes="32px"
 							imageClassName="h-8 w-8 rounded-full object-cover ring-1 ring-gray-200"
 							fallback={

@@ -1,13 +1,11 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PackagePlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import BulkEssentialWizard from "@/components/merchant/BulkEssentialWizard";
-import {
-  adminBulkAddEssentialItemsAction,
-  adminLoadBulkEssentialStagesAction,
-} from "@/actions/admin-server";
+import { adminBulkAddEssentialItemsAction } from "@/actions/admin-server";
 
 export function AdminBulkEssentialsButton({
   tenantId,
@@ -20,14 +18,10 @@ export function AdminBulkEssentialsButton({
   lastBulkEssentialsAddedAt?: string | null;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-
-  const loadStages = useCallback(
-    () => adminLoadBulkEssentialStagesAction(tenantId),
-    [tenantId],
-  );
+  const router = useRouter();
 
   const addEssentialItems = useCallback(
-    (payload: { category: string; catalogItemIds: number[] } | string[]) =>
+    (payload: { allEssentialItems: true }) =>
       adminBulkAddEssentialItemsAction(tenantId, payload),
     [tenantId],
   );
@@ -63,9 +57,7 @@ export function AdminBulkEssentialsButton({
       <BulkEssentialWizard
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        onSuccess={() => undefined}
-        onSkip={() => setIsOpen(false)}
-        loadStagesAction={loadStages}
+        onSuccess={() => router.refresh()}
         addEssentialItemsAction={addEssentialItems}
       />
     </>

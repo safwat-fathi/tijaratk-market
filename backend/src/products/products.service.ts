@@ -385,6 +385,10 @@ export class ProductsService {
     tenantId: number,
     dto: AddBulkEssentialItemsDto,
   ): Promise<{ count: number }> {
+    if (dto.all_essential_items === true) {
+      return this.bulkAddAllEssentialItems(tenantId);
+    }
+
     const selectedItemIds = this.normalizeCatalogItemIds(dto.catalog_item_ids);
     const normalizedCategory = this.normalizeOptionalCategory(dto.category);
     if (selectedItemIds.length > 0) {
@@ -407,47 +411,7 @@ export class ProductsService {
       throw new BadRequestException('At least one category or catalog item is required.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
-      return DbTenantContext.run({ tenantId, manager: tx }, async () => {
-        const catalogSource = await this.resolveTenantCatalogSource(tenantId);
-        if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
-          throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
-        }
-
-        const unsupportedCategories = categories.filter(
-          (category) =>
-            !isCatalogCategoryAllowedForSource(catalogSource, category),
-        );
-        if (unsupportedCategories.length > 0) {
-          throw new BadRequestException('Category is not supported for this catalog source.');
-        }
-
-        const catalogItems = await this.getPrismaClient().catalogItem.findMany({
-          where: {
-            source: catalogSource,
-            is_active: true,
-            is_essential: true,
-            category: { in: categories },
-          },
-          orderBy: [
-            { category: 'asc' },
-            { essential_sort_order: { sort: 'asc', nulls: 'last' } },
-            { id: 'asc' },
-          ],
-        });
-
-        if (catalogItems.length === 0) {
-          return { count: 0 };
-        }
-
-        return this.createBulkEssentialProductsFromCatalogItems(
-          tenantId,
-          catalogSource,
-          catalogItems,
-        );
-      });
-    });
+    return this.bulkAddEssentialItemsByCategories(tenantId, categories);
   }
 
   /**
@@ -459,12 +423,13 @@ export class ProductsService {
       return [];
     }
     const allowedCategories =
-      await this.getActiveCatalogCategoryNames(catalogSource);
+      getAllowedCatalogCategoriesForSource(catalogSource);
 
     const catalogItems = await this.getPrismaClient().catalogItem.findMany({
       where: {
         source: catalogSource,
         is_active: true,
+        is_essential: true,
         category: { in: allowedCategories },
       },
       orderBy: [
@@ -498,12 +463,96 @@ export class ProductsService {
         return {
           category,
           total: rankedItems.length,
-          default_selected_catalog_item_ids: rankedItems
-            .filter((item) => item.is_essential)
-            .map((item) => item.id),
+          default_selected_catalog_item_ids: rankedItems.map((item) => item.id),
           items: rankedItems,
         };
       });
+  }
+
+  /**
+   * Adds every active essential catalog item allowed for a grocery tenant.
+   */
+  private async bulkAddAllEssentialItems(
+    tenantId: number,
+  ): Promise<{ count: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+      return DbTenantContext.run({ tenantId, manager: tx }, async () => {
+        const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+        if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+          throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
+        }
+
+        const allowedCategories =
+          getAllowedCatalogCategoriesForSource(catalogSource);
+
+        const catalogItems = await this.getPrismaClient().catalogItem.findMany({
+          where: {
+            source: catalogSource,
+            is_active: true,
+            is_essential: true,
+            category: { in: allowedCategories },
+          },
+          orderBy: [
+            { category: 'asc' },
+            { essential_sort_order: { sort: 'asc', nulls: 'last' } },
+            { id: 'asc' },
+          ],
+        });
+
+        return this.createBulkEssentialProductsFromCatalogItems(
+          tenantId,
+          catalogSource,
+          catalogItems,
+        );
+      });
+    });
+  }
+
+  /**
+   * Adds essential catalog items from the selected legacy category list.
+   */
+  private async bulkAddEssentialItemsByCategories(
+    tenantId: number,
+    categories: string[],
+  ): Promise<{ count: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+      return DbTenantContext.run({ tenantId, manager: tx }, async () => {
+        const catalogSource = await this.resolveTenantCatalogSource(tenantId);
+        if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+          throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
+        }
+
+        const unsupportedCategories = categories.filter(
+          (category) =>
+            !isCatalogCategoryAllowedForSource(catalogSource, category),
+        );
+        if (unsupportedCategories.length > 0) {
+          throw new BadRequestException('Category is not supported for this catalog source.');
+        }
+
+        const catalogItems = await this.getPrismaClient().catalogItem.findMany({
+          where: {
+            source: catalogSource,
+            is_active: true,
+            is_essential: true,
+            category: { in: categories },
+          },
+          orderBy: [
+            { category: 'asc' },
+            { essential_sort_order: { sort: 'asc', nulls: 'last' } },
+            { id: 'asc' },
+          ],
+        });
+
+        return this.createBulkEssentialProductsFromCatalogItems(
+          tenantId,
+          catalogSource,
+          catalogItems,
+        );
+      });
+    });
   }
 
   private async bulkAddEssentialItemsById(

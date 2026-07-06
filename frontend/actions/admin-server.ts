@@ -375,6 +375,9 @@ export async function adminBulkAddEssentialItemsAction(
   tenantId: number,
   payload:
     | {
+        allEssentialItems: true;
+      }
+    | {
         category: string;
         catalogItemIds: number[];
       }
@@ -396,6 +399,8 @@ export async function adminBulkAddEssentialItemsAction(
       tenantId,
       Array.isArray(payload)
         ? { categories: payload }
+        : "allEssentialItems" in payload
+          ? { all_essential_items: payload.allEssentialItems }
         : {
             category: payload.category,
             catalog_item_ids: payload.catalogItemIds,

@@ -1,7 +1,21 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class AddBulkEssentialItemsDto {
+  @ApiPropertyOptional({
+    description: 'Import every active catalog item marked as essential',
+  })
+  @IsOptional()
+  @IsBoolean()
+  all_essential_items?: boolean;
+
   @ApiPropertyOptional({ description: 'Single category title for item-level import' })
   @IsOptional()
   @IsString()

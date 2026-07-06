@@ -98,7 +98,9 @@ export class ImportsController {
             }
           },
           filename: (_req, file, callback) => {
-            const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-');
+            const ext = extname(file.originalname);
+            const nameWithoutExt = file.originalname.substring(0, file.originalname.length - ext.length);
+            const safeName = Buffer.from(nameWithoutExt).toString('hex') + ext;
             if (file.fieldname === 'file') {
               callback(null, `${Date.now()}-${safeName}`);
             } else {

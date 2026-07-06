@@ -5,8 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createReadStream } from 'fs';
-import { stat, rm } from 'fs/promises';
-import { dirname, join } from 'path';
+import { readdir, rm } from 'fs/promises';
+import { basename, dirname, extname, join } from 'path';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   ImportMode,
@@ -418,20 +418,32 @@ export class ImportsService {
       let processedUrl: string | null = null;
       let isLocalFile = false;
 
-      if (!incomingExternalUrl.startsWith('http')) {
-        const sanitizedFileName = incomingExternalUrl.replace(/[^a-zA-Z0-9._-]/g, '-');
-        const localImagePath = join(sessionImagesDir, sanitizedFileName);
-        try {
-          await stat(localImagePath);
-          isLocalFile = true;
-          processedUrl = await this.imageProcessorService.processProductThumbnail(localImagePath);
-        } catch (e) {
-          throw new Error(`Local image matching '${incomingExternalUrl}' was not uploaded in the payload.`);
+      if (!this.isExternalImageUrl(incomingExternalUrl)) {
+        const localImagePath = await this.resolveStagedLocalImagePath(
+          incomingExternalUrl,
+          sessionImagesDir,
+        );
+
+        if (!localImagePath) {
+          throw new Error(
+            `Local image matching '${incomingExternalUrl}' was not uploaded in the payload.`,
+          );
         }
+
+        isLocalFile = true;
+        processedUrl =
+          await this.imageProcessorService.processProductThumbnail(
+            localImagePath,
+          );
       }
 
-      if (!isLocalFile && incomingExternalUrl.startsWith('http') && incomingExternalUrl !== existingItem?.original_image_url) {
-        processedUrl = await this.imageDownloaderService.downloadImage(incomingExternalUrl);
+      if (
+        !isLocalFile &&
+        this.isExternalImageUrl(incomingExternalUrl) &&
+        incomingExternalUrl !== existingItem?.original_image_url
+      ) {
+        processedUrl =
+          await this.imageDownloaderService.downloadImage(incomingExternalUrl);
       }
 
       if (processedUrl) {
@@ -443,7 +455,7 @@ export class ImportsService {
             existingItem.image_url,
           );
         }
-      } else if (!isLocalFile && incomingExternalUrl.startsWith('http')) {
+      } else if (!isLocalFile && this.isExternalImageUrl(incomingExternalUrl)) {
         finalImageUrl = incomingExternalUrl;
         finalOriginalImageUrl = incomingExternalUrl;
       }
@@ -453,6 +465,147 @@ export class ImportsService {
     }
 
     return { finalImageUrl, finalOriginalImageUrl };
+  }
+
+  /**
+   * Resolves a local CSV image reference to the matching staged upload path.
+   */
+  private async resolveStagedLocalImagePath(
+    incomingImageReference: string,
+    sessionImagesDir: string,
+  ): Promise<string | null> {
+    const requestedFileName =
+      this.normalizeCatalogImageFileName(incomingImageReference);
+    if (!requestedFileName) return null;
+
+    const requestedKeys = this.buildCatalogImageFileNameKeys(requestedFileName);
+
+    let stagedFileNames: string[];
+    try {
+      stagedFileNames = await readdir(sessionImagesDir);
+    } catch (error) {
+      if (this.isMissingDirectoryError(error)) {
+        return null;
+      }
+      throw error;
+    }
+
+    for (const stagedFileName of stagedFileNames) {
+      const candidateFileNames = [
+        stagedFileName,
+        this.decodeStagedImportImageFileName(stagedFileName),
+      ].filter((fileName): fileName is string => Boolean(fileName));
+
+      const candidateKeys = new Set(
+        candidateFileNames.flatMap((fileName) =>
+          Array.from(this.buildCatalogImageFileNameKeys(fileName)),
+        ),
+      );
+
+      if (Array.from(candidateKeys).some((key) => requestedKeys.has(key))) {
+        return join(sessionImagesDir, stagedFileName);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Normalizes an image reference down to a comparable file name.
+   */
+  private normalizeCatalogImageFileName(value: string): string | null {
+    const normalizedPath = value.trim().replace(/\\/g, '/');
+    const fileName = basename(normalizedPath).trim().normalize('NFC');
+    return fileName || null;
+  }
+
+  /**
+   * Builds all comparison keys accepted for a catalog image file name.
+   */
+  private buildCatalogImageFileNameKeys(fileName: string): Set<string> {
+    const keys = new Set<string>();
+
+    for (const variant of this.getCatalogImageFileNameVariants(fileName)) {
+      const normalizedVariant = this.normalizeCatalogImageFileName(variant);
+      if (!normalizedVariant) continue;
+
+      keys.add(normalizedVariant.toLocaleLowerCase('en-US'));
+    }
+
+    return keys;
+  }
+
+  /**
+   * Returns the original and common mojibake-repaired file name variants.
+   */
+  private getCatalogImageFileNameVariants(fileName: string): string[] {
+    const variants = new Set<string>([fileName]);
+    const repairedFileName = this.repairMojibakeFileName(fileName);
+
+    if (repairedFileName) {
+      variants.add(repairedFileName);
+    }
+
+    return Array.from(variants);
+  }
+
+  /**
+   * Decodes a staged import image name stored as a hex-encoded stem.
+   */
+  private decodeStagedImportImageFileName(
+    stagedFileName: string,
+  ): string | null {
+    const extension = extname(stagedFileName);
+    const encodedName = stagedFileName.substring(
+      0,
+      stagedFileName.length - extension.length,
+    );
+
+    if (!encodedName || !/^[a-f0-9]+$/i.test(encodedName)) {
+      return null;
+    }
+
+    try {
+      return `${Buffer.from(encodedName, 'hex').toString('utf8')}${extension}`;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Repairs filenames decoded as Latin-1 even though they were sent as UTF-8.
+   */
+  private repairMojibakeFileName(fileName: string): string | null {
+    try {
+      const repaired = Buffer.from(fileName, 'latin1')
+        .toString('utf8')
+        .normalize('NFC');
+
+      return repaired !== fileName && !repaired.includes('\uFFFD')
+        ? repaired
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Detects a missing staged images directory.
+   */
+  private isMissingDirectoryError(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    );
+  }
+
+  /**
+   * Detects external image URLs that should be downloaded instead of matched.
+   */
+  private isExternalImageUrl(imageUrl: string): boolean {
+    return /^https?:\/\//i.test(imageUrl);
   }
 
   private trackReplacementSource(
