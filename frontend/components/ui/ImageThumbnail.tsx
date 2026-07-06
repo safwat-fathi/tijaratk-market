@@ -6,9 +6,10 @@ import SafeImage from './SafeImage';
 
 type ImageThumbnailProps = ComponentProps<typeof SafeImage> & {
   thumbnailWrapperClassName?: string;
+  disableEnlarge?: boolean;
 };
 
-export default function ImageThumbnail({ thumbnailWrapperClassName, ...props }: ImageThumbnailProps) {
+export default function ImageThumbnail({ thumbnailWrapperClassName, disableEnlarge, ...props }: ImageThumbnailProps) {
   const [isEnlarged, setIsEnlarged] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -27,33 +28,33 @@ export default function ImageThumbnail({ thumbnailWrapperClassName, ...props }: 
     };
   }, [isEnlarged]);
 
-  const hasValidSrc = typeof props.src === 'string' && props.src.trim().length > 0;
+  const isEnlargeable = typeof props.src === 'string' && props.src.trim().length > 0 && !disableEnlarge;
 
   return (
     <>
       <div 
-        role={hasValidSrc ? 'button' : undefined}
-        tabIndex={hasValidSrc ? 0 : undefined}
+        role={isEnlargeable ? 'button' : undefined}
+        tabIndex={isEnlargeable ? 0 : undefined}
         onClick={(e) => {
-          if (hasValidSrc) {
+          if (isEnlargeable) {
             e.preventDefault();
             e.stopPropagation();
             setIsEnlarged(true);
           }
         }}
         onKeyDown={(e) => {
-          if (hasValidSrc && (e.key === 'Enter' || e.key === ' ')) {
+          if (isEnlargeable && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
             e.stopPropagation();
             setIsEnlarged(true);
           }
         }}
-        className={`relative inline-block overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/50 ${hasValidSrc ? 'cursor-zoom-in' : 'cursor-default'} ${thumbnailWrapperClassName || ''}`}
+        className={`relative inline-block overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/50 ${isEnlargeable ? 'cursor-zoom-in' : 'cursor-default'} ${thumbnailWrapperClassName || ''}`}
       >
         <SafeImage {...props} />
       </div>
 
-      {mounted && isEnlarged && hasValidSrc && typeof document !== 'undefined' && createPortal(
+      {mounted && isEnlarged && isEnlargeable && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm transition-all"
           onClick={(e) => {

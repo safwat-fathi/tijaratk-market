@@ -106,6 +106,7 @@ export default function CategoryEntryGrid({
                 width={54}
                 height={54}
                 sizes="56px"
+                disableEnlarge={true}
                 imageClassName="h-14 w-14 rounded-md object-cover ring-1 ring-brand-border"
                 fallback={<span className="text-2xl">🛒</span>}
               />

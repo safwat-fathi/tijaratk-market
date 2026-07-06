@@ -2492,124 +2492,142 @@ export class ProductsService {
     const csvParser = require('csv-parser');
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createReadStream } = require('fs');
-    
+
     const results: any[] = [];
-    
+
     await new Promise((resolve, reject) => {
       createReadStream(file.path)
-        .pipe(csvParser({
-          mapHeaders: ({ header }: { header: string }) => header.trim().replace(/^[\uFEFF\u200B]/, '')
-        }))
+        .pipe(
+          csvParser({
+            mapHeaders: ({ header }: { header: string }) =>
+              header.trim().replace(/^[\uFEFF\u200B]/, ''),
+          }),
+        )
         .on('data', (data: any) => results.push(data))
         .on('end', () => resolve(results))
         .on('error', (err: any) => reject(err));
     });
 
-    for (const rowData of results) {
-      summary.total_rows += 1;
-      try {
-        const rawName = rowData.name || rowData.Name;
-        const rawPrice = rowData.price || rowData.Price;
-        const rawCategory = rowData.category || rowData.Category;
-        const rawImageUrl = rowData.imageUrl || rowData.ImageUrl || rowData.image_url;
-        
-        if (!rawName) {
-          throw new Error('Product name is required');
-        }
+    const processRows = async () => {
+      for (const rowData of results) {
+        summary.total_rows += 1;
+        try {
+          const rawName = rowData.name || rowData.Name;
+          const rawPrice = rowData.price || rowData.Price;
+          const rawCategory = rowData.category || rowData.Category;
+          const rawImageUrl =
+            rowData.imageUrl || rowData.ImageUrl || rowData.image_url;
 
-        const name = rawName.trim().replace(/\s+/g, ' ').toLowerCase();
-        
-        const normalizeNumerals = (str: string) => str.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
-        const priceStr = rawPrice ? normalizeNumerals(String(rawPrice).trim()) : undefined;
-        let price: number | undefined = undefined;
-        if (priceStr) {
-          price = parseFloat(priceStr);
-          if (isNaN(price) || price < 0) {
-            throw new Error(`Invalid price format: ${rawPrice}`);
+          if (!rawName) {
+            throw new Error('Product name is required');
           }
-        }
-        if (price === undefined) {
-           throw new Error('Price is required'); 
-        }
 
-        const categoryName = rawCategory ? rawCategory.trim() : 'أخرى';
-        
-        await this.prisma.$transaction(async (tx) => {
-          let category = await tx.tenantProductCategory.findUnique({
-            where: { tenant_id_name: { tenant_id: tenantId, name: categoryName } },
+          const name = rawName.trim().replace(/\s+/g, ' ').toLowerCase();
+
+          const normalizeNumerals = (str: string) =>
+            str.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+          const priceStr = rawPrice
+            ? normalizeNumerals(String(rawPrice).trim())
+            : undefined;
+          let price: number | undefined = undefined;
+          if (priceStr) {
+            price = parseFloat(priceStr);
+            if (isNaN(price) || price < 0) {
+              throw new Error(`Invalid price format: ${rawPrice}`);
+            }
+          }
+          if (price === undefined) {
+            throw new Error('Price is required');
+          }
+
+          const categoryName = rawCategory ? rawCategory.trim() : 'أخرى';
+
+          const client = this.getPrismaClient();
+          let category = await client.tenantProductCategory.findUnique({
+            where: {
+              tenant_id_name: { tenant_id: tenantId, name: categoryName },
+            },
           });
           if (!category) {
-             category = await tx.tenantProductCategory.create({
-                data: { tenant_id: tenantId, name: categoryName }
-             });
+            category = await client.tenantProductCategory.create({
+              data: { tenant_id: tenantId, name: categoryName },
+            });
           }
 
-          const existingProduct = await tx.product.findFirst({
+          const existingProduct = await client.product.findFirst({
             where: { tenant_id: tenantId, name },
           });
 
           if (existingProduct) {
-             const oldPrice = existingProduct.current_price;
-             await tx.product.update({
-                where: { id: existingProduct.id },
+            const oldPrice = existingProduct.current_price;
+            await client.product.update({
+              where: { id: existingProduct.id },
+              data: {
+                current_price: price,
+                category: category.name,
+                image_url: rawImageUrl
+                  ? rawImageUrl.trim()
+                  : existingProduct.image_url,
+                is_available: true,
+              },
+            });
+            if (oldPrice && Number(oldPrice) !== price) {
+              await client.productPriceHistory.create({
                 data: {
-                  current_price: price,
-                  category: category.name,
-                  image_url: rawImageUrl ? rawImageUrl.trim() : existingProduct.image_url,
-                  is_available: true,
-                }
-             });
-             if (oldPrice && Number(oldPrice) !== price) {
-                await tx.productPriceHistory.create({
-                   data: {
-                      tenant_id: tenantId,
-                      product_id: existingProduct.id,
-                      price: price,
-                      reason: 'Imported from CSV',
-                   }
-                });
-             }
-             summary.updated_rows++;
+                  tenant_id: tenantId,
+                  product_id: existingProduct.id,
+                  price: price,
+                  reason: 'Imported from CSV',
+                },
+              });
+            }
+            summary.updated_rows++;
           } else {
-             const newProduct = await tx.product.create({
-                data: {
-                   tenant_id: tenantId,
-                   name,
-                   current_price: price,
-                   category: category.name,
-                   image_url: rawImageUrl ? rawImageUrl.trim() : null,
-                   source: 'manual',
-                   status: 'active',
-                   order_mode: 'quantity',
-                   is_available: true,
-                }
-             });
-             
-             await tx.productPriceHistory.create({
-                data: {
-                   tenant_id: tenantId,
-                   product_id: newProduct.id,
-                   price: price,
-                   reason: 'Initial price from CSV import',
-                }
-             });
-             
-             summary.created_rows++;
+            const newProduct = await client.product.create({
+              data: {
+                tenant_id: tenantId,
+                name,
+                current_price: price,
+                category: category.name,
+                image_url: rawImageUrl ? rawImageUrl.trim() : null,
+                source: 'manual',
+                status: 'active',
+                order_mode: 'quantity',
+                is_available: true,
+              },
+            });
+
+            await client.productPriceHistory.create({
+              data: {
+                tenant_id: tenantId,
+                product_id: newProduct.id,
+                price: price,
+                reason: 'Initial price from CSV import',
+              },
+            });
+
+            summary.created_rows++;
           }
-        });
-      } catch (error) {
-         summary.failed_rows++;
-         summary.errors.push({
+        } catch (error) {
+          summary.failed_rows++;
+          summary.errors.push({
             row_number: summary.total_rows,
             message: error instanceof Error ? error.message : 'Unknown error',
-         });
+          });
+        }
       }
+    };
+
+    if (DbTenantContext.getTenantId()) {
+      await processRows();
+    } else {
+      await this.runAsTenantForAdmin(tenantId, processRows);
     }
 
     if (summary.created_rows > 0 || summary.updated_rows > 0) {
       await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
     }
-    
+
     return summary;
   }
 }
