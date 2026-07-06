@@ -13,7 +13,7 @@ Images in the CSV will be referenced by their filenames (e.g., `tomato.jpg`) rat
    - The catalog CSV file.
    - Multiple image files via a file picker or dropzone.
    - Import mode (`upsert`, `replace_source`, `create_only`, `update_only`).
-   - Catalog format/source (`talabat` / `chefaa` / `carrefour`).
+   - Catalog type (`grocery` / `pharmacy`) instead of specific sources like talabat. The backend will automatically infer the exact source based on this type.
 3. **Submission**: The frontend submits the CSV and the images together in a single `multipart/form-data` request via Next.js Server Actions to the NestJS backend.
 4. **Backend Staging**: The NestJS backend intercepts the files, stages them in an isolated session folder, and starts the asynchronous import process in the background.
 5. **Matching & Processing**: The import worker processes the CSV row-by-row. When it encounters a filename in `image_url`, it matches it against the uploaded files, processes the image into a 256x256 WebP thumbnail using the existing `ImageProcessorService`, and saves it.

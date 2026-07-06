@@ -5,6 +5,10 @@
 **Status**: Draft  
 **Input**: User description: "@[bulk-catalog-items.md]"
 
+## Clarifications
+### Session 2026-07-06
+- Q: How should the catalog format/source be selected? → A: It should be identified by the current opened tab (Grocery, Pharmacy). The backend will align it with the handled catalog items without the admin selecting specific sources like talabat or carrefour.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Bulk Image Upload with CSV Import (Priority: P1)
@@ -41,7 +45,7 @@ Administrators need the ability to upload a catalog CSV and multiple product ima
 - **FR-005**: System MUST fall back to downloading from external URLs if the `image_url` is a valid external URL and no local file matches.
 - **FR-006**: System MUST record row-level errors for entries where a local filename is specified but the corresponding file was not uploaded.
 - **FR-007**: System MUST completely clean up and remove the temporary session directory upon completion, cancellation, or failure of the import.
-- **FR-008**: System MUST enforce existing catalog source and category isolation rules for the imported rows.
+- **FR-008**: System MUST infer the specific catalog source (e.g., talabat, carrefour) automatically based on the selected catalog type (Grocery, Pharmacy) and enforce existing isolation rules, rather than requiring the admin to explicitly select the source.
 
 ### Key Entities
 
