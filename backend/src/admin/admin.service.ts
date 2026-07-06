@@ -57,6 +57,29 @@ const CATALOG_EXPORT_COLUMNS = [
   'order_mode',
 ] as const;
 
+const TALABAT_EXPORT_COLUMNS = [
+  'name',
+  'price',
+  'currency',
+  'image_url',
+  'product_id',
+  'category',
+  'is_essential',
+] as const;
+
+const CHEFAA_EXPORT_COLUMNS = [
+  'name',
+  'price',
+  'currency',
+  'image_url',
+  'product_id',
+  'product_slug',
+  'product_url',
+  'category_path',
+  'category',
+  'is_essential',
+] as const;
+
 type CatalogExportColumn = (typeof CATALOG_EXPORT_COLUMNS)[number];
 
 type ProductSheetRow = Partial<Record<CatalogExportColumn, string>> &
@@ -490,19 +513,38 @@ export class AdminService {
       orderBy: [{ category: 'asc' }, { name: 'asc' }, { id: 'asc' }],
     });
 
-    const rows = items.map((item) =>
-      this.buildCatalogExportRow(item, {
-        product_id: '',
-        is_available: 'true',
-        status: ProductStatus.ACTIVE,
-        order_mode: ProductOrderMode.QUANTITY,
-      }),
-    );
-
-    return {
-      filename: `${source === CATALOG_SOURCE_TALABAT ? 'grocery-items' : source === CATALOG_SOURCE_CHEFAA ? 'pharmacy-items' : 'catalog-items'}-${this.formatDateForFilename(new Date())}.csv`,
-      content: this.encodeCsv(CATALOG_EXPORT_COLUMNS, rows),
-    };
+    if (source === CATALOG_SOURCE_TALABAT) {
+      const rows = items.map((item) => ({
+        name: item.name,
+        price: item.price === null ? '' : String(item.price),
+        currency: item.currency || 'EGP',
+        image_url: item.image_url || '',
+        product_id: item.external_id || '',
+        category: item.category,
+        is_essential: item.is_essential ? 'true' : 'false',
+      }));
+      return {
+        filename: `grocery-items-${this.formatDateForFilename(new Date())}.csv`,
+        content: this.encodeCsv(TALABAT_EXPORT_COLUMNS, rows),
+      };
+    } else {
+      const rows = items.map((item) => ({
+        name: item.name,
+        price: item.price === null ? '' : String(item.price),
+        currency: item.currency || 'EGP',
+        image_url: item.image_url || '',
+        product_id: item.external_id || '',
+        product_slug: '',
+        product_url: '',
+        category_path: item.category,
+        category: item.category,
+        is_essential: item.is_essential ? 'true' : 'false',
+      }));
+      return {
+        filename: `pharmacy-items-${this.formatDateForFilename(new Date())}.csv`,
+        content: this.encodeCsv(CHEFAA_EXPORT_COLUMNS, rows),
+      };
+    }
   }
 
   generateProductImportTemplate() {
@@ -1348,28 +1390,7 @@ export class AdminService {
     );
   }
 
-  private buildCatalogExportRow(
-    item: CatalogItem,
-    defaults: {
-      product_id: string;
-      is_available: string;
-      status: ProductStatus;
-      order_mode: ProductOrderMode;
-    },
-  ): Record<CatalogExportColumn, string> {
-    return {
-      catalog_item_id: String(item.id),
-      product_id: defaults.product_id,
-      name: item.name,
-      category: item.category,
-      current_price: item.price === null ? '' : String(item.price),
-      currency: item.currency || 'EGP',
-      image_url: item.image_url || '',
-      is_available: defaults.is_available,
-      status: defaults.status,
-      order_mode: defaults.order_mode,
-    };
-  }
+
 
   private encodeCsv<T extends string>(
     columns: readonly T[],

@@ -27,9 +27,9 @@ description: "Task list template for feature implementation"
 
 ## Phase 3: User Story 1 - Bulk Image Upload with CSV Import (Priority: P1) 🎯 MVP
 
-**Goal**: Administrators need the ability to upload a catalog CSV and multiple product images simultaneously, so that product records are created with proper thumbnails without relying on external image URLs.
+**Goal**: Administrators need the ability to upload a catalog CSV and multiple product images simultaneously, process `is_essential` flags from the CSV, and download an aligned CSV template.
 
-**Independent Test**: Can be fully tested by submitting a valid catalog CSV referencing local filenames alongside the matching image files, and verifying that the images are processed and associated correctly in the catalog.
+**Independent Test**: Can be fully tested by submitting a valid catalog CSV referencing local filenames alongside the matching image files, including the `is_essential` flag, and verifying that the images and flags are processed and associated correctly in the catalog. The downloaded CSV template should exactly match the upload schema.
 
 ### Implementation for User Story 1
 
@@ -38,6 +38,9 @@ description: "Task list template for feature implementation"
 - [x] T003 [US1] Update ImportWorker to map local image files, process thumbnails via ImageProcessorService, and assign WebP paths to products in `backend/src/imports/import-worker.service.ts`
 - [x] T004 [P] [US1] Update Next.js Server Action to proxy the multipart payload with images in `frontend/actions/admin-server.ts`
 - [x] T005 [P] [US1] Update frontend UI form to allow multiple image selection for the import in `frontend/app/(dashboard)/admin/imports/page.tsx`
+- [x] T008 [P] [US1] Add `is_essential` as optional field to `TalabatCatalogImportRowSchema` and `ChefaaCatalogImportRowSchema` in `backend/src/imports/schemas/catalog-import-row.schema.ts`
+- [x] T009 [US1] Update `processCatalogImportRow` to parse `is_essential` from string to boolean and save it to the DB in `backend/src/imports/import-worker.service.ts`
+- [x] T010 [P] [US1] Define `TALABAT_EXPORT_COLUMNS` and `CHEFAA_EXPORT_COLUMNS` to match Zod schemas and update `exportAdminCatalogItems` to use them in `backend/src/admin/admin.service.ts`
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently.
 
@@ -47,8 +50,8 @@ description: "Task list template for feature implementation"
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T006 [P] Code cleanup and verify strict typing
-- [ ] T007 Run quickstart.md validation
+- [x] T006 [P] Code cleanup and verify strict typing
+- [x] T007 Run quickstart.md validation
 
 ---
 
@@ -65,4 +68,4 @@ description: "Task list template for feature implementation"
 
 ### Parallel Opportunities
 
-- T001, T004, and T005 can all be implemented in parallel as they touch decoupled frontend, controller, and server-action layers.
+- T008 and T010 can be implemented in parallel as they touch the schemas and the admin export service, which are decoupled from the import worker logic.

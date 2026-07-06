@@ -5,7 +5,10 @@ import { usePathname } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
 import { adminLogoutAction } from "@/actions/admin-server";
 
-import { DashboardSidebar, NavItem } from "@/components/layout/DashboardSidebar";
+import {
+  DashboardSidebar,
+  NavItem,
+} from "@/components/layout/DashboardSidebar";
 
 export default function AdminLayout({
   children,
@@ -23,9 +26,9 @@ export default function AdminLayout({
     { label: "لوحة التحكم", href: "/admin" },
     { label: "التجار", href: "/admin/merchants" },
     { label: "الباقات", href: "/admin/plans" },
-    { label: "الاستيراد", href: "/admin/imports" },
     { label: "المنتجات", href: "/admin/products" },
     { label: "التصنيفات", href: "/admin/categories" },
+    { label: "استيراد الكتالوج", href: "/admin/imports" },
     { label: "عناصر الكتالوج", href: "/admin/catalog-items" },
     { label: "الطلبات", href: "/admin/orders" },
     { label: "المناطق", href: "/admin/areas" },

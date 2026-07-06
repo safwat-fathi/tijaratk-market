@@ -23,6 +23,7 @@ export const TalabatCatalogImportRowSchema = z.object({
   image_url: optionalText,
   product_id: optionalText,
   category: optionalText,
+  is_essential: optionalText,
 });
 
 /**
@@ -38,6 +39,7 @@ export const ChefaaCatalogImportRowSchema = z.object({
   product_url: optionalText,
   category_path: optionalText,
   category: optionalText,
+  is_essential: optionalText,
 });
 
 /**

@@ -29,6 +29,7 @@ import {
 } from 'src/products/catalog-source-policy';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import { ImageDownloaderService } from './services/image-downloader.service';
+import { parseBooleanLike } from 'src/products/utils/parse-boolean-like';
 
 const EXPECTED_CURRENCY = 'EGP';
 const PROGRESS_UPDATE_INTERVAL = 100;
@@ -54,6 +55,7 @@ type CatalogItemData = {
   external_id: string | null;
   last_seen_at: Date;
   is_active: boolean;
+  is_essential?: boolean;
 };
 
 type CatalogReplacementState = {
@@ -517,6 +519,9 @@ export class ImportsService {
       external_id: this.normalizeOptionalText(row.data.product_id),
       last_seen_at: new Date(),
       is_active: true,
+      ...('is_essential' in row.data && row.data.is_essential !== undefined
+        ? { is_essential: parseBooleanLike(row.data.is_essential) ?? false }
+        : {}),
     };
   }
 
