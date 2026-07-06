@@ -422,15 +422,12 @@ export class ProductsService {
     if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
       return [];
     }
-    const allowedCategories =
-      getAllowedCatalogCategoriesForSource(catalogSource);
 
     const catalogItems = await this.getPrismaClient().catalogItem.findMany({
       where: {
         source: catalogSource,
         is_active: true,
         is_essential: true,
-        category: { in: allowedCategories },
       },
       orderBy: [
         { category: 'asc' },
@@ -447,7 +444,7 @@ export class ProductsService {
     const groupedItems = new Map<string, (CatalogItem & { is_in_stock?: boolean })[]>();
     for (const item of enrichedCatalogItems) {
       const category = this.normalizeOptionalCategory(item.category ?? undefined);
-      if (!category || !isCatalogCategoryAllowedForSource(catalogSource, category)) {
+      if (!category) {
         continue;
       }
 
@@ -483,15 +480,11 @@ export class ProductsService {
           throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
         }
 
-        const allowedCategories =
-          getAllowedCatalogCategoriesForSource(catalogSource);
-
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
           where: {
             source: catalogSource,
             is_active: true,
             is_essential: true,
-            category: { in: allowedCategories },
           },
           orderBy: [
             { category: 'asc' },
@@ -522,14 +515,6 @@ export class ProductsService {
         const catalogSource = await this.resolveTenantCatalogSource(tenantId);
         if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
           throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
-        }
-
-        const unsupportedCategories = categories.filter(
-          (category) =>
-            !isCatalogCategoryAllowedForSource(catalogSource, category),
-        );
-        if (unsupportedCategories.length > 0) {
-          throw new BadRequestException('Category is not supported for this catalog source.');
         }
 
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
@@ -568,15 +553,12 @@ export class ProductsService {
           throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
         }
 
-        if (!isCatalogCategoryAllowedForSource(catalogSource, category)) {
-          throw new BadRequestException('Category is not supported for this catalog source.');
-        }
-
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
           where: {
             id: { in: catalogItemIds },
             source: catalogSource,
             is_active: true,
+            is_essential: true,
             category,
           },
         });
