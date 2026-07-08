@@ -8,6 +8,7 @@ import {
 import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
 import { ProductSource } from 'src/common/enums/product-source.enum';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
+import { OrderStatus } from 'src/common/enums/order-status.enum';
 import { AddProductFromCatalogDto } from './dto/add-product-from-catalog.dto';
 import { AddBulkEssentialItemsDto } from './dto/add-bulk-essential.dto';
 import { BulkUpdateProductsDto } from './dto/bulk-update-products.dto';
@@ -63,11 +64,14 @@ type ProductOrderConfig = {
   };
 };
 
-type BulkUpdateProductsForAdminPayload = {
-  ids: number[];
-  category?: string;
-  is_available?: boolean;
-  status?: ProductStatus;
+type DeleteTenantProductsAsAdminResult = {
+  totalCount: number;
+  deletedCount: number;
+  skippedCount: number;
+  skippedReasons: Array<{
+    reason: 'active_order_reference';
+    count: number;
+  }>;
 };
 
 type PublicProductsResult = {
@@ -84,7 +88,7 @@ type PublicProductsResult = {
 type PublicProductCategorySummary = {
   category: string;
   count: number;
-  image_url?: string;
+  image_url?: string | null;
 };
 
 type TenantProductsSearchResult = {
@@ -300,19 +304,119 @@ export class ProductsService {
     );
   }
 
-  async removeForTenantAsAdmin(productId: number): Promise<void> {
-    const product = await this.prisma.product.findFirst({
-      where: { id: productId, deleted_at: null },
-      select: { tenant_id: true },
+  async deleteTenantProductsAsAdmin(
+    tenantId: number,
+    adminId: number,
+  ): Promise<DeleteTenantProductsAsAdminResult> {
+    return this.runAsTenantForAdmin(tenantId, async () => {
+      const prisma = this.getPrismaClient();
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { id: true },
+      });
+
+      if (!tenant) {
+        throw new NotFoundException(`Tenant with ID ${tenantId} not found`);
+      }
+
+      const products = await prisma.product.findMany({
+        where: { tenant_id: tenantId, deleted_at: null },
+        select: { id: true },
+      });
+      const productIds = products.map((product) => product.id);
+      const totalCount = productIds.length;
+
+      if (totalCount === 0) {
+        return {
+          totalCount: 0,
+          deletedCount: 0,
+          skippedCount: 0,
+          skippedReasons: [],
+        };
+      }
+
+      const productIdSet = new Set(productIds);
+      const activeOrderItems = await prisma.orderItem.findMany({
+        where: {
+          OR: [
+            { product_id: { in: productIds } },
+            { replaced_by_product_id: { in: productIds } },
+            { pending_replacement_product_id: { in: productIds } },
+          ],
+          order: {
+            tenant_id: tenantId,
+            status: {
+              in: [
+                OrderStatus.DRAFT,
+                OrderStatus.CONFIRMED,
+                OrderStatus.OUT_FOR_DELIVERY,
+              ],
+            },
+          },
+        },
+        select: {
+          product_id: true,
+          replaced_by_product_id: true,
+          pending_replacement_product_id: true,
+        },
+      });
+
+      const blockedProductIds = new Set<number>();
+      for (const item of activeOrderItems) {
+        if (item.product_id && productIdSet.has(item.product_id)) {
+          blockedProductIds.add(item.product_id);
+        }
+        if (
+          item.replaced_by_product_id &&
+          productIdSet.has(item.replaced_by_product_id)
+        ) {
+          blockedProductIds.add(item.replaced_by_product_id);
+        }
+        if (
+          item.pending_replacement_product_id &&
+          productIdSet.has(item.pending_replacement_product_id)
+        ) {
+          blockedProductIds.add(item.pending_replacement_product_id);
+        }
+      }
+
+      const deletableProductIds = productIds.filter(
+        (id) => !blockedProductIds.has(id),
+      );
+
+      let deletedCount = 0;
+      if (deletableProductIds.length > 0) {
+        const deleteResult = await prisma.product.updateMany({
+          where: {
+            tenant_id: tenantId,
+            id: { in: deletableProductIds },
+            deleted_at: null,
+          },
+          data: {
+            deleted_at: new Date(),
+            deleted_by_id: adminId,
+          },
+        });
+        deletedCount = deleteResult.count;
+
+        if (deletedCount > 0) {
+          await this.bumpTenantSearchCacheVersion(tenantId);
+          await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+        }
+      }
+
+      const skippedCount = blockedProductIds.size;
+
+      return {
+        totalCount,
+        deletedCount,
+        skippedCount,
+        skippedReasons:
+          skippedCount > 0
+            ? [{ reason: 'active_order_reference', count: skippedCount }]
+            : [],
+      };
     });
-
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${productId} not found`);
-    }
-
-    return this.runAsTenantForAdmin(product.tenant_id, () =>
-      this.remove(productId, product.tenant_id),
-    );
   }
 
   /**
@@ -954,37 +1058,34 @@ export class ProductsService {
 
     const categories = categoryRows.map((row) => row.category);
 
-    const catalogRows = catalogSource
-      ? await this.getPrismaClient().catalogItem.findMany({
+    const categoryRowsByName = new Map<string, string | null>();
+    if (catalogSource) {
+      const catalogCategoryRows =
+        await this.getPrismaClient().catalogCategory.findMany({
           where: {
-            is_active: true,
             source: catalogSource,
-            category: {
+            deleted_at: null,
+            name: {
               in: categories.filter((category) =>
                 isCatalogCategoryAllowedForSource(catalogSource, category),
               ),
             },
-            image_url: { not: null, notIn: [''] },
           },
           select: {
-            category: true,
+            name: true,
             image_url: true,
           },
-          orderBy: [{ category: 'asc' }, { name: 'asc' }],
-        })
-      : [];
+        });
 
-    const categoryImages = new Map<string, string>();
-    for (const row of catalogRows) {
-      if (row.category && row.image_url && !categoryImages.has(row.category)) {
-        categoryImages.set(row.category, row.image_url);
+      for (const row of catalogCategoryRows) {
+        categoryRowsByName.set(row.name, row.image_url);
       }
     }
 
     return categoryRows.map((row) => ({
       category: row.category,
       count: Number(row.count),
-      image_url: categoryImages.get(row.category),
+      image_url: categoryRowsByName.get(row.category) ?? null,
     }));
   }
 
@@ -1018,30 +1119,26 @@ export class ProductsService {
       return [];
     }
 
-    const catalogRows = await this.getPrismaClient().catalogItem.findMany({
-      where: {
-        is_active: true,
-        source: catalogSource,
-        category: {
-          in: categories.filter((category) =>
-            allowedCategories.includes(category),
-          ),
+    const catalogCategoryRows =
+      await this.getPrismaClient().catalogCategory.findMany({
+        where: {
+          source: catalogSource,
+          deleted_at: null,
+          name: {
+            in: categories.filter((category) =>
+              allowedCategories.includes(category),
+            ),
+          },
         },
-        image_url: { not: null },
-      },
-      select: {
-        category: true,
-        image_url: true,
-      },
-      orderBy: [{ category: 'asc' }, { id: 'asc' }],
-    });
+        select: {
+          name: true,
+          image_url: true,
+        },
+      });
 
-    const categoryImages = new Map<string, string>();
-    for (const row of catalogRows) {
-      if (row.category && row.image_url && !categoryImages.has(row.category)) {
-        categoryImages.set(row.category, row.image_url);
-      }
-    }
+    const categoryImages = new Map(
+      catalogCategoryRows.map((row) => [row.name, row.image_url]),
+    );
 
     const summariesByCategory = new Map<string, PublicProductCategorySummary>();
     for (const row of rows) {
@@ -1053,16 +1150,13 @@ export class ProductsService {
       const existingSummary = summariesByCategory.get(category);
       if (existingSummary) {
         existingSummary.count += row._count.id;
-        if (!existingSummary.image_url) {
-          existingSummary.image_url = categoryImages.get(category);
-        }
         continue;
       }
 
       summariesByCategory.set(category, {
         category,
         count: row._count.id,
-        image_url: categoryImages.get(category),
+        image_url: categoryImages.get(category) ?? null,
       });
     }
 
@@ -1534,20 +1628,6 @@ export class ProductsService {
     }
 
     return { success: true, count: productIds.length };
-  }
-
-  async bulkUpdateForTenantAsAdmin(
-    payload: BulkUpdateProductsForAdminPayload,
-  ): Promise<{ success: true; count: number }> {
-    const { products, dto } = await this.prepareBulkProductUpdate(payload);
-
-    for (const product of products) {
-      await this.runAsTenantForAdmin(product.tenant_id, () =>
-        this.update(product.id, product.tenant_id, dto),
-      );
-    }
-
-    return { success: true, count: products.length };
   }
 
   private async prepareBulkProductUpdate(

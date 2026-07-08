@@ -175,6 +175,17 @@ export type AdminTenantProductCategory = {
 	count: number;
 };
 
+type MoveAdminCatalogCategoryProductsPayload = {
+	source: AdminCatalogSource;
+	from_category: string;
+	to_category: string;
+};
+
+type MoveAdminTenantProductCategoryProductsPayload = {
+	from_category: string;
+	to_category: string;
+};
+
 export type AdminProductSheetUploadSummary = {
 	total_rows: number;
 	created_rows: number;
@@ -235,11 +246,14 @@ type BulkUpdateAdminCatalogItemsPayload = {
 	is_essential?: boolean;
 };
 
-type BulkUpdateAdminProductsPayload = {
-	ids: number[];
-	category?: string;
-	is_available?: boolean;
-	status?: "active" | "archived";
+export type DeleteTenantProductsSummary = {
+	totalCount: number;
+	deletedCount: number;
+	skippedCount: number;
+	skippedReasons: Array<{
+		reason: "active_order_reference";
+		count: number;
+	}>;
 };
 
 type UpdateTenantDirectoryProfilePayload = {
@@ -496,18 +510,9 @@ class AdminApiService extends HttpService {
 		);
 	}
 
-	public async bulkUpdateProducts(payload: BulkUpdateAdminProductsPayload) {
-		return this.patch<{ success: boolean; count: number }>(
-			"products/bulk",
-			payload,
-			undefined,
-			ADMIN_AUTH_OPTIONS
-		);
-	}
-
-	public async removeProduct(productId: number) {
-		return this.delete<void>(
-			`products/${productId}`,
+	public async deleteTenantProducts(tenantId: number) {
+		return this.delete<DeleteTenantProductsSummary>(
+			`tenants/${tenantId}/products`,
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);
@@ -550,30 +555,47 @@ class AdminApiService extends HttpService {
 		return `/api/admin/catalog-items/export${qs}`;
 	}
 
-	public async createAdminCatalogCategory(payload: {
-		source: AdminCatalogSource;
-		name: string;
-	}) {
+	public async createAdminCatalogCategory(payload: FormData) {
 		return this.post<AdminCatalogCategory>(
 			"catalog-items/categories",
 			payload,
 			undefined,
-			ADMIN_AUTH_OPTIONS
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: 30000,
+			}
 		);
 	}
 
-	public async updateAdminCatalogCategory(id: number, payload: { name: string }) {
+	public async updateAdminCatalogCategory(
+		id: number,
+		payload: FormData,
+	) {
 		return this.patch<AdminCatalogCategory>(
 			`catalog-items/categories/${id}`,
 			payload,
 			undefined,
-			ADMIN_AUTH_OPTIONS
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: 30000,
+			}
 		);
 	}
 
 	public async deleteAdminCatalogCategory(id: number) {
 		return this.delete<{ success: boolean }>(
 			`catalog-items/categories/${id}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async moveAdminCatalogCategoryProducts(
+		payload: MoveAdminCatalogCategoryProductsPayload,
+	) {
+		return this.post<{ success: boolean; count: number }>(
+			"catalog-items/categories/move-products",
+			payload,
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);
@@ -612,6 +634,18 @@ class AdminApiService extends HttpService {
 	public async deleteAdminTenantProductCategory(tenantId: number, categoryId: number) {
 		return this.delete<{ success: boolean }>(
 			`tenants/${tenantId}/product-categories/${categoryId}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS
+		);
+	}
+
+	public async moveAdminTenantProductCategoryProducts(
+		tenantId: number,
+		payload: MoveAdminTenantProductCategoryProductsPayload,
+	) {
+		return this.post<{ success: boolean; count: number }>(
+			`tenants/${tenantId}/product-categories/move-products`,
+			payload,
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);

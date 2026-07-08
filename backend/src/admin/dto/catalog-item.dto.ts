@@ -5,7 +5,6 @@ import {
   ArrayNotEmpty,
   IsBoolean,
   IsArray,
-  IsEnum,
   IsIn,
   IsInt,
   IsNumber,
@@ -21,7 +20,6 @@ import {
   CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
 } from 'src/products/catalog-source-policy';
-import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { parseBooleanLike } from 'src/products/utils/parse-boolean-like';
 
 const ADMIN_CATALOG_SOURCES = [
@@ -156,6 +154,31 @@ export class UpdateAdminCatalogCategoryDto {
   @IsString()
   @MaxLength(64)
   name!: string;
+
+  @ApiPropertyOptional({ description: 'Remove the current category image' })
+  @IsOptional()
+  @Transform(({ value }) => parseBooleanLike(value))
+  @IsBoolean()
+  clear_image?: boolean;
+}
+
+export class MoveAdminCatalogCategoryProductsDto {
+  @ApiProperty({
+    enum: ADMIN_CATALOG_SOURCES,
+    description: 'Catalog source for both categories',
+  })
+  @IsIn(ADMIN_CATALOG_SOURCES)
+  source!: (typeof ADMIN_CATALOG_SOURCES)[number];
+
+  @ApiProperty({ description: 'Source category name to move items from' })
+  @IsString()
+  @MaxLength(64)
+  from_category!: string;
+
+  @ApiProperty({ description: 'Target category name to move items into' })
+  @IsString()
+  @MaxLength(64)
+  to_category!: string;
 }
 
 export class CreateTenantProductCategoryDto {
@@ -170,6 +193,22 @@ export class UpdateTenantProductCategoryDto {
   @IsString()
   @MaxLength(64)
   name!: string;
+}
+
+export class MoveTenantProductCategoryProductsDto {
+  @ApiProperty({
+    description: 'Source tenant category name to move products from',
+  })
+  @IsString()
+  @MaxLength(64)
+  from_category!: string;
+
+  @ApiProperty({
+    description: 'Target tenant category name to move products into',
+  })
+  @IsString()
+  @MaxLength(64)
+  to_category!: string;
 }
 
 /**
@@ -336,42 +375,4 @@ export class BulkUpdateAdminCatalogItemsDto {
   @Transform(({ value }) => value === true || value === 'true' || value === '1')
   @IsBoolean()
   is_essential?: boolean;
-}
-
-export class BulkUpdateAdminProductsDto {
-  @ApiProperty({ type: [Number], description: 'Product IDs to update' })
-  @Transform(({ value }) => normalizeBulkIds(value))
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(100)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  ids!: number[];
-
-  @ApiPropertyOptional({ description: 'Merchant product category' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  category?: string;
-
-  @ApiPropertyOptional({ description: 'Whether selected products are available' })
-  @IsOptional()
-  @Transform(
-    ({ obj, value }: { obj?: Record<string, unknown>; value: unknown }) => {
-      const fromRawObject = parseBooleanLike(obj?.is_available);
-      if (fromRawObject !== undefined) {
-        return fromRawObject;
-      }
-
-      const parsedValue = parseBooleanLike(value);
-      return parsedValue !== undefined ? parsedValue : value;
-    },
-  )
-  @IsBoolean()
-  is_available?: boolean;
-
-  @ApiPropertyOptional({ enum: ProductStatus })
-  @IsOptional()
-  @IsEnum(ProductStatus)
-  status?: ProductStatus;
 }

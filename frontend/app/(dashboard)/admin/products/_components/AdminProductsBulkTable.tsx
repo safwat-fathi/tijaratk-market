@@ -1,8 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { CheckSquare, Square, X } from "lucide-react";
-import { adminBulkUpdateProductsAction, adminUpdateProductAction } from "@/actions/admin-server";
+import { adminUpdateProductAction } from "@/actions/admin-server";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
 import { AdminPagination } from "../../_components/AdminPagination";
@@ -47,71 +45,12 @@ export default function AdminProductsBulkTable({
   meta,
   params,
 }: Props) {
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [bulkCategory, setBulkCategory] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const visibleIds = useMemo(() => products.map((product) => product.id), [products]);
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const allVisibleSelected =
-    visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
-
-  const toggleId = (id: number) => {
-    setSelectedIds((current) =>
-      current.includes(id)
-        ? current.filter((selectedId) => selectedId !== id)
-        : [...current, id],
-    );
-  };
-
-  const runBulkAction = (payload: {
-    category?: string;
-    is_available?: boolean;
-    status?: "active" | "archived";
-  }) => {
-    setMessage(null);
-    startTransition(async () => {
-      const response = await adminBulkUpdateProductsAction({
-        ids: selectedIds,
-        ...payload,
-      });
-      if (!response.success) {
-        setMessage(response.message || "تعذر تحديث المنتجات المحددة");
-        return;
-      }
-
-      setSelectedIds([]);
-      setBulkCategory("");
-      setMessage("تم تحديث المنتجات المحددة");
-    });
-  };
-
   return (
     <>
-      {message ? (
-        <p className="rounded-md bg-brand-soft px-3 py-2 text-sm font-semibold text-brand-primary">
-          {message}
-        </p>
-      ) : null}
-
       <div className="overflow-x-auto mt-6">
         <table className="min-w-full divide-y divide-brand-border">
           <thead className="bg-brand-soft">
             <tr>
-              <th className="w-12 px-6 py-3 text-right">
-                <button
-                  type="button"
-                  onClick={() => setSelectedIds(allVisibleSelected ? [] : visibleIds)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-brand-border bg-white text-brand-text"
-                  aria-label="تحديد المنتجات الظاهرة"
-                >
-                  {allVisibleSelected ? (
-                    <CheckSquare className="h-5 w-5" />
-                  ) : (
-                    <Square className="h-5 w-5" />
-                  )}
-                </button>
-              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
                 المنتج
               </th>
@@ -136,7 +75,7 @@ export default function AdminProductsBulkTable({
             {products.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={6}
                   className="px-6 py-8 text-center text-sm text-gray-500"
                 >
                   لا توجد منتجات
@@ -148,8 +87,6 @@ export default function AdminProductsBulkTable({
                   key={product.id}
                   product={product}
                   categories={categories}
-                  isSelected={selectedSet.has(product.id)}
-                  onToggle={() => toggleId(product.id)}
                 />
               ))
             )}
@@ -165,77 +102,6 @@ export default function AdminProductsBulkTable({
         limit={meta.limit}
         params={params}
       />
-
-      {selectedIds.length > 0 ? (
-        <div className="sticky bottom-3 z-40 rounded-lg border border-brand-border bg-white p-3 shadow-xl">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-brand-text">
-                {selectedIds.length} محدد
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedIds([])}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-brand-border text-brand-text"
-                aria-label="مسح التحديد"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:flex lg:items-end">
-              <Combobox
-                name="bulk_category"
-                label="تغيير التصنيف"
-                options={categories}
-                defaultValue={bulkCategory}
-                onValueChange={setBulkCategory}
-                wrapperClassName="min-w-56"
-                inputClassName="h-10 px-3 text-sm"
-                placeholder="اكتب أو اختر التصنيف"
-              />
-              <Button
-                type="button"
-                disabled={isPending || !bulkCategory.trim()}
-                onClick={() => runBulkAction({ category: bulkCategory })}
-              >
-                تطبيق التصنيف
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={isPending}
-                onClick={() => runBulkAction({ is_available: true })}
-              >
-                إتاحة
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={isPending}
-                onClick={() => runBulkAction({ is_available: false })}
-              >
-                إيقاف
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={isPending}
-                onClick={() => runBulkAction({ status: "active" })}
-              >
-                تنشيط
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={isPending}
-                onClick={() => runBulkAction({ status: "archived" })}
-              >
-                أرشفة
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </>
   );
 }
@@ -243,34 +109,12 @@ export default function AdminProductsBulkTable({
 function ProductRow({
   product,
   categories,
-  isSelected,
-  onToggle,
 }: {
   product: AdminProduct;
   categories: string[];
-  isSelected: boolean;
-  onToggle: () => void;
 }) {
   return (
     <tr>
-      <td className="px-6 py-4 align-top">
-        <button
-          type="button"
-          onClick={onToggle}
-          className={`inline-flex h-10 w-10 items-center justify-center rounded-md border ${
-            isSelected
-              ? "border-brand-primary bg-brand-primary text-white"
-              : "border-brand-border bg-white text-brand-text"
-          }`}
-          aria-label="تحديد المنتج"
-        >
-          {isSelected ? (
-            <CheckSquare className="h-5 w-5" />
-          ) : (
-            <Square className="h-5 w-5" />
-          )}
-        </button>
-      </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-text">
         {product.name}
       </td>

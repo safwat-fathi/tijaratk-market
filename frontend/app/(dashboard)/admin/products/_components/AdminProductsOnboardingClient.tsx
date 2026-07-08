@@ -6,9 +6,7 @@ import {
   adminCreateProductForTenantAction,
   adminLoadCatalogItemsAction,
   adminLoadProductOnboardingAction,
-  adminRemoveProductAction,
   adminSearchTenantProductsAction,
-  adminBulkUpdateProductsAction,
   adminUploadProductCatalogSheetAction,
   adminUpdateProductAvailabilityAction,
   adminUpdateProductPayloadAction,
@@ -197,8 +195,10 @@ export default function AdminProductsOnboardingClient({
         ),
       updateProduct: adminUpdateProductPayloadAction,
       updateProductAvailability: adminUpdateProductAvailabilityAction,
-      bulkUpdateProducts: adminBulkUpdateProductsAction,
-      removeProduct: adminRemoveProductAction,
+      removeProduct: async () => ({
+        success: false,
+        message: "حذف المنتجات متاح من شاشة التجار فقط",
+      }),
     };
   }, [selectedMerchantId]);
 
@@ -397,6 +397,7 @@ export default function AdminProductsOnboardingClient({
           actions={actions}
           enableCatalogHiding={false}
           enableBulkWizard={false}
+          allowProductRemoval={false}
           layoutMode="admin"
         />
       ) : (

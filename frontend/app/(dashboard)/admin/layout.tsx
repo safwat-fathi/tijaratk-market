@@ -28,8 +28,14 @@ export default function AdminLayout({
     { label: "الباقات", href: "/admin/plans" },
     { label: "المنتجات", href: "/admin/products" },
     { label: "التصنيفات", href: "/admin/categories" },
-    { label: "استيراد الكتالوج", href: "/admin/imports" },
-    { label: "عناصر الكتالوج", href: "/admin/catalog-items" },
+    {
+      label: "الكتالوج",
+      href: "#",
+      children: [
+        { label: "استيراد الكتالوج", href: "/admin/imports" },
+        { label: "عناصر الكتالوج", href: "/admin/catalog-items" },
+      ],
+    },
     { label: "الطلبات", href: "/admin/orders" },
     { label: "المناطق", href: "/admin/areas" },
   ];

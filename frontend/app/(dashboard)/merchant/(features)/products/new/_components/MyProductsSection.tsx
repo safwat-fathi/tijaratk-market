@@ -63,6 +63,7 @@ type MyProductsSectionProps = {
   onRequestRemove: (productId: number) => void;
   onRemoveProduct: (product: Product) => void;
   onCancelRemove: () => void;
+  allowProductRemoval?: boolean;
   setProductRowRef: (productId: number, node: HTMLLIElement | null) => void;
   onOpenBulkWizard?: () => void;
   bulkUpdateProducts?: (payload: {
@@ -107,6 +108,7 @@ export default function MyProductsSection({
   onRequestRemove,
   onRemoveProduct,
   onCancelRemove,
+  allowProductRemoval = true,
   setProductRowRef,
   onOpenBulkWizard,
   bulkUpdateProducts,
@@ -430,7 +432,7 @@ export default function MyProductsSection({
             <ul className="mt-4 space-y-2">
               {displayedProducts.map((product) => {
                 const isConfirmingRemoval =
-                  confirmRemoveProductId === product.id;
+                  allowProductRemoval && confirmRemoveProductId === product.id;
                 const isRemoving = removingProductId === product.id;
                 const isAvailabilityPending =
                   availabilityPendingProductId === product.id;
@@ -569,16 +571,18 @@ export default function MyProductsSection({
                             <AvailabilityIcon className="h-4 w-4" />
                             <span className="max-sm:hidden">{availabilityActionLabel}</span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => onRequestRemove(product.id)}
-                            disabled={Boolean(removingProductId) || isAvailabilityPending}
-                            className="flex items-center gap-1.5 rounded-lg border border-red-200 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
-                            title="حذف"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            <span className="max-sm:hidden">حذف</span>
-                          </button>
+                          {allowProductRemoval ? (
+                            <button
+                              type="button"
+                              onClick={() => onRequestRemove(product.id)}
+                              disabled={Boolean(removingProductId) || isAvailabilityPending}
+                              className="flex items-center gap-1.5 rounded-lg border border-red-200 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                              title="حذف"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="max-sm:hidden">حذف</span>
+                            </button>
+                          ) : null}
                         </>
                       )}
                     </div>

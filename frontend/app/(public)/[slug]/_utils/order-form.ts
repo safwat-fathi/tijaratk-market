@@ -19,7 +19,7 @@ export type CategoryTab = {
 	key: string;
 	label: string;
 	count: number;
-	image_url?: string;
+	image_url?: string | null;
 };
 
 const parseProductPrice = (product?: Product): number | null => {

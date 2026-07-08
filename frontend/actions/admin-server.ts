@@ -20,6 +20,7 @@ import type {
   AdminCatalogItem,
   AdminCatalogSource,
   AdminProductSheetUploadSummary,
+  DeleteTenantProductsSummary,
   UpdateAdminCatalogItemPayload,
 } from "@/services/api/admin.service";
 
@@ -839,79 +840,39 @@ export async function adminUpdateProductAvailabilityAction(
   return adminUpdateProductPayloadAction(productId, formData);
 }
 
-export async function adminBulkUpdateProductsAction(payload: {
-  ids: number[];
-  category?: string;
-  is_available?: boolean;
-  status?: "active" | "archived";
-}) {
+export async function adminDeleteTenantProductsAction(tenantId: number): Promise<{
+  success: boolean;
+  data?: DeleteTenantProductsSummary;
+  message?: string;
+}> {
   try {
-    const ids = Array.from(
-      new Set(
-        payload.ids.filter(
-          (id) => Number.isInteger(id) && Number.isFinite(id) && id > 0,
-        ),
-      ),
-    );
-    const category = payload.category?.trim();
-    const hasAction =
-      Boolean(category) ||
-      payload.is_available !== undefined ||
-      payload.status !== undefined;
-
-    if (ids.length === 0 || !hasAction) {
+    if (!Number.isInteger(tenantId) || tenantId <= 0) {
       return {
         success: false,
-        message: "اختر منتجات وإجراء للتطبيق",
+        message: "معرف التاجر غير صالح",
       };
     }
 
-    const response = await adminService.bulkUpdateProducts({
-      ids,
-      category: category || undefined,
-      is_available: payload.is_available,
-      status: payload.status,
-    });
+    const response = await adminService.deleteTenantProducts(tenantId);
 
     if (!response.success) {
       return {
         success: false,
-        message: response.message || "تعذر تحديث المنتجات المحددة",
+        message: response.message || "تعذر حذف منتجات التاجر",
       };
     }
 
-    revalidatePath("/admin/products");
-    return { success: true, data: response.data };
-  } catch (error) {
-    console.error("Admin bulk update products failed:", error);
-    return {
-      success: false,
-      message: "تعذر تحديث المنتجات المحددة",
-    };
-  }
-}
-
-export async function adminRemoveProductAction(productId: number) {
-  try {
-    const response = await adminService.removeProduct(productId);
-
-    if (!response.success) {
-      return {
-        success: false,
-        message: response.message || "تعذر حذف المنتج",
-      };
-    }
-
-    revalidatePath("/admin/products");
+    revalidatePath("/admin/merchants");
     return {
       success: true,
-      message: "تم حذف المنتج",
+      data: response.data,
+      message: "تم تنفيذ عملية الحذف",
     };
   } catch (error) {
-    console.error("Admin remove product failed:", error);
+    console.error("Admin delete tenant products failed:", error);
     return {
       success: false,
-      message: "تعذر حذف المنتج",
+      message: "تعذر حذف منتجات التاجر",
     };
   }
 }
@@ -1135,10 +1096,7 @@ export async function adminCreateCatalogCategoryAction(
     throw new Error("المصدر واسم التصنيف مطلوبان");
   }
 
-  const response = await adminService.createAdminCatalogCategory({
-    source,
-    name,
-  });
+  const response = await adminService.createAdminCatalogCategory(formData);
 
   if (!response.success) {
     throw new Error(response.message || "تعذر إضافة التصنيف");
@@ -1157,9 +1115,10 @@ export async function adminUpdateCatalogCategoryAction(
     throw new Error("اسم التصنيف مطلوب");
   }
 
-  const response = await adminService.updateAdminCatalogCategory(categoryId, {
-    name,
-  });
+  const response = await adminService.updateAdminCatalogCategory(
+    categoryId,
+    formData,
+  );
 
   if (!response.success) {
     throw new Error(response.message || "تعذر تعديل التصنيف");
@@ -1175,6 +1134,33 @@ export async function adminDeleteCatalogCategoryAction(
   const response = await adminService.deleteAdminCatalogCategory(categoryId);
   if (!response.success) {
     throw new Error(response.message || "تعذر حذف التصنيف");
+  }
+
+  revalidatePath(ADMIN_CATEGORIES_PATH);
+  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+}
+
+export async function adminMoveCatalogCategoryProductsAction(
+  sourceValue: AdminCatalogSource,
+  fromCategoryValue: string,
+  formData: FormData,
+): Promise<void> {
+  const source = ADMIN_CATALOG_SOURCES.has(sourceValue) ? sourceValue : null;
+  const fromCategory = parseNullableString(fromCategoryValue);
+  const toCategory = parseNullableString(formData.get("to_category"));
+
+  if (!source || !fromCategory || !toCategory) {
+    throw new Error("اختر تصنيف المصدر والتصنيف الهدف");
+  }
+
+  const response = await adminService.moveAdminCatalogCategoryProducts({
+    source,
+    from_category: fromCategory,
+    to_category: toCategory,
+  });
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر نقل عناصر التصنيف");
   }
 
   revalidatePath(ADMIN_CATEGORIES_PATH);
@@ -1221,6 +1207,34 @@ export async function adminUpdateTenantProductCategoryAction(
 
   if (!response.success) {
     throw new Error(response.message || "تعذر تعديل تصنيف التاجر");
+  }
+
+  revalidatePath(ADMIN_CATEGORIES_PATH);
+  revalidatePath("/admin/products");
+}
+
+export async function adminMoveTenantProductCategoryProductsAction(
+  tenantId: number,
+  fromCategoryValue: string,
+  formData: FormData,
+): Promise<void> {
+  const fromCategory = parseNullableString(fromCategoryValue);
+  const toCategory = parseNullableString(formData.get("to_category"));
+
+  if (!fromCategory || !toCategory) {
+    throw new Error("اختر تصنيف المصدر والتصنيف الهدف");
+  }
+
+  const response = await adminService.moveAdminTenantProductCategoryProducts(
+    tenantId,
+    {
+      from_category: fromCategory,
+      to_category: toCategory,
+    },
+  );
+
+  if (!response.success) {
+    throw new Error(response.message || "تعذر نقل منتجات التصنيف");
   }
 
   revalidatePath(ADMIN_CATEGORIES_PATH);

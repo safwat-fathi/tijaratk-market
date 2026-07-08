@@ -34,6 +34,8 @@ import {
   CreateAdminCatalogItemDto,
   CreateAdminCatalogCategoryDto,
   CreateTenantProductCategoryDto,
+  MoveAdminCatalogCategoryProductsDto,
+  MoveTenantProductCategoryProductsDto,
   UpdateAdminCatalogCategoryDto,
   UpdateAdminCatalogItemDto,
   UpdateTenantProductCategoryDto,
@@ -359,7 +361,9 @@ export class AdminService {
             Promise.all([
               tx.order.count({ where: { tenant_id: tenant.id } }),
               tx.customer.count({ where: { tenant_id: tenant.id } }),
-              tx.product.count({ where: { tenant_id: tenant.id } }),
+              tx.product.count({
+                where: { tenant_id: tenant.id, deleted_at: null },
+              }),
               this.tenantCancellationPolicyService.getAdminSummary(
                 tenant.id,
                 tenant.status,
@@ -632,10 +636,14 @@ export class AdminService {
       name: category.name,
       category: category.name,
       count: existingCounts.get(category.name) || 0,
+      image_url: category.image_url,
     }));
   }
 
-  async createAdminCatalogCategory(dto: CreateAdminCatalogCategoryDto) {
+  async createAdminCatalogCategory(
+    dto: CreateAdminCatalogCategoryDto,
+    file?: Express.Multer.File,
+  ) {
     const source = dto.source;
     this.ensureSupportedCatalogSource(source);
     const name = this.normalizeCategoryName(dto.name);
@@ -648,53 +656,110 @@ export class AdminService {
       throw new BadRequestException('Category already exists for source');
     }
 
+    const imageUrl = file?.path
+      ? await this.imageProcessorService.processProductThumbnail(file.path)
+      : null;
+
     if (existing) {
-      return this.prisma.catalogCategory.update({
+      const updatedCategory = await this.prisma.catalogCategory.update({
         where: { id: existing.id },
-        data: { deleted_at: null },
+        data: { deleted_at: null, image_url: imageUrl },
       });
+
+      if (existing.image_url && existing.image_url !== updatedCategory.image_url) {
+        await this.imageProcessorService.deleteManagedProductImage(
+          existing.image_url,
+        );
+      }
+
+      return updatedCategory;
     }
 
     return this.prisma.catalogCategory.create({
-      data: { source, name },
+      data: { source, name, image_url: imageUrl },
     });
   }
 
   async updateAdminCatalogCategory(
     id: number,
     dto: UpdateAdminCatalogCategoryDto,
+    file?: Express.Multer.File,
   ) {
     const category = await this.findCatalogCategory(id);
     const newName = this.normalizeCategoryName(dto.name);
-    if (newName === category.name) return category;
+    const shouldClearImage = dto.clear_image === true && !file?.path;
 
-    const duplicate = await this.prisma.catalogCategory.findUnique({
-      where: { source_name: { source: category.source, name: newName } },
-    });
-    if (duplicate && !duplicate.deleted_at) {
-      throw new BadRequestException('Category already exists for source');
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      if (duplicate) {
-        await tx.catalogCategory.delete({ where: { id: duplicate.id } });
+    if (newName !== category.name) {
+      const duplicate = await this.prisma.catalogCategory.findUnique({
+        where: { source_name: { source: category.source, name: newName } },
+      });
+      if (duplicate && !duplicate.deleted_at) {
+        throw new BadRequestException('Category already exists for source');
       }
 
-      const updated = await tx.catalogCategory.update({
-        where: { id },
-        data: { name: newName },
+      const nextImageUrl = file?.path
+        ? await this.imageProcessorService.processProductThumbnail(file.path)
+        : shouldClearImage
+          ? null
+          : undefined;
+
+      const updated = await this.prisma.$transaction(async (tx) => {
+        if (duplicate) {
+          await tx.catalogCategory.delete({ where: { id: duplicate.id } });
+        }
+
+        const data: Prisma.CatalogCategoryUpdateInput = { name: newName };
+        if (nextImageUrl !== undefined) {
+          data.image_url = nextImageUrl;
+        }
+
+        const updatedCategory = await tx.catalogCategory.update({
+          where: { id },
+          data,
+        });
+
+        await tx.catalogItem.updateMany({
+          where: {
+            source: category.source,
+            category: category.name,
+          },
+          data: { category: newName },
+        });
+
+        return updatedCategory;
       });
 
-      await tx.catalogItem.updateMany({
-        where: {
-          source: category.source,
-          category: category.name,
-        },
-        data: { category: newName },
-      });
+      if (category.image_url && category.image_url !== updated.image_url) {
+        await this.imageProcessorService.deleteManagedProductImage(
+          category.image_url,
+        );
+      }
 
       return updated;
+    }
+
+    const nextImageUrl = file?.path
+      ? await this.imageProcessorService.processProductThumbnail(file.path)
+      : shouldClearImage
+        ? null
+        : undefined;
+
+    if (nextImageUrl === undefined) {
+      return category;
+    }
+
+    const updated = await this.prisma.catalogCategory.update({
+      where: { id },
+      data: { image_url: nextImageUrl },
     });
+
+    if (category.image_url && category.image_url !== updated.image_url) {
+      await this.imageProcessorService.deleteManagedProductImage(
+        category.image_url,
+      );
+    }
+
+    return updated;
   }
 
   async deleteAdminCatalogCategory(id: number) {
@@ -720,6 +785,42 @@ export class AdminService {
     });
 
     return { success: true };
+  }
+
+  async moveAdminCatalogCategoryProducts(
+    dto: MoveAdminCatalogCategoryProductsDto,
+  ) {
+    const source = dto.source;
+    this.ensureSupportedCatalogSource(source);
+    const fromCategory = this.normalizeCategoryName(dto.from_category);
+    const toCategory = this.normalizeCategoryName(dto.to_category);
+
+    if (fromCategory === toCategory) {
+      throw new BadRequestException(
+        'Source and target categories must be different',
+      );
+    }
+
+    await Promise.all([
+      this.ensureActiveCatalogCategory(source, fromCategory),
+      this.ensureActiveCatalogCategory(source, toCategory),
+    ]);
+
+    const result = await this.prisma.catalogItem.updateMany({
+      where: {
+        source,
+        category: fromCategory,
+      },
+      data: { category: toCategory },
+    });
+
+    if (result.count === 0) {
+      throw new BadRequestException(
+        'No catalog items found in source category',
+      );
+    }
+
+    return { success: true, count: result.count };
   }
 
   async getTenantProductCategories(tenantId: number) {
@@ -819,6 +920,70 @@ export class AdminService {
       });
 
       return updated;
+    });
+  }
+
+  async moveTenantProductCategoryProducts(
+    tenantId: number,
+    dto: MoveTenantProductCategoryProductsDto,
+  ) {
+    const fromCategory = this.normalizeCategoryName(dto.from_category);
+    const toCategory = this.normalizeCategoryName(dto.to_category);
+
+    if (fromCategory === toCategory) {
+      throw new BadRequestException(
+        'Source and target categories must be different',
+      );
+    }
+
+    return this.runWithTenantRls(tenantId, async (tx) => {
+      const tenant = await tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { id: true },
+      });
+      if (!tenant) throw new NotFoundException('Tenant not found');
+
+      const [sourceCategory, targetCategory] = await Promise.all([
+        tx.tenantProductCategory.findFirst({
+          where: {
+            tenant_id: tenantId,
+            name: fromCategory,
+            deleted_at: null,
+          },
+        }),
+        tx.tenantProductCategory.findFirst({
+          where: {
+            tenant_id: tenantId,
+            name: toCategory,
+            deleted_at: null,
+          },
+        }),
+      ]);
+
+      if (!sourceCategory) {
+        throw new NotFoundException('Source category not found');
+      }
+
+      if (!targetCategory) {
+        throw new NotFoundException('Target category not found');
+      }
+
+      const result = await tx.product.updateMany({
+        where: {
+          tenant_id: tenantId,
+          category: fromCategory,
+          deleted_at: null,
+        },
+        data: { category: toCategory },
+      });
+
+      if (result.count === 0) {
+        throw new BadRequestException(
+          'No products found in source category',
+        );
+      }
+
+      return { success: true, count: result.count };
     });
   }
 
@@ -1051,37 +1216,12 @@ export class AdminService {
       orderBy: { category: 'asc' },
     });
 
-    const categories = rows
-      .map((row) => row.category?.trim())
-      .filter((category): category is string => Boolean(category));
-
-    const catalogRows =
-      categories.length > 0
-        ? await this.prisma.catalogItem.findMany({
-            where: {
-              is_active: true,
-              source: CATALOG_SOURCE_TALABAT,
-              category: { in: categories },
-              image_url: { not: null },
-            },
-            select: { category: true, image_url: true },
-            orderBy: [{ category: 'asc' }, { id: 'asc' }],
-          })
-        : [];
-
-    const categoryImages = new Map<string, string>();
-    for (const row of catalogRows) {
-      if (row.category && row.image_url && !categoryImages.has(row.category)) {
-        categoryImages.set(row.category, row.image_url);
-      }
-    }
-
     const existingCounts = new Map(rows.map((row) => [row.category, row._count.id]));
 
     return allowedCategories.map((category) => ({
       category: category.name,
       count: existingCounts.get(category.name) || 0,
-      image_url: categoryImages.get(category.name),
+      image_url: category.image_url,
     }));
   }
 
@@ -1594,10 +1734,10 @@ export class AdminService {
 
   private async getActiveCatalogCategoryRows(
     source: CatalogSource,
-  ): Promise<{ id: number; name: string }[]> {
+  ): Promise<{ id: number; name: string; image_url: string | null }[]> {
     const categories = await this.prisma.catalogCategory.findMany({
       where: { source, deleted_at: null },
-      select: { id: true, name: true },
+      select: { id: true, name: true, image_url: true },
       orderBy: { name: 'asc' },
     });
 
@@ -1608,6 +1748,7 @@ export class AdminService {
     return getAllowedCatalogCategoriesForSource(source).map((name, index) => ({
       id: -1 - index,
       name,
+      image_url: null,
     }));
   }
 

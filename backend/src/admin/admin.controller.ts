@@ -13,7 +13,9 @@ import {
   UploadedFile,
   UseInterceptors,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
+import { Request, Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -38,12 +40,13 @@ import { GetTenantProductsDto } from '../products/dto/get-tenant-products.dto';
 import { UpdateProductDto } from '../products/dto/update-product.dto';
 import {
   BulkUpdateAdminCatalogItemsDto,
-  BulkUpdateAdminProductsDto,
   CreateAdminCatalogCategoryDto,
   CreateAdminCatalogItemDto,
   CreateTenantProductCategoryDto,
   GetAdminCatalogCategoriesDto,
   GetAdminCatalogItemsDto,
+  MoveAdminCatalogCategoryProductsDto,
+  MoveTenantProductCategoryProductsDto,
   UpdateAdminCatalogCategoryDto,
   UpdateAdminCatalogItemDto,
   UpdateTenantProductCategoryDto,
@@ -52,7 +55,6 @@ import {
   CreateSupermarketEssentialDto,
   UpdateSupermarketEssentialDto,
 } from './dto/supermarket-essential.dto';
-import { Response } from 'express';
 import { TenantCategory } from '../../generated/prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -93,6 +95,14 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly productsService: ProductsService,
   ) {}
+
+  private getAdminUserId(req: Request): number {
+    const adminId = (req.user as { userId?: number } | undefined)?.userId;
+    if (!adminId) {
+      throw new BadRequestException('Admin user context is required');
+    }
+    return adminId;
+  }
 
   private resolveAdminCatalogSource(query: {
     catalogType?: AdminCatalogType;
@@ -510,15 +520,28 @@ export class AdminController {
   }
 
   @UseGuards(AdminAuthGuard)
-  @Patch('products/bulk')
+  @Delete('tenants/:id/products')
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
-  @ApiOperation({ summary: 'Bulk update merchant products as admin' })
-  @ApiBody({ type: BulkUpdateAdminProductsDto })
-  @ApiResponse({ status: 200, description: 'Products updated successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid bulk update payload' })
+  @ApiOperation({ summary: 'Delete all merchant products as admin' })
+  @ApiParam({
+    name: 'id',
+    description: 'The unique ID of the merchant tenant',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Products deleted successfully; products tied to active orders are skipped',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  bulkUpdateProducts(@Body() dto: BulkUpdateAdminProductsDto) {
-    return this.productsService.bulkUpdateForTenantAsAdmin(dto);
+  deleteTenantProducts(
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.productsService.deleteTenantProductsAsAdmin(
+      id,
+      this.getAdminUserId(req),
+    );
   }
 
   @UseGuards(AdminAuthGuard)
@@ -546,14 +569,6 @@ export class AdminController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.productsService.updateForTenantAsAdmin(id, dto, file);
-  }
-
-  @UseGuards(AdminAuthGuard)
-  @Delete('products/:id')
-  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
-  @ApiOperation({ summary: 'Archive a merchant product as admin' })
-  archiveTenantProduct(@Param('id', ParseIntPipe) id: number) {
-    return this.productsService.removeForTenantAsAdmin(id);
   }
 
   @UseGuards(AdminAuthGuard)
@@ -696,22 +711,47 @@ export class AdminController {
   @Post('catalog-items/categories')
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Create catalog category' })
+  @ApiConsumes('multipart/form-data')
   @ApiBody({ type: CreateAdminCatalogCategoryDto })
-  createAdminCatalogCategory(@Body() dto: CreateAdminCatalogCategoryDto) {
-    return this.adminService.createAdminCatalogCategory(dto);
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
+  createAdminCatalogCategory(
+    @Body() dto: CreateAdminCatalogCategoryDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.adminService.createAdminCatalogCategory(dto, file);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('catalog-items/categories/move-products')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Move catalog items between categories' })
+  @ApiBody({ type: MoveAdminCatalogCategoryProductsDto })
+  moveAdminCatalogCategoryProducts(
+    @Body() dto: MoveAdminCatalogCategoryProductsDto,
+  ) {
+    return this.adminService.moveAdminCatalogCategoryProducts(dto);
   }
 
   @UseGuards(AdminAuthGuard)
   @Patch('catalog-items/categories/:id')
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
-  @ApiOperation({ summary: 'Rename catalog category' })
+  @ApiOperation({ summary: 'Update catalog category' })
   @ApiParam({ name: 'id', type: Number })
+  @ApiConsumes('multipart/form-data')
   @ApiBody({ type: UpdateAdminCatalogCategoryDto })
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
   updateAdminCatalogCategory(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateAdminCatalogCategoryDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.adminService.updateAdminCatalogCategory(id, dto);
+    return this.adminService.updateAdminCatalogCategory(id, dto, file);
   }
 
   @UseGuards(AdminAuthGuard)
@@ -819,6 +859,18 @@ export class AdminController {
     @Body() dto: CreateTenantProductCategoryDto,
   ) {
     return this.adminService.createTenantProductCategory(id, dto);
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Post('tenants/:tenantId/product-categories/move-products')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Move tenant products between categories' })
+  @ApiBody({ type: MoveTenantProductCategoryProductsDto })
+  moveAdminTenantProductCategoryProducts(
+    @Param('tenantId', ParseIntPipe) tenantId: number,
+    @Body() dto: MoveTenantProductCategoryProductsDto,
+  ) {
+    return this.adminService.moveTenantProductCategoryProducts(tenantId, dto);
   }
 
   @UseGuards(AdminAuthGuard)

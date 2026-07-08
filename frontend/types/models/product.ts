@@ -85,7 +85,7 @@ export interface TenantProductsSearchResponse {
 export interface PublicProductCategory {
   category: string;
   count: number;
-  image_url?: string;
+  image_url?: string | null;
 }
 
 export type BulkUpdateProductsPayload = {

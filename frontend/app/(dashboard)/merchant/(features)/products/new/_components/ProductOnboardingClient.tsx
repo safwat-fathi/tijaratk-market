@@ -67,6 +67,7 @@ import {
   normalizeOptionalCategory,
   normalizeProductName,
   parseOptionalPositivePrice,
+  resolveImageUrl,
   resolveSectionFromQuery,
   supportsCatalogForStoreType,
 } from "../_utils/product-onboarding";
@@ -87,6 +88,7 @@ type ProductOnboardingClientProps = {
   actions?: ProductOnboardingActions;
   enableCatalogHiding?: boolean;
   enableBulkWizard?: boolean;
+  allowProductRemoval?: boolean;
   layoutMode?: "merchant" | "admin";
 };
 
@@ -340,6 +342,7 @@ export default function ProductOnboardingClient({
   actions = merchantProductOnboardingActions,
   enableCatalogHiding = true,
   enableBulkWizard = true,
+  allowProductRemoval = true,
   layoutMode = "merchant",
 }: ProductOnboardingClientProps) {
   const router = useRouter();
@@ -495,8 +498,9 @@ export default function ProductOnboardingClient({
       const existingCategory = categoryMap.get(categoryName);
       if (existingCategory) {
         existingCategory.count += category.count;
-        if (!existingCategory.imageUrl && category.image_url) {
-          existingCategory.imageUrl = category.image_url;
+        const categoryImageUrl = resolveImageUrl(category.image_url);
+        if (!existingCategory.imageUrl && categoryImageUrl) {
+          existingCategory.imageUrl = categoryImageUrl;
         }
         continue;
       }
@@ -505,7 +509,7 @@ export default function ProductOnboardingClient({
         key: categoryName,
         label: categoryName,
         count: category.count,
-        imageUrl: category.image_url ?? null,
+        imageUrl: resolveImageUrl(category.image_url),
       });
     }
 
@@ -1753,6 +1757,7 @@ export default function ProductOnboardingClient({
         onRequestRemove={handleRequestRemove}
         onRemoveProduct={handleRemoveProduct}
         onCancelRemove={() => setConfirmRemoveProductId(null)}
+        allowProductRemoval={allowProductRemoval}
         productStatusFilter={productStatusFilter}
         onProductStatusFilterChange={handleProductStatusFilterChange}
         bulkUpdateProducts={

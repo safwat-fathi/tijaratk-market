@@ -290,23 +290,18 @@ export const buildAvailableProductCategories = (categories: string[]): string[] 
 };
 
 export const buildCategoryTabsFromCatalog = (catalogItems: CatalogItem[]): CategoryTab[] => {
-  const categoryMap = new Map<string, { count: number; imageUrl: string | null }>();
+  const categoryMap = new Map<string, { count: number }>();
 
   for (const item of catalogItems) {
-    const resolvedImageUrl = resolveImageUrl(item.image_url);
     const existing = categoryMap.get(item.category);
 
     if (existing) {
       existing.count += 1;
-      if (!existing.imageUrl && resolvedImageUrl) {
-        existing.imageUrl = resolvedImageUrl;
-      }
       continue;
     }
 
     categoryMap.set(item.category, {
       count: 1,
-      imageUrl: resolvedImageUrl,
     });
   }
 
@@ -316,17 +311,15 @@ export const buildCategoryTabsFromCatalog = (catalogItems: CatalogItem[]): Categ
       key: category,
       label: category,
       count: value.count,
-      imageUrl: value.imageUrl,
+      imageUrl: null,
     }));
-
-  const allTabImage = categories.find((category) => category.imageUrl)?.imageUrl || null;
 
   return [
     {
       key: ALL_CATALOG_ITEMS,
       label: 'الكل',
       count: catalogItems.length,
-      imageUrl: allTabImage,
+      imageUrl: null,
     },
     ...categories,
   ];

@@ -1,0 +1,93 @@
+openapi: 3.1.0
+info:
+  title: Admin Merchant Product Delete Contract
+  version: 0.1.0
+  description: Contract for deleting merchant-owned product entries from the admin dashboard.
+paths:
+  /admin/products/{id}:
+    delete:
+      summary: Delete a merchant product as admin
+      description: >
+        Soft-deletes a merchant-owned product entry so it no longer appears in
+        active admin, merchant, or storefront product views. The operation must
+        not alter shared catalog source rows and must be blocked for active
+        operational dependencies.
+      security:
+        - adminCookieAuth: []
+        - adminBearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Merchant product ID.
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Product deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - productId
+                  - tenantId
+                  - deletedAt
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  productId:
+                    type: integer
+                  tenantId:
+                    type: integer
+                  deletedAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Product cannot be deleted because it is tied to an active operational workflow.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                activeOrder:
+                  value:
+                    success: false
+                    message: "Cannot delete product while it is referenced by active orders"
+        "401":
+          description: Admin authentication is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Product does not exist, is already deleted, or is outside admin-visible scope.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  securitySchemes:
+    adminCookieAuth:
+      type: apiKey
+      in: cookie
+      name: admin_access_token
+    adminBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string

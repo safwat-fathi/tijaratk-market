@@ -26,7 +26,7 @@ export function PlanSelect({ tenantId, currentPlanId, plans }: PlanSelectProps) 
       value={currentPlanId || ""}
       onChange={handleChange}
       disabled={isPending}
-      className="block w-full pl-3 pr-10 py-1.5 text-xs border-gray-300 focus:outline-none focus:ring-primary focus:border-primary rounded-md disabled:opacity-50"
+      className="block min-h-9 w-full sm:w-40 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-primary focus:outline-none focus:ring-primary disabled:opacity-50"
     >
       <option value="" disabled>اختر الباقة</option>
       {plans.map((plan) => (

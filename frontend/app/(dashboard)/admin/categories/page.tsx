@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Combobox } from "@/components/ui/Combobox";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import { adminService } from "@/services/api/admin.service";
 import type {
   AdminCatalogCategory,
@@ -15,11 +16,15 @@ import {
   adminCreateTenantProductCategoryAction,
   adminDeleteCatalogCategoryAction,
   adminDeleteTenantProductCategoryAction,
+  adminMoveCatalogCategoryProductsAction,
+  adminMoveTenantProductCategoryProductsAction,
   adminUpdateCatalogCategoryAction,
   adminUpdateTenantProductCategoryAction,
 } from "@/actions/admin-server";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import { resolveImageUrl } from "@/app/(dashboard)/merchant/(features)/products/new/_utils/product-onboarding";
 import { EditCategorySheet } from "./_components/EditCategorySheet";
+import { MoveCategoryItemsSheet } from "./_components/MoveCategoryItemsSheet";
 
 export const dynamic = "force-dynamic";
 
@@ -265,6 +270,8 @@ export default async function AdminCategoriesPage(props: Props) {
   const tenantCategoryOptions = data.tenantCategories.map(
     (category) => category.name,
   );
+  const catalogMoveTargetOptions = Array.from(new Set(catalogCategoryOptions));
+  const tenantMoveTargetOptions = Array.from(new Set(tenantCategoryOptions));
   const tenantOptions = filteredTenants.map((tenant) => ({
     value: tenant.id,
     label: tenant.name,
@@ -334,7 +341,8 @@ export default async function AdminCategoriesPage(props: Props) {
 
         <form
           action={adminCreateCatalogCategoryAction}
-          className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]"
+          encType="multipart/form-data"
+          className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
         >
           <input type="hidden" name="source" value={source} />
           <label className="space-y-1">
@@ -348,8 +356,19 @@ export default async function AdminCategoriesPage(props: Props) {
               className="h-10 w-full rounded-md border border-brand-border px-3 text-sm"
             />
           </label>
+          <label className="space-y-1">
+            <span className="text-sm font-medium text-brand-text">
+              رفع صورة التصنيف
+            </span>
+            <input
+              name="file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              className="block h-10 w-full rounded-md border border-brand-border bg-white px-3 py-1.5 text-sm text-brand-text file:ms-3 file:rounded-md file:border-0 file:bg-brand-primary file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white"
+            />
+          </label>
           <div className="flex items-end">
-            <Button type="submit" className="w-full sm:w-auto">
+            <Button type="submit" className="min-h-10 h-10 w-full sm:w-auto">
               إضافة
             </Button>
           </div>
@@ -381,6 +400,7 @@ export default async function AdminCategoriesPage(props: Props) {
             defaultValue={filters.catalogSearch || ""}
             wrapperClassName="md:col-span-1"
             inputClassName="h-10 px-3 text-sm"
+            labelClassName="text-sm"
             placeholder="اكتب أو اختر تصنيفًا"
           />
           <label className="space-y-1">
@@ -410,7 +430,7 @@ export default async function AdminCategoriesPage(props: Props) {
             </select>
           </label>
           <div className="flex items-end">
-            <Button type="submit" variant="outline" className="w-full">
+            <Button type="submit" variant="outline" className="min-h-10 h-10 w-full">
               تطبيق
             </Button>
           </div>
@@ -457,7 +477,12 @@ export default async function AdminCategoriesPage(props: Props) {
                 </tr>
               ) : (
                 filteredCatalogCategories.map((category) => (
-                  <CatalogCategoryRow key={category.category} category={category} />
+                  <CatalogCategoryRow
+                    key={category.category}
+                    source={source}
+                    category={category}
+                    targetCategories={catalogMoveTargetOptions}
+                  />
                 ))
               )}
             </tbody>
@@ -509,10 +534,11 @@ export default async function AdminCategoriesPage(props: Props) {
             options={tenantOptions}
             defaultValue={tenantId || ""}
             inputClassName="h-10 px-3 text-sm"
+            labelClassName="text-sm"
             placeholder="اختر تاجرًا"
           />
           <div className="flex items-end">
-            <Button type="submit" variant="outline" className="w-full sm:w-auto">
+            <Button type="submit" variant="outline" className="min-h-10 h-10 w-full sm:w-auto">
               عرض
             </Button>
           </div>
@@ -543,6 +569,7 @@ export default async function AdminCategoriesPage(props: Props) {
                 options={tenantCategoryOptions}
                 defaultValue={filters.tenantSearch || ""}
                 inputClassName="h-10 px-3 text-sm"
+                labelClassName="text-sm"
                 placeholder="اكتب أو اختر تصنيفًا"
               />
               <label className="space-y-1">
@@ -574,7 +601,7 @@ export default async function AdminCategoriesPage(props: Props) {
                 </select>
               </label>
               <div className="flex items-end">
-                <Button type="submit" variant="outline" className="w-full">
+                <Button type="submit" variant="outline" className="min-h-10 h-10 w-full">
                   تطبيق
                 </Button>
               </div>
@@ -614,7 +641,7 @@ export default async function AdminCategoriesPage(props: Props) {
                 />
               </label>
               <div className="flex items-end">
-                <Button type="submit" className="w-full sm:w-auto">
+                <Button type="submit" className="min-h-10 h-10 w-full sm:w-auto">
                   إضافة
                 </Button>
               </div>
@@ -650,6 +677,7 @@ export default async function AdminCategoriesPage(props: Props) {
                         key={category.id}
                         tenantId={selectedTenant.id}
                         category={category}
+                        targetCategories={tenantMoveTargetOptions}
                       />
                     ))
                   )}
@@ -667,26 +695,68 @@ export default async function AdminCategoriesPage(props: Props) {
   );
 }
 
-function CatalogCategoryRow({ category }: { category: AdminCatalogCategory }) {
+function CatalogCategoryRow({
+  source,
+  category,
+  targetCategories,
+}: {
+  source: AdminCatalogSource;
+  category: AdminCatalogCategory;
+  targetCategories: string[];
+}) {
   const categoryId = category.id ?? 0;
+  const categoryName = category.name || category.category;
   const canMutate = categoryId > 0;
   const canDelete = canMutate && category.count === 0;
+  const moveTargets = targetCategories.filter((name) => name !== categoryName);
+  const canMove = category.count > 0 && moveTargets.length > 0;
 
   return (
     <tr>
       <td className="px-4 py-3">
-        <div className="text-sm font-semibold text-brand-text">
-          {category.name || category.category}
+        <div className="flex items-center gap-3">
+          <ImageThumbnail
+            src={resolveImageUrl(category.image_url)}
+            alt={categoryName}
+            width={40}
+            height={40}
+            sizes="40px"
+            disableEnlarge={true}
+            imageClassName="h-10 w-10 rounded-md object-cover ring-1 ring-brand-border"
+            fallback={
+              <span className="flex h-10 w-10 items-center justify-center rounded-md bg-brand-soft text-sm">
+                🛒
+              </span>
+            }
+          />
+          <div>
+            <div className="text-sm font-semibold text-brand-text">
+              {categoryName}
+            </div>
+            {category.name && category.name !== category.category && (
+              <div className="text-xs text-brand-muted">{category.category}</div>
+            )}
+          </div>
         </div>
-        {category.name && category.name !== category.category && (
-          <div className="text-xs text-brand-muted">{category.category}</div>
-        )}
       </td>
       <td className="px-4 py-3 text-sm text-brand-muted">{category.count}</td>
       <td className="min-w-32 px-4 py-3">
         <div className="flex items-center justify-end gap-2">
+          <MoveCategoryItemsSheet
+            sourceName={categoryName}
+            itemCount={category.count}
+            targetCategories={moveTargets}
+            itemLabel="عناصر"
+            action={adminMoveCatalogCategoryProductsAction.bind(
+              null,
+              source,
+              categoryName,
+            )}
+            disabled={!canMove}
+          />
           <EditCategorySheet
-            initialName={category.name || category.category}
+            initialName={categoryName}
+            initialImageUrl={category.image_url || ""}
             action={adminUpdateCatalogCategoryAction.bind(null, categoryId)}
             disabled={!canMutate}
           />
@@ -735,11 +805,15 @@ function SummaryChips({
 function TenantCategoryRow({
   tenantId,
   category,
+  targetCategories,
 }: {
   tenantId: number;
   category: AdminTenantProductCategory;
+  targetCategories: string[];
 }) {
   const canDelete = category.count === 0;
+  const moveTargets = targetCategories.filter((name) => name !== category.name);
+  const canMove = category.count > 0 && moveTargets.length > 0;
 
   return (
     <tr>
@@ -749,6 +823,18 @@ function TenantCategoryRow({
       <td className="px-4 py-3 text-sm text-brand-muted">{category.count}</td>
       <td className="min-w-32 px-4 py-3">
         <div className="flex items-center justify-end gap-2">
+          <MoveCategoryItemsSheet
+            sourceName={category.name}
+            itemCount={category.count}
+            targetCategories={moveTargets}
+            itemLabel="منتجات"
+            action={adminMoveTenantProductCategoryProductsAction.bind(
+              null,
+              tenantId,
+              category.name,
+            )}
+            disabled={!canMove}
+          />
           <EditCategorySheet
             initialName={category.name}
             action={adminUpdateTenantProductCategoryAction.bind(

@@ -71,6 +71,7 @@ model CatalogCategory {
   id         Int       @id(map: "PK_catalog_categories_id") @default(autoincrement())
   source     String    @db.VarChar(64)
   name       String    @db.VarChar(64)
+  image_url  String?
 
   @@unique([source, name], map: "UQ_catalog_categories_source_name")
   @@index([source, deleted_at], map: "IDX_catalog_categories_source_deleted_at")
@@ -303,6 +304,7 @@ model Product {
   created_at    DateTime         @default(now()) @db.Timestamp(6)
   updated_at    DateTime         @default(now()) @db.Timestamp(6)
   deleted_at    DateTime?        @db.Timestamp(6)
+  deleted_by_id Int?
   tenant_id     Int
   id            Int              @id(map: "PK_0806c755e0aca124e67c0cf6d7d") @default(autoincrement())
   name          String           @db.VarChar

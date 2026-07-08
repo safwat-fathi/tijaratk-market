@@ -9,6 +9,7 @@ import { TenantAreaForm } from "./_components/TenantAreaForm";
 import { DirectoryStatusForm } from "./_components/DirectoryStatusForm";
 import { AdminBulkEssentialsButton } from "./_components/AdminBulkEssentialsButton";
 import { ExternalLink } from "lucide-react";
+import { DeleteMerchantProductsButton } from "./_components/DeleteMerchantProductsButton";
 import type {
   AdminDirectoryArea,
   AdminPlan,
@@ -334,6 +335,11 @@ export default async function AdminMerchants(props: Props) {
 
                 <div className="flex gap-2 items-start flex-wrap">
                   <ToggleTenantStatusForm merchant={merchant} />
+                  <DeleteMerchantProductsButton
+                    tenantId={merchant.id}
+                    tenantName={merchant.name}
+                    productCount={merchant._count?.products || 0}
+                  />
                   <AdminBulkEssentialsButton
                     tenantId={merchant.id}
                     tenantName={merchant.name}
@@ -461,6 +467,11 @@ export default async function AdminMerchants(props: Props) {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-start gap-2">
                           <ToggleTenantStatusForm merchant={merchant} />
+                          <DeleteMerchantProductsButton
+                            tenantId={merchant.id}
+                            tenantName={merchant.name}
+                            productCount={merchant._count?.products || 0}
+                          />
                           <AdminBulkEssentialsButton
                             tenantId={merchant.id}
                             tenantName={merchant.name}
