@@ -18,10 +18,14 @@ describe('ProductsService fuzzy product search', () => {
       get: jest.fn(),
       set: jest.fn(),
     };
+    const activityLogService = {
+      create: jest.fn(),
+    };
     const service = new ProductsService(
       prisma as any,
       {} as any,
       {} as any,
+      activityLogService as any,
       cacheManager as any,
     );
 
@@ -114,6 +118,149 @@ describe('ProductsService fuzzy product search', () => {
   });
 });
 
+describe('ProductsService bulk essentials', () => {
+  const createBulkEssentialService = () => {
+    const prisma = {
+      $executeRaw: jest.fn(),
+      $transaction: jest.fn(),
+      catalogItem: {
+        findMany: jest.fn(),
+      },
+      product: {
+        findMany: jest.fn(),
+        createMany: jest.fn(),
+      },
+      tenant: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    const storesDirectoryService = {
+      recalculateTenantReadiness: jest.fn(),
+    };
+    const cacheManager = {
+      get: jest.fn(),
+      set: jest.fn(),
+    };
+    const activityLogService = {
+      create: jest.fn(),
+    };
+    const service = new ProductsService(
+      prisma as any,
+      {} as any,
+      storesDirectoryService as any,
+      activityLogService as any,
+      cacheManager as any,
+    );
+
+    return {
+      service: service as any,
+      prisma,
+      storesDirectoryService,
+      cacheManager,
+    };
+  };
+
+  const essentialCatalogItem = {
+    id: 501,
+    name: 'لبن كامل الدسم',
+    image_url: '/catalog/milk.png',
+    category: 'ألبان و بيض',
+    price: 42,
+    is_essential: true,
+    essential_sort_order: 1,
+  };
+
+  it('ignores soft-deleted products when bulk adding essentials', async () => {
+    const { service, prisma, storesDirectoryService } =
+      createBulkEssentialService();
+    prisma.product.findMany.mockResolvedValue([]);
+    prisma.product.createMany.mockResolvedValue({ count: 1 });
+    prisma.tenant.update.mockResolvedValue({ id: 77 });
+
+    const result = await service.createBulkEssentialProductsFromCatalogItems(
+      77,
+      'talabat_csv',
+      [essentialCatalogItem],
+    );
+
+    expect(prisma.product.findMany).toHaveBeenCalledWith({
+      where: {
+        tenant_id: 77,
+        status: ProductStatus.ACTIVE,
+        deleted_at: null,
+      },
+      select: { name: true },
+    });
+    expect(prisma.product.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          tenant_id: 77,
+          name: essentialCatalogItem.name,
+          category: essentialCatalogItem.category,
+          status: ProductStatus.ACTIVE,
+          price_needs_review: true,
+        }),
+      ],
+      skipDuplicates: true,
+    });
+    expect(prisma.tenant.update).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: { last_bulk_essentials_added_at: expect.any(Date) },
+    });
+    expect(storesDirectoryService.recalculateTenantReadiness).toHaveBeenCalledWith(
+      77,
+    );
+    expect(result).toEqual({ count: 1 });
+  });
+
+  it('skips essentials that already exist as non-deleted active products', async () => {
+    const { service, prisma } = createBulkEssentialService();
+    prisma.product.findMany.mockResolvedValue([
+      { name: essentialCatalogItem.name },
+    ]);
+
+    const result = await service.createBulkEssentialProductsFromCatalogItems(
+      77,
+      'talabat_csv',
+      [essentialCatalogItem],
+    );
+
+    expect(prisma.product.findMany).toHaveBeenCalledWith({
+      where: {
+        tenant_id: 77,
+        status: ProductStatus.ACTIVE,
+        deleted_at: null,
+      },
+      select: { name: true },
+    });
+    expect(prisma.product.createMany).not.toHaveBeenCalled();
+    expect(prisma.tenant.update).not.toHaveBeenCalled();
+    expect(result).toEqual({ count: 0 });
+  });
+
+  it('still rejects bulk essentials for non-grocery tenants', async () => {
+    const { service, prisma } = createBulkEssentialService();
+    const tx = {
+      $executeRaw: jest.fn(),
+      tenant: {
+        findUnique: jest.fn().mockResolvedValue({ category: 'pharmacy' }),
+      },
+      catalogItem: {
+        findMany: jest.fn(),
+      },
+    };
+    prisma.$transaction.mockImplementation(
+      async (callback: (client: typeof tx) => unknown) => callback(tx),
+    );
+
+    await expect(
+      service.bulkAddEssentials(77, { all_essential_items: true }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.catalogItem.findMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('ProductsService CSV product import', () => {
   const createCsvFile = (content: string): Express.Multer.File => {
     const dir = mkdtempSync(join(tmpdir(), 'product-import-'));
@@ -150,10 +297,14 @@ describe('ProductsService CSV product import', () => {
     const storesDirectoryService = {
       recalculateTenantReadiness: jest.fn(),
     };
+    const activityLogService = {
+      create: jest.fn(),
+    };
     const service = new ProductsService(
       prisma as any,
       {} as any,
       storesDirectoryService as any,
+      activityLogService as any,
       { get: jest.fn(), set: jest.fn() } as any,
     );
 

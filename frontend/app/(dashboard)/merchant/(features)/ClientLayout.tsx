@@ -105,6 +105,25 @@ const navigation = [
     ),
   },
   {
+    label: "سجل النشاط",
+    href: "/merchant/activity",
+    icon: (
+      <svg
+        className="me-3 h-6 w-6 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth="2.5"
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 6v6l3.75 2.25M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+        />
+      </svg>
+    ),
+  },
+  {
     label: "الإعدادات",
     href: "/merchant/settings",
     icon: (

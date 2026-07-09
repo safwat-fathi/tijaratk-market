@@ -34,6 +34,14 @@ import {
   resolveCatalogSourceForTenantCategory,
 } from './catalog-source-policy';
 import { arabicNormalize } from './utils/arabic-normalize.util';
+import { ActivityLogService } from 'src/activity-log/activity-log.service';
+import { ActivityActions } from 'src/activity-log/constants/activity-actions';
+import {
+  ActivityEntityTypes,
+  ActivitySources,
+} from 'src/activity-log/constants/activity-types';
+import { PRODUCT_STATUS_LABELS_AR } from 'src/activity-log/constants/activity-labels';
+import { pickChangedFields } from 'src/activity-log/utils/activity-diff.util';
 
 const DEFAULT_PRODUCT_CATEGORY = 'أخرى';
 const DUPLICATE_PRODUCT_NAME_MESSAGE = 'Product with this name already exists';
@@ -138,6 +146,12 @@ type StrictMatchThresholds = {
   strictWordSimilarityThreshold: number;
 };
 
+type ProductActivityActor = {
+  userId?: number | null;
+  adminId?: number | null;
+  source: 'dashboard' | 'admin' | 'csv_import';
+};
+
 /**
  * Products service handles product lifecycle for each tenant.
  */
@@ -147,6 +161,7 @@ export class ProductsService {
     private readonly prisma: PrismaService,
     private readonly imageProcessorService: ImageProcessorService,
     private readonly storesDirectoryService: StoresDirectoryService,
+    private readonly activityLogService: ActivityLogService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -189,6 +204,7 @@ export class ProductsService {
     tenantId: number,
     createProductDto: CreateProductDto,
     file?: Express.Multer.File,
+    actor?: ProductActivityActor,
   ): Promise<Product> {
     const normalizedName = createProductDto.name.trim();
     if (!normalizedName) {
@@ -232,6 +248,31 @@ export class ProductsService {
     await this.bumpTenantSearchCacheVersion(tenantId);
     await this.bumpCatalogSearchCacheVersion(tenantId);
     await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+
+    if (actor) {
+      await this.activityLogService.create({
+        tenantId,
+        actorUserId: actor.userId ?? null,
+        actorAdminId: actor.adminId ?? null,
+        entityType: ActivityEntityTypes.Product,
+        entityId: product.id,
+        action: ActivityActions.ProductCreated,
+        title: 'تم إضافة منتج جديد',
+        description: `تم إضافة المنتج ${product.name}`,
+        newValues: {
+          name: product.name,
+          category: product.category,
+          current_price: this.toActivityNumber(product.current_price),
+          is_available: product.is_available,
+          status: product.status,
+        },
+        metadata: {
+          source: product.source,
+          image_changed: Boolean(product.image_url),
+        },
+        source: this.resolveProductActivitySource(actor),
+      });
+    }
     return product;
   }
 
@@ -425,6 +466,7 @@ export class ProductsService {
   async createFromCatalog(
     tenantId: number,
     payload: AddProductFromCatalogDto,
+    actor?: ProductActivityActor,
   ): Promise<Product> {
     const catalogSource = await this.resolveTenantCatalogSource(tenantId);
     if (!catalogSource) {
@@ -479,6 +521,32 @@ export class ProductsService {
     await this.bumpTenantSearchCacheVersion(tenantId);
     await this.bumpCatalogSearchCacheVersion(tenantId);
     await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+
+    if (actor) {
+      await this.activityLogService.create({
+        tenantId,
+        actorUserId: actor.userId ?? null,
+        actorAdminId: actor.adminId ?? null,
+        entityType: ActivityEntityTypes.Product,
+        entityId: product.id,
+        action: ActivityActions.ProductCreated,
+        title: 'تم إضافة منتج من الكتالوج',
+        description: `تم إضافة المنتج ${product.name} من الكتالوج`,
+        newValues: {
+          name: product.name,
+          category: product.category,
+          current_price: this.toActivityNumber(product.current_price),
+          is_available: product.is_available,
+          status: product.status,
+        },
+        metadata: {
+          catalog_item_id: catalogItem.id,
+          catalog_source: catalogSource,
+        },
+        source: this.resolveProductActivitySource(actor),
+      });
+    }
+
     return product;
   }
 
@@ -488,34 +556,58 @@ export class ProductsService {
   async bulkAddEssentials(
     tenantId: number,
     dto: AddBulkEssentialItemsDto,
+    actor?: ProductActivityActor,
   ): Promise<{ count: number }> {
+    let result: { count: number };
+
     if (dto.all_essential_items === true) {
-      return this.bulkAddAllEssentialItems(tenantId);
-    }
+      result = await this.bulkAddAllEssentialItems(tenantId);
+    } else {
+      const selectedItemIds = this.normalizeCatalogItemIds(dto.catalog_item_ids);
+      const normalizedCategory = this.normalizeOptionalCategory(dto.category);
+      if (selectedItemIds.length > 0) {
+        if (!normalizedCategory) {
+          throw new BadRequestException('Category is required for selected item import.');
+        }
 
-    const selectedItemIds = this.normalizeCatalogItemIds(dto.catalog_item_ids);
-    const normalizedCategory = this.normalizeOptionalCategory(dto.category);
-    if (selectedItemIds.length > 0) {
-      if (!normalizedCategory) {
-        throw new BadRequestException('Category is required for selected item import.');
+        result = await this.bulkAddEssentialItemsById(
+          tenantId,
+          normalizedCategory,
+          selectedItemIds,
+        );
+      } else {
+        const categories = (dto.categories ?? [])
+          .map((category) => this.normalizeOptionalCategory(category))
+          .filter((category): category is string => Boolean(category));
+
+        if (categories.length === 0) {
+          throw new BadRequestException('At least one category or catalog item is required.');
+        }
+
+        result = await this.bulkAddEssentialItemsByCategories(tenantId, categories);
       }
+    }
 
-      return this.bulkAddEssentialItemsById(
+    if (actor && result.count > 0) {
+      await this.activityLogService.create({
         tenantId,
-        normalizedCategory,
-        selectedItemIds,
-      );
+        actorUserId: actor.userId ?? null,
+        actorAdminId: actor.adminId ?? null,
+        entityType: ActivityEntityTypes.Product,
+        action: ActivityActions.ProductBulkCreated,
+        title: 'تم إضافة منتجات أساسية',
+        description: `تم إضافة ${result.count} منتج من المنتجات الأساسية`,
+        metadata: {
+          created_count: result.count,
+          all_essential_items: dto.all_essential_items === true,
+          selected_catalog_item_count: dto.catalog_item_ids?.length ?? 0,
+          selected_category_count: dto.categories?.length ?? 0,
+        },
+        source: this.resolveProductActivitySource(actor),
+      });
     }
 
-    const categories = (dto.categories ?? [])
-      .map((category) => this.normalizeOptionalCategory(category))
-      .filter((category): category is string => Boolean(category));
-
-    if (categories.length === 0) {
-      throw new BadRequestException('At least one category or catalog item is required.');
-    }
-
-    return this.bulkAddEssentialItemsByCategories(tenantId, categories);
+    return result;
   }
 
   /**
@@ -690,7 +782,11 @@ export class ProductsService {
     }
 
     const existingProducts = await this.getPrismaClient().product.findMany({
-      where: { tenant_id: tenantId, status: ProductStatus.ACTIVE },
+      where: {
+        tenant_id: tenantId,
+        status: ProductStatus.ACTIVE,
+        deleted_at: null,
+      },
       select: { name: true },
     });
     const existingNames = new Set(existingProducts.map((product) => product.name));
@@ -1511,6 +1607,7 @@ export class ProductsService {
     tenantId: number,
     updateProductDto: UpdateProductDto,
     file?: Express.Multer.File,
+    actor?: ProductActivityActor,
   ): Promise<Product> {
     const product = await this.findOne(id, tenantId);
 
@@ -1592,6 +1689,18 @@ export class ProductsService {
       );
     }
 
+    if (actor) {
+      await this.logProductUpdateActivity(
+        tenantId,
+        product,
+        updatedProduct,
+        {
+          imageChanged: previousImageUrl !== updatedProduct.image_url,
+          actor,
+        },
+      );
+    }
+
     return updatedProduct;
   }
 
@@ -1617,6 +1726,7 @@ export class ProductsService {
   async bulkUpdate(
     tenantId: number,
     payload: BulkUpdateProductsDto,
+    actor?: ProductActivityActor,
   ): Promise<{ success: true; count: number }> {
     const { productIds, dto } = await this.prepareBulkProductUpdate(
       payload,
@@ -1627,7 +1737,131 @@ export class ProductsService {
       await this.update(productId, tenantId, dto);
     }
 
+    if (actor && productIds.length > 0) {
+      await this.activityLogService.create({
+        tenantId,
+        actorUserId: actor.userId ?? null,
+        actorAdminId: actor.adminId ?? null,
+        entityType: ActivityEntityTypes.Product,
+        action: ActivityActions.ProductBulkUpdated,
+        title: 'تم تعديل مجموعة منتجات',
+        description: `تم تعديل ${productIds.length} منتج`,
+        metadata: {
+          product_ids: productIds,
+          changed_fields: Object.keys(dto),
+        },
+        source: this.resolveProductActivitySource(actor),
+      });
+    }
+
     return { success: true, count: productIds.length };
+  }
+
+  /**
+   * Writes high-signal product activity entries for changed fields.
+   */
+  private async logProductUpdateActivity(
+    tenantId: number,
+    oldProduct: Product,
+    updatedProduct: Product,
+    options: { imageChanged: boolean; actor: ProductActivityActor },
+  ): Promise<void> {
+    const actor = options.actor;
+    const source = this.resolveProductActivitySource(actor);
+    const actorPayload = {
+      actorUserId: actor.userId ?? null,
+      actorAdminId: actor.adminId ?? null,
+    };
+
+    const oldPrice = this.toActivityNumber(oldProduct.current_price);
+    const newPrice = this.toActivityNumber(updatedProduct.current_price);
+    if (String(oldPrice ?? '') !== String(newPrice ?? '')) {
+      await this.activityLogService.create({
+        tenantId,
+        ...actorPayload,
+        entityType: ActivityEntityTypes.Product,
+        entityId: updatedProduct.id,
+        action: ActivityActions.ProductPriceChanged,
+        title: 'تم تعديل سعر المنتج',
+        description: `تم تعديل سعر ${updatedProduct.name} من ${oldPrice ?? 'غير محدد'} إلى ${newPrice ?? 'غير محدد'} جنيه`,
+        oldValues: { current_price: oldPrice },
+        newValues: { current_price: newPrice },
+        source,
+      });
+    }
+
+    if (oldProduct.is_available !== updatedProduct.is_available) {
+      await this.activityLogService.create({
+        tenantId,
+        ...actorPayload,
+        entityType: ActivityEntityTypes.Product,
+        entityId: updatedProduct.id,
+        action: ActivityActions.ProductAvailabilityChanged,
+        title: updatedProduct.is_available
+          ? 'تم إتاحة المنتج'
+          : 'تم إخفاء المنتج من الطلب',
+        description: updatedProduct.is_available
+          ? `تم جعل ${updatedProduct.name} متاحا للطلب`
+          : `تم جعل ${updatedProduct.name} غير متاح للطلب`,
+        oldValues: { is_available: oldProduct.is_available },
+        newValues: { is_available: updatedProduct.is_available },
+        source,
+      });
+    }
+
+    if (oldProduct.status !== updatedProduct.status) {
+      await this.activityLogService.create({
+        tenantId,
+        ...actorPayload,
+        entityType: ActivityEntityTypes.Product,
+        entityId: updatedProduct.id,
+        action:
+          updatedProduct.status === ProductStatus.ARCHIVED
+            ? ActivityActions.ProductArchived
+            : ActivityActions.ProductUpdated,
+        title:
+          updatedProduct.status === ProductStatus.ARCHIVED
+            ? 'تم أرشفة المنتج'
+            : 'تم تعديل حالة المنتج',
+        description: `تم تغيير حالة ${updatedProduct.name} من ${PRODUCT_STATUS_LABELS_AR[oldProduct.status as ProductStatus]} إلى ${PRODUCT_STATUS_LABELS_AR[updatedProduct.status as ProductStatus]}`,
+        oldValues: { status: oldProduct.status },
+        newValues: { status: updatedProduct.status },
+        source,
+      });
+    }
+
+    const diff = pickChangedFields(
+      {
+        name: oldProduct.name,
+        category: oldProduct.category,
+        order_mode: oldProduct.order_mode,
+        order_config: oldProduct.order_config,
+        image_changed: false,
+      },
+      {
+        name: updatedProduct.name,
+        category: updatedProduct.category,
+        order_mode: updatedProduct.order_mode,
+        order_config: updatedProduct.order_config,
+        image_changed: options.imageChanged,
+      },
+      ['name', 'category', 'order_mode', 'order_config', 'image_changed'],
+    );
+
+    if (diff.hasChanges) {
+      await this.activityLogService.create({
+        tenantId,
+        ...actorPayload,
+        entityType: ActivityEntityTypes.Product,
+        entityId: updatedProduct.id,
+        action: ActivityActions.ProductUpdated,
+        title: 'تم تعديل المنتج',
+        description: `تم تعديل بيانات المنتج ${updatedProduct.name}`,
+        oldValues: diff.oldValues,
+        newValues: diff.newValues,
+        source,
+      });
+    }
   }
 
   private async prepareBulkProductUpdate(
@@ -1702,8 +1936,12 @@ export class ProductsService {
   /**
    * Soft archives a product so historical order records stay intact.
    */
-  async remove(id: number, tenantId: number): Promise<void> {
-    await this.findOne(id, tenantId);
+  async remove(
+    id: number,
+    tenantId: number,
+    actor?: ProductActivityActor,
+  ): Promise<void> {
+    const product = await this.findOne(id, tenantId);
     await this.getPrismaClient().product.update({
       where: { id },
       data: { status: ProductStatus.ARCHIVED },
@@ -1711,6 +1949,22 @@ export class ProductsService {
     await this.bumpTenantSearchCacheVersion(tenantId);
     await this.bumpCatalogSearchCacheVersion(tenantId);
     await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+
+    if (actor && product.status !== ProductStatus.ARCHIVED) {
+      await this.activityLogService.create({
+        tenantId,
+        actorUserId: actor.userId ?? null,
+        actorAdminId: actor.adminId ?? null,
+        entityType: ActivityEntityTypes.Product,
+        entityId: product.id,
+        action: ActivityActions.ProductArchived,
+        title: 'تم أرشفة المنتج',
+        description: `تم أرشفة المنتج ${product.name}`,
+        oldValues: { status: product.status },
+        newValues: { status: ProductStatus.ARCHIVED },
+        source: this.resolveProductActivitySource(actor),
+      });
+    }
   }
 
   private async searchWithinTenantProducts(
@@ -2580,7 +2834,38 @@ export class ProductsService {
     await this.cacheManager.set(versionKey, Date.now().toString());
   }
 
-  async importProductsFromCsv(tenantId: number, file: Express.Multer.File) {
+  /**
+   * Maps product actor context to a persisted activity source.
+   */
+  private resolveProductActivitySource(actor: ProductActivityActor) {
+    if (actor.source === 'admin') {
+      return ActivitySources.Admin;
+    }
+
+    if (actor.source === 'csv_import') {
+      return ActivitySources.CsvImport;
+    }
+
+    return ActivitySources.Dashboard;
+  }
+
+  /**
+   * Converts Prisma decimal-like values into JSON-safe activity numbers.
+   */
+  private toActivityNumber(value: unknown): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  async importProductsFromCsv(
+    tenantId: number,
+    file: Express.Multer.File,
+    actor?: ProductActivityActor,
+  ) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { id: true, category: true },
@@ -2737,6 +3022,27 @@ export class ProductsService {
 
     if (summary.created_rows > 0 || summary.updated_rows > 0) {
       await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+    }
+
+    if (actor) {
+      await this.activityLogService.create({
+        tenantId,
+        actorUserId: actor.userId ?? null,
+        actorAdminId: actor.adminId ?? null,
+        entityType: ActivityEntityTypes.CsvImport,
+        action: ActivityActions.ProductCsvImportCompleted,
+        title: 'تم استيراد ملف منتجات',
+        description: `تم استيراد ملف منتجات: ${summary.created_rows} جديد و ${summary.updated_rows} محدث`,
+        metadata: {
+          total_rows: summary.total_rows,
+          created_rows: summary.created_rows,
+          updated_rows: summary.updated_rows,
+          skipped_rows: summary.skipped_rows,
+          failed_rows: summary.failed_rows,
+          file_name: file.originalname,
+        },
+        source: this.resolveProductActivitySource(actor),
+      });
     }
 
     return summary;

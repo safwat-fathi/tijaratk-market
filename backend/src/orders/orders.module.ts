@@ -6,6 +6,7 @@ import { TenantsModule } from 'src/tenants/tenants.module';
 import { OrderWhatsappService } from './order-whatsapp.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { TenantCancellationPolicyModule } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.module';
+import { ActivityLogModule } from 'src/activity-log/activity-log.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { TenantCancellationPolicyModule } from 'src/tenant-cancellation-policy/t
     CustomersModule,
     TenantsModule,
     TenantCancellationPolicyModule,
+    ActivityLogModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderWhatsappService],

@@ -19,6 +19,7 @@ import { AdminModule } from './admin/admin.module';
 import { ImportsModule } from './imports/imports.module';
 import { StoresDirectoryModule } from './stores-directory/stores-directory.module';
 import { MerchantDashboardModule } from './merchant-dashboard/merchant-dashboard.module';
+import { ActivityLogModule } from './activity-log/activity-log.module';
 
 const ENV = process.env.NODE_ENV;
 
@@ -53,6 +54,7 @@ const ENV = process.env.NODE_ENV;
     ImportsModule,
     StoresDirectoryModule,
     MerchantDashboardModule,
+    ActivityLogModule,
   ],
   controllers: [HealthController],
   providers: [TenantRlsInterceptor],

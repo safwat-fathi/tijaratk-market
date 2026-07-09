@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ordersService } from "@/services/api/orders.service";
 import { productsService } from "@/services/api/products.service";
+import { activityLogsService } from "@/services/api/activity-logs.service";
 import { OrderStatus } from "@/types/enums";
 import OrderItemsReplacement from "./_components/OrderItemsReplacement";
 import OrderDetailsActions from "./_components/OrderDetailsActions";
+import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import { formatCurrency } from "@/lib/utils/currency";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -48,9 +50,16 @@ export default async function OrderDetailsPage({
 }) {
 	const { id } = await params;
 
-	const [orderResponse, productsResponse] = await Promise.all([
-		ordersService.getOrder(Number(id)),
+	const orderId = Number(id);
+
+	const [orderResponse, productsResponse, logsResponse] = await Promise.all([
+		ordersService.getOrder(orderId),
 		productsService.getProducts(),
+		activityLogsService.getActivityLogs({
+			entity_type: "order",
+			entity_id: orderId,
+			limit: 20,
+		}),
 	]);
 
 	if (!orderResponse.success || !orderResponse.data) {
@@ -76,6 +85,8 @@ export default async function OrderDetailsPage({
 		productsResponse.success && productsResponse.data
 			? productsResponse.data
 			: [];
+	const activityLogs =
+		logsResponse.success && logsResponse.data ? logsResponse.data.items : [];
 
 	return (
 		<div className="flex min-h-screen flex-col bg-background">
@@ -264,6 +275,16 @@ export default async function OrderDetailsPage({
 						</div>
 					</div>
 				</Card>
+
+				<section>
+					<h2 className="mb-3 text-lg font-semibold text-brand-text">
+						سجل الطلب
+					</h2>
+					<ActivityTimeline
+						items={activityLogs}
+						emptyMessage="لا يوجد نشاط مسجل لهذا الطلب حتى الآن"
+					/>
+				</section>
 			</div>
 
 			<OrderDetailsActions

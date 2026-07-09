@@ -64,7 +64,10 @@ export class OrdersController {
     if (!tenantId) {
       throw new UnauthorizedException('Tenant context is required');
     }
-    return this.ordersService.createForTenantId(tenantId, createOrderDto);
+    return this.ordersService.createForTenantId(tenantId, createOrderDto, {
+      userId: req.user?.userId,
+      source: 'dashboard',
+    });
   }
 
   @Get()
@@ -250,10 +253,11 @@ export class OrdersController {
     description: 'Order updated successfully',
   })
   update(
+    @Req() req: Request,
     @Param('id', ParseIntPipe) id: number,
     @Body() updateOrderDto: UpdateOrderDto,
   ) {
-    return this.ordersService.update(id, updateOrderDto);
+    return this.ordersService.update(id, updateOrderDto, req.user?.userId);
   }
 
   @Patch('items/:id/replace')
@@ -283,6 +287,7 @@ export class OrdersController {
       tenantId,
       id,
       dto.replaced_by_product_id ?? null,
+      req.user?.userId,
     );
   }
 
@@ -300,7 +305,7 @@ export class OrdersController {
     description: 'Order item replacement decision reset successfully',
   })
   resetOrderItemReplacement(
-    @Req() req: { user?: { tenant_id: number } },
+    @Req() req: { user?: { tenant_id: number; userId?: number } },
     @Param('id', ParseIntPipe) id: number,
   ) {
     const tenantId = req.user?.tenant_id;
@@ -308,7 +313,11 @@ export class OrdersController {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.ordersService.resetOrderItemReplacement(tenantId, id);
+    return this.ordersService.resetOrderItemReplacement(
+      tenantId,
+      id,
+      req.user?.userId,
+    );
   }
 
   @Patch('tracking/:token/items/:itemId/replacement-decision')
@@ -383,6 +392,7 @@ export class OrdersController {
       tenantId,
       id,
       dto.total_price,
+      req.user?.userId,
     );
   }
 
@@ -407,7 +417,11 @@ export class OrdersController {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.ordersService.markOrderItemOutOfStock(tenantId, id);
+    return this.ordersService.markOrderItemOutOfStock(
+      tenantId,
+      id,
+      req.user?.userId,
+    );
   }
 
   private toStringArray(value?: string | string[]): string[] {

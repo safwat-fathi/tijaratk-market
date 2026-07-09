@@ -387,6 +387,7 @@ model Tenant {
   tenant_hidden_catalog_items TenantHiddenCatalogItem[]
   cancellation_policy_state TenantCancellationPolicyState?
   cancellation_policy_events TenantCancellationPolicyEvent[]
+  activity_logs             ActivityLog[]
 
   @@map("tenants")
 }
@@ -539,9 +540,39 @@ model User {
   role       UserRole  @map("role")
   password   String    @db.VarChar
   tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_109638590074998bb72a2f2cf08")
+  activity_logs ActivityLog[]
 
   @@index([tenant_id], map: "IDX_109638590074998bb72a2f2cf0")
   @@map("users")
+}
+
+/// Tenant-scoped append-only business activity timeline.
+model ActivityLog {
+  id             Int                @id @default(autoincrement())
+  tenant_id      Int?
+  actor_user_id  Int?
+  actor_admin_id Int?
+  entity_type    ActivityEntityType
+  entity_id      Int?
+  action         String             @db.VarChar(96)
+  title          String             @db.VarChar(160)
+  description    String?
+  old_values     Json?
+  new_values     Json?
+  metadata       Json?
+  source         ActivitySource     @default(dashboard)
+  created_at     DateTime           @default(now()) @db.Timestamptz(6)
+
+  tenant      Tenant?    @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_activity_logs_tenant")
+  actor_user  User?      @relation(fields: [actor_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_activity_logs_actor_user")
+  actor_admin AdminUser? @relation(fields: [actor_admin_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_activity_logs_actor_admin")
+
+  @@index([tenant_id, created_at], map: "IDX_activity_logs_tenant_created_at")
+  @@index([tenant_id, entity_type, entity_id, created_at], map: "IDX_activity_logs_tenant_entity_created_at")
+  @@index([actor_user_id, created_at], map: "IDX_activity_logs_actor_user_created_at")
+  @@index([actor_admin_id, created_at], map: "IDX_activity_logs_actor_admin_created_at")
+  @@index([action, created_at], map: "IDX_activity_logs_action_created_at")
+  @@map("activity_logs")
 }
 
 
@@ -708,6 +739,30 @@ enum UserRole {
   @@map("users_role_enum")
 }
 
+enum ActivityEntityType {
+  order
+  product
+  customer
+  tenant
+  user
+  subscription
+  day_closure
+  csv_import
+
+  @@map("activity_logs_entity_type_enum")
+}
+
+enum ActivitySource {
+  dashboard
+  storefront
+  admin
+  system
+  whatsapp
+  csv_import
+
+  @@map("activity_logs_source_enum")
+}
+
 model AdminUser {
   id         Int      @id @default(autoincrement())
   phone      String   @unique @db.VarChar
@@ -715,6 +770,7 @@ model AdminUser {
   name       String   @db.VarChar
   created_at DateTime @default(now()) @db.Timestamp(6)
   updated_at DateTime @default(now()) @db.Timestamp(6)
+  activity_logs ActivityLog[]
 
   @@map("admin_users")
 }

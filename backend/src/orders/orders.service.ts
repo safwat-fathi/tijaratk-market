@@ -43,6 +43,16 @@ import {
   resolveRequiredProductsForTenantCategory,
 } from 'src/products/order-readiness-policy';
 import { getDashboardCacheVersionKey } from 'src/merchant-dashboard/merchant-dashboard.service';
+import { ActivityLogService } from 'src/activity-log/activity-log.service';
+import { ActivityActions } from 'src/activity-log/constants/activity-actions';
+import {
+  ORDER_STATUS_LABELS_AR,
+  formatKnownValueAr,
+} from 'src/activity-log/constants/activity-labels';
+import {
+  ActivityEntityTypes,
+  ActivitySources,
+} from 'src/activity-log/constants/activity-types';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -83,6 +93,11 @@ type PrescriptionUpload = Pick<
   'filename' | 'mimetype' | 'originalname' | 'path'
 >;
 
+type OrderActivityActor = {
+  userId?: number | null;
+  source: 'dashboard' | 'storefront';
+};
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -101,6 +116,7 @@ export class OrdersService {
     private readonly tenantsService: TenantsService,
     private readonly orderWhatsappService: OrderWhatsappService,
     private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
+    private readonly activityLogService: ActivityLogService,
     @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
@@ -168,6 +184,7 @@ export class OrdersService {
     return this.createForTenantId(
       tenant.id,
       createOrderDto,
+      { source: 'storefront' },
       prescriptionUpload,
     );
   }
@@ -178,6 +195,7 @@ export class OrdersService {
   async createForTenantId(
     tenantId: number,
     createOrderDto: CreateOrderDto,
+    actor: OrderActivityActor = { source: 'storefront' },
     prescriptionUpload?: PrescriptionUpload,
   ): Promise<Order> {
     let isFirstOrder = false;
@@ -357,6 +375,37 @@ export class OrdersService {
               : {}),
           },
         });
+
+        await this.activityLogService.create(
+          {
+            tenantId,
+            actorUserId: actor.userId ?? null,
+            entityType: ActivityEntityTypes.Order,
+            entityId: persistedOrder.id,
+            action: ActivityActions.OrderCreated,
+            title: 'تم إنشاء طلب جديد',
+            description:
+              total !== undefined
+                ? `تم إنشاء طلب جديد بقيمة ${this.roundCurrency(total)} جنيه`
+                : 'تم إنشاء طلب جديد',
+            newValues: {
+              status: persistedOrder.status,
+              subtotal,
+              delivery_fee: deliveryFee,
+              total,
+              order_type: persistedOrder.order_type,
+            },
+            metadata: {
+              items_count: items.length,
+              has_prescription_file: Boolean(prescriptionUpload),
+            },
+            source:
+              actor.source === 'dashboard'
+                ? ActivitySources.Dashboard
+                : ActivitySources.Storefront,
+          },
+          manager,
+        );
 
         return persistedOrder;
       });
@@ -551,7 +600,11 @@ export class OrdersService {
     return this.mapOrderPayload(order);
   }
 
-  async update(id: number, updateOrderDto: UpdateOrderDto): Promise<Order> {
+  async update(
+    id: number,
+    updateOrderDto: UpdateOrderDto,
+    actorUserId?: number,
+  ): Promise<Order> {
     let previousStatus: OrderStatus | undefined;
     let nextStatus: OrderStatus | undefined;
 
@@ -637,6 +690,62 @@ export class OrdersService {
         );
       }
 
+      if (nextStatus && nextStatus !== previousStatus) {
+        const oldStatusLabel = formatKnownValueAr(
+          ORDER_STATUS_LABELS_AR,
+          previousStatus,
+        );
+        const newStatusLabel = formatKnownValueAr(
+          ORDER_STATUS_LABELS_AR,
+          nextStatus,
+        );
+
+        await this.activityLogService.create(
+          {
+            tenantId: order.tenant_id,
+            actorUserId: actorUserId ?? null,
+            entityType: ActivityEntityTypes.Order,
+            entityId: order.id,
+            action: this.resolveOrderStatusActivityAction(nextStatus),
+            title: 'تم تغيير حالة الطلب',
+            description: `تم تغيير حالة الطلب من ${oldStatusLabel} إلى ${newStatusLabel}`,
+            oldValues: { status: previousStatus },
+            newValues: { status: nextStatus },
+            metadata:
+              nextStatus === OrderStatus.CANCELLED
+                ? {
+                    cancellation_reason_provided: Boolean(
+                      updateOrderDto.cancellation_reason?.trim(),
+                    ),
+                  }
+                : undefined,
+            source: ActivitySources.Dashboard,
+          },
+          manager,
+        );
+      }
+
+      if (
+        updateOrderDto.total !== undefined &&
+        String(order.total ?? '') !== String(updateOrderDto.total ?? '')
+      ) {
+        await this.activityLogService.create(
+          {
+            tenantId: order.tenant_id,
+            actorUserId: actorUserId ?? null,
+            entityType: ActivityEntityTypes.Order,
+            entityId: order.id,
+            action: ActivityActions.OrderTotalChanged,
+            title: 'تم تعديل إجمالي الطلب',
+            description: `تم تعديل إجمالي الطلب من ${order.total ?? 'غير محدد'} إلى ${updateOrderDto.total} جنيه`,
+            oldValues: { total: this.toActivityNumber(order.total) },
+            newValues: { total: updateOrderDto.total },
+            source: ActivitySources.Dashboard,
+          },
+          manager,
+        );
+      }
+
       return updatedOrder as OrderWithItemsPayload;
     };
 
@@ -660,6 +769,7 @@ export class OrdersService {
     tenantId: number,
     itemId: number,
     replacementProductId: number | null,
+    actorUserId?: number,
   ): Promise<OrderItem> {
     const orderItem = await this.orderItemClient().findFirst({
       where: { id: itemId },
@@ -721,6 +831,29 @@ export class OrdersService {
       },
     });
 
+    await this.activityLogService.create({
+      tenantId,
+      actorUserId: actorUserId ?? null,
+      entityType: ActivityEntityTypes.Order,
+      entityId: orderItem.order_id,
+      action: ActivityActions.OrderReplacementProposed,
+      title: 'تم اقتراح بديل لمنتج',
+      description: `تم اقتراح ${replacement.name} كبديل عن ${orderItem.name_snapshot}`,
+      oldValues: {
+        pending_replacement_product_id:
+          orderItem.pending_replacement_product_id,
+      },
+      newValues: {
+        pending_replacement_product_id: replacement.id,
+      },
+      metadata: {
+        order_item_id: orderItem.id,
+        original_product_name: orderItem.name_snapshot,
+        replacement_product_name: replacement.name,
+      },
+      source: ActivitySources.Dashboard,
+    });
+
     await this.notifyCustomerReplacementRequested(
       savedItem.order_id,
       savedItem.id,
@@ -735,7 +868,9 @@ export class OrdersService {
   async resetOrderItemReplacement(
     tenantId: number,
     itemId: number,
+    actorUserId?: number,
   ): Promise<OrderItem> {
+    void actorUserId;
     const orderItem = await this.orderItemClient().findFirst({
       where: { id: itemId },
       include: { order: true },
@@ -825,6 +960,38 @@ export class OrdersService {
             },
     });
 
+    await this.activityLogService.create({
+      tenantId: orderItem.order.tenant_id,
+      entityType: ActivityEntityTypes.Order,
+      entityId: orderItem.order_id,
+      action:
+        decision === ReplacementDecisionAction.APPROVE
+          ? ActivityActions.OrderReplacementApproved
+          : ActivityActions.OrderReplacementRejected,
+      title:
+        decision === ReplacementDecisionAction.APPROVE
+          ? 'وافق العميل على البديل'
+          : 'رفض العميل البديل',
+      description:
+        decision === ReplacementDecisionAction.APPROVE
+          ? `وافق العميل على البديل المقترح للمنتج ${orderItem.name_snapshot}`
+          : `رفض العميل البديل المقترح للمنتج ${orderItem.name_snapshot}`,
+      oldValues: {
+        replacement_decision_status: ReplacementDecisionStatus.PENDING,
+      },
+      newValues: {
+        replacement_decision_status:
+          decision === ReplacementDecisionAction.APPROVE
+            ? ReplacementDecisionStatus.APPROVED
+            : ReplacementDecisionStatus.REJECTED,
+      },
+      metadata: {
+        order_item_id: orderItem.id,
+        reason_provided: Boolean(normalizedReason),
+      },
+      source: ActivitySources.Storefront,
+    });
+
     await this.notifyMerchantReplacementDecision(
       savedItem.order_id,
       savedItem.id,
@@ -863,6 +1030,19 @@ export class OrdersService {
       include: { customer: true, tenant: true, delivery_area: true },
     })) as unknown as Order;
 
+    await this.activityLogService.create({
+      tenantId: order.tenant_id,
+      entityType: ActivityEntityTypes.Order,
+      entityId: order.id,
+      action: ActivityActions.OrderRejectedByCustomer,
+      title: 'رفض العميل الطلب',
+      description: 'رفض العميل الطلب من صفحة التتبع',
+      oldValues: { status: order.status },
+      newValues: { status: OrderStatus.REJECTED_BY_CUSTOMER },
+      metadata: { rejection_reason_provided: Boolean(reason?.trim()) },
+      source: ActivitySources.Storefront,
+    });
+
     await this.notifyCustomerStatusChange(savedOrder);
     await this.bumpDashboardCacheVersion(savedOrder.tenant_id);
     return savedOrder;
@@ -875,6 +1055,7 @@ export class OrdersService {
     tenantId: number,
     itemId: number,
     totalPrice: number,
+    actorUserId?: number,
   ): Promise<OrderItem> {
     const normalizedTotal = this.roundCurrency(Number(totalPrice));
     if (Number.isNaN(normalizedTotal) || normalizedTotal <= 0) {
@@ -932,6 +1113,33 @@ export class OrdersService {
           );
         }
 
+        await this.activityLogService.create(
+          {
+            tenantId,
+            actorUserId: actorUserId ?? null,
+            entityType: ActivityEntityTypes.Order,
+            entityId: orderItem.order_id,
+            action: ActivityActions.OrderItemPriceChanged,
+            title: 'تم تعديل سعر منتج في الطلب',
+            description: `تم تعديل سعر ${orderItem.name_snapshot} إلى ${normalizedTotal} جنيه`,
+            oldValues: {
+              total_price: this.toActivityNumber(orderItem.total_price),
+              unit_price: this.toActivityNumber(orderItem.unit_price),
+            },
+            newValues: {
+              total_price: normalizedTotal,
+              unit_price: normalizedUnitPrice,
+            },
+            metadata: {
+              order_item_id: orderItem.id,
+              product_id: targetProductId,
+              product_name: orderItem.name_snapshot,
+            },
+            source: ActivitySources.Dashboard,
+          },
+          manager,
+        );
+
         return savedItem;
       },
     );
@@ -945,6 +1153,7 @@ export class OrdersService {
   async markOrderItemOutOfStock(
     tenantId: number,
     itemId: number,
+    actorUserId?: number,
   ): Promise<OrderItem> {
     const savedItem = await this.withTenantManager(
       tenantId,
@@ -988,6 +1197,33 @@ export class OrdersService {
         }
 
         await this.recalculateOrderTotals(manager, orderItem.order_id);
+
+        await this.activityLogService.create(
+          {
+            tenantId,
+            actorUserId: actorUserId ?? null,
+            entityType: ActivityEntityTypes.Order,
+            entityId: orderItem.order_id,
+            action: ActivityActions.OrderItemOutOfStock,
+            title: 'تم تحديد منتج غير متوفر',
+            description: `تم تحديد ${orderItem.name_snapshot} كمنتج غير متوفر في الطلب`,
+            oldValues: {
+              is_out_of_stock: orderItem.is_out_of_stock,
+              total_price: this.toActivityNumber(orderItem.total_price),
+            },
+            newValues: {
+              is_out_of_stock: true,
+              total_price: 0,
+            },
+            metadata: {
+              order_item_id: orderItem.id,
+              product_id: orderItem.product_id,
+              product_name: orderItem.name_snapshot,
+            },
+            source: ActivitySources.Dashboard,
+          },
+          manager,
+        );
 
         return savedItem;
       },
@@ -1434,6 +1670,33 @@ export class OrdersService {
         `Invalid status transition from ${current} to ${next}`,
       );
     }
+  }
+
+  /**
+   * Maps important order terminal statuses to specific activity actions.
+   */
+  private resolveOrderStatusActivityAction(nextStatus: OrderStatus): string {
+    if (nextStatus === OrderStatus.CANCELLED) {
+      return ActivityActions.OrderCancelled;
+    }
+
+    if (nextStatus === OrderStatus.COMPLETED) {
+      return ActivityActions.OrderCompleted;
+    }
+
+    return ActivityActions.OrderStatusChanged;
+  }
+
+  /**
+   * Converts Prisma decimal-like values into JSON-safe activity numbers.
+   */
+  private toActivityNumber(value: unknown): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   /**

@@ -91,7 +91,10 @@ export class ProductsController {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.productsService.create(tenantId, createProductDto, file);
+    return this.productsService.create(tenantId, createProductDto, file, {
+      userId: req.user?.userId,
+      source: 'dashboard',
+    });
   }
 
   @Post('from-catalog')
@@ -112,7 +115,10 @@ export class ProductsController {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.productsService.createFromCatalog(tenantId, body);
+    return this.productsService.createFromCatalog(tenantId, body, {
+      userId: req.user?.userId,
+      source: 'dashboard',
+    });
   }
 
   @Post('import')
@@ -144,7 +150,10 @@ export class ProductsController {
     if (!file) {
       throw new BadRequestException('Product sheet file is required');
     }
-    return this.productsService.importProductsFromCsv(tenantId, file);
+    return this.productsService.importProductsFromCsv(tenantId, file, {
+      userId: req.user?.userId,
+      source: 'csv_import',
+    });
   }
 
   @Post('bulk-essentials')
@@ -165,7 +174,10 @@ export class ProductsController {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.productsService.bulkAddEssentials(tenantId, body);
+    return this.productsService.bulkAddEssentials(tenantId, body, {
+      userId: req.user?.userId,
+      source: 'dashboard',
+    });
   }
 
   @Get('bulk-essentials/stages')
@@ -336,7 +348,10 @@ export class ProductsController {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.productsService.bulkUpdate(tenantId, body);
+    return this.productsService.bulkUpdate(tenantId, body, {
+      userId: req.user?.userId,
+      source: 'dashboard',
+    });
   }
 
   @Get('import-template')
@@ -458,7 +473,10 @@ export class ProductsController {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.productsService.update(+id, tenantId, updateProductDto, file);
+    return this.productsService.update(+id, tenantId, updateProductDto, file, {
+      userId: req.user?.userId,
+      source: 'dashboard',
+    });
   }
 
   @Delete(':id')
@@ -475,7 +493,10 @@ export class ProductsController {
       throw new UnauthorizedException('Tenant context is required');
     }
 
-    return this.productsService.remove(+id, tenantId);
+    return this.productsService.remove(+id, tenantId, {
+      userId: req.user?.userId,
+      source: 'dashboard',
+    });
   }
 
   private parseAvailabilityFromRequestBody(req: Request): boolean | undefined {
