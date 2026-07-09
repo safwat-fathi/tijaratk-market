@@ -33,7 +33,7 @@ type ResultState = {
 const buildSuccessMessage = (count: number) =>
   count > 0
     ? `تمت إضافة ${count} منتج من التشكيلة الأساسية بنجاح.`
-    : "كل منتجات التشكيلة الأساسية موجودة بالفعل في المتجر.";
+    : "لا توجد منتجات جديدة لإضافتها.";
 
 export default function BulkEssentialWizard({
   isOpen,
