@@ -150,6 +150,85 @@ describe('ProductsService fuzzy product search', () => {
   });
 });
 
+describe('ProductsService public storefront categories', () => {
+  const createService = () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn(),
+      tenant: {
+        findUnique: jest.fn(),
+      },
+      catalogCategory: {
+        findMany: jest.fn(),
+      },
+    };
+    const service = new ProductsService(
+      prisma as any,
+      {} as any,
+      {} as any,
+      { create: jest.fn() } as any,
+      { get: jest.fn(), set: jest.fn() } as any,
+    );
+
+    return { service, prisma };
+  };
+
+  it('returns a grocery category image from the grocery catalog source', async () => {
+    const { service, prisma } = createService();
+    prisma.tenant.findUnique.mockResolvedValue({
+      category: 'grocery',
+      status: 'active',
+    });
+    prisma.$queryRawUnsafe.mockResolvedValue([
+      { category: 'مشروبات', count: 4 },
+    ]);
+    prisma.catalogCategory.findMany.mockResolvedValue([
+      { name: 'مشروبات', image_url: '/uploads/categories/drinks.webp' },
+    ]);
+
+    await expect(service.findPublicCategoriesByTenantSlug('market-a')).resolves
+      .toEqual([
+        {
+          category: 'مشروبات',
+          count: 4,
+          image_url: '/uploads/categories/drinks.webp',
+        },
+      ]);
+
+    expect(prisma.catalogCategory.findMany).toHaveBeenCalledWith({
+      where: {
+        source: 'talabat_csv',
+        deleted_at: null,
+        name: { in: ['مشروبات'] },
+      },
+      select: { name: true, image_url: true },
+    });
+  });
+
+  it('uses the pharmacy source and falls back to null when no image exists', async () => {
+    const { service, prisma } = createService();
+    prisma.tenant.findUnique.mockResolvedValue({
+      category: 'pharmacy',
+      status: 'active',
+    });
+    prisma.$queryRawUnsafe.mockResolvedValue([
+      { category: 'أدوية', count: 2 },
+    ]);
+    prisma.catalogCategory.findMany.mockResolvedValue([]);
+
+    await expect(service.findPublicCategoriesByTenantSlug('pharmacy-a')).resolves
+      .toEqual([{ category: 'أدوية', count: 2, image_url: null }]);
+
+    expect(prisma.catalogCategory.findMany).toHaveBeenCalledWith({
+      where: {
+        source: 'chefaa_csv',
+        deleted_at: null,
+        name: { in: ['أدوية'] },
+      },
+      select: { name: true, image_url: true },
+    });
+  });
+});
+
 describe('ProductsService bulk essentials', () => {
   const createBulkEssentialService = () => {
     const prisma = {

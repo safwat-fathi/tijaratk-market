@@ -98,7 +98,7 @@ type PublicProductsResult = {
 type PublicProductCategorySummary = {
   category: string;
   count: number;
-  image_url?: string | null;
+  image_url: string | null;
 };
 
 type TenantProductsSearchResult = {

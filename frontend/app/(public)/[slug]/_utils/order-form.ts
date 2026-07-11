@@ -19,7 +19,7 @@ export type CategoryTab = {
 	key: string;
 	label: string;
 	count: number;
-	image_url?: string | null;
+	image_url: string | null;
 };
 
 const parseProductPrice = (product?: Product): number | null => {
@@ -190,7 +190,7 @@ export const buildCategoryTabs = (
 				  ).map(([category, count]) => ({
 						category,
 						count,
-						image_url: undefined,
+						image_url: null,
 				  }));
 
 	const allCount =
@@ -203,7 +203,8 @@ export const buildCategoryTabs = (
 			key: ALL_PRODUCTS_CATEGORY,
 			label: "الكل",
 			count: allCount,
-			image_url: categoriesSource.find(item => item.image_url)?.image_url,
+			image_url:
+				categoriesSource.find(item => item.image_url)?.image_url ?? null,
 		},
 		...categoriesSource.map(category => ({
 			key: category.category,
