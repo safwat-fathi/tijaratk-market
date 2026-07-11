@@ -708,9 +708,11 @@ enum TenantCategory {
 }
 
 enum TenantStatus {
+  pending
   active
   inactive
   suspended
+  rejected
 
   @@map("tenants_status_enum")
 }

@@ -9,12 +9,14 @@ import { ProductsModule } from '../products/products.module';
 import { TenantCancellationPolicyModule } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.module';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import { StoresDirectoryModule } from 'src/stores-directory/stores-directory.module';
+import { ActivityLogModule } from 'src/activity-log/activity-log.module';
 
 @Module({
   imports: [
     PrismaModule,
     ProductsModule,
     StoresDirectoryModule,
+    ActivityLogModule,
     TenantCancellationPolicyModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

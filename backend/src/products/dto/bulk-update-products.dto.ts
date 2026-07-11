@@ -32,7 +32,7 @@ export class BulkUpdateProductsDto {
   @Transform(({ value }) => normalizeBulkIds(value))
   @IsArray()
   @ArrayNotEmpty()
-  @ArrayMaxSize(100)
+  @ArrayMaxSize(500)
   @IsInt({ each: true })
   @Min(1, { each: true })
   ids!: number[];

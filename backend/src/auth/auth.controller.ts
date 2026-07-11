@@ -67,11 +67,15 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @ApiOperation({
-    summary: 'Register a new tenant',
-    description: 'Register a new tenant/store owner',
+    summary: 'Submit a merchant application',
+    description:
+      'Create a pending tenant/store owner application for admin review',
   })
   @ApiBody({ type: SignupDto })
-  @ApiResponse({ status: 201, description: 'Tenant successfully created' })
+  @ApiResponse({
+    status: 201,
+    description: 'Merchant application received without issuing a token',
+  })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   async signup(@Body() signupDto: SignupDto) {
     return this.authService.signup(signupDto);

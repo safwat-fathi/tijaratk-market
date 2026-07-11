@@ -1,10 +1,41 @@
 import { BadRequestException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { ProductsService } from './products.service';
 import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
+import { BulkUpdateProductsDto } from './dto/bulk-update-products.dto';
+
+describe('BulkUpdateProductsDto', () => {
+  it('accepts merchant selections above the previous 100 product limit', async () => {
+    const ids = Array.from({ length: 184 }, (_, index) => index + 1);
+    const dto = plainToInstance(BulkUpdateProductsDto, {
+      ids,
+      is_available: false,
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+    expect(dto.ids).toHaveLength(184);
+  });
+
+  it('keeps a cap on very large bulk selections', async () => {
+    const ids = Array.from({ length: 501 }, (_, index) => index + 1);
+    const dto = plainToInstance(BulkUpdateProductsDto, {
+      ids,
+      is_available: true,
+    });
+
+    const errors = await validate(dto);
+    const idsError = errors.find((error) => error.property === 'ids');
+
+    expect(idsError?.constraints).toHaveProperty('arrayMaxSize');
+  });
+});
 
 describe('ProductsService fuzzy product search', () => {
   const createService = () => {
@@ -82,6 +113,7 @@ describe('ProductsService fuzzy product search', () => {
 
     const dataQuery = prisma.$queryRawUnsafe.mock.calls[0][0] as string;
     expect(dataQuery).toContain('tenant.slug = $1');
+    expect(dataQuery).toContain("tenant.status = 'active'");
     expect(dataQuery).toContain('product.name_normalized');
     expect(dataQuery).toContain('product.deleted_at IS NULL');
   });
@@ -258,6 +290,93 @@ describe('ProductsService bulk essentials', () => {
       service.bulkAddEssentials(77, { all_essential_items: true }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(tx.catalogItem.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProductsService bulk update', () => {
+  const createBulkUpdateService = () => {
+    const prisma = {
+      product: {
+        findMany: jest.fn(),
+      },
+    };
+    const activityLogService = {
+      create: jest.fn(),
+    };
+    const service = new ProductsService(
+      prisma as any,
+      {} as any,
+      {} as any,
+      activityLogService as any,
+      { get: jest.fn(), set: jest.fn() } as any,
+    ) as any;
+    service.update = jest.fn().mockResolvedValue({});
+
+    return { service, prisma, activityLogService };
+  };
+
+  it('updates 184 selected tenant products through the normal update path', async () => {
+    const { service, prisma, activityLogService } = createBulkUpdateService();
+    const ids = Array.from({ length: 184 }, (_, index) => index + 1);
+    prisma.product.findMany.mockResolvedValue(
+      ids.map((id) => ({ id, tenant_id: 88 })),
+    );
+
+    const result = await service.bulkUpdate(
+      88,
+      { ids, is_available: false },
+      { userId: 7, source: 'dashboard' },
+    );
+
+    expect(prisma.product.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ids },
+        tenant_id: 88,
+        deleted_at: null,
+      },
+      select: { id: true, tenant_id: true },
+      orderBy: { id: 'asc' },
+    });
+    expect(service.update).toHaveBeenCalledTimes(184);
+    expect(service.update).toHaveBeenCalledWith(
+      ids[0],
+      88,
+      { is_available: false },
+    );
+    expect(activityLogService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 88,
+        actorUserId: 7,
+        metadata: {
+          product_ids: ids,
+          changed_fields: ['is_available'],
+        },
+      }),
+    );
+    expect(result).toEqual({ success: true, count: 184 });
+  });
+
+  it('maps category and archive status into the bulk update payload', async () => {
+    const { service, prisma } = createBulkUpdateService();
+    prisma.product.findMany.mockResolvedValue([
+      { id: 3, tenant_id: 88 },
+      { id: 4, tenant_id: 88 },
+    ]);
+
+    await service.bulkUpdate(88, {
+      ids: [3, 4],
+      category: 'مشروبات',
+      status: ProductStatus.ARCHIVED,
+    });
+
+    expect(service.update).toHaveBeenNthCalledWith(1, 3, 88, {
+      category: 'مشروبات',
+      status: ProductStatus.ARCHIVED,
+    });
+    expect(service.update).toHaveBeenNthCalledWith(2, 4, 88, {
+      category: 'مشروبات',
+      status: ProductStatus.ARCHIVED,
+    });
   });
 });
 

@@ -39,9 +39,11 @@ export function AdminMerchantFilters({ areas }: AdminMerchantFiltersProps) {
 
   const statusOptions = [
     { label: "الكل", value: "all" },
+    { label: "طلبات قيد المراجعة", value: "pending" },
     { label: "نشط", value: "active" },
     { label: "غير نشط", value: "inactive" },
     { label: "موقوف", value: "suspended" },
+    { label: "مرفوض", value: "rejected" },
   ];
 
   const categoryOptions = [

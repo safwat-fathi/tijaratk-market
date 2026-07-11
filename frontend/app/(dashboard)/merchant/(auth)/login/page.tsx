@@ -3,7 +3,7 @@ import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
 export const metadata = createNoIndexMetadata(
 	"تسجيل دخول التاجر",
-	"قم بتسجيل الدخول إلى حساب التاجر الخاص بك لإدارة متجرك والبدء في تلقي الطلبات.",
+	"سجّل الدخول إلى حساب التاجر بعد تواصل فريق تجارتك معك واعتماد طلب الانضمام.",
 );
 
 export default function LoginPage() {

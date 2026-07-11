@@ -24,6 +24,7 @@ type AdminLoginResponse = {
 type AdminDashboardStats = {
 	totalMerchants: number;
 	activeMerchants: number;
+	pendingApplications: number;
 	totalOrders: number;
 	totalPlans: number;
 };
@@ -93,7 +94,7 @@ export type AdminTenant = {
 	name: string;
 	phone: string;
 	slug: string;
-	status: "active" | "inactive" | "suspended";
+	status: "pending" | "active" | "inactive" | "suspended" | "rejected";
 	category?: AdminTenantCategory;
 	last_bulk_essentials_added_at?: string | null;
 	_count?: AdminTenantCount;

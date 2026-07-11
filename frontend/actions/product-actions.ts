@@ -511,13 +511,13 @@ export async function removeProductAction(productId: number) {
     if (!response.success) {
       return {
         success: false,
-        message: response.message || 'تعذر حذف المنتج',
+        message: response.message || 'تعذر حذف المنتج من المتجر',
       };
     }
 
     return {
       success: true,
-      message: 'تم حذف المنتج',
+      message: 'اتشال المنتج من المتجر',
     };
   } catch (error) {
     if (isNextRedirectError(error)) {
@@ -527,7 +527,7 @@ export async function removeProductAction(productId: number) {
     console.error('Remove product failed:', error);
     return {
       success: false,
-      message: 'تعذر حذف المنتج',
+      message: 'تعذر حذف المنتج من المتجر',
     };
   }
 }

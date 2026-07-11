@@ -29,6 +29,41 @@ export default function RegisterForm() {
     initialState,
   );
 
+  if (state.success) {
+    return (
+      <Card className="w-full max-w-md px-6 py-8 text-center sm:px-10">
+        <Logo
+          variant="icon"
+          width={72}
+          height={72}
+          className="mx-auto mb-5 rounded-xl"
+        />
+        <div
+          className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-success/10 text-2xl text-status-success"
+          aria-hidden="true"
+        >
+          ✓
+        </div>
+        <h2 className="mt-4 text-2xl font-bold text-brand-text">
+          تم استلام طلب انضمام متجرك
+        </h2>
+        <p className="mt-3 leading-7 text-muted-foreground">
+          سيراجع فريق تجارتك بياناتك ويتواصل معك لاستكمال التحقق وطلب
+          المستندات القانونية الخاصة بالنشاط.
+        </p>
+        <div className="mt-5 rounded-xl border border-brand-border bg-brand-soft/30 p-4 text-sm leading-7 text-brand-text">
+          لن تتمكن من تسجيل الدخول قبل أن يتواصل معك الفريق ويتم اعتماد الطلب.
+        </div>
+        <Link
+          href="/"
+          className="mt-6 inline-flex font-bold text-brand-primary hover:text-brand-primary-hover"
+        >
+          العودة إلى الرئيسية
+        </Link>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full max-w-md px-6 py-8 sm:px-10">
       <div className="mb-6 flex flex-col items-center text-center">
@@ -39,10 +74,10 @@ export default function RegisterForm() {
           className="mb-4 rounded-xl"
         />
         <h2 className="text-3xl font-bold tracking-tight text-brand-text">
-          إنشاء حساب
+          طلب انضمام متجر
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          ابدأ متجرك مع تجارتك
+          أدخل بياناتك وسنتواصل معك بعد مراجعة الطلب
         </p>
       </div>
 
@@ -149,9 +184,14 @@ export default function RegisterForm() {
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             <p className="leading-relaxed">
-              <strong className="text-brand-text">تنويه:</strong> المنصة غير
-              مسؤولة عن أي منتج تالف، منتهي الصلاحية أو غير صالح للاستخدام
-              الآدمي.
+              <strong className="text-brand-text">قبل الإرسال:</strong> الطلب
+              يخضع لمراجعة الإدارة، وسيتواصل معك الفريق لطلب المستندات
+              القانونية وإثباتات النشاط. لن يتاح تسجيل الدخول إلا بعد
+              الاعتماد.
+              <span className="mt-2 block">
+                المنصة غير مسؤولة عن أي منتج تالف أو منتهي الصلاحية أو غير
+                صالح للاستخدام الآدمي.
+              </span>
             </p>
           </div>
         </div>
@@ -169,7 +209,7 @@ export default function RegisterForm() {
         )}
 
         <Button type="submit" disabled={isPending} className="w-full">
-          {isPending ? "جاري الإنشاء…" : "إنشاء حساب"}
+          {isPending ? "جاري إرسال الطلب…" : "إرسال طلب الانضمام"}
         </Button>
       </form>
 
@@ -177,7 +217,7 @@ export default function RegisterForm() {
         <div className="relative">
           <div className="relative flex justify-center text-sm">
             <span className="bg-white px-2 text-muted-foreground">
-              لديك حساب بالفعل؟{" "}
+              تم اعتماد حسابك بالفعل؟{" "}
               <Link
                 href="/merchant/login"
                 className="font-medium text-brand-primary hover:text-brand-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"

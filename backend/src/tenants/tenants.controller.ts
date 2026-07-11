@@ -131,7 +131,7 @@ export class TenantsController {
       throw new NotFoundException(`Tenant with slug ${slug} not found`);
     }
 
-    if (tenant.status === TenantStatus.suspended) {
+    if (tenant.status !== TenantStatus.active) {
       throw new ForbiddenException('هذا المتجر غير متاح حاليا');
     }
 

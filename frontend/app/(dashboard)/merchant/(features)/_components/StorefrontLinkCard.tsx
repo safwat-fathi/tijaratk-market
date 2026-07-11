@@ -8,7 +8,7 @@ import type { ProductReadinessMetric } from "@/types/services/merchant-dashboard
 
 interface StorefrontLinkCardProps {
   slug?: string;
-  status?: "active" | "inactive" | "suspended";
+  status?: "pending" | "active" | "inactive" | "suspended" | "rejected";
   deliveryAvailable?: boolean;
   productReadiness?: ProductReadinessMetric;
 }

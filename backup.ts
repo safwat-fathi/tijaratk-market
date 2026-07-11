@@ -317,14 +317,7 @@ export class ProductsService {
     options?: TenantProductsSearchOptions,
   ): Promise<TenantProductsSearchResult> {
     return this.runAsTenantForAdmin(tenantId, () =>
-      this.searchTenantProducts(
-        tenantId,
-        search,
-        category,
-        page,
-        limit,
-        options,
-      ),
+      this.searchTenantProducts(tenantId, search, category, page, limit, options),
     );
   }
 
@@ -453,9 +446,7 @@ export class ProductsService {
 
         if (deletedCount > 0) {
           await this.bumpTenantSearchCacheVersion(tenantId);
-          await this.storesDirectoryService.recalculateTenantReadiness(
-            tenantId,
-          );
+          await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
         }
       }
 
@@ -576,15 +567,11 @@ export class ProductsService {
     if (dto.all_essential_items === true) {
       result = await this.bulkAddAllEssentialItems(tenantId);
     } else {
-      const selectedItemIds = this.normalizeCatalogItemIds(
-        dto.catalog_item_ids,
-      );
+      const selectedItemIds = this.normalizeCatalogItemIds(dto.catalog_item_ids);
       const normalizedCategory = this.normalizeOptionalCategory(dto.category);
       if (selectedItemIds.length > 0) {
         if (!normalizedCategory) {
-          throw new BadRequestException(
-            'Category is required for selected item import.',
-          );
+          throw new BadRequestException('Category is required for selected item import.');
         }
 
         result = await this.bulkAddEssentialItemsById(
@@ -598,15 +585,10 @@ export class ProductsService {
           .filter((category): category is string => Boolean(category));
 
         if (categories.length === 0) {
-          throw new BadRequestException(
-            'At least one category or catalog item is required.',
-          );
+          throw new BadRequestException('At least one category or catalog item is required.');
         }
 
-        result = await this.bulkAddEssentialItemsByCategories(
-          tenantId,
-          categories,
-        );
+        result = await this.bulkAddEssentialItemsByCategories(tenantId, categories);
       }
     }
 
@@ -635,9 +617,7 @@ export class ProductsService {
   /**
    * Returns staged essential bulk candidates grouped by category.
    */
-  async findBulkEssentialStages(
-    tenantId: number,
-  ): Promise<BulkEssentialStage[]> {
+  async findBulkEssentialStages(tenantId: number): Promise<BulkEssentialStage[]> {
     const catalogSource = await this.resolveTenantCatalogSource(tenantId);
     if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
       return [];
@@ -661,14 +641,9 @@ export class ProductsService {
       catalogItems,
     );
 
-    const groupedItems = new Map<
-      string,
-      (CatalogItem & { is_in_stock?: boolean })[]
-    >();
+    const groupedItems = new Map<string, (CatalogItem & { is_in_stock?: boolean })[]>();
     for (const item of enrichedCatalogItems) {
-      const category = this.normalizeOptionalCategory(
-        item.category ?? undefined,
-      );
+      const category = this.normalizeOptionalCategory(item.category ?? undefined);
       if (!category) {
         continue;
       }
@@ -702,9 +677,7 @@ export class ProductsService {
       return DbTenantContext.run({ tenantId, manager: tx }, async () => {
         const catalogSource = await this.resolveTenantCatalogSource(tenantId);
         if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
-          throw new BadRequestException(
-            'Essential bulk import is only supported for supermarket tenants.',
-          );
+          throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
         }
 
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
@@ -741,9 +714,7 @@ export class ProductsService {
       return DbTenantContext.run({ tenantId, manager: tx }, async () => {
         const catalogSource = await this.resolveTenantCatalogSource(tenantId);
         if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
-          throw new BadRequestException(
-            'Essential bulk import is only supported for supermarket tenants.',
-          );
+          throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
         }
 
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
@@ -779,9 +750,7 @@ export class ProductsService {
       return DbTenantContext.run({ tenantId, manager: tx }, async () => {
         const catalogSource = await this.resolveTenantCatalogSource(tenantId);
         if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
-          throw new BadRequestException(
-            'Essential bulk import is only supported for supermarket tenants.',
-          );
+          throw new BadRequestException('Essential bulk import is only supported for supermarket tenants.');
         }
 
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
@@ -795,9 +764,7 @@ export class ProductsService {
         });
 
         if (catalogItems.length !== catalogItemIds.length) {
-          throw new BadRequestException(
-            'One or more selected catalog items are invalid for this category.',
-          );
+          throw new BadRequestException('One or more selected catalog items are invalid for this category.');
         }
 
         return this.createBulkEssentialProductsFromCatalogItems(
@@ -826,12 +793,8 @@ export class ProductsService {
       },
       select: { name: true },
     });
-    const existingNames = new Set(
-      existingProducts.map((product) => product.name),
-    );
-    const itemsToAdd = catalogItems.filter(
-      (item) => !existingNames.has(item.name),
-    );
+    const existingNames = new Set(existingProducts.map((product) => product.name));
+    const itemsToAdd = catalogItems.filter((item) => !existingNames.has(item.name));
 
     if (itemsToAdd.length === 0) {
       return { count: 0 };
@@ -865,11 +828,7 @@ export class ProductsService {
     });
 
     const uniqueCategories = Array.from(
-      new Set(
-        itemsToAdd
-          .map((item) => item.category)
-          .filter((category): category is string => Boolean(category)),
-      ),
+      new Set(itemsToAdd.map((item) => item.category).filter((category): category is string => Boolean(category))),
     );
     for (const itemCategory of uniqueCategories) {
       await this.storeTenantProductCategory(tenantId, itemCategory);
@@ -895,18 +854,15 @@ export class ProductsService {
         return rightEssential - leftEssential;
       }
 
-      const leftSortOrder =
-        left.essential_sort_order ?? Number.MAX_SAFE_INTEGER;
+      const leftSortOrder = left.essential_sort_order ?? Number.MAX_SAFE_INTEGER;
       const rightSortOrder =
         right.essential_sort_order ?? Number.MAX_SAFE_INTEGER;
       if (leftSortOrder !== rightSortOrder) {
         return leftSortOrder - rightSortOrder;
       }
 
-      const leftCompleteness =
-        Number(Boolean(left.image_url)) + Number(left.price != null);
-      const rightCompleteness =
-        Number(Boolean(right.image_url)) + Number(right.price != null);
+      const leftCompleteness = Number(Boolean(left.image_url)) + Number(left.price != null);
+      const rightCompleteness = Number(Boolean(right.image_url)) + Number(right.price != null);
       if (leftCompleteness !== rightCompleteness) {
         return rightCompleteness - leftCompleteness;
       }
@@ -1049,8 +1005,7 @@ export class ProductsService {
     const strictMatchThresholds =
       this.resolveStrictMatchThresholds(normalizedSearch);
     const tenantId = await this.resolveTenantIdBySlug(slug);
-    if (!tenantId)
-      return this.emptyPublicProductsResult(normalizedPage, normalizedLimit);
+    if (!tenantId) return this.emptyPublicProductsResult(normalizedPage, normalizedLimit);
     const cacheKey = tenantId
       ? await this.buildPublicProductSearchCacheKey(
           tenantId,
@@ -1107,8 +1062,7 @@ export class ProductsService {
       : 20;
     const normalizedCategory = category?.trim();
     const tenantId = await this.resolveTenantIdBySlug(slug);
-    if (!tenantId)
-      return this.emptyPublicProductsResult(normalizedPage, normalizedLimit);
+    if (!tenantId) return this.emptyPublicProductsResult(normalizedPage, normalizedLimit);
     const cacheKey = tenantId
       ? await this.buildPublicProductListCacheKey(
           tenantId,
@@ -1383,9 +1337,7 @@ export class ProductsService {
     }));
   }
 
-  private async getActiveTenantProductNames(
-    tenantId: number,
-  ): Promise<string[]> {
+  private async getActiveTenantProductNames(tenantId: number): Promise<string[]> {
     const products = await this.getPrismaClient().product.findMany({
       where: {
         tenant_id: tenantId,
@@ -1517,10 +1469,7 @@ export class ProductsService {
   /**
    * Hides a catalog item from a tenant's view.
    */
-  async hideCatalogItem(
-    tenantId: number,
-    catalogItemId: number,
-  ): Promise<void> {
+  async hideCatalogItem(tenantId: number, catalogItemId: number): Promise<void> {
     const catalogSource = await this.resolveTenantCatalogSource(tenantId);
     if (!catalogSource) {
       throw new NotFoundException(
@@ -1565,10 +1514,7 @@ export class ProductsService {
   /**
    * Unhides a catalog item for a tenant.
    */
-  async unhideCatalogItem(
-    tenantId: number,
-    catalogItemId: number,
-  ): Promise<void> {
+  async unhideCatalogItem(tenantId: number, catalogItemId: number): Promise<void> {
     try {
       await this.getPrismaClient().tenantHiddenCatalogItem.delete({
         where: {
@@ -1581,10 +1527,7 @@ export class ProductsService {
       await this.bumpCatalogSearchCacheVersion(tenantId);
     } catch (error) {
       // Ignore if it's already deleted/doesn't exist
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         return;
       }
       throw error;
@@ -1755,10 +1698,15 @@ export class ProductsService {
     }
 
     if (actor) {
-      await this.logProductUpdateActivity(tenantId, product, updatedProduct, {
-        imageChanged: previousImageUrl !== updatedProduct.image_url,
-        actor,
-      });
+      await this.logProductUpdateActivity(
+        tenantId,
+        product,
+        updatedProduct,
+        {
+          imageChanged: previousImageUrl !== updatedProduct.image_url,
+          actor,
+        },
+      );
     }
 
     return updatedProduct;
@@ -1788,9 +1736,10 @@ export class ProductsService {
     payload: BulkUpdateProductsDto,
     actor?: ProductActivityActor,
   ): Promise<{ success: true; count: number }> {
-    const { productIds, dto } = await this.prepareBulkProductUpdate(payload, {
-      tenantId,
-    });
+    const { productIds, dto } = await this.prepareBulkProductUpdate(
+      payload,
+      { tenantId },
+    );
 
     for (const productId of productIds) {
       await this.update(productId, tenantId, dto);
@@ -2855,9 +2804,7 @@ export class ProductsService {
     ]);
   }
 
-  private async getPublicProductCacheVersion(
-    tenantId: number,
-  ): Promise<string> {
+  private async getPublicProductCacheVersion(tenantId: number): Promise<string> {
     const versionKey = this.getPublicProductCacheVersionKey(tenantId);
     const cachedVersion = await this.cacheManager.get<string>(versionKey);
     if (cachedVersion) {
@@ -2902,9 +2849,7 @@ export class ProductsService {
     };
   }
 
-  private async getCatalogSearchCacheVersion(
-    tenantId: number,
-  ): Promise<string> {
+  private async getCatalogSearchCacheVersion(tenantId: number): Promise<string> {
     const versionKey = this.getCatalogSearchCacheVersionKey(tenantId);
     const cachedVersion = await this.cacheManager.get<string>(versionKey);
     if (cachedVersion) {

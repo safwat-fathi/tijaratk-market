@@ -131,7 +131,7 @@ export class OrdersService {
       throw new NotFoundException(`Tenant with slug ${tenantSlug} not found`);
     }
 
-    if (tenant.status === TenantStatus.suspended) {
+    if (tenant.status !== TenantStatus.active) {
       await this.deleteUploadedFileQuietly(prescriptionUpload);
       throw new ForbiddenException('هذا المتجر غير متاح حاليا');
     }

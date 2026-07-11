@@ -24,7 +24,7 @@ export default function LoginForm() {
 				<h2 className="text-3xl font-bold tracking-tight text-brand-text">
 					تسجيل الدخول
 				</h2>
-				<p className="mt-2 text-sm text-muted-foreground">الدخول إلى لوحة التحكم</p>
+				<p className="mt-2 text-sm text-muted-foreground">الدخول متاح بعد مراجعة الطلب واعتماده</p>
 			</div>
 
 			<form action={action} className="space-y-6">
@@ -86,12 +86,12 @@ export default function LoginForm() {
 				<div className="relative">
 					<div className="relative flex justify-center text-sm">
 						<span className="bg-white px-2 text-muted-foreground">
-							ليس لديك حساب؟{" "}
+							لم ترسل طلب انضمام؟{" "}
 							<Link
 								href="/merchant/register"
 								className="font-medium text-brand-primary hover:text-brand-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
 							>
-								إنشاء حساب
+								أرسل طلبك
 							</Link>
 						</span>
 					</div>

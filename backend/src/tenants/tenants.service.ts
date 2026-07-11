@@ -1,7 +1,7 @@
 import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, Tenant } from '../../generated/prisma/client';
+import { Prisma, Tenant, TenantStatus } from '../../generated/prisma/client';
 import { TENANT_CATEGORIES, TenantCategory } from './constants/tenant-category';
 import { generateUniqueSlug } from '../common/utils/slug.utils';
 import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-settings.dto';
@@ -22,6 +22,7 @@ export class TenantsService {
     phone: string,
     category?: TenantCategory,
     manager?: Prisma.TransactionClient,
+    status: TenantStatus = TenantStatus.active,
   ): Promise<Tenant> {
     const db = manager || this.prisma;
 
@@ -41,6 +42,7 @@ export class TenantsService {
         name: storeName,
         phone,
         slug,
+        status,
         category: category || TENANT_CATEGORIES.OTHER.value,
         delivery_fee: 20,
         ...(defaultPlan && {

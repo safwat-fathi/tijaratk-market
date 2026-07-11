@@ -244,10 +244,12 @@ export class AdminController {
   updateTenantStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateTenantStatusDto: UpdateTenantStatusDto,
+    @Req() req: Request & { user?: { userId?: number } },
   ) {
     return this.adminService.updateTenantStatus(
       id,
       updateTenantStatusDto.status,
+      req.user?.userId,
     );
   }
 

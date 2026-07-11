@@ -1,7 +1,10 @@
 import { adminService } from "@/services/api/admin.service";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { toggleTenantStatusAction } from "@/actions/admin-server";
+import {
+  decideTenantApplicationAction,
+  toggleTenantStatusAction,
+} from "@/actions/admin-server";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { redirect } from "next/navigation";
 import { PlanSelect } from "./_components/PlanSelect";
@@ -144,16 +147,22 @@ async function getDirectoryAreas() {
 
 function MerchantStatusBadge({ status }: { status: AdminTenant["status"] }) {
   const labels: Record<AdminTenant["status"], string> = {
+    pending: "قيد المراجعة",
     active: "نشط",
     inactive: "غير نشط",
     suspended: "موقوف",
+    rejected: "مرفوض",
   };
   const className =
     status === "active"
       ? "bg-green-100 text-green-800"
-      : status === "inactive"
-        ? "bg-gray-100 text-gray-800"
-        : "bg-red-100 text-red-800";
+      : status === "pending"
+        ? "bg-amber-100 text-amber-900"
+        : status === "rejected"
+          ? "bg-rose-100 text-rose-800"
+          : status === "inactive"
+            ? "bg-gray-100 text-gray-800"
+            : "bg-red-100 text-red-800";
 
   return (
     <span
@@ -197,6 +206,35 @@ function CancellationPolicySummary({ merchant }: { merchant: AdminTenant }) {
 }
 
 function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
+  if (merchant.status === "pending") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <form
+          action={decideTenantApplicationAction.bind(
+            null,
+            merchant.id,
+            "active",
+          )}
+        >
+          <Button type="submit" size="sm">
+            اعتماد الطلب
+          </Button>
+        </form>
+        <form
+          action={decideTenantApplicationAction.bind(
+            null,
+            merchant.id,
+            "rejected",
+          )}
+        >
+          <Button type="submit" variant="outline" size="sm">
+            رفض الطلب
+          </Button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <form
       action={toggleTenantStatusAction.bind(null, merchant.id, merchant.status)}
@@ -207,7 +245,13 @@ function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
         size="sm"
         className="w-full md:w-auto"
       >
-        {merchant.status === "active" ? "إيقاف" : "تفعيل"}
+        {merchant.status === "active"
+          ? "إيقاف"
+          : merchant.status === "suspended"
+            ? "إعادة تفعيل"
+            : merchant.status === "rejected"
+              ? "اعتماد الطلب"
+              : "تفعيل"}
       </Button>
     </form>
   );

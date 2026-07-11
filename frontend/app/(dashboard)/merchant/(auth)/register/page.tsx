@@ -2,8 +2,8 @@ import RegisterForm from "@/app/(dashboard)/merchant/(auth)/_components/auth/reg
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
 export const metadata = createNoIndexMetadata(
-	"إنشاء حساب تاجر",
-	"ابدأ رحلتك مع تجارتك وقم بإنشاء حساب لمتجرك بكل سهولة لتصل لعملائك بشكل أفضل.",
+	"طلب انضمام متجر",
+	"أرسل بيانات متجرك للمراجعة، وسيتواصل معك فريق تجارتك لاستكمال المستندات القانونية والاعتماد.",
 );
 
 export default function RegisterPage() {

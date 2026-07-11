@@ -60,6 +60,12 @@ export class AdminDashboardStatsResponseDto {
   activeMerchants: number;
 
   @ApiProperty({
+    description: 'Number of merchant applications awaiting review',
+    example: 8,
+  })
+  pendingApplications: number;
+
+  @ApiProperty({
     description: 'Total number of orders placed in the system',
     example: 1450,
   })

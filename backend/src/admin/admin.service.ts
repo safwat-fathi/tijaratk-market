@@ -45,6 +45,12 @@ import {
   UpdateSupermarketEssentialDto,
 } from './dto/supermarket-essential.dto';
 import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
+import { ActivityLogService } from 'src/activity-log/activity-log.service';
+import { ActivityActions } from 'src/activity-log/constants/activity-actions';
+import {
+  ActivityEntityTypes,
+  ActivitySources,
+} from 'src/activity-log/constants/activity-types';
 
 const CATALOG_EXPORT_COLUMNS = [
   'catalog_item_id',
@@ -109,6 +115,7 @@ export class AdminService {
     private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
     private readonly imageProcessorService: ImageProcessorService,
     private readonly storesDirectoryService: StoresDirectoryService,
+    private readonly activityLogService: ActivityLogService,
   ) {}
 
   async login(loginDto: AdminLoginDto) {
@@ -258,15 +265,19 @@ export class AdminService {
 
   // Dashboard Stats
   async getDashboardStats() {
-    const [tenants, activeMerchants, totalPlans] = await Promise.all([
-      this.prisma.tenant.findMany({
-        select: { id: true },
-      }),
-      this.prisma.tenant.count({
-        where: { status: TenantStatus.active },
-      }),
-      this.prisma.subscriptionPlan.count(),
-    ]);
+    const [tenants, activeMerchants, pendingApplications, totalPlans] =
+      await Promise.all([
+        this.prisma.tenant.findMany({
+          select: { id: true },
+        }),
+        this.prisma.tenant.count({
+          where: { status: TenantStatus.active },
+        }),
+        this.prisma.tenant.count({
+          where: { status: TenantStatus.pending },
+        }),
+        this.prisma.subscriptionPlan.count(),
+      ]);
 
     const orderCounts = await Promise.all(
       tenants.map((tenant) =>
@@ -281,6 +292,7 @@ export class AdminService {
     return {
       totalMerchants: tenants.length,
       activeMerchants,
+      pendingApplications,
       totalOrders: orderCounts.reduce((total, count) => total + count, 0),
       totalPlans,
     };
@@ -401,7 +413,11 @@ export class AdminService {
     };
   }
 
-  async updateTenantStatus(id: number, status: TenantStatus) {
+  async updateTenantStatus(
+    id: number,
+    status: TenantStatus,
+    adminUserId?: number,
+  ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
@@ -415,6 +431,34 @@ export class AdminService {
         id,
         tenant.status,
         status,
+        tx,
+      );
+
+      const action =
+        tenant.status === TenantStatus.pending && status === TenantStatus.active
+          ? ActivityActions.TenantApplicationApproved
+          : tenant.status === TenantStatus.pending &&
+              status === TenantStatus.rejected
+            ? ActivityActions.TenantApplicationRejected
+            : ActivityActions.TenantStatusChanged;
+
+      await this.activityLogService.create(
+        {
+          tenantId: id,
+          actorAdminId: adminUserId,
+          entityType: ActivityEntityTypes.Tenant,
+          entityId: id,
+          action,
+          title:
+            action === ActivityActions.TenantApplicationApproved
+              ? 'تم اعتماد طلب انضمام المتجر'
+              : action === ActivityActions.TenantApplicationRejected
+                ? 'تم رفض طلب انضمام المتجر'
+                : 'تم تغيير حالة المتجر',
+          oldValues: { status: tenant.status },
+          newValues: { status },
+          source: ActivitySources.Admin,
+        },
         tx,
       );
 

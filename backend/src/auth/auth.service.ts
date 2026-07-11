@@ -1,10 +1,19 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import twilio from 'twilio';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomInt } from 'node:crypto';
-import { User, UserRole } from '../../generated/prisma/client';
+import {
+  TenantStatus,
+  User,
+  UserRole,
+} from '../../generated/prisma/client';
 import { TenantsService } from '../tenants/tenants.service';
 import { SignupDto } from './dto/signup.dto';
 import { formatPhoneNumber } from 'src/common/utils/phone.util';
@@ -30,19 +39,49 @@ export class AuthService {
   ): Promise<Omit<User, 'password'> | null> {
     const normalizedPhone = formatPhoneNumber(phone);
 
-    const user =
-      await this.usersService.findOneByPhoneWithPassword(normalizedPhone);
+    const user = await this.prisma.user.findUnique({
+      where: { phone: normalizedPhone },
+      include: { tenant: { select: { status: true } } },
+    });
     if (!user) {
       return null;
     }
     const isMatch = await bcrypt.compare(pass, user.password);
-    if (user && isMatch) {
+    if (isMatch) {
+      this.assertTenantCanLogin(user.tenant.status);
       // Create a copy and remove password to safely satisfy strict typing
       const result = { ...user } as Partial<User>;
       delete result.password;
+      delete (result as Partial<User> & { tenant?: unknown }).tenant;
       return result as Omit<User, 'password'>;
     }
     return null;
+  }
+
+  private assertTenantCanLogin(status: TenantStatus): void {
+    const statusErrors: Partial<
+      Record<TenantStatus, { code: string; message: string }>
+    > = {
+      [TenantStatus.pending]: {
+        code: 'MERCHANT_APPROVAL_PENDING',
+        message:
+          'طلب الانضمام قيد المراجعة. سنتواصل معك بعد مراجعة البيانات والمستندات القانونية.',
+      },
+      [TenantStatus.rejected]: {
+        code: 'MERCHANT_APPLICATION_REJECTED',
+        message: 'تعذر اعتماد طلب الانضمام. تواصل معنا لمراجعة الطلب.',
+      },
+      [TenantStatus.inactive]: {
+        code: 'MERCHANT_ACCOUNT_INACTIVE',
+        message: 'الحساب غير نشط حالياً. تواصل معنا للمساعدة.',
+      },
+      [TenantStatus.suspended]: {
+        code: 'MERCHANT_ACCOUNT_SUSPENDED',
+        message: 'الحساب موقوف حالياً. تواصل معنا للمساعدة.',
+      },
+    };
+    const error = statusErrors[status];
+    if (error) throw new ForbiddenException(error);
   }
 
   login(user: Omit<User, 'password'>) {
@@ -78,20 +117,32 @@ export class AuthService {
       );
     }
 
-    // 1. Create Tenant
-    const tenant = await this.tenantsService.create(storeName, phone, category);
+    await this.prisma.$transaction(async (tx) => {
+      const tenant = await this.tenantsService.create(
+        storeName,
+        phone,
+        category,
+        tx,
+        TenantStatus.pending,
+      );
 
-    // 2. Create User (Owner)
-    const user = await this.usersService.create({
-      phone,
-      password,
-      name,
-      role: UserRole.owner,
-      tenant_id: tenant.id, // Link to the new tenant
+      await this.usersService.create(
+        {
+          phone,
+          password,
+          name,
+          role: UserRole.owner,
+          tenant_id: tenant.id,
+        },
+        tx,
+      );
     });
 
-    // 3. Return Login Response
-    return this.login(user);
+    return {
+      status: TenantStatus.pending,
+      code: 'MERCHANT_APPLICATION_RECEIVED',
+      message: 'تم استلام طلب انضمام متجرك وسيتم التواصل معك بعد المراجعة.',
+    };
   }
 
   private isNotificationsEnabled(): boolean {

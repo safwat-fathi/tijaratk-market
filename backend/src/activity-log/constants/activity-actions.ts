@@ -1,4 +1,7 @@
 export const ActivityActions = {
+  TenantStatusChanged: 'tenant.status_changed',
+  TenantApplicationApproved: 'tenant.application_approved',
+  TenantApplicationRejected: 'tenant.application_rejected',
   OrderCreated: 'order.created',
   OrderStatusChanged: 'order.status_changed',
   OrderCancelled: 'order.cancelled',
@@ -22,4 +25,3 @@ export const ActivityActions = {
 
 export type ActivityAction =
   (typeof ActivityActions)[keyof typeof ActivityActions];
-

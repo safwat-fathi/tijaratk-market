@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Ban, CheckCircle, CheckSquare, Pencil, Square, Trash2, X } from "lucide-react";
+import {
+  Archive,
+  Ban,
+  CheckCircle,
+  CheckSquare,
+  PackageOpen,
+  Pencil,
+  RotateCcw,
+  Square,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react";
 import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";
@@ -20,17 +32,17 @@ const availabilityFilters: {
   id: ProductAvailabilityFilter;
   label: string;
 }[] = [
-  { id: "all", label: "الكل" },
-  { id: "available", label: "متاح" },
-  { id: "unavailable", label: "غير متاح" },
+  { id: "all", label: "كل المنتجات" },
+  { id: "available", label: "متاحة للطلب" },
+  { id: "unavailable", label: "غير متاحة" },
 ];
 
 const productStatusFilters: {
   id: ProductStatusFilter;
   label: string;
 }[] = [
-  { id: "active", label: "نشطة" },
-  { id: "archived", label: "مؤرشفة" },
+  { id: "active", label: "في المتجر" },
+  { id: "archived", label: "مخفية من المتجر" },
 ];
 
 type MyProductsSectionProps = {
@@ -129,6 +141,11 @@ export default function MyProductsSection({
     visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
   const allCategoryCountLabel =
     formatArabicInteger(categoryFilterTotalCount) || categoryFilterTotalCount;
+  const selectedCountLabel =
+    formatArabicInteger(selectedIds.length) || selectedIds.length;
+  const visibleCountLabel =
+    formatArabicInteger(visibleIds.length) || visibleIds.length;
+  const hasSelectedProducts = selectedIds.length > 0;
 
   useEffect(() => {
     setSelectedIds((current) =>
@@ -188,9 +205,15 @@ export default function MyProductsSection({
       setBulkCategory("");
       setIsConfirmingBulkArchive(false);
       if (payload.status === "archived") {
-        setBulkMessage("تمت أرشفة المنتجات المحددة");
+        setBulkMessage("تم إخفاء المنتجات المحددة من المتجر");
       } else if (payload.status === "active") {
-        setBulkMessage("تم تنشيط المنتجات المحددة");
+        setBulkMessage("تمت إعادة المنتجات المحددة للمتجر");
+      } else if (payload.is_available === true) {
+        setBulkMessage("أصبحت المنتجات المحددة متاحة للطلب");
+      } else if (payload.is_available === false) {
+        setBulkMessage("تم إيقاف الطلب على المنتجات المحددة");
+      } else if (payload.category) {
+        setBulkMessage("تم تغيير تصنيف المنتجات المحددة");
       } else {
         setBulkMessage("تم تحديث المنتجات المحددة");
       }
@@ -305,7 +328,7 @@ export default function MyProductsSection({
             }`}
             aria-pressed={categoryFilter === allCategoryFilterKey}
           >
-            <span>الكل</span>
+            <span>كل التصنيفات</span>
             <span
               className={`rounded-full px-1.5 py-0.5 text-[11px] ${
                 categoryFilter === allCategoryFilterKey
@@ -382,28 +405,173 @@ export default function MyProductsSection({
 
         <div className="lg:pe-1">
           {bulkUpdateProducts && displayedProducts.length > 0 ? (
-            <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2">
-              <button
-                type="button"
-                onClick={() => setSelectedIds(allVisibleSelected ? [] : visibleIds)}
-                className="inline-flex min-h-10 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-700"
-              >
-                {allVisibleSelected ? (
-                  <CheckSquare className="h-4 w-4" />
-                ) : (
-                  <Square className="h-4 w-4" />
-                )}
-                تحديد الظاهر
-              </button>
-              <span className="text-xs font-semibold text-gray-500">
-                {selectedIds.length > 0 ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}
-              </span>
+            <div
+              className={`mt-4 rounded-xl border p-3 transition-colors ${
+                hasSelectedProducts
+                  ? "border-brand-accent/40 bg-brand-soft/45"
+                  : "border-gray-200 bg-gray-50"
+              }`}
+              aria-label="إجراءات على المنتجات المختارة"
+            >
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-gray-900">
+                    إجراءات على المنتجات المحددة
+                  </h3>
+                  <p
+                    className="mt-1 text-xs font-semibold text-gray-600"
+                    aria-live="polite"
+                  >
+                    {hasSelectedProducts
+                      ? `تم تحديد ${selectedCountLabel} منتج`
+                      : "حدد منتجات لتطبيق إجراء عليها"}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedIds(allVisibleSelected ? [] : visibleIds)
+                    }
+                    className="inline-flex min-h-11 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 shadow-sm transition hover:border-brand-accent hover:bg-white"
+                    aria-pressed={allVisibleSelected}
+                  >
+                    {allVisibleSelected ? (
+                      <CheckSquare className="h-4 w-4" />
+                    ) : (
+                      <Square className="h-4 w-4" />
+                    )}
+                    {allVisibleSelected
+                      ? "إلغاء تحديد المعروض"
+                      : "تحديد المعروض"}
+                    <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-500">
+                      {visibleCountLabel}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds([])}
+                    disabled={!hasSelectedProducts || isBulkPending}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" />
+                    إلغاء التحديد
+                  </button>
+                </div>
+              </div>
+
+              {bulkMessage ? (
+                <p
+                  className="mt-3 rounded-md border border-brand-accent/20 bg-white px-3 py-2 text-xs font-semibold text-brand-primary"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {bulkMessage}
+                </p>
+              ) : null}
+
+              {productStatusFilter === "active" ? (
+                <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(280px,1fr)_auto] xl:items-end">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_auto] sm:items-end">
+                    <Combobox
+                      name="bulk_category"
+                      label="التصنيف الجديد"
+                      options={bulkCategoryOptions}
+                      value={bulkCategory}
+                      onValueChange={setBulkCategory}
+                      inputClassName="h-11 px-3 text-sm bg-white"
+                      labelClassName="text-xs font-bold"
+                      placeholder="اكتب أو اختار التصنيف"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        isBulkPending ||
+                        !hasSelectedProducts ||
+                        !bulkCategory.trim()
+                      }
+                      onClick={() => runBulkAction({ category: bulkCategory })}
+                      className="min-h-11 shrink-0 px-3"
+                    >
+                      <Tag className="h-4 w-4" />
+                      غيّر التصنيف
+                    </Button>
+                  </div>
+
+                  <div className="flex gap-2 overflow-x-auto pb-1 xl:justify-end xl:pb-0">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={isBulkPending || !hasSelectedProducts}
+                      onClick={() => runBulkAction({ is_available: true })}
+                      className="min-h-11 shrink-0 px-3"
+                      title="ستصبح المنتجات ظاهرة ومتاحة للطلب"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      إتاحة الطلب
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={isBulkPending || !hasSelectedProducts}
+                      onClick={() => runBulkAction({ is_available: false })}
+                      className="min-h-11 shrink-0 px-3"
+                      title="ستبقى المنتجات ظاهرة ولكن لن يتمكن العميل من طلبها"
+                    >
+                      <Ban className="h-4 w-4" />
+                      إيقاف الطلب عليها
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        isConfirmingBulkArchive ? "destructive" : "outline"
+                      }
+                      disabled={isBulkPending || !hasSelectedProducts}
+                      onClick={handleRequestBulkArchive}
+                      className="min-h-11 shrink-0 px-3"
+                      title="سيتم حذف المنتجات من المتجر ويمكنك إعادتها لاحقاً"
+                    >
+                      <Archive className="h-4 w-4" />
+                      {isConfirmingBulkArchive
+                        ? "تأكيد الحذف"
+                        : "حذف من المتجر"}
+                    </Button>
+                    {isConfirmingBulkArchive ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={isBulkPending}
+                        onClick={() => setIsConfirmingBulkArchive(false)}
+                        className="min-h-11 shrink-0 px-3"
+                      >
+                        إلغاء
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={isBulkPending || !hasSelectedProducts}
+                    onClick={() => runBulkAction({ status: "active" })}
+                    className="min-h-11 shrink-0 px-3"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    إعادة للمتجر
+                  </Button>
+                </div>
+              )}
             </div>
-          ) : null}
-          {bulkMessage ? (
-            <p className="mt-2 rounded-md bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-primary">
-              {bulkMessage}
-            </p>
           ) : null}
           {displayedProducts.length === 0 && !isSearchLoading ? (
             <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed border-brand-border bg-gray-50/50 p-8 text-center">
@@ -411,9 +579,11 @@ export default function MyProductsSection({
                 <p className="text-sm text-gray-500">لا توجد نتائج مطابقة.</p>
               ) : (
                 <>
-                  <div className="mb-4 text-6xl opacity-80">🛒</div>
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-soft text-brand-primary">
+                    <PackageOpen className="h-7 w-7" />
+                  </div>
                   <h3 className="mb-2 text-lg font-bold text-gray-900">
-                    متجرك فاضي؟
+                    متجرك فارغ؟
                   </h3>
                   <p className="mb-6 max-w-sm text-sm text-gray-500 leading-relaxed">
                     أضف أهم المنتجات الأساسية في السوق المصري بأسعار استرشادية.
@@ -437,12 +607,12 @@ export default function MyProductsSection({
                 const isAvailabilityPending =
                   availabilityPendingProductId === product.id;
                 const isHighlighted = highlightedProductId === product.id;
-                let availabilityActionLabel = "إيقاف";
+                let availabilityActionLabel = "إيقاف الطلب";
                 let AvailabilityIcon = Ban;
                 if (isAvailabilityPending) {
-                  availabilityActionLabel = "...جاري";
+                  availabilityActionLabel = "جاري...";
                 } else if (product.is_available === false) {
-                  availabilityActionLabel = "إتاحة";
+                  availabilityActionLabel = "إتاحة الطلب";
                   AvailabilityIcon = CheckCircle;
                 }
                 const availabilityActionClass =
@@ -471,7 +641,8 @@ export default function MyProductsSection({
                               ? "border-brand-primary bg-brand-primary text-white"
                               : "border-gray-200 bg-white text-gray-600"
                           }`}
-                          aria-label="تحديد المنتج"
+                          aria-label={`تحديد ${product.name}`}
+                          aria-pressed={selectedSet.has(product.id)}
                         >
                           {selectedSet.has(product.id) ? (
                             <CheckSquare className="h-5 w-5" />
@@ -514,7 +685,7 @@ export default function MyProductsSection({
                           </span>
                           {!product.is_available && (
                             <span className="rounded-full bg-status-error/15 px-2 py-1 text-xs font-semibold text-status-error">
-                              غير متاح
+                              غير متاح للطلب
                             </span>
                           )}
                           {product.price_needs_review && (
@@ -536,7 +707,9 @@ export default function MyProductsSection({
                             className="flex items-center gap-1.5 rounded-lg bg-red-600 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                           >
                             <Trash2 className="h-4 w-4" />
-                            <span className="max-sm:hidden">{isRemoving ? "...جاري الحذف" : "تأكيد الحذف"}</span>
+                            <span className="max-sm:hidden">
+                              {isRemoving ? "جاري الحذف..." : "تأكيد الحذف"}
+                            </span>
                           </button>
                           <button
                             type="button"
@@ -577,7 +750,7 @@ export default function MyProductsSection({
                               onClick={() => onRequestRemove(product.id)}
                               disabled={Boolean(removingProductId) || isAvailabilityPending}
                               className="flex items-center gap-1.5 rounded-lg border border-red-200 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
-                              title="حذف"
+                              title="حذف من المتجر"
                             >
                               <Trash2 className="h-4 w-4" />
                               <span className="max-sm:hidden">حذف</span>
@@ -593,90 +766,6 @@ export default function MyProductsSection({
           )}
         </div>
       </div>
-      {bulkUpdateProducts && selectedIds.length > 0 ? (
-        <div className="sticky bottom-3 z-40 mt-3 rounded-lg border border-brand-border bg-white p-3 shadow-xl">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-brand-text">
-                {selectedIds.length} محدد
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedIds([])}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-brand-border text-brand-text"
-                aria-label="مسح التحديد"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-              {productStatusFilter === "active" ? (
-                <>
-                  <Combobox
-                    name="bulk_category"
-                    label="تغيير التصنيف"
-                    options={bulkCategoryOptions}
-                    defaultValue={bulkCategory}
-                    onValueChange={setBulkCategory}
-                    inputClassName="h-10 px-3 text-sm"
-                    placeholder="اكتب أو اختر التصنيف"
-                  />
-                  <Button
-                    type="button"
-                    disabled={isBulkPending || !bulkCategory.trim()}
-                    onClick={() => runBulkAction({ category: bulkCategory })}
-                  >
-                    تطبيق التصنيف
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={isBulkPending}
-                    onClick={() => runBulkAction({ is_available: true })}
-                  >
-                    إتاحة
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={isBulkPending}
-                    onClick={() => runBulkAction({ is_available: false })}
-                  >
-                    إيقاف
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={isConfirmingBulkArchive ? "primary" : "secondary"}
-                    disabled={isBulkPending}
-                    onClick={handleRequestBulkArchive}
-                  >
-                    {isConfirmingBulkArchive ? "تأكيد الأرشفة" : "أرشفة"}
-                  </Button>
-                  {isConfirmingBulkArchive ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={isBulkPending}
-                      onClick={() => setIsConfirmingBulkArchive(false)}
-                    >
-                      إلغاء
-                    </Button>
-                  ) : null}
-                </>
-              ) : (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={isBulkPending}
-                  onClick={() => runBulkAction({ status: "active" })}
-                >
-                  تنشيط
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

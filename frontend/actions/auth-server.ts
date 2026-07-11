@@ -23,9 +23,13 @@ export type ActionState = {
   message?: string;
   errors?: Record<string, string[] | undefined>;
   timestamp?: number; // Force re-render on similar errors
+  code?: string;
 };
 
-export async function loginAction(prevState: ActionState, formData: FormData): Promise<ActionState> {
+export async function loginAction(
+  prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const rawData = Object.fromEntries(formData.entries());
   
   // Validate Fields
@@ -49,9 +53,11 @@ export async function loginAction(prevState: ActionState, formData: FormData): P
     const response = await authService.login(payload);
 
     if (response.success && response.data?.access_token) {
-      await setCookieAction(STORAGE_KEYS.ACCESS_TOKEN, response.data.access_token, {
-        maxAge: MERCHANT_SESSION_MAX_AGE_SECONDS,
-      });
+      await setCookieAction(
+        STORAGE_KEYS.ACCESS_TOKEN,
+        response.data.access_token,
+        { maxAge: MERCHANT_SESSION_MAX_AGE_SECONDS },
+      );
       if (response.data.user) {
 				await setCookieAction(
 					STORAGE_KEYS.USER,
@@ -61,9 +67,16 @@ export async function loginAction(prevState: ActionState, formData: FormData): P
 			}
       // Redirect to merchant dashboard
     } else {
+      const errorCode =
+        response.data &&
+        typeof response.data === "object" &&
+        "code" in response.data
+          ? String(response.data.code)
+          : undefined;
       return {
         success: false,
-        message: response.message || "Invalid credentials",
+        code: errorCode,
+        message: response.message || "رقم الهاتف أو كلمة المرور غير صحيحة.",
         timestamp: Date.now(),
       };
     }
@@ -80,7 +93,10 @@ export async function loginAction(prevState: ActionState, formData: FormData): P
   redirect("/merchant");
 }
 
-export async function registerAction(prevState: ActionState, formData: FormData): Promise<ActionState> {
+export async function registerAction(
+  prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
   const rawData = Object.fromEntries(formData.entries());
   
   const validated = registerSchema.safeParse(rawData);
@@ -106,9 +122,12 @@ export async function registerAction(prevState: ActionState, formData: FormData)
     const response = await authService.signup(payload);
 
     if (response.success) {
-       // Signup usually doesn't login automatically unless specified.
-       // We might want to login usually, or redirect to Login.
-       // Assuming redirect to login for now.
+      return {
+        success: true,
+        code: "MERCHANT_APPLICATION_RECEIVED",
+        message: "تم استلام طلب انضمام متجرك.",
+        timestamp: Date.now(),
+      };
     } else {
         return {
             success: false,
@@ -126,7 +145,6 @@ export async function registerAction(prevState: ActionState, formData: FormData)
     };
   }
 
-   redirect("/merchant/login");
 }
 
 export async function logoutAction() {

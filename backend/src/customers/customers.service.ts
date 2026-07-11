@@ -4,7 +4,12 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { formatPhoneNumber } from '@/common/utils/phone.util';
 import { DbTenantContext } from '@/common/contexts/db-tenant.context';
 import { PrismaService } from '@/prisma/prisma.service';
-import { Customer, Order, Prisma } from '../../generated/prisma/client';
+import {
+  Customer,
+  Order,
+  Prisma,
+  TenantStatus,
+} from '../../generated/prisma/client';
 
 type PublicCustomerProfile = Pick<Customer, 'name' | 'phone' | 'notes'> & {
   addresses: string[];
@@ -152,7 +157,7 @@ export class CustomersService {
     const customer = await this.getCustomersDb().findFirst({
       where: {
         phone,
-        tenant: { slug: normalizedSlug },
+        tenant: { slug: normalizedSlug, status: TenantStatus.active },
       },
       select: {
         id: true,

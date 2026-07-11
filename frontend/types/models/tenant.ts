@@ -6,7 +6,7 @@ export interface Tenant {
   phone: string;
   slug: string;
   category: TenantCategory;
-  status?: "active" | "inactive" | "suspended";
+  status?: "pending" | "active" | "inactive" | "suspended" | "rejected";
   delivery_fee?: number | string;
   delivery_available?: boolean;
   delivery_starts_at?: string | null;

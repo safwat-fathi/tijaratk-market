@@ -61,13 +61,14 @@ export function Combobox({
   // Sync internal state if controlled value changes
   useEffect(() => {
     if (value !== undefined) {
+      const nextValue = String(value);
       const option = normalizedOptions.find(opt => opt.value === String(value));
       if (option) {
         setInputValue(option.label);
         setSelectedValue(option.value);
       } else {
-        // If value doesn't match any option, we might want to clear or keep it.
-        // Usually, we'd clear it if it's invalid, but for a combobox, maybe custom value is allowed.
+        setInputValue(nextValue);
+        setSelectedValue(nextValue);
       }
     }
   }, [value, normalizedOptions]);

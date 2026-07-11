@@ -247,10 +247,25 @@ export async function adminLogoutAction() {
   redirect("/admin/login");
 }
 
-export async function toggleTenantStatusAction(id: number, currentStatus: string): Promise<void> {
-  const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+export async function toggleTenantStatusAction(
+  id: number,
+  currentStatus: string,
+): Promise<void> {
+  const newStatus = currentStatus === "active" ? "suspended" : "active";
   const response = await adminService.updateTenantStatus(id, newStatus);
   if (response.success) {
+    revalidatePath("/admin");
+    revalidatePath("/admin/merchants");
+  }
+}
+
+export async function decideTenantApplicationAction(
+  id: number,
+  decision: "active" | "rejected",
+): Promise<void> {
+  const response = await adminService.updateTenantStatus(id, decision);
+  if (response.success) {
+    revalidatePath("/admin");
     revalidatePath("/admin/merchants");
   }
 }

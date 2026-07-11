@@ -65,7 +65,7 @@ export default function LandingPage() {
                   href="/merchant/register"
                   className="inline-flex h-14 w-full sm:w-auto min-w-[200px] items-center justify-center rounded-2xl bg-[#27AE60] px-8 text-xl font-bold text-white transition-colors hover:bg-[#219653]"
                 >
-                  أنشئ متجرك مجاناً
+                  قدّم طلب انضمام متجرك
                 </Link>
               </div>
 
@@ -146,6 +146,35 @@ export default function LandingPage() {
                 fetchPriority="high"
               />
             </div>
+          </div>
+        </section>
+
+        <section className="bg-white px-4 py-16 sm:py-20 lg:px-8" aria-labelledby="merchant-application-process">
+          <div className="mx-auto max-w-6xl">
+            <div className="mx-auto max-w-3xl text-center">
+              <h2 id="merchant-application-process" className="text-3xl font-bold text-[#222B2E] sm:text-4xl">
+                كيف تنضم إلى تجارتك؟
+              </h2>
+              <p className="mt-4 text-lg leading-8 text-[#222B2E]/70">
+                كل متجر يخضع للمراجعة قبل إتاحة لوحة التحكم، لحماية التجار والعملاء والتأكد من بيانات النشاط.
+              </p>
+            </div>
+            <ol className="mt-10 grid gap-5 md:grid-cols-3">
+              {[
+                ["١", "أرسل بيانات متجرك", "أدخل اسم المتجر ونوع النشاط وبيانات صاحب المتجر ورقم التواصل."],
+                ["٢", "نتواصل معك للمراجعة", "يطلب فريقنا المستندات القانونية وإثباتات النشاط اللازمة للتحقق."],
+                ["٣", "الاعتماد ثم تسجيل الدخول", "بعد اعتماد الطلب يمكنك تسجيل الدخول وإكمال إعداد متجرك واستقبال الطلبات."],
+              ].map(([number, title, description]) => (
+                <li key={number} className="rounded-2xl border border-[#DDE5E1] bg-[#F7F8F6] p-6 text-center">
+                  <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#0F5A3D] text-lg font-black text-white">{number}</span>
+                  <h3 className="mt-4 text-xl font-bold text-[#222B2E]">{title}</h3>
+                  <p className="mt-3 leading-7 text-[#222B2E]/70">{description}</p>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-7 text-center font-bold text-[#0F5A3D]">
+              لن تتمكن من تسجيل الدخول قبل تواصل الفريق معك واعتماد الطلب.
+            </p>
           </div>
         </section>
 
@@ -749,7 +778,7 @@ export default function LandingPage() {
                   href="/merchant/register"
                   className="mt-8 block w-full rounded-2xl px-4 py-4 text-center text-sm font-black transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-sm hover:shadow-md bg-[#E8F5ED] text-[#0F5A3D] hover:bg-[#D1EBDC]"
                 >
-                  ابدأ فترة التجربة
+                  قدّم طلب انضمام متجرك
                 </Link>
               </div>
               */}
@@ -894,7 +923,7 @@ export default function LandingPage() {
                 أسئلة شائعة عن تجارتك
               </h2>
               <p className="mt-4 text-lg leading-relaxed text-[#222B2E]/70">
-                إجابات مختصرة تساعدك تفهم الخدمة قبل التسجيل.
+                إجابات مختصرة تساعدك تفهم الخدمة وخطوات المراجعة قبل إرسال طلب الانضمام.
               </p>
             </div>
             <div className="mt-10 space-y-4">

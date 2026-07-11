@@ -25,7 +25,7 @@ export function PublicHeader() {
             href="/merchant/register"
             className="inline-flex h-10 items-center justify-center rounded-full bg-[#0F5A3D] px-5 text-sm font-bold text-white transition-colors hover:bg-[#00412a]"
           >
-            ابدأ الآن
+            قدّم طلب انضمام
           </Link>
         </div>
       </div>

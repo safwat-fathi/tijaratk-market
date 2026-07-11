@@ -4,6 +4,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { TenantStatus } from '../../../generated/prisma/client';
 
 const cookieTokenExtractor = (request: Request): string | null => {
   if (!request?.cookies) {
@@ -52,9 +53,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
+      include: { tenant: { select: { status: true } } },
     });
 
-    if (!user) {
+    if (!user || user.tenant.status !== TenantStatus.active) {
       throw new UnauthorizedException();
     }
 

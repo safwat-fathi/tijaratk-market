@@ -1282,7 +1282,7 @@ export default function ProductOnboardingClient({
       setRemovingProductId(null);
 
       if (!response.success) {
-        setMessage(response.message || "تعذر حذف المنتج");
+        setMessage(response.message || "تعذر حذف المنتج من المتجر");
         return;
       }
 
@@ -1298,7 +1298,7 @@ export default function ProductOnboardingClient({
       if (highlightedProductId === product.id) {
         setHighlightedProductId(null);
       }
-      setMessage(response.message || "تم حذف المنتج");
+      setMessage(response.message || "اتشال المنتج من المتجر");
     });
   };
 
@@ -1331,7 +1331,9 @@ export default function ProductOnboardingClient({
       setSearchResults((prev) =>
         replaceProductInList(prev, product.id, updatedProduct),
       );
-      setMessage(nextAvailability ? "تم إتاحة المنتج" : "تم إيقاف المنتج");
+      setMessage(
+        nextAvailability ? "المنتج بقى متاح للطلب" : "تم قفل الطلب على المنتج",
+      );
     })();
   };
 
@@ -1390,11 +1392,17 @@ export default function ProductOnboardingClient({
       addCategoryOption(payload.category);
     }
     if (payload.status === "archived") {
-      setMessage("تمت أرشفة المنتجات المحددة");
+      setMessage("اتشالت المنتجات المختارة من المتجر");
     } else if (payload.status === "active") {
-      setMessage("تم تنشيط المنتجات المحددة");
+      setMessage("رجعت المنتجات المختارة للمتجر");
+    } else if (payload.is_available === true) {
+      setMessage("المنتجات المختارة بقت متاحة للطلب");
+    } else if (payload.is_available === false) {
+      setMessage("تم قفل الطلب على المنتجات المختارة");
+    } else if (payload.category) {
+      setMessage("تم تغيير تصنيف المنتجات المختارة");
     } else {
-      setMessage("تم تحديث المنتجات المحددة");
+      setMessage("تم تحديث المنتجات المختارة");
     }
 
     return response;

@@ -38,7 +38,7 @@ export function PublicFooter() {
               href="/merchant/register"
               className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"
             >
-              انضم لنا كتاجر
+              قدّم طلب انضمام متجر
             </Link>
             <span className="text-[#222B2E]/20 hidden sm:inline" aria-hidden="true">
               •

@@ -18,7 +18,7 @@ export default function PricingPage() {
 		<PublicPageShell
 			eyebrow="الأسعار"
 			title="باقات بسيطة للمحلات في مصر"
-			description="ابدأ بفترة مجانية، وبعدها اختار الباقة المناسبة لحجم متجرك. تجارتك لا يأخذ عمولة على الطلبات."
+			description="بعد مراجعة طلب انضمام متجرك واعتماده، تبدأ الفترة المجانية ثم تختار الباقة المناسبة. تجارتك لا يأخذ عمولة على الطلبات."
 		>
 			<JsonLd id="pricing-product-jsonld" data={pricingJsonLd} />
 			<section className="grid gap-5 lg:grid-cols-2">
@@ -49,7 +49,7 @@ export default function PricingPage() {
 							href="/merchant/register"
 							className="mt-6 inline-flex min-h-11 items-center justify-center rounded-md bg-brand-primary px-5 py-3 text-sm font-bold text-white hover:bg-brand-primary-hover"
 						>
-							ابدأ تجربة تجارتك
+							قدّم طلب انضمام متجرك
 						</Link>
 					</article>
 				))}
@@ -59,6 +59,7 @@ export default function PricingPage() {
 				<ul className="mt-4 space-y-3 leading-8 text-muted-foreground">
 					<li>- لا توجد عمولة على الطلبات.</li>
 					<li>- الأسعار بالجنيه المصري.</li>
+					<li>- تفعيل الحساب يبدأ بعد مراجعة بيانات النشاط والمستندات القانونية واعتماد الطلب.</li>
 					<li>- التجربة المجانية تساعدك تختبر استقبال الطلبات قبل الدفع.</li>
 				</ul>
 			</section>
