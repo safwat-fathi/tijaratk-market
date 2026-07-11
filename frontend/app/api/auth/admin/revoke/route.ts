@@ -5,7 +5,19 @@ import { createAppUrl } from "@/lib/url/app-url";
 const DEFAULT_LOGIN_ROUTE = "/admin/login";
 
 function clearAdminSessionCookie(response: NextResponse): NextResponse {
-	response.cookies.delete(STORAGE_KEYS.ADMIN_ACCESS_TOKEN);
+	const domain =
+		process.env.NODE_ENV === "production" ? ".tijaratk.com" : undefined;
+
+	if (domain) {
+		response.cookies.set(STORAGE_KEYS.ADMIN_ACCESS_TOKEN, "", {
+			maxAge: 0,
+			domain,
+			path: "/",
+		});
+	} else {
+		response.cookies.delete(STORAGE_KEYS.ADMIN_ACCESS_TOKEN);
+	}
+
 	return response;
 }
 
