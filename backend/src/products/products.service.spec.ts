@@ -172,25 +172,25 @@ describe('ProductsService public storefront categories', () => {
     return { service, prisma };
   };
 
-  it('returns a grocery category image from the grocery catalog source', async () => {
+  it('returns an image for a persisted grocery category outside the static defaults', async () => {
     const { service, prisma } = createService();
     prisma.tenant.findUnique.mockResolvedValue({
       category: 'grocery',
       status: 'active',
     });
     prisma.$queryRawUnsafe.mockResolvedValue([
-      { category: 'مشروبات', count: 4 },
+      { category: 'تمر', count: 4 },
     ]);
     prisma.catalogCategory.findMany.mockResolvedValue([
-      { name: 'مشروبات', image_url: '/uploads/categories/drinks.webp' },
+      { name: 'تمر', image_url: '/uploads/categories/dates.webp' },
     ]);
 
     await expect(service.findPublicCategoriesByTenantSlug('market-a')).resolves
       .toEqual([
         {
-          category: 'مشروبات',
+          category: 'تمر',
           count: 4,
-          image_url: '/uploads/categories/drinks.webp',
+          image_url: '/uploads/categories/dates.webp',
         },
       ]);
 
@@ -198,13 +198,13 @@ describe('ProductsService public storefront categories', () => {
       where: {
         source: 'talabat_csv',
         deleted_at: null,
-        name: { in: ['مشروبات'] },
+        name: { in: ['تمر'] },
       },
       select: { name: true, image_url: true },
     });
   });
 
-  it('uses the pharmacy source and falls back to null when no image exists', async () => {
+  it('uses only the pharmacy catalog source for pharmacy category images', async () => {
     const { service, prisma } = createService();
     prisma.tenant.findUnique.mockResolvedValue({
       category: 'pharmacy',
@@ -213,16 +213,68 @@ describe('ProductsService public storefront categories', () => {
     prisma.$queryRawUnsafe.mockResolvedValue([
       { category: 'أدوية', count: 2 },
     ]);
-    prisma.catalogCategory.findMany.mockResolvedValue([]);
+    prisma.catalogCategory.findMany.mockResolvedValue([
+      { name: 'أدوية', image_url: '/uploads/categories/medicine.webp' },
+    ]);
 
-    await expect(service.findPublicCategoriesByTenantSlug('pharmacy-a')).resolves
-      .toEqual([{ category: 'أدوية', count: 2, image_url: null }]);
+    await expect(
+      service.findPublicCategoriesByTenantSlug('pharmacy-a'),
+    ).resolves.toEqual([
+      {
+        category: 'أدوية',
+        count: 2,
+        image_url: '/uploads/categories/medicine.webp',
+      },
+    ]);
 
     expect(prisma.catalogCategory.findMany).toHaveBeenCalledWith({
       where: {
         source: 'chefaa_csv',
         deleted_at: null,
         name: { in: ['أدوية'] },
+      },
+      select: { name: true, image_url: true },
+    });
+  });
+
+  it('does not query a catalog source for unsupported tenant categories', async () => {
+    const { service, prisma } = createService();
+    prisma.tenant.findUnique.mockResolvedValue({
+      category: 'other',
+      status: 'active',
+    });
+    prisma.$queryRawUnsafe.mockResolvedValue([
+      { category: 'تمر', count: 3 },
+    ]);
+
+    await expect(
+      service.findPublicCategoriesByTenantSlug('other-a'),
+    ).resolves.toEqual([{ category: 'تمر', count: 3, image_url: null }]);
+
+    expect(prisma.catalogCategory.findMany).not.toHaveBeenCalled();
+  });
+
+  it('falls back to null when the matching category is missing or deleted', async () => {
+    const { service, prisma } = createService();
+    prisma.tenant.findUnique.mockResolvedValue({
+      category: 'grocery',
+      status: 'active',
+    });
+    prisma.$queryRawUnsafe.mockResolvedValue([
+      { category: 'بهارات ومرق', count: 5 },
+    ]);
+    prisma.catalogCategory.findMany.mockResolvedValue([]);
+
+    await expect(service.findPublicCategoriesByTenantSlug('market-b')).resolves
+      .toEqual([
+        { category: 'بهارات ومرق', count: 5, image_url: null },
+      ]);
+
+    expect(prisma.catalogCategory.findMany).toHaveBeenCalledWith({
+      where: {
+        source: 'talabat_csv',
+        deleted_at: null,
+        name: { in: ['بهارات ومرق'] },
       },
       select: { name: true, image_url: true },
     });

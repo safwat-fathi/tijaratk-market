@@ -32,7 +32,6 @@ import {
   CATALOG_SOURCE_TALABAT,
   CatalogSource,
   getAllowedCatalogCategoriesForSource,
-  isCatalogCategoryAllowedForSource,
   resolveCatalogSourceForTenantCategory,
 } from './catalog-source-policy';
 import { arabicNormalize } from './utils/arabic-normalize.util';
@@ -1216,9 +1215,7 @@ export class ProductsService {
             source: catalogSource,
             deleted_at: null,
             name: {
-              in: categories.filter((category) =>
-                isCatalogCategoryAllowedForSource(catalogSource, category),
-              ),
+              in: categories,
             },
           },
           select: {
