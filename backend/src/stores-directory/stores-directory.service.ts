@@ -19,6 +19,7 @@ import {
   CreateDirectoryAreaDto,
   UpdateDirectoryAreaDto,
 } from './dto/directory-area.dto';
+import { rankAreaSearchResults } from './utils/area-search.util';
 
 const CATEGORY_DEFINITIONS = [
   {
@@ -139,15 +140,7 @@ export class StoresDirectoryService {
       return publicAreas.slice(0, 20);
     }
 
-    const lowerSearch = normalizedSearch.toLowerCase();
-
-    return publicAreas
-      .filter((area) =>
-        [area.name_ar, area.name_en, area.slug].some((value) =>
-          value?.toLowerCase().includes(lowerSearch),
-        ),
-      )
-      .slice(0, 20);
+    return rankAreaSearchResults(publicAreas, normalizedSearch, 20);
   }
 
   /**

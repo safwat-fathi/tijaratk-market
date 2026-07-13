@@ -2,6 +2,11 @@
 
 import { KeyboardEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  normalizeAreaSearchValue,
+  prepareAreaSearchOptions,
+  rankPreparedAreaSearchOptions,
+} from "@/lib/stores-directory/area-search";
 
 export type AreaAutocompleteOption = {
   name: string;
@@ -28,13 +33,6 @@ type Props = {
 
 const MAX_RESULTS = 6;
 
-const normalizeSearchValue = (value: string) => value.trim().toLowerCase();
-
-const areaMatchesQuery = (area: AreaAutocompleteOption, query: string) =>
-  [area.name, area.nameEn, area.slug].some((value) =>
-    value?.toLowerCase().includes(query),
-  );
-
 const getAreaHref = (
   area: AreaAutocompleteOption,
   destination: Props["destination"],
@@ -59,14 +57,15 @@ export default function AreaAutocomplete({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
-  const normalizedQuery = normalizeSearchValue(query);
+  const normalizedQuery = normalizeAreaSearchValue(query);
+  const preparedAreas = useMemo(() => prepareAreaSearchOptions(areas), [areas]);
   const matches = useMemo(() => {
-    if (!normalizedQuery) return [];
-
-    return areas
-      .filter((area) => areaMatchesQuery(area, normalizedQuery))
-      .slice(0, MAX_RESULTS);
-  }, [areas, normalizedQuery]);
+    return rankPreparedAreaSearchOptions(
+      preparedAreas,
+      normalizedQuery,
+      MAX_RESULTS,
+    );
+  }, [preparedAreas, normalizedQuery]);
   const shouldShowDropdown = isFocused && normalizedQuery.length > 0;
 
   const navigateToArea = (area: AreaAutocompleteOption) => {
