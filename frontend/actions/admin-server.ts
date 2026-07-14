@@ -19,10 +19,12 @@ import type {
 import type {
   AdminCatalogItem,
   AdminCatalogSource,
+  AdminManagedPermission,
   AdminProductSheetUploadSummary,
   DeleteTenantProductsSummary,
   UpdateAdminCatalogItemPayload,
 } from "@/services/api/admin.service";
+import { z } from "zod";
 
 export type ActionState = {
   success?: boolean;
@@ -242,9 +244,427 @@ export async function adminLoginAction(prevState: ActionState, formData: FormDat
 }
 
 export async function adminLogoutAction() {
-  await deleteCookieAction(STORAGE_KEYS.ADMIN_ACCESS_TOKEN);
   await adminService.logout();
+  await Promise.all([
+    deleteCookieAction(STORAGE_KEYS.ADMIN_ACCESS_TOKEN),
+    deleteCookieAction(STORAGE_KEYS.ADMIN_MANAGEMENT_SESSION),
+  ]);
   redirect("/admin/login");
+}
+
+const managementReasonSchema = z.string().trim().min(10).max(500);
+const positiveIdSchema = z.number().int().positive();
+
+const managedPermissionValues = [
+  "products.read",
+  "products.create",
+  "products.update",
+  "products.update_price",
+  "products.update_availability",
+  "products.archive",
+  "orders.read",
+  "orders.update_status",
+  "orders.update_pricing",
+  "orders.manage_replacements",
+  "customers.read_limited",
+  "activity_logs.read",
+  "dispatches.read",
+  "dispatches.assign",
+  "dispatches.cancel",
+] as const;
+
+const managedPermissionSchema = z.enum(managedPermissionValues);
+
+const managedPermissionPresets: Record<string, AdminManagedPermission[]> = {
+  catalog_operator: [
+    "products.read",
+    "products.create",
+    "products.update",
+    "products.update_price",
+    "products.update_availability",
+    "products.archive",
+    "activity_logs.read",
+  ],
+  order_operator: [
+    "orders.read",
+    "orders.update_status",
+    "orders.update_pricing",
+    "orders.manage_replacements",
+    "customers.read_limited",
+    "products.read",
+    "products.update_availability",
+    "activity_logs.read",
+    "dispatches.read",
+    "dispatches.assign",
+    "dispatches.cancel",
+  ],
+};
+managedPermissionPresets.store_manager = Array.from(
+  new Set([
+    ...managedPermissionPresets.catalog_operator,
+    ...managedPermissionPresets.order_operator,
+  ]),
+);
+
+const createZoneSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  area_id: z.coerce.number().int().positive(),
+  category: z.enum(["grocery", "pharmacy"]),
+  operations_phone: z.string().trim().min(8).max(32),
+  delivery_fee: z.coerce.number().min(0).optional(),
+});
+
+export async function createZoneStorefrontAction(formData: FormData): Promise<void> {
+  const parsed = createZoneSchema.parse(Object.fromEntries(formData.entries()));
+  const response = await adminService.createZone(parsed);
+  if (!response.success) throw new Error(response.message || "تعذر إنشاء المنطقة");
+  revalidatePath("/admin/zones");
+  redirect(`/admin/zones/${response.data?.id}`);
+}
+
+export async function updateZoneActivationAction(
+  zoneId: number,
+  isActive: boolean,
+): Promise<void> {
+  const id = positiveIdSchema.parse(zoneId);
+  const response = await adminService.updateZoneActivation(id, isActive);
+  if (!response.success) throw new Error(response.message || "تعذر تحديث حالة المنطقة");
+  revalidatePath("/admin/zones");
+  revalidatePath(`/admin/zones/${id}`);
+}
+
+export async function upsertZoneMerchantAction(
+  zoneId: number,
+  formData: FormData,
+): Promise<void> {
+  const id = positiveIdSchema.parse(zoneId);
+  const payload = z.object({
+    tenant_id: z.coerce.number().int().positive(),
+    priority: z.coerce.number().int().default(0),
+    is_active: z.enum(["true", "false"]).transform((value) => value === "true"),
+  }).parse(Object.fromEntries(formData.entries()));
+  const response = await adminService.upsertZoneMerchant(id, payload);
+  if (!response.success) throw new Error(response.message || "تعذر تحديث عضوية المتجر");
+  revalidatePath(`/admin/zones/${id}`);
+}
+
+export async function startZoneDispatchSessionAction(
+  zoneId: number,
+  tenantId: number,
+  formData: FormData,
+): Promise<void> {
+  const normalizedZoneId = positiveIdSchema.parse(zoneId);
+  const normalizedTenantId = positiveIdSchema.parse(tenantId);
+  const reason = managementReasonSchema.parse(formData.get("reason"));
+  const response = await adminService.startManagementSession({
+    tenant_id: normalizedTenantId,
+    reason,
+  });
+  const token = response.data?.session_token;
+  const expiresAt = response.data?.session.expires_at;
+  if (!response.success || !token || !expiresAt) {
+    throw new Error(response.message || "تعذر بدء جلسة إدارة التوزيع");
+  }
+  await setCookieAction(STORAGE_KEYS.ADMIN_MANAGEMENT_SESSION, token, {
+    maxAge: Math.max(1, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000)),
+  });
+  redirect(`/admin/zones/${normalizedZoneId}/dispatches`);
+}
+
+export async function assignZoneDispatchAction(
+  zoneId: number,
+  tenantId: number,
+  dispatchId: number,
+  formData: FormData,
+): Promise<void> {
+  const payload = z.object({
+    target_tenant_id: z.coerce.number().int().positive(),
+    expected_version: z.coerce.number().int().min(0),
+    internal_notes: z.string().trim().max(500).optional(),
+  }).parse(Object.fromEntries(formData.entries()));
+  const response = await adminService.assignManagedZoneDispatch(
+    positiveIdSchema.parse(tenantId),
+    positiveIdSchema.parse(dispatchId),
+    payload,
+  );
+  if (!response.success) throw new Error(response.message || "تعذر إسناد الطلب");
+  const normalizedZoneId = positiveIdSchema.parse(zoneId);
+  revalidatePath(`/admin/zones/${normalizedZoneId}/dispatches`);
+  revalidatePath(
+    `/admin/zones/${normalizedZoneId}/dispatches/${positiveIdSchema.parse(dispatchId)}`,
+  );
+}
+
+export async function cancelZoneDispatchAction(
+  zoneId: number,
+  tenantId: number,
+  dispatchId: number,
+  formData: FormData,
+): Promise<void> {
+  const payload = z.object({
+    expected_version: z.coerce.number().int().min(0),
+    reason: z.string().trim().min(3).max(500),
+  }).parse(Object.fromEntries(formData.entries()));
+  const response = await adminService.cancelManagedZoneDispatch(
+    positiveIdSchema.parse(tenantId),
+    positiveIdSchema.parse(dispatchId),
+    payload,
+  );
+  if (!response.success) throw new Error(response.message || "تعذر إلغاء الطلب");
+  const normalizedZoneId = positiveIdSchema.parse(zoneId);
+  revalidatePath(`/admin/zones/${normalizedZoneId}/dispatches`);
+  revalidatePath(
+    `/admin/zones/${normalizedZoneId}/dispatches/${positiveIdSchema.parse(dispatchId)}`,
+  );
+}
+
+export async function startManagedStoreSessionAction(
+  tenantId: number,
+  formData: FormData,
+): Promise<void> {
+  const normalizedTenantId = positiveIdSchema.parse(tenantId);
+  const reason = managementReasonSchema.parse(formData.get("reason"));
+  const response = await adminService.startManagementSession({
+    tenant_id: normalizedTenantId,
+    reason,
+  });
+  const token = response.data?.session_token;
+  const expiresAt = response.data?.session.expires_at;
+  if (!response.success || !token || !expiresAt) {
+    throw new Error(response.message || "تعذر بدء جلسة إدارة المتجر");
+  }
+
+  const maxAge = Math.max(
+    1,
+    Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000),
+  );
+  await setCookieAction(STORAGE_KEYS.ADMIN_MANAGEMENT_SESSION, token, {
+    maxAge,
+  });
+  redirect(`/admin/merchants/${normalizedTenantId}/manage/products`);
+}
+
+export async function endManagedStoreSessionAction(
+  tenantId: number,
+): Promise<void> {
+  positiveIdSchema.parse(tenantId);
+  await adminService.endCurrentManagementSession();
+  await deleteCookieAction(STORAGE_KEYS.ADMIN_MANAGEMENT_SESSION);
+  redirect(`/admin/merchants/${tenantId}`);
+}
+
+export async function upsertManagedTenantAccessAction(
+  tenantId: number,
+  formData: FormData,
+): Promise<void> {
+  const normalizedTenantId = positiveIdSchema.parse(tenantId);
+  const adminUserId = positiveIdSchema.parse(Number(formData.get("admin_user_id")));
+  const customPermissions = formData
+    .getAll("permissions")
+    .map(String)
+    .map((permission) => managedPermissionSchema.parse(permission));
+  const preset = String(formData.get("preset") || "");
+  const permissions = customPermissions.length > 0
+    ? customPermissions
+    : managedPermissionPresets[preset] || [];
+  if (permissions.length === 0) {
+    throw new Error("اختر مجموعة صلاحيات واحدة على الأقل");
+  }
+  const expiresAtValue = String(formData.get("expires_at") || "").trim();
+  const expiresAt = expiresAtValue
+    ? new Date(expiresAtValue).toISOString()
+    : null;
+
+  const response = await adminService.upsertTenantAccess(
+    normalizedTenantId,
+    adminUserId,
+    { permissions, expires_at: expiresAt },
+  );
+  if (!response.success) {
+    throw new Error(response.message || "تعذر حفظ صلاحيات إدارة المتجر");
+  }
+  revalidatePath(`/admin/merchants/${normalizedTenantId}`);
+}
+
+export async function revokeManagedTenantAccessAction(
+  tenantId: number,
+  adminUserId: number,
+): Promise<void> {
+  positiveIdSchema.parse(tenantId);
+  positiveIdSchema.parse(adminUserId);
+  const response = await adminService.revokeTenantAccess(tenantId, adminUserId);
+  if (!response.success) {
+    throw new Error(response.message || "تعذر إلغاء الصلاحية");
+  }
+  revalidatePath(`/admin/merchants/${tenantId}`);
+}
+
+async function revalidateManagedProductPaths(tenantId: number) {
+  revalidatePath(`/admin/merchants/${tenantId}/manage/products`);
+  const context = await adminService.getManagedMerchantContext(tenantId);
+  if (context.success && context.data?.tenant.slug) {
+    revalidatePath(`/${context.data.tenant.slug}`);
+  }
+}
+
+export async function createManagedProductAction(
+  tenantId: number,
+  formData: FormData,
+): Promise<void> {
+  positiveIdSchema.parse(tenantId);
+  const name = z.string().trim().min(1).max(120).parse(formData.get("name"));
+  const priceValue = String(formData.get("current_price") || "").trim();
+  const currentPrice = priceValue ? Number(priceValue) : undefined;
+  const category = String(formData.get("category") || "").trim() || undefined;
+  const response = await adminService.createManagedProduct(tenantId, {
+    name,
+    current_price: currentPrice,
+    category,
+    is_available: true,
+  });
+  if (!response.success) throw new Error(response.message || "تعذر إضافة المنتج");
+  await revalidateManagedProductPaths(tenantId);
+}
+
+export async function addManagedCatalogProductAction(
+  tenantId: number,
+  catalogItemId: number,
+): Promise<void> {
+  positiveIdSchema.parse(tenantId);
+  positiveIdSchema.parse(catalogItemId);
+  const response = await adminService.addManagedProductFromCatalog(
+    tenantId,
+    catalogItemId,
+  );
+  if (!response.success) throw new Error(response.message || "تعذر إضافة منتج الكتالوج");
+  await revalidateManagedProductPaths(tenantId);
+}
+
+export async function updateManagedProductPriceAction(
+  tenantId: number,
+  productId: number,
+  formData: FormData,
+): Promise<void> {
+  const currentPrice = z.coerce.number().positive().parse(formData.get("current_price"));
+  const response = await adminService.updateManagedProduct(
+    tenantId,
+    productId,
+    "price",
+    { current_price: currentPrice },
+  );
+  if (!response.success) throw new Error(response.message || "تعذر تحديث السعر");
+  await revalidateManagedProductPaths(tenantId);
+}
+
+export async function updateManagedProductDetailsAction(
+  tenantId: number,
+  productId: number,
+  formData: FormData,
+): Promise<void> {
+  const name = z.string().trim().min(1).max(120).parse(formData.get("name"));
+  const category = String(formData.get("category") || "").trim();
+  const response = await adminService.updateManagedProduct(
+    tenantId,
+    productId,
+    "details",
+    { name, category },
+  );
+  if (!response.success) throw new Error(response.message || "تعذر تحديث بيانات المنتج");
+  await revalidateManagedProductPaths(tenantId);
+}
+
+export async function updateManagedProductAvailabilityAction(
+  tenantId: number,
+  productId: number,
+  isAvailable: boolean,
+): Promise<void> {
+  const response = await adminService.updateManagedProduct(
+    tenantId,
+    productId,
+    "availability",
+    { is_available: isAvailable },
+  );
+  if (!response.success) throw new Error(response.message || "تعذر تحديث الإتاحة");
+  await revalidateManagedProductPaths(tenantId);
+}
+
+export async function updateManagedProductStatusAction(
+  tenantId: number,
+  productId: number,
+  status: "active" | "archived",
+): Promise<void> {
+  const response = await adminService.updateManagedProduct(
+    tenantId,
+    productId,
+    "status",
+    { status },
+  );
+  if (!response.success) throw new Error(response.message || "تعذر تحديث حالة المنتج");
+  await revalidateManagedProductPaths(tenantId);
+}
+
+export async function updateManagedOrderStatusAction(
+  tenantId: number,
+  orderId: number,
+  formData: FormData,
+): Promise<void> {
+  const status = z.enum([
+    "draft",
+    "confirmed",
+    "out_for_delivery",
+    "completed",
+    "cancelled",
+  ]).parse(formData.get("status"));
+  const cancellationReason = String(formData.get("cancellation_reason") || "").trim();
+  const response = await adminService.updateManagedOrderStatus(tenantId, orderId, {
+    status,
+    cancellation_reason: cancellationReason || undefined,
+  });
+  if (!response.success) throw new Error(response.message || "تعذر تحديث حالة الطلب");
+  revalidatePath(`/admin/merchants/${tenantId}/manage/orders`);
+  revalidatePath(`/admin/merchants/${tenantId}/manage/orders/${orderId}`);
+}
+
+export async function updateManagedOrderTotalAction(
+  tenantId: number,
+  orderId: number,
+  formData: FormData,
+): Promise<void> {
+  const total = z.coerce.number().min(0).parse(formData.get("total"));
+  const response = await adminService.updateManagedOrderPricing(tenantId, orderId, total);
+  if (!response.success) throw new Error(response.message || "تعذر تحديث إجمالي الطلب");
+  revalidatePath(`/admin/merchants/${tenantId}/manage/orders/${orderId}`);
+}
+
+export async function updateManagedOrderItemAction(
+  tenantId: number,
+  orderId: number,
+  itemId: number,
+  action: "price" | "out-of-stock" | "replacement" | "replacement-reset",
+  formData?: FormData,
+): Promise<void> {
+  let payload: Record<string, unknown> = {};
+  if (action === "price") {
+    payload = {
+      total_price: z.coerce.number().positive().parse(formData?.get("total_price")),
+    };
+  } else if (action === "replacement") {
+    payload = {
+      replaced_by_product_id: positiveIdSchema.parse(
+        Number(formData?.get("replaced_by_product_id")),
+      ),
+    };
+  }
+  const response = await adminService.updateManagedOrderItem(
+    tenantId,
+    itemId,
+    action,
+    payload,
+  );
+  if (!response.success) throw new Error(response.message || "تعذر تحديث منتج الطلب");
+  revalidatePath(`/admin/merchants/${tenantId}/manage/orders`);
+  revalidatePath(`/admin/merchants/${tenantId}/manage/orders/${orderId}`);
 }
 
 export async function toggleTenantStatusAction(

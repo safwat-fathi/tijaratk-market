@@ -64,6 +64,7 @@ export class TenantsService {
         directory_profile: {
           include: { area: true },
         },
+        operated_zone_storefront: { select: { id: true } },
       },
     });
   }

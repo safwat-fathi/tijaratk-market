@@ -38,6 +38,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(adminUrl);
   }
 
+  if (pathname.startsWith('/admin') && pathname !== '/admin/login' && !adminToken) {
+    const loginUrl = createAppUrl('/admin/login', request);
+    return NextResponse.redirect(loginUrl);
+  }
+
   // Allow request to proceed
   return NextResponse.next();
 }

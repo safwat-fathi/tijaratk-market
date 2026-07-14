@@ -210,6 +210,111 @@ export const templatesRegistry = {
     fallbackText: (data: { otp: string; expiresInMinutes: number }) =>
       merchantPasswordResetOtp(data),
   },
+
+  zone_order_operations: {
+    contentSidEnv: 'TWILIO_CONTENT_SID_ZONE_ORDER_OPERATIONS',
+    variables: { orderNumber: 1, zoneName: 2, area: 3, totalEgp: 4 },
+    schema: z.object({
+      orderNumber: z.string().trim().min(1),
+      zoneName: z.string().trim().min(1),
+      area: z.string().trim().min(1),
+      totalEgp: z.number().nonnegative(),
+    }),
+    fallbackText: (data: {
+      orderNumber: string;
+      zoneName: string;
+      area: string;
+      totalEgp: number;
+    }) =>
+      `طلب منطقة جديد #${data.orderNumber}\nالواجهة: ${data.zoneName}\nالمنطقة: ${data.area}\nالإجمالي المبدئي: ${data.totalEgp} جنيه`,
+  },
+
+  zone_order_assigned: {
+    contentSidEnv: 'TWILIO_CONTENT_SID_ZONE_ORDER_ASSIGNED',
+    variables: {
+      merchantName: 1,
+      orderNumber: 2,
+      zoneName: 3,
+      area: 4,
+      assignmentUrl: 5,
+    },
+    schema: z.object({
+      merchantName: z.string().trim().min(1),
+      orderNumber: z.string().trim().min(1),
+      zoneName: z.string().trim().min(1),
+      area: z.string().trim().min(1),
+      assignmentUrl: z.string().url(),
+    }),
+    fallbackText: (data: {
+      merchantName: string;
+      orderNumber: string;
+      zoneName: string;
+      area: string;
+      assignmentUrl: string;
+    }) =>
+      `مرحباً ${data.merchantName}، تم إسناد الطلب #${data.orderNumber} من ${data.zoneName} (${data.area}). راجع الطلب: ${data.assignmentUrl}`,
+  },
+
+  zone_dispatch_rejected_operations: {
+    contentSidEnv: 'TWILIO_CONTENT_SID_ZONE_DISPATCH_REJECTED_OPERATIONS',
+    variables: { orderNumber: 1, merchantName: 2, reason: 3 },
+    schema: z.object({
+      orderNumber: z.string().trim().min(1),
+      merchantName: z.string().trim().min(1),
+      reason: z.string().trim().min(1),
+    }),
+    fallbackText: (data: {
+      orderNumber: string;
+      merchantName: string;
+      reason: string;
+    }) =>
+      `رفض ${data.merchantName} الطلب #${data.orderNumber}. السبب: ${data.reason}. يحتاج الطلب إلى إعادة إسناد.`,
+  },
+
+  zone_dispatch_reassigned_operations: {
+    contentSidEnv: 'TWILIO_CONTENT_SID_ZONE_DISPATCH_REASSIGNED_OPERATIONS',
+    variables: { orderNumber: 1, previousMerchantName: 2, newMerchantName: 3 },
+    schema: z.object({
+      orderNumber: z.string().trim().min(1),
+      previousMerchantName: z.string().trim().min(1),
+      newMerchantName: z.string().trim().min(1),
+    }),
+    fallbackText: (data: {
+      orderNumber: string;
+      previousMerchantName: string;
+      newMerchantName: string;
+    }) =>
+      `تمت إعادة إسناد الطلب #${data.orderNumber} من ${data.previousMerchantName} إلى ${data.newMerchantName}.`,
+  },
+
+  zone_order_accepted_customer: {
+    contentSidEnv: 'TWILIO_CONTENT_SID_ZONE_ORDER_ACCEPTED_CUSTOMER',
+    variables: {
+      customerName: 1,
+      orderNumber: 2,
+      merchantName: 3,
+      oldTotal: 4,
+      newTotal: 5,
+      trackingUrl: 6,
+    },
+    schema: z.object({
+      customerName: z.string().trim().min(1),
+      orderNumber: z.string().trim().min(1),
+      merchantName: z.string().trim().min(1),
+      oldTotal: z.number().nonnegative(),
+      newTotal: z.number().nonnegative(),
+      trackingUrl: z.string().url(),
+    }),
+    fallbackText: (data: {
+      customerName: string;
+      orderNumber: string;
+      merchantName: string;
+      oldTotal: number;
+      newTotal: number;
+      trackingUrl: string;
+    }) =>
+      `مرحباً ${data.customerName}، أكد ${data.merchantName} طلبك #${data.orderNumber}. الإجمالي من ${data.oldTotal} إلى ${data.newTotal} جنيه. التتبع: ${data.trackingUrl}`,
+  },
 } as const;
 
 export type TemplateKey = keyof typeof templatesRegistry;

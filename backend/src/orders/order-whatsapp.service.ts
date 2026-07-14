@@ -10,6 +10,7 @@ import {
 } from '../../generated/prisma/client';
 import { welcomeCustomer } from 'src/whatsapp/templates';
 import { OrderStatus } from 'src/common/enums/order-status.enum';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 type OrderWithRelations = Order & {
   customer?: Customer | null;
@@ -22,7 +23,10 @@ type OrderItemWithProduct = OrderItem & {
 
 @Injectable()
 export class OrderWhatsappService {
-  constructor(private readonly whatsappService: WhatsappService) {}
+  constructor(
+    private readonly whatsappService: WhatsappService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   private resolveStatusLabel(status: OrderStatus): string | null {
     if (status === OrderStatus.CONFIRMED) return 'تم التأكيد';
@@ -118,7 +122,8 @@ export class OrderWhatsappService {
     const customerNumber = order.customer_phone || order.customer?.phone;
     if (!customerNumber || !item.pending_replacement_product?.name) return;
 
-    const storeName = order.tenant?.name || 'المتجر';
+    const fulfillingMerchant = await this.resolveFulfillingMerchant(order);
+    const storeName = fulfillingMerchant?.name || order.tenant?.name || 'المتجر';
 
     await this.whatsappService.sendTemplatedMessage({
       key: 'order_product_replacement',
@@ -139,7 +144,7 @@ export class OrderWhatsappService {
   async notifyMerchantReplacementAccepted(
     order: OrderWithRelations,
   ): Promise<void> {
-    const sellerNumber = order.tenant?.phone;
+    const sellerNumber = (await this.resolveFulfillingMerchant(order))?.phone;
     if (!sellerNumber) return;
 
     const customerName = order.customer_name || order.customer?.name || 'عميل';
@@ -162,7 +167,7 @@ export class OrderWhatsappService {
     item: OrderItemWithProduct,
     reason?: string,
   ): Promise<void> {
-    const sellerNumber = order.tenant?.phone;
+    const sellerNumber = (await this.resolveFulfillingMerchant(order))?.phone;
     if (!sellerNumber) return;
 
     const customerName = order.customer_name || order.customer?.name || 'عميل';
@@ -192,6 +197,25 @@ export class OrderWhatsappService {
     });
 
     await this.whatsappService.sendMessage(customerNumber, message);
+  }
+
+  /** Resolves the accepted dispatch merchant before falling back to the order owner. */
+  private async resolveFulfillingMerchant(
+    order: OrderWithRelations,
+  ): Promise<{ name: string; phone: string } | undefined> {
+    const acceptedAssignment = await this.prisma.orderDispatchAssignment.findFirst({
+      where: {
+        status: 'accepted',
+        is_current: true,
+        order_dispatch: { order_id: order.id, status: 'accepted' },
+      },
+      select: { target_tenant: { select: { name: true, phone: true } } },
+      orderBy: { id: 'desc' },
+    });
+
+    if (acceptedAssignment) return acceptedAssignment.target_tenant;
+    if (!order.tenant?.phone) return undefined;
+    return { name: order.tenant.name, phone: order.tenant.phone };
   }
 
   /**

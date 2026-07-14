@@ -7,6 +7,9 @@ type OrderSuccessViewProps = {
   tenantSlug: string;
   orderToken: string;
   customerAccessCode?: string;
+  newOrderHref?: string;
+  newOrderLabel?: string;
+  successDescription?: string;
 };
 
 const TrackingOrdersIcon = () => (
@@ -35,6 +38,9 @@ export default function OrderSuccessView({
   tenantSlug,
   orderToken,
   customerAccessCode,
+  newOrderHref,
+  newOrderLabel = "عمل طلب جديد من نفس المتجر",
+  successDescription = "سيتواصل معك صاحب المتجر للتأكيد.",
 }: OrderSuccessViewProps) {
   const [copied, setCopied] = useState(false);
   const [copiedCustomerCode, setCopiedCustomerCode] = useState(false);
@@ -74,7 +80,7 @@ export default function OrderSuccessView({
         تم إرسال الطلب!
       </h2>
       <p className="mb-4 max-w-sm text-muted-foreground">
-        سيتواصل معك صاحب المتجر للتأكيد. <br />
+        {successDescription} <br />
         احفظ كود العميل ورابط التتبع لمتابعة طلباتك من أي جهاز.
       </p>
 
@@ -245,11 +251,11 @@ export default function OrderSuccessView({
         </Link>
 
         <Link
-          href={`/${tenantSlug}`}
+          href={newOrderHref ?? `/${tenantSlug}`}
           prefetch={true}
           className="w-full rounded-md py-3.5 font-semibold text-muted-foreground transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
         >
-          عمل طلب جديد من نفس المتجر
+          {newOrderLabel}
         </Link>
       </div>
     </div>

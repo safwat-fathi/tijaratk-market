@@ -10,6 +10,7 @@ import { TenantCancellationPolicyModule } from 'src/tenant-cancellation-policy/t
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import { StoresDirectoryModule } from 'src/stores-directory/stores-directory.module';
 import { ActivityLogModule } from 'src/activity-log/activity-log.module';
+import { AdminManagedModule } from 'src/admin-managed/admin-managed.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ActivityLogModule } from 'src/activity-log/activity-log.module';
     StoresDirectoryModule,
     ActivityLogModule,
     TenantCancellationPolicyModule,
+    AdminManagedModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

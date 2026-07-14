@@ -25,6 +25,7 @@ import {
 import { Request } from 'express';
 import CONSTANTS from 'src/common/constants';
 import { AdminAuthGuard } from 'src/admin/guards/admin-auth.guard';
+import { RequirePlatformAdmin } from 'src/admin/decorators/admin-role.decorator';
 import { StoresDirectoryService } from './stores-directory.service';
 import {
   DirectoryAreasQueryDto,
@@ -159,6 +160,7 @@ export class StoresDirectoryController {
 
   @Get('admin/directory/areas')
   @UseGuards(AdminAuthGuard)
+  @RequirePlatformAdmin()
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Get directory areas for admin management' })
   @ApiResponse({
@@ -171,6 +173,7 @@ export class StoresDirectoryController {
 
   @Post('admin/directory/areas')
   @UseGuards(AdminAuthGuard)
+  @RequirePlatformAdmin()
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Create a directory area' })
   @ApiBody({ type: CreateDirectoryAreaDto })
@@ -184,6 +187,7 @@ export class StoresDirectoryController {
 
   @Patch('admin/directory/areas/:id')
   @UseGuards(AdminAuthGuard)
+  @RequirePlatformAdmin()
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Update a directory area' })
   @ApiParam({ name: 'id', type: Number })
@@ -201,6 +205,7 @@ export class StoresDirectoryController {
 
   @Delete('admin/directory/areas/:id')
   @UseGuards(AdminAuthGuard)
+  @RequirePlatformAdmin()
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Delete a directory area' })
   @ApiParam({ name: 'id', type: Number })
@@ -214,6 +219,7 @@ export class StoresDirectoryController {
 
   @Patch('admin/tenants/:tenantId/directory-profile')
   @UseGuards(AdminAuthGuard)
+  @RequirePlatformAdmin()
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({ summary: 'Update tenant directory profile as admin' })
   @ApiParam({ name: 'tenantId', type: Number })

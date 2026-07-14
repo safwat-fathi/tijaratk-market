@@ -6,7 +6,13 @@ import { registerAction } from "@/actions/auth-server";
 import { TENANT_CATEGORIES, TENANT_CATEGORY_VALUES } from "@/constants";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Field, Input, PasswordInput, Select } from "@/components/ui/Field";
+import {
+  Field,
+  Input,
+  PasswordInput,
+  Select,
+  Textarea,
+} from "@/components/ui/Field";
 import { Logo } from "@/components/ui/Logo";
 
 const initialState = {
@@ -112,6 +118,22 @@ export default function RegisterForm() {
               </option>
             ))}
           </Select>
+        </Field>
+
+        <Field
+          label="عنوان المتجر بالتفصيل"
+          htmlFor="address"
+          error={state?.errors?.address?.[0]}
+        >
+          <Textarea
+            id="address"
+            name="address"
+            autoComplete="street-address"
+            placeholder="اسم الشارع، رقم العقار، المنطقة، وعلامة مميزة"
+            required
+            minLength={5}
+            maxLength={500}
+          />
         </Field>
 
         <Field label="الاسم" htmlFor="name" error={state?.errors?.name?.[0]}>

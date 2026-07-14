@@ -30,6 +30,7 @@ export enum OrderSource {
   DIRECTORY = 'directory',
   WHATSAPP = 'whatsapp',
   MANUAL = 'manual',
+  ZONE_STOREFRONT = 'zone_storefront',
 }
 
 export enum PricingMode {

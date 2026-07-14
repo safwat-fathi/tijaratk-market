@@ -13,6 +13,7 @@ import {
   UploadedFile,
   UseInterceptors,
   BadRequestException,
+  ForbiddenException,
   Req,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
@@ -78,6 +79,17 @@ import {
   type CatalogSource,
 } from 'src/products/catalog-source-policy';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
+import {
+  AllowAnyAdmin,
+  RequirePlatformAdmin,
+} from './decorators/admin-role.decorator';
+import { AdminManagedAccessService } from 'src/admin-managed/admin-managed-access.service';
+import {
+  AdminAuditOutcome,
+  AdminManagementSessionEndReason,
+  AdminRole,
+} from '../../generated/prisma/client';
+import { AdminAuditService } from 'src/admin-audit/admin-audit.service';
 
 const ADMIN_PRODUCT_SHEET_UPLOAD_DIR = join(
   process.cwd(),
@@ -90,10 +102,13 @@ mkdirSync(ADMIN_PRODUCT_SHEET_UPLOAD_DIR, { recursive: true });
 
 @ApiTags('Admin')
 @Controller('admin')
+@RequirePlatformAdmin()
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly productsService: ProductsService,
+    private readonly adminManagedAccessService: AdminManagedAccessService,
+    private readonly adminAuditService: AdminAuditService,
   ) {}
 
   private getAdminUserId(req: Request): number {
@@ -102,6 +117,14 @@ export class AdminController {
       throw new BadRequestException('Admin user context is required');
     }
     return adminId;
+  }
+
+  /** Prevents legacy platform routes from bypassing managed-store controls. */
+  private rejectLegacyTenantWrite(): never {
+    throw new ForbiddenException({
+      code: 'MANAGEMENT_SESSION_REQUIRED',
+      message: 'Use the managed-tenant API with an active management session',
+    });
   }
 
   private resolveAdminCatalogSource(query: {
@@ -137,9 +160,13 @@ export class AdminController {
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(
     @Body() loginDto: AdminLoginDto,
+    @Req() req: Request & { requestId?: string },
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.adminService.login(loginDto);
+    const result = await this.adminService.login(
+      loginDto,
+      this.adminManagedAccessService.getRequestMetadata(req),
+    );
 
     res.cookie('admin_access_token', result.admin_access_token, {
       httpOnly: true,
@@ -153,6 +180,7 @@ export class AdminController {
 
   @Post('logout')
   @UseGuards(AdminAuthGuard)
+  @AllowAnyAdmin()
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Admin logout',
@@ -164,9 +192,49 @@ export class AdminController {
     description: 'Logout successful',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(
+    @Req()
+    req: Request & {
+      requestId?: string;
+      user?: {
+        userId?: number;
+        name?: string;
+        role?: AdminRole;
+      };
+    },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (req.user?.userId) {
+      await this.adminManagedAccessService.endCurrentSession(
+        req.user.userId,
+        this.adminManagedAccessService.extractSessionToken(req),
+        AdminManagementSessionEndReason.logout,
+        this.adminManagedAccessService.getRequestMetadata(req),
+      );
+    }
+    await this.adminAuditService.recordRequest(
+      req,
+      AdminAuditOutcome.success,
+      200,
+      {
+        action: 'admin.logout.succeeded',
+        title: 'تم تسجيل خروج المسؤول',
+      },
+    );
     res.clearCookie('admin_access_token');
+    res.clearCookie('admin_management_session');
     return { success: true };
+  }
+
+  /** Returns the currently authenticated administrator without sensitive fields. */
+  @Get('me')
+  @UseGuards(AdminAuthGuard)
+  @AllowAnyAdmin()
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Get current administrator profile' })
+  getCurrentAdmin(@Req() req: Request) {
+    const adminId = this.getAdminUserId(req);
+    return this.adminService.getCurrentAdmin(adminId);
   }
 
   @UseGuards(AdminAuthGuard)
@@ -250,6 +318,7 @@ export class AdminController {
       id,
       updateTenantStatusDto.status,
       req.user?.userId,
+      this.adminManagedAccessService.getRequestMetadata(req),
     );
   }
 
@@ -272,8 +341,14 @@ export class AdminController {
   updateTenantPlan(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateTenantPlanDto: UpdateTenantPlanDto,
+    @Req() req: Request,
   ) {
-    return this.adminService.updateTenantPlan(id, updateTenantPlanDto.plan_id);
+    return this.adminService.updateTenantPlan(
+      id,
+      updateTenantPlanDto.plan_id,
+      this.getAdminUserId(req),
+      this.adminManagedAccessService.getRequestMetadata(req),
+    );
   }
 
   @UseGuards(AdminAuthGuard)
@@ -296,7 +371,9 @@ export class AdminController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AddBulkEssentialItemsDto,
   ) {
-    return this.productsService.bulkAddEssentials(id, dto);
+    void id;
+    void dto;
+    return this.rejectLegacyTenantWrite();
   }
 
   /**
@@ -348,7 +425,10 @@ export class AdminController {
     @Body() dto: CreateProductDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.productsService.createForTenantAsAdmin(id, dto, file);
+    void id;
+    void dto;
+    void file;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)
@@ -422,7 +502,9 @@ export class AdminController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AddProductFromCatalogDto,
   ) {
-    return this.productsService.createFromCatalogForTenantAsAdmin(id, dto);
+    void id;
+    void dto;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)
@@ -467,7 +549,9 @@ export class AdminController {
       throw new BadRequestException('Product sheet file is required');
     }
 
-    return this.adminService.uploadTenantProductCatalogSheet(id, file);
+    void id;
+    void file;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)
@@ -518,7 +602,9 @@ export class AdminController {
       throw new BadRequestException('Product sheet file is required');
     }
 
-    return this.productsService.importProductsFromCsv(id, file);
+    void id;
+    void file;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)
@@ -540,10 +626,9 @@ export class AdminController {
     @Req() req: Request,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.productsService.deleteTenantProductsAsAdmin(
-      id,
-      this.getAdminUserId(req),
-    );
+    void req;
+    void id;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)
@@ -570,7 +655,10 @@ export class AdminController {
     @Body() dto: UpdateProductDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.productsService.updateForTenantAsAdmin(id, dto, file);
+    void id;
+    void dto;
+    void file;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)
@@ -613,10 +701,13 @@ export class AdminController {
   togglePlanStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() togglePlanStatusDto: TogglePlanStatusDto,
+    @Req() req: Request,
   ) {
     return this.adminService.togglePlanStatus(
       id,
       togglePlanStatusDto.is_active,
+      this.getAdminUserId(req),
+      this.adminManagedAccessService.getRequestMetadata(req),
     );
   }
 
@@ -651,9 +742,10 @@ export class AdminController {
   @ApiOperation({
     summary: 'Export catalog items as CSV',
     description:
-      'Download active catalog items for one supported catalog type as an Excel-compatible CSV.',
+      'Download active catalog items for one supported catalog type and optional essential status as an Excel-compatible CSV.',
   })
   @ApiResponse({ status: 200, description: 'CSV file returned' })
+  @ApiResponse({ status: 400, description: 'Invalid catalog export filter' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async exportAdminCatalogItems(
     @Query() query: GetAdminCatalogItemsDto,
@@ -662,6 +754,7 @@ export class AdminController {
     const source = this.resolveAdminCatalogSource(query);
     const exportFile = await this.adminService.exportAdminCatalogItems(
       source,
+      query.essentialStatus,
     );
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -860,7 +953,9 @@ export class AdminController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateTenantProductCategoryDto,
   ) {
-    return this.adminService.createTenantProductCategory(id, dto);
+    void id;
+    void dto;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)
@@ -872,7 +967,9 @@ export class AdminController {
     @Param('tenantId', ParseIntPipe) tenantId: number,
     @Body() dto: MoveTenantProductCategoryProductsDto,
   ) {
-    return this.adminService.moveTenantProductCategoryProducts(tenantId, dto);
+    void tenantId;
+    void dto;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)
@@ -885,11 +982,10 @@ export class AdminController {
     @Param('categoryId', ParseIntPipe) categoryId: number,
     @Body() dto: UpdateTenantProductCategoryDto,
   ) {
-    return this.adminService.updateTenantProductCategory(
-      tenantId,
-      categoryId,
-      dto,
-    );
+    void tenantId;
+    void categoryId;
+    void dto;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)
@@ -900,10 +996,9 @@ export class AdminController {
     @Param('tenantId', ParseIntPipe) tenantId: number,
     @Param('categoryId', ParseIntPipe) categoryId: number,
   ) {
-    return this.adminService.deleteTenantProductCategory(
-      tenantId,
-      categoryId,
-    );
+    void tenantId;
+    void categoryId;
+    return this.rejectLegacyTenantWrite();
   }
 
   @UseGuards(AdminAuthGuard)

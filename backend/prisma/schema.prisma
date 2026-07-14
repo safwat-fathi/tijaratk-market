@@ -229,6 +229,7 @@ model OrderItem {
   product                     Product? @relation("order_items_product_idToproducts", fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_9263386c35b6b242540f9493b00")
   replaced_by_product         Product? @relation("order_items_replaced_by_product_idToproducts", fields: [replaced_by_product_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_bd6d79fc38399711f5407ea118d")
   pending_replacement_product Product? @relation("order_items_pending_replacement_product_idToproducts", fields: [pending_replacement_product_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_order_items_pending_replacement_product")
+  dispatch_quote_lines        OrderDispatchQuoteLine[]
 
   @@index([pending_replacement_product_id], map: "IDX_order_items_pending_replacement_product")
   @@map("order_items")
@@ -274,6 +275,7 @@ model Order {
   customer    Customer    @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_772d0ce0473ac2ccfa26060dbe9")
   delivery_area DirectoryArea? @relation(fields: [delivery_area_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_orders_delivery_area")
   cancellation_policy_events TenantCancellationPolicyEvent[]
+  order_dispatch             OrderDispatch?
 
   @@index([delivery_area_id], map: "IDX_orders_delivery_area_id")
   @@index([tenant_id], map: "IDX_527dd6efd5f3402f729c6b3e82")
@@ -388,6 +390,12 @@ model Tenant {
   cancellation_policy_state TenantCancellationPolicyState?
   cancellation_policy_events TenantCancellationPolicyEvent[]
   activity_logs             ActivityLog[]
+  admin_tenant_accesses     AdminTenantAccess[]
+  admin_management_sessions AdminManagementSession[]
+  admin_audit_logs          AdminAuditLog[]
+  operated_zone_storefront  ZoneStorefront?           @relation("ZoneStorefrontOperatorTenant")
+  zone_storefront_memberships ZoneStorefrontMerchant[] @relation("ZoneStorefrontMerchantTenant")
+  targeted_dispatch_assignments OrderDispatchAssignment[] @relation("OrderDispatchAssignmentTargetTenant")
 
   @@map("tenants")
 }
@@ -459,6 +467,7 @@ model DirectoryArea {
   directory_events          DirectoryEvent[]
   customer_addresses        CustomerAddress[]
   orders                    Order[]
+  zone_storefront           ZoneStorefront?
 
   @@index([parent_area_id], map: "IDX_directory_areas_parent_area_id")
   @@index([is_active, sort_order, name_ar], map: "IDX_directory_areas_active_sort_name")
@@ -541,6 +550,7 @@ model User {
   password   String    @db.VarChar
   tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_109638590074998bb72a2f2cf08")
   activity_logs ActivityLog[]
+  responded_dispatch_assignments OrderDispatchAssignment[] @relation("OrderDispatchAssignmentRespondingUser")
 
   @@index([tenant_id], map: "IDX_109638590074998bb72a2f2cf0")
   @@map("users")
@@ -552,6 +562,9 @@ model ActivityLog {
   tenant_id      Int?
   actor_user_id  Int?
   actor_admin_id Int?
+  actor_admin_name_snapshot String? @db.VarChar(160)
+  actor_admin_role_snapshot AdminRole?
+  management_session_id Int?
   entity_type    ActivityEntityType
   entity_id      Int?
   action         String             @db.VarChar(96)
@@ -561,16 +574,20 @@ model ActivityLog {
   new_values     Json?
   metadata       Json?
   source         ActivitySource     @default(dashboard)
+  request_id     String?            @db.VarChar(64)
+  ip_address     String?            @db.VarChar(64)
   created_at     DateTime           @default(now()) @db.Timestamptz(6)
 
   tenant      Tenant?    @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_activity_logs_tenant")
   actor_user  User?      @relation(fields: [actor_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_activity_logs_actor_user")
   actor_admin AdminUser? @relation(fields: [actor_admin_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_activity_logs_actor_admin")
+  management_session AdminManagementSession? @relation(fields: [management_session_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_activity_logs_management_session")
 
   @@index([tenant_id, created_at], map: "IDX_activity_logs_tenant_created_at")
   @@index([tenant_id, entity_type, entity_id, created_at], map: "IDX_activity_logs_tenant_entity_created_at")
   @@index([actor_user_id, created_at], map: "IDX_activity_logs_actor_user_created_at")
   @@index([actor_admin_id, created_at], map: "IDX_activity_logs_actor_admin_created_at")
+  @@index([management_session_id, created_at], map: "IDX_activity_logs_management_session_created_at")
   @@index([action, created_at], map: "IDX_activity_logs_action_created_at")
   @@map("activity_logs")
 }
@@ -624,6 +641,7 @@ enum OrderSource {
   directory
   whatsapp
   manual
+  zone_storefront
 
   @@map("orders_source_enum")
 }
@@ -750,6 +768,8 @@ enum ActivityEntityType {
   subscription
   day_closure
   csv_import
+  zone_storefront
+  order_dispatch
 
   @@map("activity_logs_entity_type_enum")
 }
@@ -765,16 +785,278 @@ enum ActivitySource {
   @@map("activity_logs_source_enum")
 }
 
+enum AdminRole {
+  platform_admin
+  operations_admin
+
+  @@map("admin_users_role_enum")
+}
+
+enum AdminAuditOutcome {
+  success
+  denied
+
+  @@map("admin_audit_logs_outcome_enum")
+}
+
+enum AdminAuditEntityType {
+  admin
+  tenant
+  subscription
+  catalog_item
+  catalog_category
+  import
+  area
+  product
+  order
+  management_session
+  zone_storefront
+  order_dispatch
+
+  @@map("admin_audit_logs_entity_type_enum")
+}
+
+enum AdminManagementSessionEndReason {
+  user_exit
+  store_switch
+  idle_timeout
+  absolute_timeout
+  access_revoked
+  admin_disabled
+  logout
+
+  @@map("admin_management_sessions_end_reason_enum")
+}
+
 model AdminUser {
   id         Int      @id @default(autoincrement())
   phone      String   @unique @db.VarChar
   password   String   @db.VarChar
   name       String   @db.VarChar
+  role       AdminRole @default(operations_admin)
+  is_active  Boolean   @default(true)
   created_at DateTime @default(now()) @db.Timestamp(6)
   updated_at DateTime @default(now()) @db.Timestamp(6)
   activity_logs ActivityLog[]
+  tenant_accesses AdminTenantAccess[] @relation("AdminTenantAccessAdmin")
+  granted_tenant_accesses AdminTenantAccess[] @relation("AdminTenantAccessGrantedBy")
+  management_sessions AdminManagementSession[]
+  admin_audit_logs AdminAuditLog[]
+  assigned_dispatch_assignments OrderDispatchAssignment[] @relation("OrderDispatchAssignmentAssigningAdmin")
+  cancelled_dispatches OrderDispatch[] @relation("OrderDispatchCancellingAdmin")
 
   @@map("admin_users")
+}
+
+enum OrderDispatchStatus {
+  pending
+  awaiting_merchant
+  accepted
+  cancelled
+
+  @@map("order_dispatches_status_enum")
+}
+
+enum OrderDispatchAssignmentStatus {
+  pending
+  accepted
+  rejected
+  revoked
+  cancelled
+
+  @@map("order_dispatch_assignments_status_enum")
+}
+
+/// Cross-tenant control-plane record for a public zone storefront. This table intentionally does not use tenant RLS.
+model ZoneStorefront {
+  id                 Int      @id @default(autoincrement())
+  area_id            Int      @unique(map: "UQ_zone_storefronts_area_id")
+  operator_tenant_id Int      @unique(map: "UQ_zone_storefronts_operator_tenant_id")
+  name               String   @db.VarChar(120)
+  slug               String   @unique(map: "UQ_zone_storefronts_slug") @db.VarChar(120)
+  operations_phone   String   @db.VarChar(32)
+  is_active          Boolean  @default(false)
+  created_at         DateTime @default(now()) @db.Timestamp(6)
+  updated_at         DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  area            DirectoryArea              @relation(fields: [area_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "FK_zone_storefronts_area")
+  operator_tenant Tenant                     @relation("ZoneStorefrontOperatorTenant", fields: [operator_tenant_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "FK_zone_storefronts_operator_tenant")
+  merchants       ZoneStorefrontMerchant[]
+  dispatches      OrderDispatch[]
+
+  @@index([is_active, slug], map: "IDX_zone_storefronts_active_slug")
+  @@map("zone_storefronts")
+}
+
+/// Cross-tenant membership between a zone storefront and an eligible fulfillment merchant.
+model ZoneStorefrontMerchant {
+  id                 Int      @id @default(autoincrement())
+  zone_storefront_id Int
+  tenant_id          Int
+  priority           Int      @default(0)
+  is_active          Boolean  @default(true)
+  created_at         DateTime @default(now()) @db.Timestamp(6)
+  updated_at         DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  zone_storefront ZoneStorefront @relation(fields: [zone_storefront_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_zone_storefront_merchants_zone")
+  tenant          Tenant         @relation("ZoneStorefrontMerchantTenant", fields: [tenant_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "FK_zone_storefront_merchants_tenant")
+
+  @@unique([zone_storefront_id, tenant_id], map: "UQ_zone_storefront_merchants_zone_tenant")
+  @@index([zone_storefront_id, is_active, priority], map: "IDX_zone_storefront_merchants_zone_active_priority")
+  @@index([tenant_id, is_active], map: "IDX_zone_storefront_merchants_tenant_active")
+  @@map("zone_storefront_merchants")
+}
+
+/// Cross-tenant dispatch state for one operator-owned zone order.
+model OrderDispatch {
+  id                    Int                 @id @default(autoincrement())
+  order_id              Int                 @unique(map: "UQ_order_dispatches_order_id")
+  zone_storefront_id    Int
+  status                OrderDispatchStatus @default(pending)
+  version               Int                 @default(0)
+  cancellation_reason   String?
+  cancelled_by_admin_id Int?
+  cancelled_at          DateTime?           @db.Timestamptz(6)
+  accepted_at           DateTime?           @db.Timestamptz(6)
+  created_at            DateTime            @default(now()) @db.Timestamp(6)
+  updated_at            DateTime            @default(now()) @updatedAt @db.Timestamp(6)
+
+  order              Order                       @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_order_dispatches_order")
+  zone_storefront    ZoneStorefront              @relation(fields: [zone_storefront_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "FK_order_dispatches_zone")
+  cancelled_by_admin AdminUser?                   @relation("OrderDispatchCancellingAdmin", fields: [cancelled_by_admin_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_order_dispatches_cancelled_by_admin")
+  assignments        OrderDispatchAssignment[]
+
+  @@index([zone_storefront_id, status, created_at(sort: Desc)], map: "IDX_order_dispatches_zone_status_created")
+  @@map("order_dispatches")
+}
+
+/// Append-only merchant assignment attempt. Only state and response metadata are updated.
+model OrderDispatchAssignment {
+  id                    Int                           @id @default(autoincrement())
+  order_dispatch_id     Int
+  target_tenant_id      Int
+  assigned_by_admin_id  Int
+  responded_by_user_id  Int?
+  status                OrderDispatchAssignmentStatus @default(pending)
+  is_current            Boolean                       @default(true)
+  version               Int                           @default(0)
+  reason                String?
+  internal_notes        String?
+  assigned_at           DateTime                      @default(now()) @db.Timestamptz(6)
+  responded_at          DateTime?                     @db.Timestamptz(6)
+  created_at            DateTime                      @default(now()) @db.Timestamp(6)
+  updated_at            DateTime                      @default(now()) @updatedAt @db.Timestamp(6)
+
+  order_dispatch    OrderDispatch @relation(fields: [order_dispatch_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_order_dispatch_assignments_dispatch")
+  target_tenant     Tenant        @relation("OrderDispatchAssignmentTargetTenant", fields: [target_tenant_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "FK_order_dispatch_assignments_target_tenant")
+  assigned_by_admin AdminUser     @relation("OrderDispatchAssignmentAssigningAdmin", fields: [assigned_by_admin_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "FK_order_dispatch_assignments_assigning_admin")
+  responded_by_user User?         @relation("OrderDispatchAssignmentRespondingUser", fields: [responded_by_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_order_dispatch_assignments_responding_user")
+  quote_lines       OrderDispatchQuoteLine[]
+
+  @@unique([order_dispatch_id], map: "UQ_order_dispatch_assignments_current_dispatch", where: raw("(is_current = true)"))
+  @@index([target_tenant_id, status, is_current, assigned_at(sort: Desc)], map: "IDX_order_dispatch_assignments_target_status_current")
+  @@index([order_dispatch_id, created_at], map: "IDX_order_dispatch_assignments_dispatch_created")
+  @@map("order_dispatch_assignments")
+}
+
+/// Assignment-scoped price proposal that is applied to order snapshots only when accepted.
+model OrderDispatchQuoteLine {
+  id              Int      @id @default(autoincrement())
+  assignment_id   Int
+  order_item_id   Int
+  unit_price      Decimal  @db.Decimal(10, 2)
+  total_price     Decimal  @db.Decimal(10, 2)
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+  updated_at      DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  assignment OrderDispatchAssignment @relation(fields: [assignment_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_order_dispatch_quote_lines_assignment")
+  order_item OrderItem               @relation(fields: [order_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_order_dispatch_quote_lines_order_item")
+
+  @@unique([assignment_id, order_item_id], map: "UQ_order_dispatch_quote_lines_assignment_item")
+  @@index([order_item_id], map: "IDX_order_dispatch_quote_lines_order_item")
+  @@map("order_dispatch_quote_lines")
+}
+
+model AdminTenantAccess {
+  id                    Int       @id @default(autoincrement())
+  admin_user_id         Int
+  tenant_id             Int
+  permissions           Json      @db.JsonB
+  is_active             Boolean   @default(true)
+  granted_by_admin_id   Int?
+  granted_at            DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at            DateTime? @db.Timestamptz(6)
+  revoked_at            DateTime? @db.Timestamptz(6)
+  created_at            DateTime  @default(now()) @db.Timestamp(6)
+  updated_at            DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+
+  admin_user             AdminUser  @relation("AdminTenantAccessAdmin", fields: [admin_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_admin_tenant_accesses_admin_user")
+  tenant                 Tenant     @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_admin_tenant_accesses_tenant")
+  granted_by_admin       AdminUser? @relation("AdminTenantAccessGrantedBy", fields: [granted_by_admin_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_admin_tenant_accesses_granted_by")
+  management_sessions    AdminManagementSession[]
+
+  @@unique([admin_user_id, tenant_id], map: "UQ_admin_tenant_accesses_admin_tenant")
+  @@index([tenant_id, is_active], map: "IDX_admin_tenant_accesses_tenant_active")
+  @@index([admin_user_id, is_active], map: "IDX_admin_tenant_accesses_admin_active")
+  @@map("admin_tenant_accesses")
+}
+
+model AdminManagementSession {
+  id                 Int       @id @default(autoincrement())
+  session_token_hash String    @unique(map: "UQ_admin_management_sessions_token_hash") @db.Char(64)
+  admin_user_id      Int
+  tenant_id          Int
+  access_id          Int
+  reason             String    @db.VarChar(500)
+  started_at         DateTime  @default(now()) @db.Timestamptz(6)
+  last_active_at     DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at         DateTime  @db.Timestamptz(6)
+  ended_at           DateTime? @db.Timestamptz(6)
+  end_reason         AdminManagementSessionEndReason?
+  ip_address         String?   @db.VarChar(64)
+  user_agent         String?   @db.VarChar(512)
+  created_at         DateTime  @default(now()) @db.Timestamp(6)
+
+  admin_user         AdminUser         @relation(fields: [admin_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_admin_management_sessions_admin_user")
+  tenant             Tenant            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_admin_management_sessions_tenant")
+  access             AdminTenantAccess @relation(fields: [access_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_admin_management_sessions_access")
+  activity_logs      ActivityLog[]
+  admin_audit_logs   AdminAuditLog[]
+
+  @@unique([admin_user_id], map: "UQ_admin_management_sessions_one_active_admin", where: raw("(ended_at IS NULL)"))
+  @@index([tenant_id, started_at(sort: Desc)], map: "IDX_admin_management_sessions_tenant_started")
+  @@index([admin_user_id, ended_at], map: "IDX_admin_management_sessions_admin_ended")
+  @@map("admin_management_sessions")
+}
+
+/// Platform control-plane audit trail. This table intentionally does not use tenant RLS.
+model AdminAuditLog {
+  id                        Int                  @id @default(autoincrement())
+  actor_admin_id            Int?
+  actor_admin_name_snapshot String?              @db.VarChar(160)
+  actor_admin_role_snapshot AdminRole?
+  tenant_id                 Int?
+  management_session_id     Int?
+  entity_type               AdminAuditEntityType?
+  entity_id                 Int?
+  action                    String               @db.VarChar(96)
+  title                     String               @db.VarChar(160)
+  outcome                   AdminAuditOutcome    @default(success)
+  request_id                String?              @db.VarChar(64)
+  ip_address                String?              @db.VarChar(64)
+  metadata                  Json?                @db.JsonB
+  created_at                DateTime             @default(now()) @db.Timestamptz(6)
+
+  actor_admin       AdminUser?              @relation(fields: [actor_admin_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_admin_audit_logs_actor_admin")
+  tenant            Tenant?                 @relation(fields: [tenant_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_admin_audit_logs_tenant")
+  management_session AdminManagementSession? @relation(fields: [management_session_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_admin_audit_logs_management_session")
+
+  @@index([created_at(sort: Desc), id(sort: Desc)], map: "IDX_admin_audit_logs_created_id")
+  @@index([actor_admin_id, created_at(sort: Desc)], map: "IDX_admin_audit_logs_actor_created")
+  @@index([tenant_id, created_at(sort: Desc)], map: "IDX_admin_audit_logs_tenant_created")
+  @@index([action, outcome, created_at(sort: Desc)], map: "IDX_admin_audit_logs_action_outcome_created")
+  @@index([request_id], map: "IDX_admin_audit_logs_request_id")
+  @@map("admin_audit_logs")
 }
 
 model SubscriptionPlan {

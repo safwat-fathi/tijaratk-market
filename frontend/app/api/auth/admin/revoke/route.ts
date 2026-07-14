@@ -14,8 +14,14 @@ function clearAdminSessionCookie(response: NextResponse): NextResponse {
 			domain,
 			path: "/",
 		});
+		response.cookies.set(STORAGE_KEYS.ADMIN_MANAGEMENT_SESSION, "", {
+			maxAge: 0,
+			domain,
+			path: "/",
+		});
 	} else {
 		response.cookies.delete(STORAGE_KEYS.ADMIN_ACCESS_TOKEN);
+		response.cookies.delete(STORAGE_KEYS.ADMIN_MANAGEMENT_SESSION);
 	}
 
 	return response;

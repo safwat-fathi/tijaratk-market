@@ -18,11 +18,18 @@ import CategoryGrid, {
 } from "@/components/stores-directory/CategoryGrid";
 import { AppHeader } from "@/components/layout/AppHeader";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
+import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import {
+  buildCustomerAnalyticsPageLocation,
+  type CustomerAnalyticsSearchParams,
+} from "@/lib/analytics/google-analytics";
+
+type StoresDirectorySearchParams = CustomerAnalyticsSearchParams & {
+  area?: string;
+};
 
 type StoresDirectoryPageProps = {
-  searchParams: Promise<{
-    area?: string;
-  }>;
+  searchParams: Promise<StoresDirectorySearchParams>;
 };
 
 const STORES_PATH = "/";
@@ -277,7 +284,8 @@ const StoreCard = ({ store }: { store: StoresDirectoryStoreCard }) => (
 export default async function StoresDirectoryPage({
   searchParams,
 }: StoresDirectoryPageProps) {
-  const { area } = await searchParams;
+  const resolvedSearchParams = await searchParams;
+  const { area } = resolvedSearchParams;
   const selectedAreaSlug = area?.trim() || undefined;
   const landing = await getStoresLanding();
   const areas = landing?.areas ?? [];
@@ -297,6 +305,13 @@ export default async function StoresDirectoryPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
+      <CustomerAnalytics
+        pageLocation={buildCustomerAnalyticsPageLocation(
+          STORES_PATH,
+          resolvedSearchParams,
+        )}
+        pageTitle={seo.title}
+      />
       {jsonLd.map((item, index) => (
         <JsonLd
           key={`${item["@type"]}-${index}`}

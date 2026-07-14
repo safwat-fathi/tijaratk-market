@@ -4,7 +4,9 @@ import { AuthService } from './auth.service';
 
 describe('AuthService merchant approval', () => {
   const createService = () => {
-    const tx = {};
+    const tx = {
+      tenantDirectoryProfile: { create: jest.fn() },
+    };
     const usersService = {
       findOneByPhone: jest.fn(),
       create: jest.fn(),
@@ -30,7 +32,7 @@ describe('AuthService merchant approval', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('creates the pending tenant and owner in one transaction without issuing a token', async () => {
+  it('creates the pending tenant, directory profile, and owner in one transaction without issuing a token', async () => {
     const { service, usersService, tenantsService, prisma, tx } =
       createService();
     usersService.findOneByPhone.mockResolvedValue(null);
@@ -42,6 +44,7 @@ describe('AuthService merchant approval', () => {
       name: 'أحمد محمد',
       phone: '01012345678',
       category: 'grocery',
+      address: '12 شارع التحرير، الدقي',
       password: 'secret12',
       confirm_password: 'secret12',
     });
@@ -54,6 +57,13 @@ describe('AuthService merchant approval', () => {
       tx,
       TenantStatus.pending,
     );
+    expect(tx.tenantDirectoryProfile.create).toHaveBeenCalledWith({
+      data: {
+        tenant_id: 41,
+        display_name: 'متجر الاختبار',
+        address: '12 شارع التحرير، الدقي',
+      },
+    });
     expect(usersService.create).toHaveBeenCalledWith(
       expect.objectContaining({ role: UserRole.owner, tenant_id: 41 }),
       tx,
@@ -77,6 +87,7 @@ describe('AuthService merchant approval', () => {
         name: 'أحمد محمد',
         phone: '01012345678',
         category: 'grocery',
+        address: '12 شارع التحرير، الدقي',
         password: 'secret12',
         confirm_password: 'secret12',
       }),
@@ -96,10 +107,33 @@ describe('AuthService merchant approval', () => {
         name: 'أحمد محمد',
         phone: '01012345678',
         category: 'grocery',
+        address: '12 شارع التحرير، الدقي',
         password: 'secret12',
         confirm_password: 'secret12',
       }),
     ).rejects.toThrow('owner creation failed');
+  });
+
+  it('does not attempt owner creation when directory profile creation fails', async () => {
+    const { service, usersService, tenantsService, tx } = createService();
+    usersService.findOneByPhone.mockResolvedValue(null);
+    tenantsService.create.mockResolvedValue({ id: 41 });
+    tx.tenantDirectoryProfile.create.mockRejectedValue(
+      new Error('profile creation failed'),
+    );
+
+    await expect(
+      service.signup({
+        storeName: 'متجر الاختبار',
+        name: 'أحمد محمد',
+        phone: '01012345678',
+        category: 'grocery',
+        address: '12 شارع التحرير، الدقي',
+        password: 'secret12',
+        confirm_password: 'secret12',
+      }),
+    ).rejects.toThrow('profile creation failed');
+    expect(usersService.create).not.toHaveBeenCalled();
   });
 
   it.each([

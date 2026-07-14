@@ -10,9 +10,7 @@ import { redirect } from "next/navigation";
 import { PlanSelect } from "./_components/PlanSelect";
 import { TenantAreaForm } from "./_components/TenantAreaForm";
 import { DirectoryStatusForm } from "./_components/DirectoryStatusForm";
-import { AdminBulkEssentialsButton } from "./_components/AdminBulkEssentialsButton";
 import { ExternalLink } from "lucide-react";
-import { DeleteMerchantProductsButton } from "./_components/DeleteMerchantProductsButton";
 import type {
   AdminDirectoryArea,
   AdminPlan,
@@ -258,6 +256,53 @@ function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
 }
 
 export default async function AdminMerchants(props: Props) {
+  const profileResponse = await adminService.getCurrentAdmin();
+  if (profileResponse.data?.role === "operations_admin") {
+    const assignedResponse = await adminService.getAssignedTenants();
+    const assignedMerchants = assignedResponse.success && assignedResponse.data
+      ? assignedResponse.data
+      : [];
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">المتاجر المسندة إليك</h1>
+          <p className="mt-1 text-sm text-gray-600">
+            لا يمكنك إدارة متجر إلا بعد بدء جلسة موثقة من صفحة المتجر.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {assignedMerchants.map((merchant) => (
+            <Card key={merchant.id} className="space-y-4 p-5">
+              <div>
+                <h2 className="font-bold text-gray-900">{merchant.name}</h2>
+                <p className="text-sm text-gray-500">{merchant.category}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {merchant.access.permissions.map((permission) => (
+                  <span key={permission} className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
+                    {permission}
+                  </span>
+                ))}
+              </div>
+              <a
+                href={`/admin/merchants/${merchant.id}`}
+                className="inline-flex min-h-10 items-center justify-center rounded-md bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary-hover"
+              >
+                فتح المتجر
+              </a>
+            </Card>
+          ))}
+          {assignedMerchants.length === 0 ? (
+            <Card className="p-8 text-center text-sm text-gray-500">
+              لم يتم إسناد متاجر إلى حسابك حتى الآن.
+            </Card>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   const searchParams = await props.searchParams;
   const page = parsePositiveInteger(searchParams.page, 1);
   const limit = parsePositiveInteger(searchParams.limit, DEFAULT_PAGE_SIZE);
@@ -378,20 +423,13 @@ export default async function AdminMerchants(props: Props) {
                 </div>
 
                 <div className="flex gap-2 items-start flex-wrap">
+                  <a
+                    href={`/admin/merchants/${merchant.id}`}
+                    className="inline-flex min-h-9 items-center rounded-md bg-brand-primary px-3 text-xs font-semibold text-white"
+                  >
+                    إدارة المتجر
+                  </a>
                   <ToggleTenantStatusForm merchant={merchant} />
-                  <DeleteMerchantProductsButton
-                    tenantId={merchant.id}
-                    tenantName={merchant.name}
-                    productCount={merchant._count?.products || 0}
-                  />
-                  <AdminBulkEssentialsButton
-                    tenantId={merchant.id}
-                    tenantName={merchant.name}
-                    category={merchant.category}
-                    lastBulkEssentialsAddedAt={
-                      merchant.last_bulk_essentials_added_at
-                    }
-                  />
                 </div>
               </div>
             </Card>
@@ -510,20 +548,13 @@ export default async function AdminMerchants(props: Props) {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-start gap-2">
+                          <a
+                            href={`/admin/merchants/${merchant.id}`}
+                            className="inline-flex min-h-9 items-center rounded-md bg-brand-primary px-3 text-xs font-semibold text-white"
+                          >
+                            إدارة المتجر
+                          </a>
                           <ToggleTenantStatusForm merchant={merchant} />
-                          <DeleteMerchantProductsButton
-                            tenantId={merchant.id}
-                            tenantName={merchant.name}
-                            productCount={merchant._count?.products || 0}
-                          />
-                          <AdminBulkEssentialsButton
-                            tenantId={merchant.id}
-                            tenantName={merchant.name}
-                            category={merchant.category}
-                            lastBulkEssentialsAddedAt={
-                              merchant.last_bulk_essentials_added_at
-                            }
-                          />
                         </div>
                       </td>
                     </tr>

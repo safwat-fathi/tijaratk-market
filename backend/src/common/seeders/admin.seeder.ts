@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { PrismaClient } from '../../../generated/prisma/client';
+import { AdminRole, PrismaClient } from '../../../generated/prisma/client';
 import * as bcrypt from 'bcrypt';
 
 export async function seedAdmin(prisma: PrismaClient) {
@@ -8,12 +8,13 @@ export async function seedAdmin(prisma: PrismaClient) {
     logger.log('Seeding Admin and Plans...');
 
     // 1. Create Admin
+    const adminName = process.env.ADMIN_NAME?.trim();
     const adminPhone = process.env.ADMIN_PHONE?.trim();
     const adminPassword = process.env.ADMIN_PASSWORD;
 
-    if (!adminPhone || !adminPassword) {
+    if (!adminName || !adminPhone || !adminPassword) {
       throw new Error(
-        'ADMIN_PHONE and ADMIN_PASSWORD are required to seed the admin user.',
+        'ADMIN_NAME, ADMIN_PHONE, and ADMIN_PASSWORD are required to seed the admin user.',
       );
     }
 
@@ -27,7 +28,8 @@ export async function seedAdmin(prisma: PrismaClient) {
         data: {
           phone: adminPhone,
           password: hashedPassword,
-          name: 'System Admin',
+          name: adminName,
+          role: AdminRole.platform_admin,
         },
       });
       logger.log(`✅ Admin user created (phone: ${adminPhone})`);

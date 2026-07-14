@@ -14,6 +14,7 @@ import { AllExceptionFilter } from './common/filters/all-exception.filter';
 import { TenantRlsInterceptor } from './common/interceptors/tenant-rls.interceptor';
 import { validationExceptionFactory } from './common/utils/validation-exception.factory';
 import { requestLoggingMiddleware } from './common/middlewares/request-logging.middleware';
+import { AdminAuditInterceptor } from './admin-audit/admin-audit.interceptor';
 
 const parseBooleanEnv = (value: string | undefined, defaultValue: boolean) => {
   if (value === undefined) return defaultValue;
@@ -63,7 +64,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin: corsOrigin,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: [
       'Content-Type',
@@ -148,8 +149,10 @@ async function bootstrap() {
 
   // Global Interceptor for success responses
   const tenantRlsInterceptor = app.get(TenantRlsInterceptor);
+  const adminAuditInterceptor = app.get(AdminAuditInterceptor);
   const interceptors: NestInterceptor[] = [
     tenantRlsInterceptor,
+    adminAuditInterceptor,
     new ResponseTransformInterceptor(),
   ];
   app.useGlobalInterceptors(...interceptors);

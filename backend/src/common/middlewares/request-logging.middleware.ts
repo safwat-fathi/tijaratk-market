@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { NextFunction, Request, Response } from 'express';
+import { AdminAuditContext } from 'src/admin-audit/admin-audit.context';
 
 const REQUEST_ID_HEADER = 'x-request-id';
 
@@ -16,7 +17,11 @@ export function requestLoggingMiddleware(
 ): void {
   const startedAt = Date.now();
   const incomingRequestId = req.header(REQUEST_ID_HEADER);
-  const requestId = incomingRequestId?.trim() || randomUUID();
+  const normalizedRequestId = incomingRequestId?.trim().slice(0, 64);
+  const requestId =
+    normalizedRequestId && /^[A-Za-z0-9._:-]+$/.test(normalizedRequestId)
+      ? normalizedRequestId
+      : randomUUID();
   const requestWithId = req as Request & { requestId?: string };
   requestWithId.requestId = requestId;
   res.setHeader(REQUEST_ID_HEADER, requestId);
@@ -36,5 +41,5 @@ export function requestLoggingMiddleware(
     );
   });
 
-  next();
+  AdminAuditContext.run(next);
 }

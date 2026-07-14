@@ -32,6 +32,7 @@ import type { TenantCategory } from "@/constants";
 import type { PublicCustomerProfile } from "@/services/api/customers.service";
 import {
   createOrderAction,
+  createZoneOrderAction,
   type CreateOrderState,
 } from "@/actions/order-actions";
 import { OrderSource, UnavailableItemAction } from "@/types/enums";
@@ -43,6 +44,7 @@ import {
 	prepareAvailabilityRequestAction,
 } from "@/actions/availability-request-cookie-actions";
 import { productsService } from "@/services/api/products.service";
+import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
 import { availabilityRequestsService } from "@/services/api/availability-requests.service";
 import {
   getPublicCustomerByAccessCodeAction,
@@ -76,6 +78,7 @@ import {
 import {
   DEFAULT_UNAVAILABLE_ITEM_ACTION,
 } from "@/lib/orders/unavailable-item-action";
+import { sendCustomerAnalyticsEvent } from "@/lib/analytics/google-analytics";
 
 const initialState: CreateOrderState = {
   success: false,
@@ -283,6 +286,7 @@ const getCreatedCustomerAccessCode = (data: unknown) => {
 
 type OrderFormProps = {
   tenantSlug: string;
+  storefrontKind?: "tenant" | "zone";
   areaSlug?: string;
   landingAttribution?: LandingAttributionInput;
   isPharmacy?: boolean;
@@ -304,6 +308,7 @@ type OrderFormProps = {
 
 export default function OrderForm({
   tenantSlug,
+  storefrontKind = "tenant",
   areaSlug,
   landingAttribution,
   isPharmacy,
@@ -358,7 +363,10 @@ export default function OrderForm({
     );
   const [hasPrescription, setHasPrescription] = useState(false);
   const [state, formAction, isPending] = useActionState(
-    createOrderAction.bind(null, tenantSlug),
+    (storefrontKind === "zone" ? createZoneOrderAction : createOrderAction).bind(
+      null,
+      tenantSlug,
+    ),
     initialState,
   );
 
@@ -556,7 +564,15 @@ export default function OrderForm({
         return Object.fromEntries(prevMap);
       });
 
-      const response = await productsService.getPublicProducts(tenantSlug, {
+      const response = storefrontKind === "zone"
+        ? await zoneStorefrontsService.getPublicProducts(tenantSlug, {
+            search: searchTerm || undefined,
+            category:
+              categoryKey === ALL_PRODUCTS_CATEGORY ? undefined : categoryKey,
+            page,
+            limit: PAGE_SIZE,
+          })
+        : await productsService.getPublicProducts(tenantSlug, {
         search: searchTerm || undefined,
         category:
           categoryKey === ALL_PRODUCTS_CATEGORY ? undefined : categoryKey,
@@ -620,7 +636,7 @@ export default function OrderForm({
         return Object.fromEntries(prevMap);
       });
     },
-    [debouncedProductSearch, paginationByCategoryMap, tenantSlug],
+    [debouncedProductSearch, paginationByCategoryMap, storefrontKind, tenantSlug],
   );
 
   const handleCategoryChange = useCallback(
@@ -822,30 +838,6 @@ export default function OrderForm({
   ]);
 
   useEffect(() => {
-    if (!state.success || hasNavigatedToSuccessRef.current) {
-      return;
-    }
-
-    const publicToken = getCreatedOrderPublicToken(state.data);
-    if (!publicToken) {
-      return;
-    }
-    const customerAccessCode = getCreatedCustomerAccessCode(state.data);
-    const successUrl = new URL(
-      `/${encodeURIComponent(tenantSlug)}/success`,
-      window.location.origin,
-    );
-    successUrl.searchParams.set("token", publicToken);
-    if (customerAccessCode) {
-      successUrl.searchParams.set("customerCode", customerAccessCode);
-    }
-
-    hasNavigatedToSuccessRef.current = true;
-    router.replace(`${successUrl.pathname}${successUrl.search}`);
-  }, [router, state.data, state.success, tenantSlug]);
-
-
-  useEffect(() => {
     if (!isCategoryProductsView) {
       return;
     }
@@ -877,7 +869,11 @@ export default function OrderForm({
   }, [activeCategory, isCategoryProductsView]);
 
   useEffect(() => {
-    if (savedCustomerProfile || initialOrder?.customer) {
+    if (
+      storefrontKind === "zone" ||
+      savedCustomerProfile ||
+      initialOrder?.customer
+    ) {
       return;
     }
 
@@ -919,6 +915,7 @@ export default function OrderForm({
     deferredCustomerPhone,
     initialOrder?.customer,
     savedCustomerProfile,
+    storefrontKind,
     tenantSlug,
   ]);
 
@@ -1088,6 +1085,13 @@ export default function OrderForm({
 
   const handleRequestAvailability = useCallback(
     async (product: Product): Promise<AvailabilityRequestOutcome> => {
+      if (storefrontKind === "zone") {
+        setToastState({
+          message: "طلبات توفير المنتجات تُدار حالياً عبر عمليات المنطقة",
+          type: "error",
+        });
+        return "failed";
+      }
       if (product.is_available) {
         return "failed";
       }
@@ -1150,11 +1154,25 @@ export default function OrderForm({
 
       return response.data.status;
     },
-    [customerName, customerPhone, deliveryAddress, notes, tenantSlug],
+    [
+      customerName,
+      customerPhone,
+      deliveryAddress,
+      notes,
+      storefrontKind,
+      tenantSlug,
+    ],
   );
 
 	const handleRequestCustomAvailability = useCallback(
 		async (requestedProductName: string): Promise<AvailabilityRequestOutcome> => {
+			if (storefrontKind === "zone") {
+				setToastState({
+					message: "طلبات توفير المنتجات تُدار حالياً عبر عمليات المنطقة",
+					type: "error",
+				});
+				return "failed";
+			}
 			const prepared = await prepareCustomAvailabilityRequestAction({
 				slug: tenantSlug,
 				requested_product_name: requestedProductName,
@@ -1213,7 +1231,14 @@ export default function OrderForm({
 
 			return response.data.status;
 		},
-		[customerName, customerPhone, deliveryAddress, notes, tenantSlug],
+		[
+			customerName,
+			customerPhone,
+			deliveryAddress,
+			notes,
+			storefrontKind,
+			tenantSlug,
+		],
 	);
 
   const handleReviewSelectionUpdate = useCallback(
@@ -1291,6 +1316,47 @@ export default function OrderForm({
       ),
     [effectiveCartSelections, knownProductsById, knownProductsByIdMap],
   );
+
+  const hasFreeTextRequest = orderRequest.trim().length > 0;
+
+  useEffect(() => {
+    if (!state.success || hasNavigatedToSuccessRef.current) {
+      return;
+    }
+
+    const publicToken = getCreatedOrderPublicToken(state.data);
+    if (!publicToken) {
+      return;
+    }
+
+    const customerAccessCode = getCreatedCustomerAccessCode(state.data);
+    const successPath = storefrontKind === "zone"
+      ? `/market/${encodeURIComponent(tenantSlug)}/success`
+      : `/${encodeURIComponent(tenantSlug)}/success`;
+    const successUrl = new URL(successPath, window.location.origin);
+    successUrl.searchParams.set("token", publicToken);
+    if (customerAccessCode) {
+      successUrl.searchParams.set("customerCode", customerAccessCode);
+    }
+
+    hasNavigatedToSuccessRef.current = true;
+    sendCustomerAnalyticsEvent("order_submitted", {
+      store_slug: tenantSlug,
+      item_count: totalItems,
+      has_free_text: hasFreeTextRequest,
+      has_prescription: hasPrescription,
+    });
+    router.replace(`${successUrl.pathname}${successUrl.search}`);
+  }, [
+    hasFreeTextRequest,
+    hasPrescription,
+    router,
+    state.data,
+    state.success,
+    storefrontKind,
+    tenantSlug,
+    totalItems,
+  ]);
 
   const displayedErrors = useMemo(
     () => ({

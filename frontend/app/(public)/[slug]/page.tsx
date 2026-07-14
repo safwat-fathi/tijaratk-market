@@ -19,16 +19,23 @@ import { Order } from "@/types/models/order";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { getCustomerProfileBySlugFromCookie } from "@/lib/tracking/customer-tracking-cookie";
+import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import {
+  buildCustomerAnalyticsPageLocation,
+  type CustomerAnalyticsSearchParams,
+} from "@/lib/analytics/google-analytics";
+
+type StoreSearchParams = CustomerAnalyticsSearchParams & {
+  reorder?: string;
+  category?: string;
+  areaSlug?: string;
+  categorySlug?: string;
+  src?: string;
+};
 
 type Props = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{
-    reorder?: string;
-    category?: string;
-    areaSlug?: string;
-    categorySlug?: string;
-    src?: string;
-  }>;
+  searchParams: Promise<StoreSearchParams>;
 };
 
 // Fetch data
@@ -146,8 +153,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function StorePage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const resolvedSearchParams = await searchParams;
   const { reorder, category, areaSlug, categorySlug, src } =
-    await searchParams;
+    resolvedSearchParams;
 
   const tenant = await getTenant(slug);
   if (!tenant || !tenant.id) {
@@ -164,6 +172,13 @@ export default async function StorePage({ params, searchParams }: Props) {
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-md bg-background flex flex-col">
+      <CustomerAnalytics
+        pageLocation={buildCustomerAnalyticsPageLocation(
+          `/${encodeURIComponent(slug)}`,
+          resolvedSearchParams,
+        )}
+        pageTitle={tenant.name}
+      />
       <StoreHeader tenant={tenant} />
       
       {!tenant.onboarding_completed ? (

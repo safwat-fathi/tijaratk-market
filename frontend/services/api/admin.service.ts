@@ -10,6 +10,17 @@ import type {
 	PublicProductCategory,
 	TenantProductsSearchResponse,
 } from "@/types/models/product";
+import type { Order } from "@/types/models/order";
+import type {
+	AdminAuditLogsResponse,
+	GetAdminAuditLogsParams,
+} from "@/types/models/admin-audit-log";
+import type {
+	AdminZoneStorefront,
+	EligibleZoneMerchant,
+	ManagedZoneDispatchContext,
+	ZoneOrderDispatch,
+} from "@/types/models/zone-storefront";
 
 type AdminLoginPayload = {
 	phone: string;
@@ -102,6 +113,13 @@ export type AdminTenant = {
 	directory_profile?: AdminTenantDirectoryProfile | null;
 	tenant_delivery_areas?: AdminTenantDeliveryArea[];
 	cancellation_policy?: AdminTenantCancellationPolicy;
+	operated_zone_storefront?: {
+		id: number;
+		name: string;
+		slug: string;
+		is_active: boolean;
+		area: Pick<AdminDirectoryArea, "id" | "name_ar" | "name_en" | "slug">;
+	} | null;
 };
 
 export type AdminPlan = {
@@ -199,7 +217,7 @@ export type AdminProductSheetUploadSummary = {
 	}>;
 };
 
-type AdminOrder = Record<string, unknown>;
+export type AdminOrder = Order;
 
 type AdminProductPayload = {
 	name: string;
@@ -257,6 +275,85 @@ export type DeleteTenantProductsSummary = {
 	}>;
 };
 
+export type AdminRole = "platform_admin" | "operations_admin";
+
+export type AdminManagedPermission =
+	| "products.read"
+	| "products.create"
+	| "products.update"
+	| "products.update_price"
+	| "products.update_availability"
+	| "products.archive"
+	| "orders.read"
+	| "orders.update_status"
+	| "orders.update_pricing"
+	| "orders.manage_replacements"
+	| "customers.read_limited"
+	| "activity_logs.read"
+	| "dispatches.read"
+	| "dispatches.assign"
+	| "dispatches.cancel";
+
+export type AdminProfile = {
+	id: number;
+	name: string;
+	phone: string;
+	role: AdminRole;
+	is_active: boolean;
+};
+
+export type AdminTenantAccess = {
+	id: number;
+	admin_user_id: number;
+	tenant_id: number;
+	permissions: AdminManagedPermission[];
+	is_active: boolean;
+	granted_by_admin_id?: number | null;
+	granted_at: string;
+	expires_at?: string | null;
+	revoked_at?: string | null;
+	admin_user?: AdminProfile;
+	granted_by_admin?: { id: number; name: string } | null;
+};
+
+export type AdminManagementSession = {
+	id: number;
+	admin_user_id: number;
+	tenant_id: number;
+	reason: string;
+	started_at: string;
+	last_active_at: string;
+	expires_at: string;
+	ended_at?: string | null;
+	end_reason?: string | null;
+	permissions: AdminManagedPermission[];
+	tenant: {
+		id: number;
+		name: string;
+		slug: string;
+		status: string;
+		operated_zone_storefront?: { id: number; slug: string } | null;
+	};
+};
+
+export type AdminManagementSessionSummary = {
+	id: number;
+	reason: string;
+	started_at: string;
+	last_active_at: string;
+	expires_at: string;
+	ended_at?: string | null;
+	end_reason?: string | null;
+	ip_address?: string | null;
+	admin_user: { id: number; name: string; role: AdminRole };
+};
+
+export type ManagedMerchantContext = {
+	tenant: AdminTenant;
+	current_admin_access: AdminTenantAccess | null;
+	managed_stores_enabled: boolean;
+};
+
 type UpdateTenantDirectoryProfilePayload = {
 	area_id?: number;
 	delivery_area_ids?: number[];
@@ -290,6 +387,316 @@ class AdminApiService extends HttpService {
 
 	public async getDashboardStats() {
 		return this.get<AdminDashboardStats>("dashboard-stats", undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async getCurrentAdmin() {
+		return this.get<AdminProfile>("me", undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async getAdminActivityLogs(params?: GetAdminAuditLogsParams) {
+		return this.get<AdminAuditLogsResponse>(
+			"activity-logs",
+			params ? { ...params } : undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getAssignedTenants() {
+		return this.get<Array<AdminTenant & { access: AdminTenantAccess }>>(
+			"managed-tenants",
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedMerchantContext(tenantId: number) {
+		return this.get<ManagedMerchantContext>(
+			`managed-tenants/${tenantId}/context`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getAdminUsers() {
+		return this.get<AdminProfile[]>("admin-users", undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async getTenantAccesses(tenantId: number) {
+		return this.get<AdminTenantAccess[]>(
+			`tenants/${tenantId}/accesses`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async upsertTenantAccess(
+		tenantId: number,
+		adminUserId: number,
+		payload: { permissions: AdminManagedPermission[]; expires_at?: string | null },
+	) {
+		return this.put<AdminTenantAccess>(
+			`tenants/${tenantId}/accesses/${adminUserId}`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async revokeTenantAccess(tenantId: number, adminUserId: number) {
+		return this.delete<{ success: boolean }>(
+			`tenants/${tenantId}/accesses/${adminUserId}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getTenantManagementSessions(tenantId: number) {
+		return this.get<AdminManagementSessionSummary[]>(
+			`tenants/${tenantId}/management-sessions`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async startManagementSession(payload: { tenant_id: number; reason: string }) {
+		return this.post<{
+			session_token: string;
+			session: AdminManagementSession;
+		}>("management-sessions", payload, undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async getCurrentManagementSession() {
+		return this.get<AdminManagementSession | null>(
+			"management-sessions/current",
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async endCurrentManagementSession() {
+		return this.delete<{ success: boolean }>(
+			"management-sessions/current",
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedProducts(tenantId: number, status: ProductStatus = "active") {
+		return this.get<Product[]>(
+			`managed-tenants/${tenantId}/products`,
+			{ status },
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedCatalog(tenantId: number, limit = 40) {
+		return this.get<CatalogItemsResponse>(
+			`managed-tenants/${tenantId}/catalog`,
+			{ page: 1, limit },
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async createManagedProduct(tenantId: number, payload: AdminProductPayload) {
+		return this.post<Product>(
+			`managed-tenants/${tenantId}/products`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async addManagedProductFromCatalog(tenantId: number, catalogItemId: number) {
+		return this.post<Product>(
+			`managed-tenants/${tenantId}/products/from-catalog`,
+			{ catalog_item_id: catalogItemId },
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async updateManagedProduct(
+		tenantId: number,
+		productId: number,
+		section: "details" | "price" | "availability" | "status",
+		payload: Record<string, unknown>,
+	) {
+		return this.patch<Product>(
+			`managed-tenants/${tenantId}/products/${productId}/${section}`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedOrders(tenantId: number, date?: string) {
+		return this.get<AdminOrder[]>(
+			`managed-tenants/${tenantId}/orders`,
+			date ? { date } : undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedOrder(tenantId: number, orderId: number) {
+		return this.get<AdminOrder>(
+			`managed-tenants/${tenantId}/orders/${orderId}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async updateManagedOrderStatus(
+		tenantId: number,
+		orderId: number,
+		payload: { status: string; cancellation_reason?: string },
+	) {
+		return this.patch<AdminOrder>(
+			`managed-tenants/${tenantId}/orders/${orderId}/status`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async updateManagedOrderPricing(tenantId: number, orderId: number, total: number) {
+		return this.patch<AdminOrder>(
+			`managed-tenants/${tenantId}/orders/${orderId}/pricing`,
+			{ total },
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async updateManagedOrderItem(
+		tenantId: number,
+		itemId: number,
+		action: "price" | "out-of-stock" | "replacement" | "replacement-reset",
+		payload: Record<string, unknown> = {},
+	) {
+		return this.patch<unknown>(
+			`managed-tenants/${tenantId}/orders/items/${itemId}/${action}`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedActivityLogs(
+		tenantId: number,
+		params?: { entity_type?: string; entity_id?: number; cursor?: number; limit?: number },
+	) {
+		return this.get<{ items: import("@/types/models/activity-log").ActivityLog[]; next_cursor: number | null }>(
+			`managed-tenants/${tenantId}/activity-logs`,
+			params,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getZones() {
+		return this.get<AdminZoneStorefront[]>("zones", undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async getZone(zoneId: number) {
+		return this.get<AdminZoneStorefront>(`zones/${zoneId}`, undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async getEligibleZoneMerchants(zoneId: number) {
+		return this.get<EligibleZoneMerchant[]>(
+			`zones/${zoneId}/eligible-merchants`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async createZone(payload: {
+		name: string;
+		slug: string;
+		area_id: number;
+		category: "grocery" | "pharmacy";
+		operations_phone: string;
+		delivery_fee?: number;
+	}) {
+		return this.post<AdminZoneStorefront>(
+			"zones",
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async updateZoneActivation(zoneId: number, isActive: boolean) {
+		return this.patch<AdminZoneStorefront>(
+			`zones/${zoneId}/activation`,
+			{ is_active: isActive },
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async upsertZoneMerchant(
+		zoneId: number,
+		payload: { tenant_id: number; priority?: number; is_active?: boolean },
+	) {
+		return this.post<AdminZoneStorefront>(
+			`zones/${zoneId}/merchants`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedZoneDispatches(tenantId: number, status?: string) {
+		return this.get<ZoneOrderDispatch[]>(
+			`managed-tenants/${tenantId}/zone-dispatches`,
+			status ? { status } : undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedZoneDispatchContext(tenantId: number) {
+		return this.get<ManagedZoneDispatchContext>(
+			`managed-tenants/${tenantId}/zone-dispatches/context`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedZoneDispatch(tenantId: number, dispatchId: number) {
+		return this.get<ZoneOrderDispatch>(
+			`managed-tenants/${tenantId}/zone-dispatches/${dispatchId}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async assignManagedZoneDispatch(
+		tenantId: number,
+		dispatchId: number,
+		payload: {
+			target_tenant_id: number;
+			expected_version: number;
+			internal_notes?: string;
+		},
+	) {
+		return this.post<ZoneOrderDispatch>(
+			`managed-tenants/${tenantId}/zone-dispatches/${dispatchId}/assign`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async cancelManagedZoneDispatch(
+		tenantId: number,
+		dispatchId: number,
+		payload: { expected_version: number; reason: string },
+	) {
+		return this.post<ZoneOrderDispatch>(
+			`managed-tenants/${tenantId}/zone-dispatches/${dispatchId}/cancel`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
 	}
 
 	public async getTenants(): Promise<ServiceResponse<AdminTenant[]>>;
@@ -551,8 +958,15 @@ class AdminApiService extends HttpService {
 		);
 	}
 
-	public getAdminCatalogExportPath(catalogType: AdminCatalogType) {
-		const qs = this.buildQueryString({ catalogType });
+	public getAdminCatalogExportPath(
+		catalogType: AdminCatalogType,
+		essentialStatus: "all" | "essential" | "non_essential" = "all",
+	) {
+		const qs = this.buildQueryString({
+			catalogType,
+			essentialStatus:
+				essentialStatus === "all" ? undefined : essentialStatus,
+		});
 		return `/api/admin/catalog-items/export${qs}`;
 	}
 

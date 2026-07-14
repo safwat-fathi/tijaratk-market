@@ -115,6 +115,7 @@ export async function registerAction(
 			storeName: validated.data.storeName,
 			phone: validated.data.phone,
 			category: validated.data.category,
+			address: validated.data.address,
 			password: validated.data.password,
 			confirm_password: validated.data.confirmPassword,
 		};

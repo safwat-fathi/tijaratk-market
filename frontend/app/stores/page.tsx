@@ -1,22 +1,38 @@
 import { redirect } from "next/navigation";
+import {
+  buildCustomerAnalyticsPageLocation,
+  type CustomerAnalyticsSearchParams,
+} from "@/lib/analytics/google-analytics";
+
+type StoresRedirectSearchParams = CustomerAnalyticsSearchParams & {
+  area?: string;
+  category?: string;
+};
 
 type Props = {
-  searchParams: Promise<{
-    area?: string;
-    category?: string;
-  }>;
+  searchParams: Promise<StoresRedirectSearchParams>;
 };
 
 export default async function StoresQueryRedirectPage({ searchParams }: Props) {
-  const { area, category } = await searchParams;
+  const resolvedSearchParams = await searchParams;
+  const { area, category } = resolvedSearchParams;
   const areaSlug = area?.trim();
   const categorySlug = category?.trim();
+  const campaignSearchParams = {
+    utm_source: resolvedSearchParams.utm_source,
+    utm_medium: resolvedSearchParams.utm_medium,
+    utm_campaign: resolvedSearchParams.utm_campaign,
+    utm_content: resolvedSearchParams.utm_content,
+  };
 
   if (areaSlug && categorySlug) {
     redirect(
-      `/stores/${encodeURIComponent(areaSlug)}/${encodeURIComponent(categorySlug)}`,
+      buildCustomerAnalyticsPageLocation(
+        `/stores/${encodeURIComponent(areaSlug)}/${encodeURIComponent(categorySlug)}`,
+        campaignSearchParams,
+      ),
     );
   }
 
-  redirect("/");
+  redirect(buildCustomerAnalyticsPageLocation("/", campaignSearchParams));
 }

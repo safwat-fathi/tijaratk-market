@@ -18,8 +18,9 @@ export class AdminUserDto {
   name: string;
 
   @ApiProperty({
-    description: 'The role of the user, which is admin',
-    example: 'admin',
+    description: 'The administrator control-plane role',
+    enum: ['platform_admin', 'operations_admin'],
+    example: 'operations_admin',
   })
   role: string;
 }

@@ -105,7 +105,14 @@ export class AuthService {
   }
 
   async signup(signupDto: SignupDto) {
-    const { phone: rawPhone, password, storeName, name, category } = signupDto;
+    const {
+      phone: rawPhone,
+      password,
+      storeName,
+      name,
+      category,
+      address,
+    } = signupDto;
 
     const phone = formatPhoneNumber(rawPhone);
 
@@ -125,6 +132,14 @@ export class AuthService {
         tx,
         TenantStatus.pending,
       );
+
+      await tx.tenantDirectoryProfile.create({
+        data: {
+          tenant_id: tenant.id,
+          display_name: storeName,
+          address,
+        },
+      });
 
       await this.usersService.create(
         {

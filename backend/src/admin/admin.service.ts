@@ -11,11 +11,16 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import {
+  AdminAuditEntityType,
+  AdminAuditOutcome,
+  AdminRole,
   CatalogItem,
   Prisma,
   TenantCategory,
   TenantStatus,
 } from '../../generated/prisma/client';
+import { AdminAuditService } from 'src/admin-audit/admin-audit.service';
+import { AdminAuditRequestMetadata } from 'src/admin-audit/admin-audit.types';
 import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
 import { ProductSource } from 'src/common/enums/product-source.enum';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
@@ -116,19 +121,36 @@ export class AdminService {
     private readonly imageProcessorService: ImageProcessorService,
     private readonly storesDirectoryService: StoresDirectoryService,
     private readonly activityLogService: ActivityLogService,
+    private readonly adminAuditService: AdminAuditService,
   ) {}
 
-  async login(loginDto: AdminLoginDto) {
+  /** Authenticates an administrator and audits success or credential denial. */
+  async login(
+    loginDto: AdminLoginDto,
+    metadata: AdminAuditRequestMetadata = {},
+  ) {
     const adminUser = await this.prisma.adminUser.findUnique({
       where: { phone: loginDto.phone },
     });
 
-    if (!adminUser) {
+    if (!adminUser || !adminUser.is_active) {
+      await this.recordLoginAudit(
+        adminUser,
+        loginDto.phone,
+        AdminAuditOutcome.denied,
+        metadata,
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isMatch = await bcrypt.compare(loginDto.password, adminUser.password);
     if (!isMatch) {
+      await this.recordLoginAudit(
+        adminUser,
+        loginDto.phone,
+        AdminAuditOutcome.denied,
+        metadata,
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -138,15 +160,71 @@ export class AdminService {
       role: 'admin',
     };
 
+    await this.recordLoginAudit(
+      adminUser,
+      loginDto.phone,
+      AdminAuditOutcome.success,
+      metadata,
+    );
+
     return {
       admin_access_token: this.jwtService.sign(payload),
       user: {
         id: adminUser.id,
         phone: adminUser.phone,
         name: adminUser.name,
-        role: 'admin',
+        role: adminUser.role,
       },
     };
+  }
+
+  /** Persists a safe login outcome without storing the submitted phone. */
+  private recordLoginAudit(
+    adminUser: {
+      id: number;
+      name: string;
+      role: AdminRole;
+    } | null,
+    phone: string,
+    outcome: AdminAuditOutcome,
+    metadata: AdminAuditRequestMetadata,
+  ) {
+    return this.adminAuditService.record({
+      actor: adminUser
+        ? { id: adminUser.id, name: adminUser.name, role: adminUser.role }
+        : null,
+      entityType: AdminAuditEntityType.admin,
+      entityId: adminUser?.id,
+      action:
+        outcome === AdminAuditOutcome.success
+          ? 'admin.login.succeeded'
+          : 'admin.login.denied',
+      title:
+        outcome === AdminAuditOutcome.success
+          ? 'تم تسجيل دخول المسؤول'
+          : 'تم رفض تسجيل دخول إداري',
+      outcome,
+      requestId: metadata.requestId,
+      ipAddress: metadata.ipAddress,
+      metadata: {
+        login_identifier_hash:
+          this.adminAuditService.hashLoginIdentifier(phone),
+      },
+    });
+  }
+
+  /** Returns a safe administrator profile for server-rendered admin layouts. */
+  async getCurrentAdmin(adminUserId: number) {
+    return this.prisma.adminUser.findFirstOrThrow({
+      where: { id: adminUserId, is_active: true },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        role: true,
+        is_active: true,
+      },
+    });
   }
 
   private async runWithTenantRls<T>(
@@ -268,13 +346,20 @@ export class AdminService {
     const [tenants, activeMerchants, pendingApplications, totalPlans] =
       await Promise.all([
         this.prisma.tenant.findMany({
+          where: { operated_zone_storefront: { is: null } },
           select: { id: true },
         }),
         this.prisma.tenant.count({
-          where: { status: TenantStatus.active },
+          where: {
+            status: TenantStatus.active,
+            operated_zone_storefront: { is: null },
+          },
         }),
         this.prisma.tenant.count({
-          where: { status: TenantStatus.pending },
+          where: {
+            status: TenantStatus.pending,
+            operated_zone_storefront: { is: null },
+          },
         }),
         this.prisma.subscriptionPlan.count(),
       ]);
@@ -319,6 +404,7 @@ export class AdminService {
     const normalizedAreaId = this.parsePositiveIntegerFilter(areaId);
 
     const where: Prisma.TenantWhereInput = {
+      operated_zone_storefront: { is: null },
       ...(normalizedTenantId && { id: normalizedTenantId }),
       ...this.buildTenantSearchFilter(normalizedSearch),
       ...(normalizedCategory && { category: normalizedCategory }),
@@ -417,6 +503,7 @@ export class AdminService {
     id: number,
     status: TenantStatus,
     adminUserId?: number,
+    metadata: AdminAuditRequestMetadata = {},
   ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -458,6 +545,8 @@ export class AdminService {
           oldValues: { status: tenant.status },
           newValues: { status },
           source: ActivitySources.Admin,
+          requestId: metadata.requestId,
+          ipAddress: metadata.ipAddress,
         },
         tx,
       );
@@ -466,7 +555,12 @@ export class AdminService {
     });
   }
 
-  async updateTenantPlan(tenantId: number, planId: number) {
+  async updateTenantPlan(
+    tenantId: number,
+    planId: number,
+    adminUserId: number,
+    metadata: AdminAuditRequestMetadata = {},
+  ) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
     });
@@ -477,21 +571,34 @@ export class AdminService {
     });
     if (!plan) throw new NotFoundException('Plan not found');
 
-    // Deactivate current active subscription
-    await this.prisma.tenantSubscription.updateMany({
-      where: { tenant_id: tenantId, is_active: true },
-      data: { is_active: false, end_date: new Date() },
-    });
-
-    // Create new subscription
-    return this.prisma.tenantSubscription.create({
-      data: {
-        tenant_id: tenantId,
-        plan_id: planId,
-        start_date: new Date(),
-        is_active: true,
+    return this.adminAuditService.runWithSuccessAudit(
+      {
+        actor: { id: adminUserId },
+        tenantId,
+        entityType: AdminAuditEntityType.subscription,
+        entityId: planId,
+        action: 'admin.tenant_subscription.changed',
+        title: 'تم تغيير باقة المتجر',
+        requestId: metadata.requestId,
+        ipAddress: metadata.ipAddress,
+        metadata: { plan_id: planId },
       },
-    });
+      async (tx) => {
+        await tx.tenantSubscription.updateMany({
+          where: { tenant_id: tenantId, is_active: true },
+          data: { is_active: false, end_date: new Date() },
+        });
+
+        return tx.tenantSubscription.create({
+          data: {
+            tenant_id: tenantId,
+            plan_id: planId,
+            start_date: new Date(),
+            is_active: true,
+          },
+        });
+      },
+    );
   }
 
   // Plans Management
@@ -501,11 +608,29 @@ export class AdminService {
     });
   }
 
-  async togglePlanStatus(id: number, is_active: boolean) {
-    return this.prisma.subscriptionPlan.update({
-      where: { id },
-      data: { is_active },
-    });
+  async togglePlanStatus(
+    id: number,
+    isActive: boolean,
+    adminUserId: number,
+    metadata: AdminAuditRequestMetadata = {},
+  ) {
+    return this.adminAuditService.runWithSuccessAudit(
+      {
+        actor: { id: adminUserId },
+        entityType: AdminAuditEntityType.subscription,
+        entityId: id,
+        action: isActive ? 'admin.plan.enabled' : 'admin.plan.disabled',
+        title: isActive ? 'تم تفعيل الباقة' : 'تم تعطيل الباقة',
+        requestId: metadata.requestId,
+        ipAddress: metadata.ipAddress,
+        metadata: { is_active: isActive },
+      },
+      (tx) =>
+        tx.subscriptionPlan.update({
+          where: { id },
+          data: { is_active: isActive },
+        }),
+    );
   }
 
   /**
@@ -549,7 +674,13 @@ export class AdminService {
     );
   }
 
-  async exportAdminCatalogItems(source: CatalogSource) {
+  /**
+   * Export active, source-valid catalog items for an optional essential status.
+   */
+  async exportAdminCatalogItems(
+    source: CatalogSource,
+    essentialStatus: 'all' | 'essential' | 'non_essential' = 'all',
+  ) {
     this.ensureSupportedCatalogSource(source);
 
     const items = await this.prisma.catalogItem.findMany({
@@ -557,9 +688,22 @@ export class AdminService {
         source,
         is_active: true,
         category: { in: getAllowedCatalogCategoriesForSource(source) },
+        ...(essentialStatus === 'essential'
+          ? { is_essential: true }
+          : essentialStatus === 'non_essential'
+            ? { is_essential: false }
+            : {}),
       },
       orderBy: [{ category: 'asc' }, { name: 'asc' }, { id: 'asc' }],
     });
+
+    const filenameQualifier =
+      essentialStatus === 'essential'
+        ? '-essential'
+        : essentialStatus === 'non_essential'
+          ? '-non-essential'
+          : '';
+    const filenameDate = this.formatDateForFilename(new Date());
 
     if (source === CATALOG_SOURCE_TALABAT) {
       const rows = items.map((item) => ({
@@ -572,7 +716,7 @@ export class AdminService {
         is_essential: item.is_essential ? 'true' : 'false',
       }));
       return {
-        filename: `grocery-items-${this.formatDateForFilename(new Date())}.csv`,
+        filename: `grocery${filenameQualifier}-items-${filenameDate}.csv`,
         content: this.encodeCsv(TALABAT_EXPORT_COLUMNS, rows),
       };
     } else {
@@ -589,7 +733,7 @@ export class AdminService {
         is_essential: item.is_essential ? 'true' : 'false',
       }));
       return {
-        filename: `pharmacy-items-${this.formatDateForFilename(new Date())}.csv`,
+        filename: `pharmacy${filenameQualifier}-items-${filenameDate}.csv`,
         content: this.encodeCsv(CHEFAA_EXPORT_COLUMNS, rows),
       };
     }
@@ -1875,7 +2019,9 @@ export class AdminService {
     limit = 20,
   ) {
     const pagination = this.getPagination(page, limit);
-    const tenantWhere: Prisma.TenantWhereInput = {};
+    const tenantWhere: Prisma.TenantWhereInput = {
+      operated_zone_storefront: { is: null },
+    };
     if (tenantName) {
       tenantWhere.name = { contains: tenantName, mode: 'insensitive' };
     }
@@ -1940,6 +2086,7 @@ export class AdminService {
   ) {
     const pagination = this.getPagination(page, limit);
     const tenants = await this.prisma.tenant.findMany({
+      where: { operated_zone_storefront: { is: null } },
       orderBy: { created_at: 'desc' },
     });
 

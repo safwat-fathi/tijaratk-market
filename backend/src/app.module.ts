@@ -20,6 +20,8 @@ import { ImportsModule } from './imports/imports.module';
 import { StoresDirectoryModule } from './stores-directory/stores-directory.module';
 import { MerchantDashboardModule } from './merchant-dashboard/merchant-dashboard.module';
 import { ActivityLogModule } from './activity-log/activity-log.module';
+import { AdminAuditModule } from './admin-audit/admin-audit.module';
+import { ZoneStorefrontsModule } from './zone-storefronts/zone-storefronts.module';
 
 const ENV = process.env.NODE_ENV;
 
@@ -35,6 +37,7 @@ const ENV = process.env.NODE_ENV;
       ttl: 3600, // Default TTL is 1 hour
     }),
     PrismaModule,
+    AdminAuditModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60, // 1 minute
@@ -55,6 +58,7 @@ const ENV = process.env.NODE_ENV;
     StoresDirectoryModule,
     MerchantDashboardModule,
     ActivityLogModule,
+    ZoneStorefrontsModule,
   ],
   controllers: [HealthController],
   providers: [TenantRlsInterceptor],

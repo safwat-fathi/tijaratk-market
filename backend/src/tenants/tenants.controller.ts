@@ -131,6 +131,10 @@ export class TenantsController {
       throw new NotFoundException(`Tenant with slug ${slug} not found`);
     }
 
+    if (tenant.operated_zone_storefront) {
+      throw new NotFoundException(`Tenant with slug ${slug} not found`);
+    }
+
     if (tenant.status !== TenantStatus.active) {
       throw new ForbiddenException('هذا المتجر غير متاح حاليا');
     }

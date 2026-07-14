@@ -88,6 +88,13 @@ export interface Order {
   customer_rejection_reason?: string | null;
   customer_rejected_at?: string | null;
   customer_access_code?: string;
+  zone_storefront?: {
+    id: number;
+    name: string;
+    slug: string;
+    reorder_url: string;
+  } | null;
+  fulfilled_by?: { name: string } | null;
   created_at: string;
   updated_at: string;
 }

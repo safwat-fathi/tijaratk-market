@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
@@ -52,6 +53,21 @@ export class SignupDto {
   @IsString()
   @IsIn(TENANT_CATEGORY_VALUES)
   category?: TenantCategory;
+
+  @ApiProperty({
+    example: '12 شارع التحرير، الدقي، بجوار محطة المترو',
+    description: 'The detailed address of the store',
+    minLength: 5,
+    maxLength: 500,
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(5)
+  @MaxLength(500)
+  address: string;
 
   @ApiProperty({
     example: 'password123',

@@ -202,6 +202,7 @@ export class StoresDirectoryService {
       tenant: {
         status: TenantStatus.active,
         deleted_at: null,
+        operated_zone_storefront: { is: null },
         category: category.tenantCategory,
         directory_profile: {
           is: {
@@ -345,8 +346,11 @@ export class StoresDirectoryService {
 
     const [tenant, area] = await Promise.all([
       dto.tenant_slug
-        ? this.prisma.tenant.findUnique({
-            where: { slug: dto.tenant_slug.trim() },
+        ? this.prisma.tenant.findFirst({
+            where: {
+              slug: dto.tenant_slug.trim(),
+              operated_zone_storefront: { is: null },
+            },
             select: { id: true },
           })
         : null,
@@ -765,6 +769,7 @@ export class StoresDirectoryService {
         tenant: {
           status: TenantStatus.active,
           deleted_at: null,
+          operated_zone_storefront: { is: null },
           category: {
             in: CATEGORY_DEFINITIONS.map((item) => item.tenantCategory),
           },

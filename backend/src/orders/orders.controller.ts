@@ -39,6 +39,7 @@ import { DecideReplacementDto } from './dto/decide-replacement.dto';
 import { RejectOrderByCustomerDto } from './dto/reject-order-by-customer.dto';
 import { ResetOrderItemReplacementDto } from './dto/reset-order-item-replacement.dto';
 import { Request } from 'express';
+import { OrderSource } from '../../generated/prisma/client';
 
 @ApiTags('Orders')
 @Controller('orders')
@@ -63,6 +64,11 @@ export class OrdersController {
     const tenantId = req.user?.tenant_id;
     if (!tenantId) {
       throw new UnauthorizedException('Tenant context is required');
+    }
+    if (createOrderDto.order_source === OrderSource.zone_storefront) {
+      throw new BadRequestException(
+        'Zone storefront source is reserved for the dedicated zone checkout',
+      );
     }
     return this.ordersService.createForTenantId(tenantId, createOrderDto, {
       userId: req.user?.userId,
@@ -257,7 +263,10 @@ export class OrdersController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateOrderDto: UpdateOrderDto,
   ) {
-    return this.ordersService.update(id, updateOrderDto, req.user?.userId);
+    return this.ordersService.update(id, updateOrderDto, {
+      userId: req.user?.userId,
+      source: 'dashboard',
+    });
   }
 
   @Patch('items/:id/replace')
@@ -287,7 +296,7 @@ export class OrdersController {
       tenantId,
       id,
       dto.replaced_by_product_id ?? null,
-      req.user?.userId,
+      { userId: req.user?.userId, source: 'dashboard' },
     );
   }
 
@@ -316,7 +325,7 @@ export class OrdersController {
     return this.ordersService.resetOrderItemReplacement(
       tenantId,
       id,
-      req.user?.userId,
+      { userId: req.user?.userId, source: 'dashboard' },
     );
   }
 
@@ -392,7 +401,7 @@ export class OrdersController {
       tenantId,
       id,
       dto.total_price,
-      req.user?.userId,
+      { userId: req.user?.userId, source: 'dashboard' },
     );
   }
 
@@ -420,7 +429,7 @@ export class OrdersController {
     return this.ordersService.markOrderItemOutOfStock(
       tenantId,
       id,
-      req.user?.userId,
+      { userId: req.user?.userId, source: 'dashboard' },
     );
   }
 

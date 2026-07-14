@@ -249,9 +249,9 @@ export default async function TrackOrder({ params }: Props) {
                 <TrackingOrdersIcon />
                 كل طلباتي
               </Link>
-              {order.tenant?.slug && (
+              {(order.zone_storefront?.reorder_url || order.tenant?.slug) && (
                 <Link
-                  href={`/${order.tenant.slug}?reorder=${order.public_token}`}
+                  href={`${order.zone_storefront?.reorder_url ?? `/${order.tenant?.slug}`}?reorder=${order.public_token}`}
                   className="inline-flex min-h-10 items-center rounded-full border border-transparent bg-brand-primary px-3 py-1.5 text-xs font-medium text-white shadow-soft transition-colors hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
                 >
                   إعادة الطلب
@@ -263,6 +263,16 @@ export default async function TrackOrder({ params }: Props) {
       </div>
       <div className="border-t border-brand-border">
         <dl>
+          {order.fulfilled_by?.name && (
+            <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt className="text-sm font-medium text-muted-foreground">
+                ينفذ الطلب
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-brand-text sm:col-span-2 sm:mt-0">
+                {order.fulfilled_by.name}
+              </dd>
+            </div>
+          )}
           <div className="bg-brand-soft/50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt className="text-sm font-medium text-muted-foreground">
               الحالة

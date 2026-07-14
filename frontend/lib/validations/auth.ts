@@ -14,6 +14,11 @@ export const registerSchema = z.object({
     .enum(TENANT_CATEGORY_VALUES)
     .optional()
     .default(TENANT_CATEGORIES.OTHER.value),
+  address: z
+    .string({ error: "عنوان المتجر بالتفصيل مطلوب" })
+    .trim()
+    .min(5, "عنوان المتجر يجب أن يكون 5 أحرف على الأقل")
+    .max(500, "عنوان المتجر يجب ألا يتجاوز 500 حرف"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string().min(6, "Password must be at least 6 characters"),
 }).refine((data) => data.password === data.confirmPassword, {

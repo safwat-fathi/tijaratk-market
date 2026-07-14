@@ -23,6 +23,10 @@ async function getStats() {
 }
 
 export default async function AdminDashboard() {
+  const profile = await adminService.getCurrentAdmin();
+  if (profile.data?.role === 'operations_admin') {
+    redirect('/admin/merchants');
+  }
   const stats = await getStats();
 
   if (!stats) {

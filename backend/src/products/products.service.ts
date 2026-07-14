@@ -32,6 +32,7 @@ import {
   CATALOG_SOURCE_TALABAT,
   CatalogSource,
   getAllowedCatalogCategoriesForSource,
+  isCatalogCategoryAllowedForSource,
   resolveCatalogSourceForTenantCategory,
 } from './catalog-source-policy';
 import { arabicNormalize } from './utils/arabic-normalize.util';
@@ -43,6 +44,7 @@ import {
 } from 'src/activity-log/constants/activity-types';
 import { PRODUCT_STATUS_LABELS_AR } from 'src/activity-log/constants/activity-labels';
 import { pickChangedFields } from 'src/activity-log/utils/activity-diff.util';
+import { ActivityActor } from 'src/activity-log/activity-log.types';
 
 const DEFAULT_PRODUCT_CATEGORY = 'أخرى';
 const DUPLICATE_PRODUCT_NAME_MESSAGE = 'Product with this name already exists';
@@ -147,11 +149,7 @@ type StrictMatchThresholds = {
   strictWordSimilarityThreshold: number;
 };
 
-type ProductActivityActor = {
-  userId?: number | null;
-  adminId?: number | null;
-  source: 'dashboard' | 'admin' | 'csv_import';
-};
+type ProductActivityActor = ActivityActor;
 
 /**
  * Products service handles product lifecycle for each tenant.
@@ -255,8 +253,7 @@ export class ProductsService {
     if (actor) {
       await this.activityLogService.create({
         tenantId,
-        actorUserId: actor.userId ?? null,
-        actorAdminId: actor.adminId ?? null,
+        ...this.toActivityActorFields(actor),
         entityType: ActivityEntityTypes.Product,
         entityId: product.id,
         action: ActivityActions.ProductCreated,
@@ -283,18 +280,47 @@ export class ProductsService {
     tenantId: number,
     createProductDto: CreateProductDto,
     file?: Express.Multer.File,
+    actor?: ProductActivityActor,
   ): Promise<Product> {
     return this.runAsTenantForAdmin(tenantId, () =>
-      this.create(tenantId, createProductDto, file),
+      this.create(tenantId, createProductDto, file, actor),
     );
   }
 
   async createFromCatalogForTenantAsAdmin(
     tenantId: number,
     payload: AddProductFromCatalogDto,
+    actor?: ProductActivityActor,
   ): Promise<Product> {
     return this.runAsTenantForAdmin(tenantId, () =>
-      this.createFromCatalog(tenantId, payload),
+      this.createFromCatalog(tenantId, payload, actor),
+    );
+  }
+
+  /** Returns one tenant-owned product after establishing the admin RLS context. */
+  async findOneForTenantAsAdmin(
+    tenantId: number,
+    productId: number,
+  ): Promise<Product> {
+    return this.runAsTenantForAdmin(tenantId, () =>
+      this.findOne(productId, tenantId),
+    );
+  }
+
+  /** Updates one explicitly tenant-scoped product with admin actor attribution. */
+  async updateForManagedAdmin(
+    actor: ProductActivityActor & { tenantId: number },
+    productId: number,
+    updateProductDto: UpdateProductDto,
+  ): Promise<Product> {
+    return this.runAsTenantForAdmin(actor.tenantId, () =>
+      this.update(
+        productId,
+        actor.tenantId,
+        updateProductDto,
+        undefined,
+        actor,
+      ),
     );
   }
 
@@ -502,7 +528,10 @@ export class ProductsService {
     }
 
     const catalogCategory = catalogItem.category?.trim();
-    if (!catalogCategory) {
+    if (
+      !catalogCategory ||
+      !isCatalogCategoryAllowedForSource(catalogSource, catalogCategory)
+    ) {
       throw new BadRequestException(
         `Catalog item with ID ${payload.catalog_item_id} has invalid category`,
       );
@@ -537,8 +566,7 @@ export class ProductsService {
     if (actor) {
       await this.activityLogService.create({
         tenantId,
-        actorUserId: actor.userId ?? null,
-        actorAdminId: actor.adminId ?? null,
+        ...this.toActivityActorFields(actor),
         entityType: ActivityEntityTypes.Product,
         entityId: product.id,
         action: ActivityActions.ProductCreated,
@@ -612,8 +640,7 @@ export class ProductsService {
     if (actor && result.count > 0) {
       await this.activityLogService.create({
         tenantId,
-        actorUserId: actor.userId ?? null,
-        actorAdminId: actor.adminId ?? null,
+        ...this.toActivityActorFields(actor),
         entityType: ActivityEntityTypes.Product,
         action: ActivityActions.ProductBulkCreated,
         title: 'تم إضافة منتجات أساسية',
@@ -1180,9 +1207,19 @@ export class ProductsService {
   ): Promise<PublicProductCategorySummary[]> {
     const tenant = await this.getPrismaClient().tenant.findUnique({
       where: { slug },
-      select: { category: true, status: true },
+      select: {
+        category: true,
+        status: true,
+        operated_zone_storefront: { select: { id: true } },
+      },
     });
-    if (!tenant || tenant.status !== TenantStatus.active) return [];
+    if (
+      !tenant ||
+      tenant.status !== TenantStatus.active ||
+      tenant.operated_zone_storefront
+    ) {
+      return [];
+    }
     const catalogSource = resolveCatalogSourceForTenantCategory(
       tenant?.category,
     );
@@ -1761,25 +1798,6 @@ export class ProductsService {
     return updatedProduct;
   }
 
-  async updateForTenantAsAdmin(
-    productId: number,
-    updateProductDto: UpdateProductDto,
-    file?: Express.Multer.File,
-  ): Promise<Product> {
-    const product = await this.getPrismaClient().product.findFirst({
-      where: { id: productId, deleted_at: null },
-      select: { tenant_id: true },
-    });
-
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${productId} not found`);
-    }
-
-    return this.runAsTenantForAdmin(product.tenant_id, () =>
-      this.update(productId, product.tenant_id, updateProductDto, file),
-    );
-  }
-
   async bulkUpdate(
     tenantId: number,
     payload: BulkUpdateProductsDto,
@@ -1796,8 +1814,7 @@ export class ProductsService {
     if (actor && productIds.length > 0) {
       await this.activityLogService.create({
         tenantId,
-        actorUserId: actor.userId ?? null,
-        actorAdminId: actor.adminId ?? null,
+        ...this.toActivityActorFields(actor),
         entityType: ActivityEntityTypes.Product,
         action: ActivityActions.ProductBulkUpdated,
         title: 'تم تعديل مجموعة منتجات',
@@ -1825,8 +1842,7 @@ export class ProductsService {
     const actor = options.actor;
     const source = this.resolveProductActivitySource(actor);
     const actorPayload = {
-      actorUserId: actor.userId ?? null,
-      actorAdminId: actor.adminId ?? null,
+      ...this.toActivityActorFields(actor),
     };
 
     const oldPrice = this.toActivityNumber(oldProduct.current_price);
@@ -2016,8 +2032,7 @@ export class ProductsService {
     if (actor && product.status !== ProductStatus.ARCHIVED) {
       await this.activityLogService.create({
         tenantId,
-        actorUserId: actor.userId ?? null,
-        actorAdminId: actor.adminId ?? null,
+        ...this.toActivityActorFields(actor),
         entityType: ActivityEntityTypes.Product,
         entityId: product.id,
         action: ActivityActions.ProductArchived,
@@ -2877,10 +2892,17 @@ export class ProductsService {
   private async resolveTenantIdBySlug(slug: string): Promise<number | null> {
     const tenant = await this.getPrismaClient().tenant.findUnique({
       where: { slug },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        operated_zone_storefront: { select: { id: true } },
+      },
     });
 
-    return tenant?.status === TenantStatus.active ? tenant.id : null;
+    return tenant?.status === TenantStatus.active &&
+      !tenant.operated_zone_storefront
+      ? tenant.id
+      : null;
   }
 
   private emptyPublicProductsResult(
@@ -2931,6 +2953,19 @@ export class ProductsService {
     }
 
     return ActivitySources.Dashboard;
+  }
+
+  /** Maps a domain actor onto the persisted activity attribution fields. */
+  private toActivityActorFields(actor: ProductActivityActor) {
+    return {
+      actorUserId: actor.userId ?? null,
+      actorAdminId: actor.adminId ?? null,
+      actorAdminName: actor.adminName ?? null,
+      actorAdminRole: actor.adminRole ?? null,
+      managementSessionId: actor.managementSessionId ?? null,
+      requestId: actor.requestId ?? null,
+      ipAddress: actor.ipAddress ?? null,
+    };
   }
 
   /**
@@ -3111,8 +3146,7 @@ export class ProductsService {
     if (actor) {
       await this.activityLogService.create({
         tenantId,
-        actorUserId: actor.userId ?? null,
-        actorAdminId: actor.adminId ?? null,
+        ...this.toActivityActorFields(actor),
         entityType: ActivityEntityTypes.CsvImport,
         action: ActivityActions.ProductCsvImportCompleted,
         title: 'تم استيراد ملف منتجات',

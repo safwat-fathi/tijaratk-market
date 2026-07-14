@@ -13,6 +13,7 @@ export const ActivityActions = {
   OrderReplacementProposed: 'order.replacement_proposed',
   OrderReplacementApproved: 'order.replacement_approved',
   OrderReplacementRejected: 'order.replacement_rejected',
+  OrderReplacementReset: 'order.replacement_reset',
   ProductCreated: 'product.created',
   ProductUpdated: 'product.updated',
   ProductPriceChanged: 'product.price_changed',
@@ -21,6 +22,19 @@ export const ActivityActions = {
   ProductBulkCreated: 'product.bulk_created',
   ProductBulkUpdated: 'product.bulk_updated',
   ProductCsvImportCompleted: 'product.csv_import_completed',
+  AdminTenantAccessGranted: 'admin.tenant_access_granted',
+  AdminTenantAccessRevoked: 'admin.tenant_access_revoked',
+  ManagementSessionStarted: 'management_session.started',
+  ManagementSessionEnded: 'management_session.ended',
+  ZoneStorefrontCreated: 'zone_storefront.created',
+  ZoneStorefrontActivationChanged: 'zone_storefront.activation_changed',
+  ZoneStorefrontMerchantChanged: 'zone_storefront.merchant_changed',
+  OrderDispatchCreated: 'order_dispatch.created',
+  OrderDispatchAssigned: 'order_dispatch.assigned',
+  OrderDispatchRejected: 'order_dispatch.rejected',
+  OrderDispatchAccepted: 'order_dispatch.accepted',
+  OrderDispatchCancelled: 'order_dispatch.cancelled',
+  OrderDispatchQuoteChanged: 'order_dispatch.quote_changed',
 } as const;
 
 export type ActivityAction =

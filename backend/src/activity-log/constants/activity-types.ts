@@ -7,6 +7,8 @@ export const ActivityEntityTypes = {
   Subscription: 'subscription',
   DayClosure: 'day_closure',
   CsvImport: 'csv_import',
+  ZoneStorefront: 'zone_storefront',
+  OrderDispatch: 'order_dispatch',
 } as const;
 
 export type ActivityEntityType =
@@ -26,4 +28,3 @@ export type ActivitySource =
 
 export const ACTIVITY_ENTITY_TYPE_VALUES = Object.values(ActivityEntityTypes);
 export const ACTIVITY_SOURCE_VALUES = Object.values(ActivitySources);
-

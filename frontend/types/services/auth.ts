@@ -22,6 +22,7 @@ export interface RegisterRequest {
 	name: string;
 	phone: string;
 	category?: TenantCategory;
+	address: string;
 	password: string;
 	confirm_password: string;
 }

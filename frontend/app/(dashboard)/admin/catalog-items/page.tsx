@@ -199,6 +199,10 @@ export default async function AdminCatalogItemsPage(props: Props) {
 
   const categoryNames = data.categories.map((item) => item.category);
   const exportHref = adminService.getAdminCatalogExportPath(catalogType);
+  const essentialExportHref = adminService.getAdminCatalogExportPath(
+    catalogType,
+    "essential",
+  );
 
   return (
     <div className="space-y-6">
@@ -230,13 +234,20 @@ export default async function AdminCatalogItemsPage(props: Props) {
             </Link>
           ))}
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto">
           <a
             href={exportHref}
             className="flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-brand-border bg-white px-4 py-2 text-sm font-semibold text-brand-text transition hover:border-brand-accent hover:bg-brand-soft/60"
           >
             <Download className="h-4 w-4" />
             تنزيل CSV للمنتجات
+          </a>
+          <a
+            href={essentialExportHref}
+            className="flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-brand-border bg-white px-4 py-2 text-sm font-semibold text-brand-text transition hover:border-brand-accent hover:bg-brand-soft/60"
+          >
+            <Download className="h-4 w-4" />
+            تنزيل CSV للمنتجات الأساسية
           </a>
           <AdminCatalogItemCreateClient
             source={

@@ -53,6 +53,7 @@ import {
   ActivityEntityTypes,
   ActivitySources,
 } from 'src/activity-log/constants/activity-types';
+import { ActivityActor } from 'src/activity-log/activity-log.types';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -86,6 +87,15 @@ type CloseDayResultPayload = {
 type OrderWithItemsPayload = Order & {
   order_items?: OrderItem[];
   items?: OrderItem[];
+  tenant?: { id: number; name: string; slug: string };
+  order_dispatch?: {
+    status: string;
+    zone_storefront: { id: number; name: string; slug: string };
+    assignments: Array<{
+      status: string;
+      target_tenant: { name: string };
+    }>;
+  } | null;
 };
 
 type PrescriptionUpload = Pick<
@@ -93,9 +103,21 @@ type PrescriptionUpload = Pick<
   'filename' | 'mimetype' | 'originalname' | 'path'
 >;
 
-type OrderActivityActor = {
-  userId?: number | null;
-  source: 'dashboard' | 'storefront';
+type OrderActivityActor = ActivityActor;
+
+export type OrderCreationOptions = {
+  /** Persists related records inside the same tenant-scoped transaction. */
+  afterPersist?: (
+    manager: Prisma.TransactionClient,
+    order: Order,
+  ) => Promise<void>;
+  /** Lets an outer workflow own cache invalidation and post-commit notifications. */
+  skipPostCommitEffects?: boolean;
+};
+
+export type OrderReplacementOptions = {
+  /** Lets a surrounding workflow defer external notification until commit. */
+  skipCustomerNotification?: boolean;
 };
 
 @Injectable()
@@ -129,6 +151,22 @@ export class OrdersService {
     if (!tenant) {
       await this.deleteUploadedFileQuietly(prescriptionUpload);
       throw new NotFoundException(`Tenant with slug ${tenantSlug} not found`);
+    }
+
+    const zoneStorefront = await this.prisma.zoneStorefront.findUnique({
+      where: { operator_tenant_id: tenant.id },
+      select: { id: true },
+    });
+    if (zoneStorefront) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      throw new NotFoundException(`Tenant with slug ${tenantSlug} not found`);
+    }
+
+    if (createOrderDto.order_source === OrderSource.zone_storefront) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      throw new BadRequestException(
+        'Zone storefront orders must use the dedicated zone checkout endpoint',
+      );
     }
 
     if (tenant.status !== TenantStatus.active) {
@@ -197,7 +235,8 @@ export class OrdersService {
     createOrderDto: CreateOrderDto,
     actor: OrderActivityActor = { source: 'storefront' },
     prescriptionUpload?: PrescriptionUpload,
-  ): Promise<Order> {
+    options: OrderCreationOptions = {},
+  ): Promise<Order & { customer_access_code: string }> {
     let isFirstOrder = false;
     let customerAccessCode = '';
 
@@ -379,7 +418,7 @@ export class OrdersService {
         await this.activityLogService.create(
           {
             tenantId,
-            actorUserId: actor.userId ?? null,
+            ...this.toActivityActorFields(actor),
             entityType: ActivityEntityTypes.Order,
             entityId: persistedOrder.id,
             action: ActivityActions.OrderCreated,
@@ -407,11 +446,20 @@ export class OrdersService {
           manager,
         );
 
+        await options.afterPersist?.(manager, persistedOrder as Order);
+
         return persistedOrder;
       });
     } catch (error) {
       await this.deleteUploadedFileQuietly(prescriptionUpload);
       throw error;
+    }
+
+    if (options.skipPostCommitEffects) {
+      return {
+        ...savedOrder,
+        customer_access_code: customerAccessCode,
+      } as Order & { customer_access_code: string };
     }
 
     const completeOrder = await this.findOne(savedOrder.id);
@@ -422,6 +470,11 @@ export class OrdersService {
       ...completeOrder,
       customer_access_code: customerAccessCode,
     } as Order & { customer_access_code: string };
+  }
+
+  /** Invalidates order-derived dashboard caches after an external transaction commits. */
+  async invalidateOrderCaches(tenantId: number): Promise<void> {
+    await this.bumpDashboardCacheVersion(tenantId);
   }
 
   async findAll(
@@ -456,6 +509,95 @@ export class OrdersService {
     });
 
     return orders.map((order) => this.mapOrderPayload(order));
+  }
+
+  /** Lists managed-tenant orders inside an explicit admin RLS transaction. */
+  async findAllForManagedAdmin(
+    actor: OrderActivityActor & { tenantId: number },
+    date?: string,
+    limit?: number,
+  ) {
+    await this.assertNotZoneOperatorForManagedOrders(actor.tenantId);
+    const orders = await this.runInTenantContext(actor.tenantId, () =>
+      this.findAll(actor.tenantId, date, limit),
+    );
+    return orders.map((order) => this.toManagedOrderPayload(order));
+  }
+
+  /** Returns one managed order with order-specific customer fields only. */
+  async findOneForManagedAdmin(
+    actor: OrderActivityActor & { tenantId: number },
+    orderId: number,
+  ) {
+    await this.assertNotZoneOperatorForManagedOrders(actor.tenantId);
+    const order = await this.runInTenantContext(actor.tenantId, () =>
+      this.findOne(orderId),
+    );
+    return this.toManagedOrderPayload(order);
+  }
+
+  /** Applies a managed status or total update through shared order rules. */
+  async updateForManagedAdmin(
+    actor: OrderActivityActor & { tenantId: number },
+    orderId: number,
+    dto: UpdateOrderDto,
+  ) {
+    await this.assertNotZoneOperatorForManagedOrders(actor.tenantId);
+    const order = await this.runInTenantContext(actor.tenantId, () =>
+      this.update(orderId, dto, actor),
+    );
+    return this.toManagedOrderPayload(order);
+  }
+
+  /** Proposes or clears a replacement within the managed tenant context. */
+  async replaceOrderItemForManagedAdmin(
+    actor: OrderActivityActor & { tenantId: number },
+    itemId: number,
+    replacementProductId: number | null,
+  ) {
+    await this.assertNotZoneOperatorForManagedOrders(actor.tenantId);
+    return this.runInTenantContext(actor.tenantId, () =>
+      this.replaceOrderItem(
+        actor.tenantId,
+        itemId,
+        replacementProductId,
+        actor,
+      ),
+    );
+  }
+
+  /** Resets a replacement within the managed tenant context. */
+  async resetOrderItemReplacementForManagedAdmin(
+    actor: OrderActivityActor & { tenantId: number },
+    itemId: number,
+  ) {
+    await this.assertNotZoneOperatorForManagedOrders(actor.tenantId);
+    return this.runInTenantContext(actor.tenantId, () =>
+      this.resetOrderItemReplacement(actor.tenantId, itemId, actor),
+    );
+  }
+
+  /** Updates a line price within the managed tenant context. */
+  async updateOrderItemPriceForManagedAdmin(
+    actor: OrderActivityActor & { tenantId: number },
+    itemId: number,
+    totalPrice: number,
+  ) {
+    await this.assertNotZoneOperatorForManagedOrders(actor.tenantId);
+    return this.runInTenantContext(actor.tenantId, () =>
+      this.updateOrderItemPrice(actor.tenantId, itemId, totalPrice, actor),
+    );
+  }
+
+  /** Marks an order item unavailable within the managed tenant context. */
+  async markOrderItemOutOfStockForManagedAdmin(
+    actor: OrderActivityActor & { tenantId: number },
+    itemId: number,
+  ) {
+    await this.assertNotZoneOperatorForManagedOrders(actor.tenantId);
+    return this.runInTenantContext(actor.tenantId, () =>
+      this.markOrderItemOutOfStock(actor.tenantId, itemId, actor),
+    );
   }
 
   /**
@@ -603,7 +745,7 @@ export class OrdersService {
   async update(
     id: number,
     updateOrderDto: UpdateOrderDto,
-    actorUserId?: number,
+    actor?: OrderActivityActor,
   ): Promise<Order> {
     let previousStatus: OrderStatus | undefined;
     let nextStatus: OrderStatus | undefined;
@@ -683,11 +825,40 @@ export class OrdersService {
         nextStatus === OrderStatus.CANCELLED &&
         previousStatus !== OrderStatus.CANCELLED
       ) {
-        await this.tenantCancellationPolicyService.recordMerchantCancellation(
-          order.tenant_id,
-          order.id,
-          manager,
-        );
+        const dispatch = await manager.orderDispatch.findUnique({
+          where: { order_id: order.id },
+          select: { id: true },
+        });
+        if (dispatch) {
+          await manager.orderDispatch.update({
+            where: { id: dispatch.id },
+            data: {
+              status: 'cancelled',
+              cancellation_reason: this.normalizeOptionalReason(
+                updateOrderDto.cancellation_reason,
+              ),
+              cancelled_by_admin_id: actor?.adminId ?? null,
+              cancelled_at: new Date(),
+              version: { increment: 1 },
+            },
+          });
+          await manager.orderDispatchAssignment.updateMany({
+            where: { order_dispatch_id: dispatch.id, is_current: true },
+            data: {
+              status: 'cancelled',
+              is_current: false,
+              responded_at: new Date(),
+              version: { increment: 1 },
+            },
+          });
+        } else {
+          await this.tenantCancellationPolicyService.recordMerchantCancellation(
+            order.tenant_id,
+            order.id,
+            manager,
+            actor?.adminId ? 'admin' : 'merchant',
+          );
+        }
       }
 
       if (nextStatus && nextStatus !== previousStatus) {
@@ -703,7 +874,7 @@ export class OrdersService {
         await this.activityLogService.create(
           {
             tenantId: order.tenant_id,
-            actorUserId: actorUserId ?? null,
+            ...this.toActivityActorFields(actor),
             entityType: ActivityEntityTypes.Order,
             entityId: order.id,
             action: this.resolveOrderStatusActivityAction(nextStatus),
@@ -719,7 +890,7 @@ export class OrdersService {
                     ),
                   }
                 : undefined,
-            source: ActivitySources.Dashboard,
+            source: actor?.source ?? ActivitySources.Dashboard,
           },
           manager,
         );
@@ -732,7 +903,7 @@ export class OrdersService {
         await this.activityLogService.create(
           {
             tenantId: order.tenant_id,
-            actorUserId: actorUserId ?? null,
+            ...this.toActivityActorFields(actor),
             entityType: ActivityEntityTypes.Order,
             entityId: order.id,
             action: ActivityActions.OrderTotalChanged,
@@ -740,7 +911,7 @@ export class OrdersService {
             description: `تم تعديل إجمالي الطلب من ${order.total ?? 'غير محدد'} إلى ${updateOrderDto.total} جنيه`,
             oldValues: { total: this.toActivityNumber(order.total) },
             newValues: { total: updateOrderDto.total },
-            source: ActivitySources.Dashboard,
+            source: actor?.source ?? ActivitySources.Dashboard,
           },
           manager,
         );
@@ -769,7 +940,8 @@ export class OrdersService {
     tenantId: number,
     itemId: number,
     replacementProductId: number | null,
-    actorUserId?: number,
+    actor?: OrderActivityActor,
+    options: OrderReplacementOptions = {},
   ): Promise<OrderItem> {
     const orderItem = await this.orderItemClient().findFirst({
       where: { id: itemId },
@@ -833,7 +1005,7 @@ export class OrdersService {
 
     await this.activityLogService.create({
       tenantId,
-      actorUserId: actorUserId ?? null,
+      ...this.toActivityActorFields(actor),
       entityType: ActivityEntityTypes.Order,
       entityId: orderItem.order_id,
       action: ActivityActions.OrderReplacementProposed,
@@ -851,15 +1023,25 @@ export class OrdersService {
         original_product_name: orderItem.name_snapshot,
         replacement_product_name: replacement.name,
       },
-      source: ActivitySources.Dashboard,
+      source: actor?.source ?? ActivitySources.Dashboard,
     });
 
-    await this.notifyCustomerReplacementRequested(
-      savedItem.order_id,
-      savedItem.id,
-    );
+    if (!options.skipCustomerNotification) {
+      await this.notifyCustomerReplacementRequested(
+        savedItem.order_id,
+        savedItem.id,
+      );
+    }
 
     return savedItem;
+  }
+
+  /** Sends a deferred replacement request notification after an outer commit. */
+  async notifyCustomerReplacementRequestedAfterCommit(
+    orderId: number,
+    itemId: number,
+  ): Promise<void> {
+    await this.notifyCustomerReplacementRequested(orderId, itemId);
   }
 
   /**
@@ -868,9 +1050,8 @@ export class OrdersService {
   async resetOrderItemReplacement(
     tenantId: number,
     itemId: number,
-    actorUserId?: number,
+    actor?: OrderActivityActor,
   ): Promise<OrderItem> {
-    void actorUserId;
     const orderItem = await this.orderItemClient().findFirst({
       where: { id: itemId },
       include: { order: true },
@@ -882,7 +1063,7 @@ export class OrdersService {
 
     this.ensureCustomerDecisionWindow(orderItem.order.status as any);
 
-    return this.orderItemClient().update({
+    const savedItem = await this.orderItemClient().update({
       where: { id: orderItem.id },
       data: {
         pending_replacement_product_id: null,
@@ -892,6 +1073,29 @@ export class OrdersService {
         replacement_decided_at: null,
       },
     }) as unknown as OrderItem;
+
+    await this.activityLogService.create({
+      tenantId,
+      ...this.toActivityActorFields(actor),
+      entityType: ActivityEntityTypes.Order,
+      entityId: orderItem.order_id,
+      action: ActivityActions.OrderReplacementReset,
+      title: 'تمت إعادة ضبط قرار البديل',
+      description: `تمت إعادة ضبط البديل للمنتج ${orderItem.name_snapshot}`,
+      oldValues: {
+        pending_replacement_product_id:
+          orderItem.pending_replacement_product_id,
+        replacement_decision_status: orderItem.replacement_decision_status,
+      },
+      newValues: {
+        pending_replacement_product_id: null,
+        replacement_decision_status: ReplacementDecisionStatus.NONE,
+      },
+      metadata: { order_item_id: orderItem.id },
+      source: actor?.source ?? ActivitySources.Dashboard,
+    });
+
+    return savedItem;
   }
 
   /**
@@ -1020,15 +1224,47 @@ export class OrdersService {
 
     this.ensureCustomerDecisionWindow(order.status as any);
 
-    const savedOrder = (await this.orderClient().update({
-      where: { id: order.id },
-      data: {
-        status: OrderStatus.REJECTED_BY_CUSTOMER,
-        customer_rejection_reason: this.normalizeOptionalReason(reason),
-        customer_rejected_at: new Date(),
+    const savedOrder = await this.withTenantManager(
+      order.tenant_id,
+      async (manager) => {
+        const updatedOrder = (await manager.order.update({
+          where: { id: order.id },
+          data: {
+            status: OrderStatus.REJECTED_BY_CUSTOMER,
+            customer_rejection_reason: this.normalizeOptionalReason(reason),
+            customer_rejected_at: new Date(),
+          },
+          include: { customer: true, tenant: true, delivery_area: true },
+        })) as unknown as Order;
+
+        const dispatch = await manager.orderDispatch.findUnique({
+          where: { order_id: order.id },
+          select: { id: true },
+        });
+        if (dispatch) {
+          await manager.orderDispatch.update({
+            where: { id: dispatch.id },
+            data: {
+              status: 'cancelled',
+              cancellation_reason: this.normalizeOptionalReason(reason),
+              cancelled_at: new Date(),
+              version: { increment: 1 },
+            },
+          });
+          await manager.orderDispatchAssignment.updateMany({
+            where: { order_dispatch_id: dispatch.id, is_current: true },
+            data: {
+              status: 'cancelled',
+              is_current: false,
+              responded_at: new Date(),
+              version: { increment: 1 },
+            },
+          });
+        }
+
+        return updatedOrder;
       },
-      include: { customer: true, tenant: true, delivery_area: true },
-    })) as unknown as Order;
+    );
 
     await this.activityLogService.create({
       tenantId: order.tenant_id,
@@ -1055,7 +1291,7 @@ export class OrdersService {
     tenantId: number,
     itemId: number,
     totalPrice: number,
-    actorUserId?: number,
+    actor?: OrderActivityActor,
   ): Promise<OrderItem> {
     const normalizedTotal = this.roundCurrency(Number(totalPrice));
     if (Number.isNaN(normalizedTotal) || normalizedTotal <= 0) {
@@ -1116,7 +1352,7 @@ export class OrdersService {
         await this.activityLogService.create(
           {
             tenantId,
-            actorUserId: actorUserId ?? null,
+            ...this.toActivityActorFields(actor),
             entityType: ActivityEntityTypes.Order,
             entityId: orderItem.order_id,
             action: ActivityActions.OrderItemPriceChanged,
@@ -1135,7 +1371,7 @@ export class OrdersService {
               product_id: targetProductId,
               product_name: orderItem.name_snapshot,
             },
-            source: ActivitySources.Dashboard,
+            source: actor?.source ?? ActivitySources.Dashboard,
           },
           manager,
         );
@@ -1153,7 +1389,7 @@ export class OrdersService {
   async markOrderItemOutOfStock(
     tenantId: number,
     itemId: number,
-    actorUserId?: number,
+    actor?: OrderActivityActor,
   ): Promise<OrderItem> {
     const savedItem = await this.withTenantManager(
       tenantId,
@@ -1201,7 +1437,7 @@ export class OrdersService {
         await this.activityLogService.create(
           {
             tenantId,
-            actorUserId: actorUserId ?? null,
+            ...this.toActivityActorFields(actor),
             entityType: ActivityEntityTypes.Order,
             entityId: orderItem.order_id,
             action: ActivityActions.OrderItemOutOfStock,
@@ -1220,7 +1456,7 @@ export class OrdersService {
               product_id: orderItem.product_id,
               product_name: orderItem.name_snapshot,
             },
-            source: ActivitySources.Dashboard,
+            source: actor?.source ?? ActivitySources.Dashboard,
           },
           manager,
         );
@@ -1245,6 +1481,19 @@ export class OrdersService {
         },
         tenant: { select: { id: true, name: true, slug: true } },
         delivery_area: true,
+        order_dispatch: {
+          include: {
+            zone_storefront: { select: { id: true, name: true, slug: true } },
+            assignments: {
+              where: { status: 'accepted' },
+              select: {
+                status: true,
+                target_tenant: { select: { name: true } },
+              },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
@@ -1273,6 +1522,19 @@ export class OrdersService {
         },
         tenant: { select: { id: true, name: true, slug: true } },
         delivery_area: true,
+        order_dispatch: {
+          include: {
+            zone_storefront: { select: { id: true, name: true, slug: true } },
+            assignments: {
+              where: { status: 'accepted' },
+              select: {
+                status: true,
+                target_tenant: { select: { name: true } },
+              },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
@@ -1291,10 +1553,35 @@ export class OrdersService {
    */
   private mapOrderPayload(order: OrderWithItemsPayload): Order {
     const orderItems = order.order_items;
+    const dispatch = order.order_dispatch;
+    const acceptedAssignment = dispatch?.assignments[0];
+    const { order_dispatch: _controlPlaneDispatch, ...publicOrder } = order;
 
     return {
-      ...order,
+      ...publicOrder,
+      tenant_id: dispatch
+        ? dispatch.zone_storefront.id
+        : publicOrder.tenant_id,
+      tenant: dispatch
+        ? {
+            id: dispatch.zone_storefront.id,
+            name: dispatch.zone_storefront.name,
+            slug: dispatch.zone_storefront.slug,
+          }
+        : publicOrder.tenant,
       items: order.items ?? orderItems ?? [],
+      zone_storefront: dispatch
+        ? {
+            id: dispatch.zone_storefront.id,
+            name: dispatch.zone_storefront.name,
+            slug: dispatch.zone_storefront.slug,
+            reorder_url: `/market/${dispatch.zone_storefront.slug}`,
+          }
+        : null,
+      fulfilled_by:
+        dispatch?.status === 'accepted' && acceptedAssignment
+          ? { name: acceptedAssignment.target_tenant.name }
+          : null,
     } as unknown as Order;
   }
 
@@ -2154,6 +2441,53 @@ export class OrdersService {
     }
   }
 
+  /** Runs an admin operation with PostgreSQL and AsyncLocalStorage tenant context. */
+  private async runInTenantContext<T>(
+    tenantId: number,
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (manager) => {
+      await manager.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+      return DbTenantContext.run({ tenantId, manager }, callback);
+    });
+  }
+
+  /** Limits managed-order customer data to fields required for fulfilment. */
+  private toManagedOrderPayload(order: Order) {
+    const payload = order as Order & {
+      customer?: {
+        id: number;
+        name: string | null;
+        phone: string;
+        address: string | null;
+      } | null;
+    };
+    return {
+      ...payload,
+      customer: payload.customer
+        ? {
+            id: payload.customer.id,
+            name: payload.customer.name,
+            phone: payload.customer.phone,
+            address: payload.customer.address,
+          }
+        : null,
+    };
+  }
+
+  /** Maps a shared domain actor to persisted activity attribution fields. */
+  private toActivityActorFields(actor?: OrderActivityActor) {
+    return {
+      actorUserId: actor?.userId ?? null,
+      actorAdminId: actor?.adminId ?? null,
+      actorAdminName: actor?.adminName ?? null,
+      actorAdminRole: actor?.adminRole ?? null,
+      managementSessionId: actor?.managementSessionId ?? null,
+      requestId: actor?.requestId ?? null,
+      ipAddress: actor?.ipAddress ?? null,
+    };
+  }
+
   /**
    * Runs work with request-scoped manager when available, otherwise creates a
    * tenant-configured transaction for non-request callers.
@@ -2171,6 +2505,17 @@ export class OrdersService {
       await transactionManager.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
       return callback(transactionManager);
     });
+  }
+
+  /** Reserves internal operator orders for the dedicated dispatch APIs. */
+  private async assertNotZoneOperatorForManagedOrders(
+    tenantId: number,
+  ): Promise<void> {
+    const zone = await this.prisma.zoneStorefront.findUnique({
+      where: { operator_tenant_id: tenantId },
+      select: { id: true },
+    });
+    if (zone) throw new NotFoundException('Managed tenant orders not found');
   }
 
   private orderClient() {

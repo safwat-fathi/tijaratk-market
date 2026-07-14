@@ -45,6 +45,7 @@ export class TenantCancellationPolicyService {
     tenantId: number,
     orderId: number,
     manager?: Prisma.TransactionClient,
+    actorType: 'merchant' | 'admin' = 'merchant',
   ): Promise<TenantCancellationPolicyState> {
     const db = manager ?? this.getDb();
     const now = new Date();
@@ -81,7 +82,10 @@ export class TenantCancellationPolicyService {
         order_id: orderId,
         event_type:
           TenantCancellationPolicyEventType.merchant_order_cancelled,
-        actor_type: TenantCancellationPolicyActorType.merchant,
+        actor_type:
+          actorType === 'admin'
+            ? TenantCancellationPolicyActorType.admin
+            : TenantCancellationPolicyActorType.merchant,
         cancellation_count: nextCount,
         threshold: suspensionThreshold,
         window_start: updatedState.window_start,

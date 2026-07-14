@@ -135,7 +135,7 @@ export class AllExceptionFilter implements ExceptionFilter {
       message = Array.isArray(resMessage)
         ? resMessage.join(', ')
         : String(resMessage);
-      errorDetails = (exceptionResponse as Record<string, unknown>).error;
+      errorDetails = exceptionResponse;
     }
     return { status, message, errorDetails };
   }

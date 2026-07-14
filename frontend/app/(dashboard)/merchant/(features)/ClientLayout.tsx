@@ -48,6 +48,15 @@ const navigation = [
     ),
   },
   {
+    label: "الطلبات المسندة",
+    href: "/merchant/assigned-orders",
+    icon: (
+      <svg className="me-3 h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M6.75 3.75h10.5A2.25 2.25 0 0 1 19.5 6v12A2.25 2.25 0 0 1 17.25 20.25H6.75A2.25 2.25 0 0 1 4.5 18V6a2.25 2.25 0 0 1 2.25-2.25Z" />
+      </svg>
+    ),
+  },
+  {
     label: "المنتجات",
     href: "/merchant/products/new",
     icon: (

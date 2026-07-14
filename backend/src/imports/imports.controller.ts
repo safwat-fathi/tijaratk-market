@@ -28,6 +28,7 @@ import { AdminAuthGuard } from 'src/admin/guards/admin-auth.guard';
 import CONSTANTS from 'src/common/constants';
 import { CreateImportDto } from './dto/create-import.dto';
 import { ImportsService } from './imports.service';
+import { RequirePlatformAdmin } from 'src/admin/decorators/admin-role.decorator';
 
 const IMPORT_UPLOAD_DIR = join(process.cwd(), 'uploads', 'imports');
 const MAX_IMPORT_FILE_SIZE_BYTES = 25 * 1024 * 1024;
@@ -41,6 +42,7 @@ mkdirSync(IMPORT_UPLOAD_DIR, { recursive: true });
 @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
 @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
 @UseGuards(AdminAuthGuard)
+@RequirePlatformAdmin()
 @Controller('admin/imports')
 export class ImportsController {
   constructor(private readonly importsService: ImportsService) {}

@@ -6,7 +6,9 @@ export type ActivityEntityType =
   | "user"
   | "subscription"
   | "day_closure"
-  | "csv_import";
+  | "csv_import"
+  | "zone_storefront"
+  | "order_dispatch";
 
 export type ActivitySource =
   | "dashboard"
@@ -16,12 +18,26 @@ export type ActivitySource =
   | "whatsapp"
   | "csv_import";
 
-export type ActivityActor = {
-  type: "user" | "admin" | "system" | "customer";
-  id: number | null;
-  name: string;
-  role?: string;
-};
+export type AdminRole = "platform_admin" | "operations_admin";
+
+export type ActivityActor =
+  | {
+      type: "admin";
+      id: number | null;
+      name: string;
+      role: AdminRole;
+    }
+  | {
+      type: "user";
+      id: number;
+      name: string;
+      role: string;
+    }
+  | {
+      type: "system" | "customer";
+      id: null;
+      name: string;
+    };
 
 export type ActivityLog = {
   id: number;
@@ -34,6 +50,8 @@ export type ActivityLog = {
   new_values: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
   source: ActivitySource;
+  management_session_id?: number | null;
+  request_id?: string | null;
   actor: ActivityActor;
   created_at: string;
 };
@@ -50,4 +68,3 @@ export type GetActivityLogsParams = {
   cursor?: number;
   limit?: number;
 };
-

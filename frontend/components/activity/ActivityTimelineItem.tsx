@@ -10,6 +10,11 @@ const sourceLabels: Record<ActivitySource, string> = {
   csv_import: "استيراد ملف",
 };
 
+const adminRoleLabels = {
+  platform_admin: "مسؤول المنصة",
+  operations_admin: "مسؤول العمليات",
+} as const;
+
 const formatDateTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -28,6 +33,8 @@ type ActivityTimelineItemProps = {
 
 export function ActivityTimelineItem({ item }: ActivityTimelineItemProps) {
   const sourceLabel = sourceLabels[item.source] || item.source;
+  const actorRole =
+    item.actor.type === "admin" ? adminRoleLabels[item.actor.role] : null;
 
   return (
     <Card className="p-4">
@@ -46,7 +53,10 @@ export function ActivityTimelineItem({ item }: ActivityTimelineItemProps) {
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-        <span>بواسطة {item.actor.name}</span>
+        <span>
+          بواسطة {item.actor.name}
+          {actorRole ? ` · ${actorRole}` : ""}
+        </span>
         <span aria-hidden="true">·</span>
         <time dateTime={item.created_at}>{formatDateTime(item.created_at)}</time>
       </div>

@@ -8,10 +8,14 @@ const CATALOG_TYPE_TO_SOURCE = {
   grocery: "talabat_csv",
   pharmacy: "chefaa_csv",
 } as const;
+const ESSENTIAL_STATUSES = ["all", "essential", "non_essential"] as const;
 type CatalogType = keyof typeof CATALOG_TYPE_TO_SOURCE;
+type EssentialStatus = (typeof ESSENTIAL_STATUSES)[number];
 
 const isCatalogType = (value: string): value is CatalogType =>
   value in CATALOG_TYPE_TO_SOURCE;
+const isEssentialStatus = (value: string): value is EssentialStatus =>
+  ESSENTIAL_STATUSES.some((status) => status === value);
 
 export async function GET(request: Request) {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -25,6 +29,7 @@ export async function GET(request: Request) {
   const searchParams = new URL(request.url).searchParams;
   const catalogType = searchParams.get("catalogType") || "";
   const legacySource = searchParams.get("source") || "";
+  const requestedEssentialStatus = searchParams.get("essentialStatus");
   const hasCatalogType = isCatalogType(catalogType);
   const source = hasCatalogType
     ? CATALOG_TYPE_TO_SOURCE[catalogType]
@@ -33,6 +38,16 @@ export async function GET(request: Request) {
   if (!SUPPORTED_SOURCES.has(source)) {
     return NextResponse.json(
       { success: false, message: "Unsupported catalog type" },
+      { status: 400 },
+    );
+  }
+
+  if (
+    requestedEssentialStatus !== null &&
+    !isEssentialStatus(requestedEssentialStatus)
+  ) {
+    return NextResponse.json(
+      { success: false, message: "Unsupported essential status" },
       { status: 400 },
     );
   }
@@ -55,6 +70,9 @@ export async function GET(request: Request) {
   } else {
     backendUrl.searchParams.set("source", source);
   }
+  if (requestedEssentialStatus !== null) {
+    backendUrl.searchParams.set("essentialStatus", requestedEssentialStatus);
+  }
 
   const response = await fetch(backendUrl, {
     headers: {
@@ -64,6 +82,19 @@ export async function GET(request: Request) {
   });
 
   const body = await response.arrayBuffer();
+  const filenamePrefix =
+    source === "talabat_csv"
+      ? "grocery"
+      : source === "chefaa_csv"
+        ? "pharmacy"
+        : "catalog";
+  const filenameQualifier =
+    requestedEssentialStatus === "essential"
+      ? "-essential"
+      : requestedEssentialStatus === "non_essential"
+        ? "-non-essential"
+        : "";
+
   return new Response(body, {
     status: response.status,
     headers: {
@@ -71,7 +102,7 @@ export async function GET(request: Request) {
         response.headers.get("content-type") || "text/csv; charset=utf-8",
       "Content-Disposition":
         response.headers.get("content-disposition") ||
-        `attachment; filename="${source === "talabat_csv" ? "grocery-items" : source === "chefaa_csv" ? "pharmacy-items" : "catalog-items"}.csv"`,
+        `attachment; filename="${filenamePrefix}${filenameQualifier}-items.csv"`,
     },
   });
 }
