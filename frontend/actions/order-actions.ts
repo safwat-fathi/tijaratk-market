@@ -29,6 +29,7 @@ export async function updateOrderStatus(
 
     revalidatePath('/merchant/orders');
     revalidatePath(`/merchant/orders/${orderId}`);
+    revalidatePath('/merchant', 'layout');
 
     return { success: true, data: response.data };
   } catch (error) {
@@ -143,6 +144,7 @@ export async function markOrderItemOutOfStockAction(
 
     revalidatePath(`/merchant/orders/${orderId}`);
     revalidatePath('/merchant/orders');
+    revalidatePath('/merchant', 'layout');
 
     return { success: true, data: response.data };
   } catch (error) {

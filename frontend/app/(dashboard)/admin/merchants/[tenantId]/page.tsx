@@ -6,9 +6,10 @@ import {
   upsertManagedTenantAccessAction,
 } from "@/actions/admin-server";
 import {
-  adminService,
-  type AdminManagedPermission,
-} from "@/services/api/admin.service";
+  ADMIN_MANAGED_PERMISSION_OPTIONS,
+  getAdminManagedPermissionLabel,
+} from "@/constants/admin-managed-permissions";
+import { adminService } from "@/services/api/admin.service";
 import { ManageStoreDialog } from "./_components/ManageStoreDialog";
 
 export const dynamic = "force-dynamic";
@@ -16,24 +17,6 @@ export const dynamic = "force-dynamic";
 type PageProps = {
   params: Promise<{ tenantId: string }>;
 };
-
-const permissionOptions: Array<{
-  value: AdminManagedPermission;
-  label: string;
-}> = [
-  { value: "products.read", label: "عرض المنتجات" },
-  { value: "products.create", label: "إضافة المنتجات" },
-  { value: "products.update", label: "تعديل بيانات المنتجات" },
-  { value: "products.update_price", label: "تعديل الأسعار" },
-  { value: "products.update_availability", label: "تعديل الإتاحة" },
-  { value: "products.archive", label: "أرشفة واستعادة المنتجات" },
-  { value: "orders.read", label: "عرض الطلبات" },
-  { value: "orders.update_status", label: "تعديل حالة الطلب" },
-  { value: "orders.update_pricing", label: "تعديل تسعير الطلب" },
-  { value: "orders.manage_replacements", label: "اقتراح البدائل" },
-  { value: "customers.read_limited", label: "بيانات تنفيذ الطلب المحدودة" },
-  { value: "activity_logs.read", label: "عرض سجل النشاط" },
-];
 
 export default async function AdminMerchantDetailsPage({ params }: PageProps) {
   const { tenantId: tenantIdValue } = await params;
@@ -138,7 +121,7 @@ export default async function AdminMerchantDetailsPage({ params }: PageProps) {
             <fieldset>
               <legend className="text-sm font-semibold text-gray-700">تخصيص الصلاحيات (يلغي القالب عند الاختيار)</legend>
               <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {permissionOptions.map((permission) => (
+                {ADMIN_MANAGED_PERMISSION_OPTIONS.map((permission) => (
                   <label key={permission.value} className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
                     <input type="checkbox" name="permissions" value={permission.value} />
                     {permission.label}
@@ -154,7 +137,11 @@ export default async function AdminMerchantDetailsPage({ params }: PageProps) {
               <div key={access.id} className="flex flex-col gap-3 rounded-md border border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-semibold text-gray-900">{access.admin_user?.name}</p>
-                  <p className="text-xs text-gray-500">{access.permissions.join(" · ")}</p>
+                  <p className="text-xs text-gray-500">
+                    {access.permissions
+                      .map(getAdminManagedPermissionLabel)
+                      .join(" · ")}
+                  </p>
                   <p className="mt-1 text-xs text-gray-500">
                     {access.is_active ? "نشطة" : "ملغاة"}
                     {access.expires_at ? ` · تنتهي ${new Date(access.expires_at).toLocaleString("ar-EG")}` : ""}

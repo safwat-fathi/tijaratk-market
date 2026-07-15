@@ -67,10 +67,18 @@ export class AdminDashboardStatsResponseDto {
   pendingApplications: number;
 
   @ApiProperty({
-    description: 'Total number of orders placed in the system',
+    description:
+      'Total number of ordinary and zone-storefront orders placed in the system',
     example: 1450,
   })
   totalOrders: number;
+
+  @ApiProperty({
+    description:
+      'Number of ordinary and zone-storefront orders with completed status',
+    example: 860,
+  })
+  completedOrders: number;
 
   @ApiProperty({
     description: 'Total number of subscription plans available',

@@ -1,5 +1,8 @@
 import { adminService } from "@/services/api/admin.service";
 import { Card } from "@/components/ui/Card";
+import {
+  getAdminManagedPermissionLabel,
+} from "@/constants/admin-managed-permissions";
 import { Button } from "@/components/ui/Button";
 import {
   decideTenantApplicationAction,
@@ -280,8 +283,11 @@ export default async function AdminMerchants(props: Props) {
               </div>
               <div className="flex flex-wrap gap-2">
                 {merchant.access.permissions.map((permission) => (
-                  <span key={permission} className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
-                    {permission}
+                  <span
+                    key={permission}
+                    className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600"
+                  >
+                    {getAdminManagedPermissionLabel(permission)}
                   </span>
                 ))}
               </div>

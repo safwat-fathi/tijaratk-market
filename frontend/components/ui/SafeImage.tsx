@@ -2,6 +2,10 @@
 
 import Image from 'next/image';
 import { ComponentProps, ReactNode, useMemo, useState } from "react";
+import {
+  isAllowedImageSource,
+  shouldBypassImageOptimization,
+} from "@/lib/image-source-policy";
 
 type SafeImageProps = Omit<ComponentProps<typeof Image>, "src"> & {
 	src?: ComponentProps<typeof Image>["src"] | null;
@@ -25,15 +29,24 @@ export default function SafeImage({
   loading,
   quality,
   draggable,
+  onError,
+  ...imageProps
 }: SafeImageProps) {
   const normalizedSrc = useMemo(() => {
-    const trimmedSrc = src?.toString().trim();
-    return trimmedSrc ? trimmedSrc : null;
+    if (typeof src !== "string") return src || null;
+
+    const trimmedSrc = src.trim();
+    return trimmedSrc || null;
   }, [src]);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const hasError = normalizedSrc !== null && failedSrc === normalizedSrc;
+  const normalizedStringSrc =
+    typeof normalizedSrc === "string" ? normalizedSrc : null;
+  const hasError =
+    normalizedStringSrc !== null && failedSrc === normalizedStringSrc;
+  const isAllowedSource =
+    normalizedStringSrc === null || isAllowedImageSource(normalizedStringSrc);
 
-  if (!normalizedSrc || hasError) {
+  if (!normalizedSrc || hasError || !isAllowedSource) {
     if (containerClassName) {
       return (
         <div className={containerClassName}>
@@ -51,9 +64,10 @@ export default function SafeImage({
     );
   }
 
-  const isAkamaiProtected = typeof normalizedSrc === 'string' && normalizedSrc.includes('cdn.mafrservices.com');
-  const isLocalImage = typeof normalizedSrc === 'string' && (normalizedSrc.includes('localhost:') || normalizedSrc.includes('127.0.0.1:'));
-  const shouldUnoptimize = unoptimized || isAkamaiProtected || isLocalImage;
+  const shouldUnoptimize =
+    unoptimized ||
+    (normalizedStringSrc !== null &&
+      shouldBypassImageOptimization(normalizedStringSrc));
 
   return (
     <Image
@@ -68,7 +82,11 @@ export default function SafeImage({
       loading={loading}
       quality={quality}
       draggable={draggable}
-      onError={() => setFailedSrc(normalizedSrc)}
+      onError={(event) => {
+        if (normalizedStringSrc) setFailedSrc(normalizedStringSrc);
+        onError?.(event);
+      }}
+      {...imageProps}
     />
   );
 }

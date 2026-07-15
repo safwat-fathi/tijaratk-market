@@ -243,7 +243,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get dashboard stats',
     description:
-      'Retrieve general stats for the admin dashboard including merchant, order, and plan counts.',
+      'Retrieve general stats for the admin dashboard including merchant, total order, completed order, and plan counts.',
   })
   @ApiResponse({
     status: 200,

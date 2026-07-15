@@ -4,9 +4,11 @@ import { adminService } from "@/services/api/admin.service";
 import { redirect } from "next/navigation";
 import { setCookieAction, deleteCookieAction } from "@/app/actions/cookie-store";
 import { STORAGE_KEYS } from "@/constants";
+import { DISPATCH_SESSION_PERMISSION_MESSAGE } from "@/constants/admin-managed-permissions";
 import { revalidatePath } from "next/cache";
 import { loginSchema } from "@/lib/validations/auth";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
 import type {
   BulkEssentialStage,
   CatalogItemsResponse,
@@ -36,6 +38,11 @@ export type ActionState = {
 export type DirectoryStatusActionState = {
   success: boolean;
   message?: string;
+};
+
+export type DispatchSessionStartResult = {
+  success: false;
+  message: string;
 };
 
 const UPDATE_PRODUCT_FALLBACK_MESSAGE = "تعذر تعديل المنتج، حاول مرة أخرى.";
@@ -334,6 +341,42 @@ export async function updateZoneActivationAction(
   revalidatePath(`/admin/zones/${id}`);
 }
 
+export type ZoneEssentialCatalogSyncActionResult = {
+  success: boolean;
+  message: string;
+};
+
+export async function syncZoneEssentialCatalogAction(
+  zoneId: number,
+): Promise<ZoneEssentialCatalogSyncActionResult> {
+  const id = positiveIdSchema.parse(zoneId);
+  const response = await adminService.syncZoneEssentialCatalog(id);
+  if (!response.success || !response.data) {
+    const hasNoEssentials = response.message
+      ?.toLowerCase()
+      .includes("essential");
+    return {
+      success: false,
+      message: hasNoEssentials
+        ? "لا توجد منتجات أساسية نشطة ومؤهلة لمزامنتها مع هذه المنطقة."
+        : "تعذر مزامنة المنتجات الأساسية للمنطقة. حاول مرة أخرى.",
+    };
+  }
+
+  revalidatePath("/admin/zones");
+  revalidatePath(`/admin/zones/${id}`);
+  revalidatePath("/");
+
+  const result = response.data;
+  return {
+    success: true,
+    message:
+      `تمت المزامنة بنجاح: ${result.active_products} منتج نشط في ` +
+      `${result.active_categories} قسم، مع إضافة ${result.created} ` +
+      `وربط ${result.linked} وأرشفة ${result.archived}.`,
+  };
+}
+
 export async function upsertZoneMerchantAction(
   zoneId: number,
   formData: FormData,
@@ -353,18 +396,65 @@ export async function startZoneDispatchSessionAction(
   zoneId: number,
   tenantId: number,
   formData: FormData,
-): Promise<void> {
+): Promise<DispatchSessionStartResult> {
   const normalizedZoneId = positiveIdSchema.parse(zoneId);
   const normalizedTenantId = positiveIdSchema.parse(tenantId);
   const reason = managementReasonSchema.parse(formData.get("reason"));
+  const contextResponse = await adminService.getManagedMerchantContext(
+    normalizedTenantId,
+  );
+
+  if (!contextResponse.success) {
+    return {
+      success: false,
+      message: contextResponse.message || "تعذر التحقق من صلاحية التوزيع",
+    };
+  }
+
+  if (
+    !hasActiveManagedPermission(
+      contextResponse.data?.current_admin_access,
+      "dispatches.read",
+    )
+  ) {
+    return {
+      success: false,
+      message: DISPATCH_SESSION_PERMISSION_MESSAGE,
+    };
+  }
+
   const response = await adminService.startManagementSession({
     tenant_id: normalizedTenantId,
     reason,
   });
+
+  if (!response.success) {
+    const responseData = response.data as unknown;
+    const errors =
+      typeof responseData === "object" && responseData !== null
+        ? (responseData as Record<string, unknown>).errors
+        : null;
+    const errorCode =
+      typeof errors === "object" && errors !== null
+        ? (errors as Record<string, unknown>).code
+        : null;
+
+    return {
+      success: false,
+      message:
+        errorCode === "ADMIN_TENANT_ACCESS_REQUIRED"
+          ? DISPATCH_SESSION_PERMISSION_MESSAGE
+          : response.message || "تعذر بدء جلسة إدارة التوزيع",
+    };
+  }
+
   const token = response.data?.session_token;
-  const expiresAt = response.data?.session.expires_at;
-  if (!response.success || !token || !expiresAt) {
-    throw new Error(response.message || "تعذر بدء جلسة إدارة التوزيع");
+  const expiresAt = response.data?.session?.expires_at;
+  if (!token || !expiresAt) {
+    return {
+      success: false,
+      message: "تعذر بدء جلسة إدارة التوزيع",
+    };
   }
   await setCookieAction(STORAGE_KEYS.ADMIN_MANAGEMENT_SESSION, token, {
     maxAge: Math.max(1, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000)),

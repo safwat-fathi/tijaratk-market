@@ -12,6 +12,12 @@ class ZoneStorefrontsService extends HttpService {
     super("/zone-storefronts");
   }
 
+  public async getPublicZones() {
+    return this.get<ZoneStorefront[]>("public", undefined, {
+      cache: "no-store",
+    });
+  }
+
   public async getPublicZone(slug: string) {
     return this.get<ZoneStorefront>(`public/${slug}`, undefined, {
       cache: "no-store",

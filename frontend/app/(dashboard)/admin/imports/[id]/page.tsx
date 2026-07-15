@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { adminService } from "@/services/api/admin.service";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { CancelImportButton } from "../_components/CancelImportButton";
+import { AutoRefresh } from "../_components/AutoRefresh";
 import type { ImportRowError, ImportRun, ImportStatus } from "@/types/models/import";
 
 export const dynamic = "force-dynamic";
@@ -72,12 +74,15 @@ export default async function AdminImportDetailsPage({
   }
 
   const { importRun, errors } = await getImportData(importId);
+  const isPolling = importRun.status === "pending" || importRun.status === "processing";
 
   return (
     <div className="space-y-6">
+      {isPolling ? <AutoRefresh intervalMs={3000} /> : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link href="/admin/imports" className="text-sm font-semibold text-red-700">
+          <Link href="/admin/imports" className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-700 hover:text-red-800">
+            <ArrowRight className="h-4 w-4" />
             العودة للاستيراد
           </Link>
           <h1 className="mt-2 text-2xl font-bold text-gray-900">

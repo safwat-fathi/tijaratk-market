@@ -15,6 +15,7 @@ import {
   AdminAuditOutcome,
   AdminRole,
   CatalogItem,
+  OrderStatus,
   Prisma,
   TenantCategory,
   TenantStatus,
@@ -32,6 +33,7 @@ import {
   CatalogSource,
   getAllowedCatalogCategoriesForSource,
   isCatalogCategoryAllowedForSource,
+  isCatalogImageReferenceAllowedForSource,
   resolveCatalogSourceForTenantCategory,
 } from 'src/products/catalog-source-policy';
 import {
@@ -346,8 +348,10 @@ export class AdminService {
     const [tenants, activeMerchants, pendingApplications, totalPlans] =
       await Promise.all([
         this.prisma.tenant.findMany({
-          where: { operated_zone_storefront: { is: null } },
-          select: { id: true },
+          select: {
+            id: true,
+            operated_zone_storefront: { select: { id: true } },
+          },
         }),
         this.prisma.tenant.count({
           where: {
@@ -364,21 +368,37 @@ export class AdminService {
         this.prisma.subscriptionPlan.count(),
       ]);
 
-    const orderCounts = await Promise.all(
+    const orderStatusCounts = await Promise.all(
       tenants.map((tenant) =>
         this.runWithTenantRls(tenant.id, (tx) =>
-          tx.order.count({
+          tx.order.groupBy({
+            by: ['status'],
             where: { tenant_id: tenant.id },
+            _count: { _all: true },
           }),
         ),
       ),
     );
 
+    let totalOrders = 0;
+    let completedOrders = 0;
+    for (const tenantStatusCounts of orderStatusCounts) {
+      for (const statusCount of tenantStatusCounts) {
+        totalOrders += statusCount._count._all;
+        if (statusCount.status === OrderStatus.completed) {
+          completedOrders += statusCount._count._all;
+        }
+      }
+    }
+
     return {
-      totalMerchants: tenants.length,
+      totalMerchants: tenants.filter(
+        (tenant) => tenant.operated_zone_storefront === null,
+      ).length,
       activeMerchants,
       pendingApplications,
-      totalOrders: orderCounts.reduce((total, count) => total + count, 0),
+      totalOrders,
+      completedOrders,
       totalPlans,
     };
   }
@@ -753,7 +773,11 @@ export class AdminService {
   ): Promise<ProductSheetUploadSummary> {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { id: true, category: true },
+      select: {
+        id: true,
+        category: true,
+        operated_zone_storefront: { select: { id: true } },
+      },
     });
 
     if (!tenant) {
@@ -785,6 +809,7 @@ export class AdminService {
       await this.processTenantProductSheetRow(
         tenantId,
         allowedSource,
+        Boolean(tenant.operated_zone_storefront),
         summary.total_rows,
         row as ProductSheetRow,
         summary,
@@ -1222,9 +1247,20 @@ export class AdminService {
     }
     await this.ensureActiveCatalogCategory(source, category);
 
+    const requestedImageUrl = this.normalizeNullableString(dto.image_url);
+    if (
+      !file?.path &&
+      requestedImageUrl &&
+      !isCatalogImageReferenceAllowedForSource(source, requestedImageUrl)
+    ) {
+      throw new BadRequestException(
+        'Image URL is not allowed for this catalog source',
+      );
+    }
+
     const imageUrl = file?.path
       ? await this.imageProcessorService.processProductThumbnail(file.path)
-      : this.normalizeNullableString(dto.image_url);
+      : requestedImageUrl;
 
     return this.prisma.catalogItem.create({
       data: {
@@ -1272,7 +1308,19 @@ export class AdminService {
         file.path,
       );
     } else if (dto.image_url !== undefined) {
-      data.image_url = this.normalizeNullableString(dto.image_url);
+      const requestedImageUrl = this.normalizeNullableString(dto.image_url);
+      if (
+        requestedImageUrl &&
+        !isCatalogImageReferenceAllowedForSource(
+          item.source,
+          requestedImageUrl,
+        )
+      ) {
+        throw new BadRequestException(
+          'Image URL is not allowed for this catalog source',
+        );
+      }
+      data.image_url = requestedImageUrl;
     }
     if (dto.external_id !== undefined) {
       data.external_id = this.normalizeNullableString(dto.external_id);
@@ -1542,6 +1590,7 @@ export class AdminService {
   private async processTenantProductSheetRow(
     tenantId: number,
     allowedSource: CatalogSource,
+    isZoneOperator: boolean,
     rowNumber: number,
     row: ProductSheetRow,
     summary: ProductSheetUploadSummary,
@@ -1561,6 +1610,11 @@ export class AdminService {
       const catalogItem = catalogItemId
         ? await this.findSheetCatalogItem(catalogItemId, allowedSource)
         : null;
+      if (isZoneOperator && catalogItem && !catalogItem.is_essential) {
+        throw new BadRequestException(
+          'Zone operators can only add curated essential catalog items',
+        );
+      }
       const nextName = name || catalogItem?.name;
       if (!nextName) {
         throw new BadRequestException('Product name is required');
@@ -1573,7 +1627,8 @@ export class AdminService {
       );
       const currentPrice = this.parseOptionalPrice(row.current_price);
       const imageUrl =
-        this.normalizeNullableString(row.image_url as string | undefined) || catalogItem?.image_url;
+        this.normalizeNullableString(row.image_url as string | undefined) ||
+        catalogItem?.image_url;
       const isAvailable = this.parseOptionalBoolean(row.is_available) ?? true;
       const status = this.parseOptionalProductStatus(row.status);
       const orderMode = this.parseOptionalProductOrderMode(row.order_mode);
@@ -1611,6 +1666,12 @@ export class AdminService {
               is_available: isAvailable,
               status: status ?? existingProduct.status,
               order_mode: orderMode ?? existingProduct.order_mode,
+              ...(catalogItem
+                ? {
+                    catalog_item_id: catalogItem.id,
+                    source: ProductSource.CATALOG,
+                  }
+                : {}),
               price_needs_review:
                 currentPrice !== undefined
                   ? false
@@ -1632,6 +1693,7 @@ export class AdminService {
               source: catalogItem
                 ? ProductSource.CATALOG
                 : ProductSource.MANUAL,
+              catalog_item_id: catalogItem?.id,
               price_needs_review: currentPrice === undefined,
             },
           });
@@ -1644,7 +1706,6 @@ export class AdminService {
           ON CONFLICT DO NOTHING
         `;
       });
-
     } catch (error) {
       summary.failed_rows += 1;
       summary.errors.push({

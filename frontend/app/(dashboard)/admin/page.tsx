@@ -1,9 +1,14 @@
 import { adminService } from '@/services/api/admin.service';
 import { Card } from '@/components/ui/Card';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
+import { formatArabicInteger } from '@/lib/utils/number';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
+
+function formatCounter(value: number | null | undefined) {
+  return formatArabicInteger(value) ?? '٠';
+}
 
 async function getStats() {
   try {
@@ -41,30 +46,47 @@ export default async function AdminDashboard() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">نظرة عامة</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-6">
         <Card className="p-6 border-t-4 border-t-red-500">
           <h3 className="text-sm font-medium text-gray-500">إجمالي التجار</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{stats.totalMerchants}</p>
+          <p className="mt-2 text-3xl font-bold text-gray-900">
+            {formatCounter(stats.totalMerchants)}
+          </p>
         </Card>
         
         <Card className="p-6 border-t-4 border-t-green-500">
           <h3 className="text-sm font-medium text-gray-500">التجار النشطين</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{stats.activeMerchants}</p>
+          <p className="mt-2 text-3xl font-bold text-gray-900">
+            {formatCounter(stats.activeMerchants)}
+          </p>
         </Card>
 
         <Card className="p-6 border-t-4 border-t-amber-500">
           <h3 className="text-sm font-medium text-gray-500">طلبات بانتظار المراجعة</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{stats.pendingApplications}</p>
+          <p className="mt-2 text-3xl font-bold text-gray-900">
+            {formatCounter(stats.pendingApplications)}
+          </p>
         </Card>
         
         <Card className="p-6 border-t-4 border-t-blue-500">
           <h3 className="text-sm font-medium text-gray-500">إجمالي الطلبات</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{stats.totalOrders}</p>
+          <p className="mt-2 text-3xl font-bold text-gray-900">
+            {formatCounter(stats.totalOrders)}
+          </p>
+        </Card>
+
+        <Card className="p-6 border-t-4 border-t-cyan-500">
+          <h3 className="text-sm font-medium text-gray-500">طلبات مكتملة</h3>
+          <p className="mt-2 text-3xl font-bold text-gray-900">
+            {formatCounter(stats.completedOrders)}
+          </p>
         </Card>
 
         <Card className="p-6 border-t-4 border-t-purple-500">
           <h3 className="text-sm font-medium text-gray-500">الباقات المتاحة</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{stats.totalPlans}</p>
+          <p className="mt-2 text-3xl font-bold text-gray-900">
+            {formatCounter(stats.totalPlans)}
+          </p>
         </Card>
       </div>
     </div>

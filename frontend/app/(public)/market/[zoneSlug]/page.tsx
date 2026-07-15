@@ -8,7 +8,13 @@ import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service"
 import type { Order } from "@/types/models/order";
 import type { Tenant } from "@/types/models/tenant";
 import type { PublicProductsMeta } from "@/types/models/product";
-type ZoneSearchParams = {
+import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import {
+  buildCustomerAnalyticsPageLocation,
+  type CustomerAnalyticsSearchParams,
+} from "@/lib/analytics/google-analytics";
+
+type ZoneSearchParams = CustomerAnalyticsSearchParams & {
   reorder?: string;
   category?: string;
 };
@@ -83,6 +89,13 @@ export default async function ZoneStorefrontPage({
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
+      <CustomerAnalytics
+        pageLocation={buildCustomerAnalyticsPageLocation(
+          `/market/${encodeURIComponent(zoneSlug)}`,
+          resolvedSearchParams,
+        )}
+        pageTitle={zone.name}
+      />
       <StoreHeader tenant={tenantPresentation} />
       <div className="min-w-0">
         <OrderForm

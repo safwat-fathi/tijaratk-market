@@ -23,6 +23,8 @@ import {
   buildCustomerAnalyticsPageLocation,
   type CustomerAnalyticsSearchParams,
 } from "@/lib/analytics/google-analytics";
+import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
+import type { ZoneStorefront } from "@/types/models/zone-storefront";
 
 type StoresDirectorySearchParams = CustomerAnalyticsSearchParams & {
   area?: string;
@@ -78,6 +80,15 @@ async function getStoresLanding(): Promise<StoresDirectoryLanding | null> {
     return response.data;
   } catch {
     return null;
+  }
+}
+
+async function getPublicZoneStorefronts(): Promise<ZoneStorefront[]> {
+  try {
+    const response = await zoneStorefrontsService.getPublicZones();
+    return response.success && Array.isArray(response.data) ? response.data : [];
+  } catch {
+    return [];
   }
 }
 
@@ -281,13 +292,112 @@ const StoreCard = ({ store }: { store: StoresDirectoryStoreCard }) => (
   </Link>
 );
 
+const ZoneStorefrontCard = ({
+  zone,
+  highlighted,
+}: {
+  zone: ZoneStorefront;
+  highlighted: boolean;
+}) => {
+  const deliveryFee = Number(zone.delivery_fee ?? 0);
+  const categoryLabel =
+    zone.category === "pharmacy" ? "صيدليات" : "سوبر ماركت";
+
+  return (
+    <Link
+      href={`/market/${encodeURIComponent(zone.slug)}`}
+      className={`group relative overflow-hidden rounded-3xl border p-6 text-right shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${
+        highlighted
+          ? "border-[#27AE60] bg-gradient-to-br from-[#0F5A3D] to-[#167A53] text-white"
+          : "border-[#27AE60]/20 bg-gradient-to-br from-white to-[#E8F5ED] text-[#222B2E]"
+      }`}
+    >
+      <div
+        className={`absolute -left-8 -top-10 h-32 w-32 rounded-full ${
+          highlighted ? "bg-white/10" : "bg-[#27AE60]/10"
+        }`}
+        aria-hidden="true"
+      />
+      <div className="relative flex h-full flex-col gap-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <span
+              className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+                highlighted
+                  ? "bg-white/15 text-white"
+                  : "bg-[#0F5A3D] text-white"
+              }`}
+            >
+              سوق مركزي تديره تجارتك
+            </span>
+            <h3 className="mt-3 text-xl font-black">{zone.name}</h3>
+            <p
+              className={`mt-1 text-sm ${
+                highlighted ? "text-white/75" : "text-gray-600"
+              }`}
+            >
+              {zone.area.name_ar} · {categoryLabel}
+            </p>
+          </div>
+          <div
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+              highlighted
+                ? "bg-white/15 text-white"
+                : "bg-white text-[#0F5A3D] shadow-sm"
+            }`}
+            aria-hidden="true"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-6 w-6"
+            >
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+              <path d="M3 6h18" />
+              <path d="M16 10a4 4 0 0 1-8 0" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="mt-auto flex items-center justify-between gap-4">
+          <span
+            className={`text-sm font-semibold ${
+              highlighted ? "text-white/80" : "text-gray-600"
+            }`}
+          >
+            التوصيل {deliveryFee > 0 ? `${deliveryFee} ج.م` : "مجاني"}
+          </span>
+          <span
+            className={`inline-flex items-center gap-1 text-sm font-black ${
+              highlighted ? "text-white" : "text-[#0F5A3D]"
+            }`}
+          >
+            اطلب الآن
+            <span className="transition-transform group-hover:-translate-x-1">
+              ←
+            </span>
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
 export default async function StoresDirectoryPage({
   searchParams,
 }: StoresDirectoryPageProps) {
   const resolvedSearchParams = await searchParams;
   const { area } = resolvedSearchParams;
   const selectedAreaSlug = area?.trim() || undefined;
-  const landing = await getStoresLanding();
+  const [landing, publicZones] = await Promise.all([
+    getStoresLanding(),
+    getPublicZoneStorefronts(),
+  ]);
   const areas = landing?.areas ?? [];
   const selectedArea = selectedAreaSlug
     ? areas.find((item) => item.slug === selectedAreaSlug)
@@ -302,6 +412,12 @@ export default async function StoresDirectoryPage({
   const areaOptions = toAreaOptions(areas);
   const topAreas = areas.slice(0, 8);
   const searchedAreas = areas.slice(0, 4);
+  const orderedPublicZones = selectedAreaSlug
+    ? [
+        ...publicZones.filter((zone) => zone.area.slug === selectedAreaSlug),
+        ...publicZones.filter((zone) => zone.area.slug !== selectedAreaSlug),
+      ]
+    : publicZones;
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
@@ -375,6 +491,32 @@ export default async function StoresDirectoryPage({
         </section>
 
         <div className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
+          {orderedPublicZones.length > 0 && (
+            <section aria-labelledby="zone-storefronts-heading">
+              <div className="mb-6 flex flex-col gap-2">
+                <h2
+                  id="zone-storefronts-heading"
+                  className="text-3xl font-bold text-[#222B2E]"
+                >
+                  أسواق تجارتك المركزية
+                </h2>
+                <p className="max-w-2xl text-base leading-7 text-gray-600">
+                  اطلب احتياجاتك من واجهة واحدة، وفريق تجارتك يختار متجر
+                  التنفيذ المناسب داخل منطقتك.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {orderedPublicZones.map((zone) => (
+                  <ZoneStorefrontCard
+                    key={zone.id}
+                    zone={zone}
+                    highlighted={zone.area.slug === selectedAreaSlug}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           <section>
             <div className="mb-8 flex items-center justify-between">
               <h2 className="text-3xl font-bold text-[#222B2E]">

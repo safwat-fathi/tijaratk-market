@@ -2,27 +2,56 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { assignedOrdersService } from "@/services/api/assigned-orders.service";
+import type { ZoneOrderDispatch } from "@/types/models/zone-storefront";
 
 const positiveId = z.number().int().positive();
 const version = z.coerce.number().int().min(0);
 
+export type AssignedItemActionResult<T = undefined> =
+  | { success: true; data: T }
+  | { success: false; message: string };
+
+const getActionErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 export async function updateAssignedQuoteAction(
   dispatchId: number,
   itemId: number,
-  formData: FormData,
-): Promise<void> {
-  const payload = z.object({
-    total_price: z.coerce.number().positive(),
-    expected_version: version,
-  }).parse(Object.fromEntries(formData.entries()));
-  const response = await assignedOrdersService.updateQuoteLine(
-    positiveId.parse(dispatchId),
-    positiveId.parse(itemId),
-    payload,
-  );
-  if (!response.success) throw new Error(response.message || "تعذر حفظ السعر");
-  revalidatePath(`/merchant/assigned-orders/${dispatchId}`);
+  totalPrice: number,
+  expectedVersion: number,
+): Promise<AssignedItemActionResult<ZoneOrderDispatch>> {
+  try {
+    const payload = z
+      .object({
+        total_price: z.coerce.number().positive(),
+        expected_version: version,
+      })
+      .parse({
+        total_price: totalPrice,
+        expected_version: expectedVersion,
+      });
+    const response = await assignedOrdersService.updateQuoteLine(
+      positiveId.parse(dispatchId),
+      positiveId.parse(itemId),
+      payload,
+    );
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: response.message || "تعذر حفظ السعر",
+      };
+    }
+    revalidatePath(`/merchant/assigned-orders/${dispatchId}`);
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    return {
+      success: false,
+      message: getActionErrorMessage(error, "تعذر حفظ السعر"),
+    };
+  }
 }
 
 export async function acceptAssignedOrderAction(
@@ -37,6 +66,8 @@ export async function acceptAssignedOrderAction(
   if (!response.success) throw new Error(response.message || "تعذر قبول الطلب");
   revalidatePath("/merchant/assigned-orders");
   revalidatePath(`/merchant/assigned-orders/${dispatchId}`);
+  revalidatePath("/merchant/orders");
+  revalidatePath("/merchant", "layout");
 }
 
 export async function rejectAssignedOrderAction(
@@ -53,6 +84,8 @@ export async function rejectAssignedOrderAction(
   );
   if (!response.success) throw new Error(response.message || "تعذر رفض الطلب");
   revalidatePath("/merchant/assigned-orders");
+  revalidatePath("/merchant/orders");
+  revalidatePath("/merchant", "layout");
 }
 
 export async function updateAssignedOrderStatusAction(
@@ -71,28 +104,57 @@ export async function updateAssignedOrderStatusAction(
 export async function updateAssignedReplacementAction(
   dispatchId: number,
   itemId: number,
-  formData: FormData,
-): Promise<void> {
-  const replacementProductId = z.coerce.number().int().positive().parse(
-    formData.get("replacement_product_id"),
-  );
-  const response = await assignedOrdersService.updateReplacement(
-    positiveId.parse(dispatchId),
-    positiveId.parse(itemId),
-    replacementProductId,
-  );
-  if (!response.success) throw new Error(response.message || "تعذر اقتراح البديل");
-  revalidatePath(`/merchant/assigned-orders/${dispatchId}`);
+  replacementProductId: number | null,
+): Promise<AssignedItemActionResult> {
+  try {
+    const normalizedReplacementId =
+      replacementProductId === null
+        ? null
+        : z.coerce.number().int().positive().parse(replacementProductId);
+    const response = await assignedOrdersService.updateReplacement(
+      positiveId.parse(dispatchId),
+      positiveId.parse(itemId),
+      normalizedReplacementId,
+    );
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر اقتراح البديل",
+      };
+    }
+    revalidatePath(`/merchant/assigned-orders/${dispatchId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    return {
+      success: false,
+      message: getActionErrorMessage(error, "تعذر اقتراح البديل"),
+    };
+  }
 }
 
 export async function resetAssignedReplacementAction(
   dispatchId: number,
   itemId: number,
-): Promise<void> {
-  const response = await assignedOrdersService.resetReplacement(
-    positiveId.parse(dispatchId),
-    positiveId.parse(itemId),
-  );
-  if (!response.success) throw new Error(response.message || "تعذر إعادة ضبط البديل");
-  revalidatePath(`/merchant/assigned-orders/${dispatchId}`);
+): Promise<AssignedItemActionResult> {
+  try {
+    const response = await assignedOrdersService.resetReplacement(
+      positiveId.parse(dispatchId),
+      positiveId.parse(itemId),
+    );
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر إعادة ضبط البديل",
+      };
+    }
+    revalidatePath(`/merchant/assigned-orders/${dispatchId}`);
+    return { success: true, data: undefined };
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    return {
+      success: false,
+      message: getActionErrorMessage(error, "تعذر إعادة ضبط البديل"),
+    };
+  }
 }

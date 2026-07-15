@@ -19,6 +19,7 @@ import {
   OrderSource,
   TenantStatus,
   TenantCategory,
+  OrderDispatchAssignmentStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateOrderDto, CreateOrderItemDto } from './dto/create-order.dto';
@@ -54,6 +55,10 @@ import {
   ActivitySources,
 } from 'src/activity-log/constants/activity-types';
 import { ActivityActor } from 'src/activity-log/activity-log.types';
+import { OrderInboxSummaryDto } from './dto/order-inbox-summary.dto';
+import {
+  resolveZoneStorefrontReorderUrl,
+} from 'src/zone-storefronts/zone-storefront-feature';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -90,7 +95,12 @@ type OrderWithItemsPayload = Order & {
   tenant?: { id: number; name: string; slug: string };
   order_dispatch?: {
     status: string;
-    zone_storefront: { id: number; name: string; slug: string };
+    zone_storefront: {
+      id: number;
+      name: string;
+      slug: string;
+      is_active: boolean;
+    };
     assignments: Array<{
       status: string;
       target_tenant: { name: string };
@@ -511,6 +521,74 @@ export class OrdersService {
     return orders.map((order) => this.mapOrderPayload(order));
   }
 
+  /** Returns exact owned and assigned order counters for the merchant inbox. */
+  async getInboxSummary(
+    tenantId: number,
+    date?: string,
+  ): Promise<OrderInboxSummaryDto> {
+    const ownedWhere: Prisma.OrderWhereInput = { tenant_id: tenantId };
+    if (date) {
+      ownedWhere.created_at = {
+        gte: new Date(`${date}T00:00:00.000+02:00`),
+        lte: new Date(`${date}T23:59:59.999+02:00`),
+      };
+    }
+
+    const [ownedGroups, assignedGroups] = await Promise.all([
+      this.orderClient().groupBy({
+        by: ['status'],
+        where: ownedWhere,
+        _count: { _all: true },
+      }),
+      this.prisma.orderDispatchAssignment.groupBy({
+        by: ['status'],
+        where: {
+          target_tenant_id: tenantId,
+          is_current: true,
+          status: {
+            in: [
+              OrderDispatchAssignmentStatus.pending,
+              OrderDispatchAssignmentStatus.accepted,
+            ],
+          },
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const ownedStatusCounts: Record<OrderStatus, number> = {
+      [OrderStatus.DRAFT]: 0,
+      [OrderStatus.CONFIRMED]: 0,
+      [OrderStatus.OUT_FOR_DELIVERY]: 0,
+      [OrderStatus.COMPLETED]: 0,
+      [OrderStatus.CANCELLED]: 0,
+      [OrderStatus.REJECTED_BY_CUSTOMER]: 0,
+    };
+    for (const group of ownedGroups) {
+      ownedStatusCounts[group.status as OrderStatus] = group._count._all;
+    }
+
+    const pendingAssigned =
+      assignedGroups.find(
+        (group) => group.status === OrderDispatchAssignmentStatus.pending,
+      )?._count._all ?? 0;
+    const acceptedAssigned =
+      assignedGroups.find(
+        (group) => group.status === OrderDispatchAssignmentStatus.accepted,
+      )?._count._all ?? 0;
+
+    return {
+      owned_status_counts: ownedStatusCounts,
+      assigned_counts: {
+        pending: pendingAssigned,
+        accepted: acceptedAssigned,
+        total: pendingAssigned + acceptedAssigned,
+      },
+      new_orders_count:
+        ownedStatusCounts[OrderStatus.DRAFT] + pendingAssigned,
+    };
+  }
+
   /** Lists managed-tenant orders inside an explicit admin RLS transaction. */
   async findAllForManagedAdmin(
     actor: OrderActivityActor & { tenantId: number },
@@ -795,21 +873,31 @@ export class OrdersService {
         updateData.pricing_mode = PricingMode.MANUAL;
       }
 
-      const updatedOrder = await manager.order.update({
-        where: { id: order.id },
-        data: updateData,
-        include: {
-          customer: true,
-          order_items: {
-            include: {
-              replaced_by_product: true,
-              pending_replacement_product: true,
-            },
-          },
-          tenant: true,
-          delivery_area: true,
-        },
-      });
+      const updatedOrder =
+        nextStatus === OrderStatus.CANCELLED &&
+        previousStatus !== OrderStatus.CANCELLED
+          ? await this.cancelOrderWithinTransaction(
+              manager,
+              order,
+              updateOrderDto.cancellation_reason,
+              actor,
+              updateData,
+            )
+          : await manager.order.update({
+              where: { id: order.id },
+              data: updateData,
+              include: {
+                customer: true,
+                order_items: {
+                  include: {
+                    replaced_by_product: true,
+                    pending_replacement_product: true,
+                  },
+                },
+                tenant: true,
+                delivery_area: true,
+              },
+            });
 
       if (
         nextStatus === OrderStatus.COMPLETED &&
@@ -822,46 +910,10 @@ export class OrdersService {
       }
 
       if (
-        nextStatus === OrderStatus.CANCELLED &&
-        previousStatus !== OrderStatus.CANCELLED
+        nextStatus &&
+        nextStatus !== previousStatus &&
+        nextStatus !== OrderStatus.CANCELLED
       ) {
-        const dispatch = await manager.orderDispatch.findUnique({
-          where: { order_id: order.id },
-          select: { id: true },
-        });
-        if (dispatch) {
-          await manager.orderDispatch.update({
-            where: { id: dispatch.id },
-            data: {
-              status: 'cancelled',
-              cancellation_reason: this.normalizeOptionalReason(
-                updateOrderDto.cancellation_reason,
-              ),
-              cancelled_by_admin_id: actor?.adminId ?? null,
-              cancelled_at: new Date(),
-              version: { increment: 1 },
-            },
-          });
-          await manager.orderDispatchAssignment.updateMany({
-            where: { order_dispatch_id: dispatch.id, is_current: true },
-            data: {
-              status: 'cancelled',
-              is_current: false,
-              responded_at: new Date(),
-              version: { increment: 1 },
-            },
-          });
-        } else {
-          await this.tenantCancellationPolicyService.recordMerchantCancellation(
-            order.tenant_id,
-            order.id,
-            manager,
-            actor?.adminId ? 'admin' : 'merchant',
-          );
-        }
-      }
-
-      if (nextStatus && nextStatus !== previousStatus) {
         const oldStatusLabel = formatKnownValueAr(
           ORDER_STATUS_LABELS_AR,
           previousStatus,
@@ -882,14 +934,6 @@ export class OrdersService {
             description: `تم تغيير حالة الطلب من ${oldStatusLabel} إلى ${newStatusLabel}`,
             oldValues: { status: previousStatus },
             newValues: { status: nextStatus },
-            metadata:
-              nextStatus === OrderStatus.CANCELLED
-                ? {
-                    cancellation_reason_provided: Boolean(
-                      updateOrderDto.cancellation_reason?.trim(),
-                    ),
-                  }
-                : undefined,
             source: actor?.source ?? ActivitySources.Dashboard,
           },
           manager,
@@ -1384,14 +1428,14 @@ export class OrdersService {
   }
 
   /**
-   * Marks one order item unavailable, removes it from totals, and hides the linked merchant product.
+   * Marks one order item unavailable and cancels the order when no deliverable lines remain.
    */
   async markOrderItemOutOfStock(
     tenantId: number,
     itemId: number,
     actor?: OrderActivityActor,
   ): Promise<OrderItem> {
-    const savedItem = await this.withTenantManager(
+    const result = await this.withTenantManager(
       tenantId,
       async (manager) => {
         const orderItem = await manager.orderItem.findFirst({
@@ -1411,6 +1455,15 @@ export class OrdersService {
             'Order items can only be marked out of stock for draft or confirmed orders',
           );
         }
+
+        const deliverableItemCount = await manager.orderItem.count({
+          where: {
+            order_id: orderItem.order_id,
+            is_out_of_stock: false,
+          },
+        });
+        const shouldCancelOrder =
+          !orderItem.is_out_of_stock && deliverableItemCount === 1;
 
         const savedItem = (await manager.orderItem.update({
           where: { id: orderItem.id },
@@ -1461,11 +1514,25 @@ export class OrdersService {
           manager,
         );
 
-        return savedItem;
+        const cancelledOrder = shouldCancelOrder
+          ? await this.cancelOrderWithinTransaction(
+              manager,
+              orderItem.order,
+              'جميع منتجات الطلب غير متوفرة',
+              actor,
+            )
+          : null;
+
+        return { savedItem, cancelledOrder };
       },
     );
+
+    if (result.cancelledOrder) {
+      await this.notifyCustomerStatusChange(result.cancelledOrder);
+    }
+
     await this.bumpDashboardCacheVersion(tenantId);
-    return savedItem;
+    return result.savedItem;
   }
 
   async findByPublicToken(token: string): Promise<Order> {
@@ -1483,7 +1550,9 @@ export class OrdersService {
         delivery_area: true,
         order_dispatch: {
           include: {
-            zone_storefront: { select: { id: true, name: true, slug: true } },
+            zone_storefront: {
+              select: { id: true, name: true, slug: true, is_active: true },
+            },
             assignments: {
               where: { status: 'accepted' },
               select: {
@@ -1524,7 +1593,9 @@ export class OrdersService {
         delivery_area: true,
         order_dispatch: {
           include: {
-            zone_storefront: { select: { id: true, name: true, slug: true } },
+            zone_storefront: {
+              select: { id: true, name: true, slug: true, is_active: true },
+            },
             assignments: {
               where: { status: 'accepted' },
               select: {
@@ -1575,7 +1646,10 @@ export class OrdersService {
             id: dispatch.zone_storefront.id,
             name: dispatch.zone_storefront.name,
             slug: dispatch.zone_storefront.slug,
-            reorder_url: `/market/${dispatch.zone_storefront.slug}`,
+            reorder_url: resolveZoneStorefrontReorderUrl({
+              slug: dispatch.zone_storefront.slug,
+              isActive: dispatch.zone_storefront.is_active,
+            }),
           }
         : null,
       fulfilled_by:
@@ -1957,6 +2031,104 @@ export class OrdersService {
         `Invalid status transition from ${current} to ${next}`,
       );
     }
+  }
+
+  /** Applies every persisted side effect of an order cancellation in one transaction. */
+  private async cancelOrderWithinTransaction(
+    manager: Prisma.TransactionClient,
+    order: Pick<Order, 'id' | 'tenant_id' | 'status'>,
+    cancellationReason?: string,
+    actor?: OrderActivityActor,
+    additionalData: Prisma.OrderUpdateInput = {},
+  ): Promise<OrderWithItemsPayload> {
+    const previousStatus = order.status as unknown as OrderStatus;
+    this.validateStatusTransition(previousStatus, OrderStatus.CANCELLED);
+
+    const normalizedReason =
+      this.normalizeOptionalReason(cancellationReason);
+    const cancelledAt = new Date();
+    const updatedOrder = await manager.order.update({
+      where: { id: order.id },
+      data: {
+        ...additionalData,
+        status: OrderStatus.CANCELLED,
+        merchant_cancellation_reason: normalizedReason,
+        merchant_cancelled_at: cancelledAt,
+      },
+      include: {
+        customer: true,
+        order_items: {
+          include: {
+            replaced_by_product: true,
+            pending_replacement_product: true,
+          },
+        },
+        tenant: true,
+        delivery_area: true,
+      },
+    });
+
+    const dispatch = await manager.orderDispatch.findUnique({
+      where: { order_id: order.id },
+      select: { id: true },
+    });
+    if (dispatch) {
+      await manager.orderDispatch.update({
+        where: { id: dispatch.id },
+        data: {
+          status: 'cancelled',
+          cancellation_reason: normalizedReason,
+          cancelled_by_admin_id: actor?.adminId ?? null,
+          cancelled_at: cancelledAt,
+          version: { increment: 1 },
+        },
+      });
+      await manager.orderDispatchAssignment.updateMany({
+        where: { order_dispatch_id: dispatch.id, is_current: true },
+        data: {
+          status: 'cancelled',
+          is_current: false,
+          responded_at: cancelledAt,
+          version: { increment: 1 },
+        },
+      });
+    } else {
+      await this.tenantCancellationPolicyService.recordMerchantCancellation(
+        order.tenant_id,
+        order.id,
+        manager,
+        actor?.adminId ? 'admin' : 'merchant',
+      );
+    }
+
+    const oldStatusLabel = formatKnownValueAr(
+      ORDER_STATUS_LABELS_AR,
+      previousStatus,
+    );
+    const cancelledStatusLabel = formatKnownValueAr(
+      ORDER_STATUS_LABELS_AR,
+      OrderStatus.CANCELLED,
+    );
+    await this.activityLogService.create(
+      {
+        tenantId: order.tenant_id,
+        ...this.toActivityActorFields(actor),
+        entityType: ActivityEntityTypes.Order,
+        entityId: order.id,
+        action: ActivityActions.OrderCancelled,
+        title: 'تم تغيير حالة الطلب',
+        description: `تم تغيير حالة الطلب من ${oldStatusLabel} إلى ${cancelledStatusLabel}`,
+        oldValues: { status: previousStatus },
+        newValues: { status: OrderStatus.CANCELLED },
+        metadata: {
+          cancellation_reason_provided: Boolean(cancellationReason?.trim()),
+        },
+        source: actor?.source ?? ActivitySources.Dashboard,
+      },
+      manager,
+    );
+
+    return updatedOrder as OrderWithItemsPayload;
   }
 
   /**

@@ -118,10 +118,13 @@ export default function CustomerAccessOrdersLookup({
       order?.total !== null && order?.total !== undefined
         ? formatCurrency(Number(order.total) || 0)
         : "يتم تأكيد السعر";
-    const reorderBase = order?.zone_storefront?.reorder_url
-      ?? (slug.startsWith("market:")
-        ? `/market/${slug.slice("market:".length)}`
-        : `/${slug}`);
+    const isZoneOrder =
+      Boolean(order?.zone_storefront) || slug.startsWith("market:");
+    const reorderBase = isZoneOrder
+      ? order?.zone_storefront?.reorder_url ?? null
+      : slug
+        ? `/${slug}`
+        : null;
 
     return (
       <div
@@ -165,7 +168,7 @@ export default function CustomerAccessOrdersLookup({
               تفاصيل التتبع
             </Link>
           )}
-          {(slug || order?.zone_storefront) && (
+          {reorderBase && (
             <Link
               href={`${reorderBase}?reorder=${token}`}
               className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-brand-border bg-white px-4 py-2 text-sm font-semibold text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"

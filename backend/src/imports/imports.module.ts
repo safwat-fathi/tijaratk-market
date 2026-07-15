@@ -3,6 +3,7 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
 import { ImportsController } from './imports.controller';
 import { ImportsService } from './imports.service';
+import { CatalogImportImageService } from './services/catalog-import-image.service';
 import { ImageDownloaderService } from './services/image-downloader.service';
 
 /**
@@ -11,6 +12,11 @@ import { ImageDownloaderService } from './services/image-downloader.service';
 @Module({
   imports: [PrismaModule],
   controllers: [ImportsController],
-  providers: [ImportsService, ImageDownloaderService, ImageProcessorService],
+  providers: [
+    ImportsService,
+    CatalogImportImageService,
+    ImageDownloaderService,
+    ImageProcessorService,
+  ],
 })
 export class ImportsModule {}

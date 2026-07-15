@@ -1,7 +1,8 @@
 'use client';
 
 import { useDebounce } from 'use-debounce';
-import { useEffect, useMemo, memo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   markOrderItemOutOfStockAction,
   replaceOrderItemAction,
@@ -12,12 +13,19 @@ import {
   createProductAction,
   searchTenantProductsAction,
 } from '@/actions/product-actions';
-import ImageThumbnail from "@/components/ui/ImageThumbnail";
-import { formatCurrency } from '@/lib/utils/currency';
+import BottomSheet from '@/components/ui/BottomSheet';
+import { Button } from '@/components/ui/Button';
+import {
+  getReplacementButtonLabel,
+  ItemPriceEditor,
+  MAX_ITEM_PRICE,
+  OrderItemActionCard,
+  OrderItemBottomSheet,
+  ReplacementProductResults,
+  ReplacementSearchField,
+} from '@/components/orders/OrderItemManagementUI';
 import { useBodyScrollLock } from '@/lib/hooks/useBodyScrollLock';
 import { useDragToClose } from '@/lib/hooks/useDragToClose';
-import { getImageUrl } from '@/lib/utils/image';
-import { formatArabicQuantity } from '@/lib/utils/number';
 import { OrderStatus, ReplacementDecisionStatus } from '@/types/enums';
 import { OrderItem } from '@/types/models/order';
 import { Product } from '@/types/models/product';
@@ -27,8 +35,6 @@ const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_RESULTS_LIMIT = 20;
 const MAX_SEARCH_LENGTH = 120;
 const MAX_PRODUCT_NAME_LENGTH = 120;
-const MAX_ITEM_PRICE = 99_999.99;
-const PRICE_CHIP_VALUES = [10, 20, 50, 100] as const;
 
 type OrderItemsReplacementProps = {
   orderId: number;
@@ -36,49 +42,6 @@ type OrderItemsReplacementProps = {
   initialItems: OrderItem[];
   products: Product[];
 };
-
-const ProductThumbnail = memo(({
-  imageUrl,
-  name,
-  size = 36,
-}: {
-  imageUrl?: string | null;
-  name: string;
-  size?: number;
-}) => {
-  if (imageUrl?.trim()) {
-    return (
-			<ImageThumbnail
-				src={getImageUrl(imageUrl)}
-				alt={name}
-				width={size}
-				height={size}
-				unoptimized
-				imageClassName="rounded-lg border border-gray-200 bg-gray-50 object-cover"
-				thumbnailWrapperClassName={`h-[${size}px] w-[${size}px]`}
-				fallback={
-					<div
-						className="flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-[10px] text-gray-500"
-						style={{ width: size, height: size }}
-					>
-						🛒
-					</div>
-				}
-			/>
-		);
-  }
-
-  return (
-    <div
-      className="flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-[10px] text-gray-500"
-      style={{ width: size, height: size }}
-    >
-      🛒
-    </div>
-  );
-});
-
-ProductThumbnail.displayName = 'ProductThumbnail';
 
 const normalizeCategory = (value?: string | null) => {
   const normalizedValue = value?.trim();
@@ -124,24 +87,6 @@ const loadReplacementOptions = async ({
 	};
 };
 
-const getReplacementButtonLabel = ({
-  decisionStatus,
-  replacementProductName,
-}: {
-  decisionStatus: ReplacementDecisionStatus;
-  replacementProductName?: string;
-}) => {
-  if (decisionStatus === ReplacementDecisionStatus.PENDING) {
-    return 'تعديل البديل المقترح';
-  }
-
-  if (replacementProductName) {
-    return 'تغيير البديل';
-  }
-
-  return 'استبدال المنتج';
-};
-
 export default function OrderItemsReplacement({
   orderId,
   orderStatus,
@@ -166,9 +111,13 @@ export default function OrderItemsReplacement({
   const [priceInput, setPriceInput] = useState('');
   const [priceError, setPriceError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [outOfStockConfirmationItemId, setOutOfStockConfirmationItemId] =
+    useState<number | null>(null);
+  const [outOfStockError, setOutOfStockError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [debouncedSearch] = useDebounce(searchQuery, SEARCH_DEBOUNCE_MS);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const router = useRouter();
   useBodyScrollLock(Boolean(activeSheet));
 
   const closeSheet = () => {
@@ -204,6 +153,15 @@ export default function OrderItemsReplacement({
   const activeItem = useMemo(
     () => items.find((item) => item.id === activeItemId) || null,
     [activeItemId, items],
+  );
+  const deliverableItemCount = useMemo(
+    () => items.filter((item) => !item.is_out_of_stock).length,
+    [items],
+  );
+  const outOfStockConfirmationItem = useMemo(
+    () =>
+      items.find((item) => item.id === outOfStockConfirmationItemId) || null,
+    [items, outOfStockConfirmationItemId],
   );
   const activeItemExcludedProductIds = useMemo(() => {
 		if (!activeItem) {
@@ -655,6 +613,45 @@ export default function OrderItemsReplacement({
     });
   };
 
+  const closeOutOfStockConfirmation = () => {
+    if (isPending) {
+      return;
+    }
+
+    setOutOfStockConfirmationItemId(null);
+    setOutOfStockError(null);
+  };
+
+  const submitMarkOutOfStock = (item: OrderItem, cancelsOrder: boolean) => {
+    setOutOfStockError(null);
+
+    startTransition(async () => {
+      const response = await markOrderItemOutOfStockAction(orderId, item.id);
+
+      if (!response.success) {
+        const errorMessage =
+          response.error || 'تعذر تحديد الصنف كغير متوفر';
+        if (cancelsOrder) {
+          setOutOfStockError(errorMessage);
+        } else {
+          setFeedback(errorMessage);
+        }
+        return;
+      }
+
+      applyOutOfStock(item.id);
+      if (cancelsOrder) {
+        setOutOfStockConfirmationItemId(null);
+        setOutOfStockError(null);
+        setFeedback('تم تحديد الصنف كغير متوفر وإلغاء الطلب');
+        router.refresh();
+        return;
+      }
+
+      setFeedback(`تم تحديد ${item.name_snapshot} كغير متوفر وإيقافه من المتجر`);
+    });
+  };
+
   const handleMarkOutOfStock = (item: OrderItem) => {
     if (!canMarkOutOfStock) {
       setFeedback('تحديد عدم التوفر متاح في حالتي جديد ومؤكد فقط');
@@ -666,21 +663,13 @@ export default function OrderItemsReplacement({
       return;
     }
 
-    startTransition(async () => {
-      const response = await markOrderItemOutOfStockAction(orderId, item.id);
+    if (deliverableItemCount === 1) {
+      setOutOfStockConfirmationItemId(item.id);
+      setOutOfStockError(null);
+      return;
+    }
 
-      if (!response.success) {
-        setFeedback(response.error || 'تعذر تحديد الصنف كغير متوفر');
-        return;
-      }
-
-      applyOutOfStock(item.id);
-      setFeedback(`تم تحديد ${item.name_snapshot} كغير متوفر وإيقافه من المتجر`);
-    });
-  };
-
-  const formatLinePrice = (value: number | string | null | undefined) => {
-    return formatCurrency(value) || 'غير محدد';
+    submitMarkOutOfStock(item, false);
   };
 
   const getItemDecisionStatus = (item: OrderItem) =>
@@ -703,8 +692,6 @@ export default function OrderItemsReplacement({
 			<div className="space-y-3">
 				{items.length > 0 ? (
 					items.map(item => {
-						const replacementProduct = item.replaced_by_product;
-						const pendingProduct = item.pending_replacement_product;
 						const decisionStatus = getItemDecisionStatus(item);
 						const isDecisionLocked =
 							decisionStatus === ReplacementDecisionStatus.APPROVED ||
@@ -712,141 +699,39 @@ export default function OrderItemsReplacement({
 						const isOutOfStock = Boolean(item.is_out_of_stock);
 
 						return (
-							<div
+							<OrderItemActionCard
 								key={item.id}
-								className={`rounded-xl border p-3 ${
-									isOutOfStock
-										? "border-red-200 bg-red-50/50"
-										: "border-gray-200"
-								}`}
-							>
-								<div className="flex justify-between gap-3">
-									<div>
-										<div className="flex flex-wrap items-center gap-2">
-											<p className="font-semibold text-gray-900">
-												{item.name_snapshot}
-											</p>
-											{isOutOfStock && (
-												<span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
-													غير متوفر
-												</span>
-											)}
-										</div>
-										<p className="text-sm text-gray-500">
-											الكمية:{" "}
-											{formatArabicQuantity(item.quantity) || item.quantity}
-										</p>
-										<p className="mt-1 text-sm font-semibold text-gray-800">
-											السعر:{" "}
-											{isOutOfStock
-												? "محذوف من الإجمالي"
-												: formatLinePrice(item.total_price)}
-										</p>
-									</div>
-								</div>
-
-								<div className="mt-3 grid grid-cols-3 gap-2">
-									<button
-										type="button"
-										onClick={() => openReplacementSheet(item.id)}
-										disabled={isDecisionLocked || !canEditItemReplacement}
-										className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-									>
-										{getReplacementButtonLabel({
-											decisionStatus,
-											replacementProductName: replacementProduct?.name,
-										})}
-									</button>
-
-									<button
-										type="button"
-										onClick={() => openPriceSheet(item.id)}
-										disabled={!canEditItemPrice || isOutOfStock}
-										className="rounded-md bg-brand-primary px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-									>
-										تسعير المنتج
-									</button>
-
-									<button
-										type="button"
-										onClick={() => handleMarkOutOfStock(item)}
-										disabled={!canMarkOutOfStock || isPending || isOutOfStock}
-										className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-									>
-										غير متوفر
-									</button>
-								</div>
-
-								{!canEditItemPrice && (
-									<p className="mt-2 text-xs text-gray-500">
-										تعديل السعر متاح في حالتي جديد ومؤكد فقط
-									</p>
-								)}
-
-								{!canEditItemReplacement && (
-									<p className="mt-2 text-xs text-gray-500">
-										الاستبدال متاح في حالتي جديد ومؤكد فقط
-									</p>
-								)}
-
-								{isOutOfStock && (
-									<p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700">
-										تم حذف الصنف من إجمالي الطلب وإيقاف المنتج من المتجر.
-									</p>
-								)}
-
-								{decisionStatus === ReplacementDecisionStatus.PENDING &&
-									pendingProduct?.name && (
-										<div className="mt-2 flex items-center gap-2 text-sm font-medium text-amber-700">
-											<ProductThumbnail
-												imageUrl={pendingProduct?.image_url}
-												name={pendingProduct.name}
-												size={28}
-											/>
-											<p>بانتظار موافقة العميل على: {pendingProduct.name}</p>
-										</div>
-									)}
-
-								{decisionStatus === ReplacementDecisionStatus.APPROVED &&
-									replacementProduct?.name && (
-										<div className="mt-2 flex items-center gap-2 text-sm font-medium text-green-700">
-											<ProductThumbnail
-												imageUrl={replacementProduct?.image_url}
-												name={replacementProduct.name}
-												size={28}
-											/>
-											<p>وافق العميل على البديل: {replacementProduct.name}</p>
-										</div>
-									)}
-
-								{decisionStatus === ReplacementDecisionStatus.REJECTED && (
-									<div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-										<p>رفض العميل البديل المقترح.</p>
-										{item.replacement_decision_reason && (
-											<p className="mt-1 text-xs text-red-600">
-												السبب: {item.replacement_decision_reason}
-											</p>
-										)}
-									</div>
-								)}
-
-								{isDecisionLocked && (
-									<button
-										type="button"
-										onClick={() => handleResetReplacementDecision(item.id)}
-										disabled={isPending || !canEditItemReplacement}
-										className="mt-3 w-full rounded-md border border-brand-border bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-primary disabled:opacity-60"
-									>
-										إعادة فتح قرار الاستبدال
-									</button>
-								)}
-
-								{item.notes && (
-									<p className="mt-2 text-xs text-amber-700">
-										ملاحظة: {item.notes}
-									</p>
-								)}
-							</div>
+								item={item}
+								replacementAction={{
+									label: getReplacementButtonLabel(item),
+									disabled:
+										isDecisionLocked || !canEditItemReplacement,
+									onClick: () => openReplacementSheet(item.id),
+								}}
+								priceAction={{
+									label: "تسعير المنتج",
+									disabled: !canEditItemPrice || isOutOfStock,
+									onClick: () => openPriceSheet(item.id),
+								}}
+								unavailableAction={{
+									label: "غير متوفر",
+									disabled:
+										!canMarkOutOfStock || isPending || isOutOfStock,
+									onClick: () => handleMarkOutOfStock(item),
+								}}
+								helperMessages={[
+									...(!canEditItemPrice
+										? ["تعديل السعر متاح في حالتي جديد ومؤكد فقط"]
+										: []),
+									...(!canEditItemReplacement
+										? ["الاستبدال متاح في حالتي جديد ومؤكد فقط"]
+										: []),
+								]}
+								onResetDecision={() =>
+									handleResetReplacementDecision(item.id)
+								}
+								resetDisabled={isPending || !canEditItemReplacement}
+							/>
 						);
 					})
 				) : (
@@ -854,103 +739,33 @@ export default function OrderItemsReplacement({
 				)}
 			</div>
 
-			{activeItem && activeSheet && (
-				<div
-					className="fixed inset-0 z-50 bg-black/40"
-					role="dialog"
-					aria-modal="true"
+			{activeItem && activeSheet ? (
+				<OrderItemBottomSheet
+					item={activeItem}
+					kind={activeSheet}
+					isSearchFocused={isSearchFocused}
+					sheetRef={sheetRef}
+					onClose={closeSheet}
+					headerContent={
+						activeSheet === "replacement" &&
+						activeItem.replacement_decision_status !==
+							ReplacementDecisionStatus.APPROVED &&
+						activeItem.replacement_decision_status !==
+							ReplacementDecisionStatus.REJECTED &&
+						canEditItemReplacement ? (
+							<ReplacementSearchField
+								value={searchQuery}
+								inputRef={searchInputRef}
+								maxLength={MAX_SEARCH_LENGTH}
+								onChange={setSearchQuery}
+								onClear={handleClearReplacementSearch}
+								onFocusChange={setIsSearchFocused}
+							/>
+						) : null
+					}
 				>
-					<button
-						type="button"
-						aria-label="close"
-						className="absolute inset-0 h-full w-full"
-						onClick={closeSheet}
-					/>
-
-					<div 
-						ref={sheetRef}
-						className={`absolute bottom-0 left-0 right-0 flex flex-col overflow-hidden rounded-t-xl bg-white shadow-float transition-[max-height,transform] duration-300 ${
-							isSearchFocused ? "max-h-[100dvh] h-[100dvh]" : "max-h-[85dvh]"
-						}`}
-					>
-						<div className="shrink-0 px-4 pb-2 pt-4 border-b border-gray-100">
-							<div className="mx-auto h-1.5 w-12 rounded-full bg-gray-300 mb-4" />
-							
-							{activeSheet === "replacement" && (
-								<div className="pb-2">
-									<h3 className="text-lg font-bold text-gray-900 leading-tight">
-										اختر المنتج البديل
-									</h3>
-									<p className="text-sm text-gray-500 mb-3">
-										بديل لـ: {activeItem.name_snapshot}
-									</p>
-
-									{activeItem.replacement_decision_status !==
-										ReplacementDecisionStatus.APPROVED &&
-										activeItem.replacement_decision_status !==
-											ReplacementDecisionStatus.REJECTED &&
-										canEditItemReplacement && (
-											<div className="relative">
-												<input
-													ref={searchInputRef}
-													value={searchQuery}
-													onFocus={() => setIsSearchFocused(true)}
-													onBlur={() => {
-														// Small delay to allow click on results before shrinking
-														setTimeout(() => setIsSearchFocused(false), 200);
-													}}
-													onChange={event =>
-														setSearchQuery(event.target.value)
-													}
-													maxLength={MAX_SEARCH_LENGTH}
-													placeholder="ابحث بالاسم..."
-											className="w-full rounded-md border border-brand-border bg-brand-soft/40 px-4 py-3 pe-10 text-sm font-medium focus:border-brand-accent focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
-												/>
-												{searchQuery && (
-													<button
-														type="button"
-														onClick={handleClearReplacementSearch}
-														aria-label="مسح البحث"
-														className="absolute inset-y-0 end-0 flex items-center pe-3 text-gray-400 transition-colors hover:text-gray-600"
-													>
-														<svg
-															className="h-5 w-5"
-															xmlns="http://www.w3.org/2000/svg"
-															fill="none"
-															viewBox="0 0 24 24"
-															stroke="currentColor"
-															strokeWidth={2}
-														>
-															<path
-																strokeLinecap="round"
-																strokeLinejoin="round"
-																d="M6 18L18 6M6 6l12 12"
-															/>
-														</svg>
-													</button>
-												)}
-											</div>
-										)}
-								</div>
-							)}
-
-							{activeSheet === "price" && (
-								<div className="pb-2">
-									<h3 className="text-lg font-bold text-gray-900 leading-tight">
-										تحديد سعر الصنف
-									</h3>
-									<p className="text-sm text-gray-500">
-										{activeItem.name_snapshot}
-									</p>
-								</div>
-							)}
-						</div>
-						<div
-							className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-2"
-							style={{ WebkitOverflowScrolling: "touch" }}
-						>
-							{activeSheet === "replacement" && (
-								<>
+					{activeSheet === "replacement" ? (
+						<>
 									{(activeItem.replacement_decision_status ===
 										ReplacementDecisionStatus.APPROVED ||
 										activeItem.replacement_decision_status ===
@@ -974,85 +789,23 @@ export default function OrderItemsReplacement({
 											ReplacementDecisionStatus.REJECTED &&
 										canEditItemReplacement && (
 											<>
-												<div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-													<p className="text-xs text-gray-400">
-														اكتب {MIN_SEARCH_CHARS} حرف على الأقل للبحث
-													</p>
-													{activeItemCategory && (
-														<p className="text-xs font-medium text-brand-primary">
-															الأولوية لقسم: {activeItemCategory}
-														</p>
-													)}
-												</div>
-
-												<div className="mt-4 space-y-2">
-													{!isTextSearchActive &&
-														replacementOptions.length > 0 && (
-															<p className="text-xs font-bold uppercase tracking-wider text-brand-primary">
-																منتجات مشابهة مقترحة
-															</p>
-														)}
-
-													{isReplacementResultsLoading && (
-														<div className="flex flex-col items-center justify-center rounded-2xl bg-gray-50/50 py-8">
-															<div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-primary border-t-transparent" />
-															<p className="mt-2 text-sm text-gray-500">
-																{isTextSearchActive
-																	? "جاري البحث..."
-																	: "جاري تحميل المقترحات..."}
-															</p>
-														</div>
-													)}
-
-													{!isReplacementResultsLoading &&
-														replacementResultsError && (
-															<p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-																{replacementResultsError}
-															</p>
-														)}
-
-													{!isReplacementResultsLoading &&
-														!replacementResultsError &&
-														replacementOptions.length === 0 && (
-															<p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
-																{!isTextSearchActive && activeItemCategory
-																	? `لا توجد نتائج مطابقة داخل قسم ${activeItemCategory}`
-																	: "لا توجد نتائج مطابقة"}
-															</p>
-														)}
-
-													{!isReplacementResultsLoading &&
-														!replacementResultsError &&
-														replacementOptions.map(product => (
-															<button
-																key={product.id}
-																type="button"
-																onClick={() =>
-																	handleSelectReplacement(
-																		activeItem.id,
-																		product,
-																	)
-																}
-																disabled={
-																	isPending || !canEditItemReplacement
-																}
-																className="flex w-full items-center justify-between rounded-xl border border-gray-200 px-3 py-3 text-start"
-															>
-																<span className="flex items-center gap-3">
-																	<ProductThumbnail
-																		imageUrl={product.image_url}
-																		name={product.name}
-																	/>
-																	<span className="font-medium text-gray-900">
-																		{product.name}
-																	</span>
-																</span>
-																<span className="text-xs text-gray-500">
-																	اختيار
-																</span>
-															</button>
-														))}
-												</div>
+												<ReplacementProductResults
+													options={replacementOptions}
+													loading={isReplacementResultsLoading}
+													error={replacementResultsError}
+													isTextSearchActive={isTextSearchActive}
+													category={activeItemCategory}
+													disabled={isPending || !canEditItemReplacement}
+													busyMessage={isPending ? "جاري حفظ البديل..." : undefined}
+													onSelect={option => {
+														const product = replacementOptions.find(
+															candidate => candidate.id === option.id,
+														);
+														if (product) {
+															handleSelectReplacement(activeItem.id, product);
+														}
+													}}
+												/>
 
 												<div className="mt-4 rounded-xl border border-gray-200 p-3">
 													<p className="text-sm font-semibold text-gray-800">
@@ -1109,74 +862,76 @@ export default function OrderItemsReplacement({
 											إعادة فتح قرار الاستبدال
 										</button>
 									)}
-								</>
-							)}
+						</>
+					) : (
+						<ItemPriceEditor
+							value={priceInput}
+							error={priceError}
+							disabled={isPending}
+							onChange={value => {
+								setPriceInput(value);
+								setPriceError(null);
+							}}
+							onSave={handleSaveLinePrice}
+						/>
+					)}
+				</OrderItemBottomSheet>
+			) : null}
 
-							{activeSheet === "price" && (
-								<>
-									<div className="mt-2 rounded-xl border border-gray-200 p-3">
-										<label className="mb-2 block text-sm font-medium text-gray-700">
-											السعر النهائي للصنف (ج.م)
-										</label>
-										<input
-											type="number"
-											inputMode="decimal"
-											min="0"
-											step="0.01"
-											value={priceInput}
-											onChange={event => {
-												setPriceInput(event.target.value);
-												setPriceError(null);
-											}}
-											placeholder="مثال: 45"
-											className="w-full rounded-md border border-brand-border px-3 py-3 text-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
-										/>
-										<p className="mt-2 text-xs text-gray-500">
-											سيتم حفظ السعر كإجمالي هذا الصنف.
-										</p>
-									</div>
-
-									<div className="mt-3">
-										<p className="mb-2 text-xs font-semibold text-gray-500">
-											أسعار سريعة
-										</p>
-										<div className="grid grid-cols-4 gap-2">
-											{PRICE_CHIP_VALUES.map(value => (
-												<button
-													key={value}
-													type="button"
-													onClick={() => {
-														setPriceInput(String(value));
-														setPriceError(null);
-													}}
-													className="rounded-lg border border-gray-300 px-2 py-2 text-sm font-semibold text-gray-700"
-												>
-													{value}
-												</button>
-											))}
-										</div>
-									</div>
-
-									{priceError && (
-										<p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-											{priceError}
-										</p>
-									)}
-
-									<button
-										type="button"
-										onClick={handleSaveLinePrice}
-										disabled={isPending}
-										className="mt-4 w-full rounded-md bg-brand-primary px-4 py-3 text-sm font-semibold text-white shadow-soft disabled:opacity-60"
-									>
-										حفظ السعر
-									</button>
-								</>
-							)}
-						</div>
+			<BottomSheet
+				isOpen={Boolean(outOfStockConfirmationItem)}
+				title="إلغاء الطلب؟"
+				closeLabel="رجوع"
+				onClose={closeOutOfStockConfirmation}
+				footer={
+					<div className="grid gap-2 pb-3 sm:grid-cols-2">
+						<Button
+							type="button"
+							variant="destructive"
+							className="min-h-12 w-full sm:order-2"
+							disabled={isPending || !outOfStockConfirmationItem}
+							onClick={() => {
+								if (outOfStockConfirmationItem) {
+									submitMarkOutOfStock(outOfStockConfirmationItem, true);
+								}
+							}}
+						>
+							{isPending
+								? "جاري الإلغاء..."
+								: "تحديد غير متوفر وإلغاء الطلب"}
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							className="min-h-12 w-full sm:order-1"
+							disabled={isPending}
+							onClick={closeOutOfStockConfirmation}
+						>
+							رجوع
+						</Button>
 					</div>
+				}
+			>
+				<div className="space-y-4 text-right">
+					<div className="rounded-xl border border-status-error/20 bg-status-error/10 p-3">
+						<p className="text-sm font-semibold text-status-error">
+							هذا هو الصنف الأخير المتاح في الطلب. إذا تابعت، سيتم إلغاء
+							الطلب بالكامل.
+						</p>
+						{outOfStockConfirmationItem && (
+							<p className="mt-2 text-sm text-status-error/80">
+								الصنف: {outOfStockConfirmationItem.name_snapshot}
+							</p>
+						)}
+					</div>
+
+					{outOfStockError && (
+						<p className="rounded-lg border border-status-error/20 bg-status-error/10 px-3 py-2 text-sm font-semibold text-status-error">
+							{outOfStockError}
+						</p>
+					)}
 				</div>
-			)}
-		</section>
+			</BottomSheet>
+			</section>
 	);
 }

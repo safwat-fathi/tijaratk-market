@@ -116,6 +116,8 @@ async function upsertTenant(
   tx: Prisma.TransactionClient,
   merchant: RankingSeedMerchant,
 ) {
+  const onboardingCompleted = merchant.variant === 'complete_100_products';
+  const onboardingStep = onboardingCompleted ? 6 : 1;
   const existingTenant = await tx.tenant.findFirst({
     where: {
       OR: [{ phone: merchant.phone }, { slug: merchant.slug }],
@@ -134,6 +136,8 @@ async function upsertTenant(
         delivery_available: true,
         delivery_starts_at: '09:00',
         delivery_ends_at: '22:00',
+        onboarding_completed: onboardingCompleted,
+        onboarding_step: onboardingStep,
       },
     });
   }
@@ -148,6 +152,8 @@ async function upsertTenant(
       delivery_available: true,
       delivery_starts_at: '09:00',
       delivery_ends_at: '22:00',
+      onboarding_completed: onboardingCompleted,
+      onboarding_step: onboardingStep,
     },
   });
 }

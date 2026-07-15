@@ -27,6 +27,7 @@ export const ActivityActions = {
   ManagementSessionStarted: 'management_session.started',
   ManagementSessionEnded: 'management_session.ended',
   ZoneStorefrontCreated: 'zone_storefront.created',
+  ZoneStorefrontCatalogSynced: 'zone_storefront.catalog_synced',
   ZoneStorefrontActivationChanged: 'zone_storefront.activation_changed',
   ZoneStorefrontMerchantChanged: 'zone_storefront.merchant_changed',
   OrderDispatchCreated: 'order_dispatch.created',

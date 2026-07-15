@@ -20,6 +20,7 @@ import {
   ApiBody,
   ApiConsumes,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -40,6 +41,7 @@ import { RejectOrderByCustomerDto } from './dto/reject-order-by-customer.dto';
 import { ResetOrderItemReplacementDto } from './dto/reset-order-item-replacement.dto';
 import { Request } from 'express';
 import { OrderSource } from '../../generated/prisma/client';
+import { OrderInboxSummaryDto } from './dto/order-inbox-summary.dto';
 
 @ApiTags('Orders')
 @Controller('orders')
@@ -233,6 +235,37 @@ export class OrdersController {
     return this.ordersService.findByPublicTokens(tokens);
   }
 
+  @Get('inbox-summary')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiOperation({
+    summary: 'Get exact merchant order inbox counters',
+    description:
+      'Returns owned status counts, current assigned counts, and the combined new/actionable count.',
+  })
+  @ApiQuery({
+    name: 'date',
+    required: false,
+    type: String,
+    format: 'date',
+    example: '2026-07-15',
+    description:
+      'Optional Cairo calendar date applied only to merchant-owned order counts.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Merchant order inbox counters returned',
+    type: OrderInboxSummaryDto,
+  })
+  getInboxSummary(@Req() req: Request, @Query('date') date?: string) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.ordersService.getInboxSummary(tenantId, date);
+  }
+
   @Get(':id')
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
@@ -411,7 +444,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Mark order item out of stock',
     description:
-      'Marks a merchant order item unavailable, removes it from order totals, and disables the linked product',
+      'Marks a merchant order item unavailable, removes it from order totals, disables the linked product, and cancels the order when no deliverable items remain',
   })
   @ApiResponse({
     status: HttpStatus.OK,

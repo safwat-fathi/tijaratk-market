@@ -3,20 +3,20 @@ import { notFound } from "next/navigation";
 import {
   acceptAssignedOrderAction,
   rejectAssignedOrderAction,
-  resetAssignedReplacementAction,
   updateAssignedOrderStatusAction,
-  updateAssignedQuoteAction,
-  updateAssignedReplacementAction,
 } from "@/actions/assigned-orders";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { assignedOrdersService } from "@/services/api/assigned-orders.service";
+import AssignedOrderItems from "./_components/AssignedOrderItems";
 
 export const dynamic = "force-dynamic";
 
 type AssignedOrderPageProps = { params: Promise<{ dispatchId: string }> };
 
-export default async function AssignedOrderPage({ params }: AssignedOrderPageProps) {
+export default async function AssignedOrderPage({
+  params,
+}: AssignedOrderPageProps) {
   const dispatchId = Number((await params).dispatchId);
   if (!Number.isInteger(dispatchId) || dispatchId <= 0) notFound();
   const response = await assignedOrdersService.getAssignedOrder(dispatchId);
@@ -32,14 +32,46 @@ export default async function AssignedOrderPage({ params }: AssignedOrderPagePro
     ? await assignedOrdersService.getReplacementProducts(dispatchId)
     : null;
   const replacementProducts = replacementProductsResponse?.data ?? [];
-  const quoteByItem = new Map(assignment.quote_lines.map((line) => [line.order_item_id, line]));
+  const quoteByItem = new Map(
+    assignment.quote_lines.map((line) => [line.order_item_id, line]),
+  );
+  const quoteSubtotal = (dispatch.order.order_items ?? []).reduce(
+    (sum, item) =>
+      item.is_out_of_stock
+        ? sum
+        : sum +
+          Number(
+            quoteByItem.get(item.id)?.total_price ?? item.total_price ?? 0,
+          ),
+    0,
+  );
+  const quotedTotal =
+    Math.round(
+      (quoteSubtotal +
+        Number(dispatch.order.delivery_fee || 0) +
+        Number.EPSILON) *
+        100,
+    ) / 100;
+  const displayedTotal = isPending
+    ? quotedTotal
+    : Number(dispatch.order.total || 0);
 
   return (
     <div className="space-y-5 pb-12">
       <div>
-        <Link href="/merchant/assigned-orders" className="text-sm text-brand-primary hover:underline">الرجوع إلى الطلبات المسندة</Link>
-        <h1 className="mt-2 text-2xl font-bold text-brand-text">طلب #{dispatch.order.id}</h1>
-        <p className="text-sm text-muted-foreground">{dispatch.zone_storefront?.name} · {isPending ? "بانتظار قبولك" : "مقبول للتنفيذ"}</p>
+        <Link
+          href="/merchant/orders?tab=assigned"
+          className="text-sm text-brand-primary hover:underline"
+        >
+          الرجوع إلى الطلبات المسندة
+        </Link>
+        <h1 className="mt-2 text-2xl font-bold text-brand-text">
+          طلب #{dispatch.order.id}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {dispatch.zone_storefront?.name} ·{" "}
+          {isPending ? "بانتظار قبولك" : "مقبول للتنفيذ"}
+        </p>
       </div>
 
       <Card className="p-5">
@@ -52,52 +84,21 @@ export default async function AssignedOrderPage({ params }: AssignedOrderPagePro
         </div>
       </Card>
 
-      <Card className="p-5">
-        <h2 className="font-bold text-brand-text">الأصناف والأسعار</h2>
-        <div className="mt-4 space-y-3">
-          {dispatch.order.order_items?.map((item) => {
-            const quote = quoteByItem.get(item.id);
-            return (
-              <div key={item.id} className="rounded-md border border-brand-border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div><p className="font-semibold text-brand-text">{item.name_snapshot}</p><p className="text-xs text-muted-foreground">الكمية: {item.quantity}</p></div>
-                  <span className="text-sm font-bold text-brand-text">{Number(quote?.total_price ?? item.total_price ?? 0).toLocaleString("ar-EG")} ج.م</span>
-                </div>
-                {isPending ? (
-                  <form action={updateAssignedQuoteAction.bind(null, dispatch.id, item.id)} className="mt-3 flex gap-2">
-                    <input type="hidden" name="expected_version" value={assignment.version} />
-                    <input name="total_price" type="number" min="0.01" step="0.01" required defaultValue={Number(quote?.total_price ?? item.total_price ?? 0)} className="min-w-0 flex-1 rounded-md border border-brand-border px-3 py-2" aria-label={`السعر الإجمالي لـ ${item.name_snapshot}`} />
-                    <Button type="submit" size="sm" variant="outline">حفظ السعر</Button>
-                  </form>
-                ) : null}
+      <AssignedOrderItems
+        dispatchId={dispatch.id}
+        assignment={assignment}
+        orderStatus={dispatch.order.status}
+        initialItems={dispatch.order.order_items ?? []}
+        replacementProducts={replacementProducts}
+      />
 
-                {canManageReplacements ? (
-                  <div className="mt-3 border-t border-brand-border pt-3">
-                    {item.replacement_decision_status !== "none" ? (
-                      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                        <span>حالة البديل: {item.replacement_decision_status}</span>
-                        <form action={resetAssignedReplacementAction.bind(null, dispatch.id, item.id)}><Button type="submit" size="sm" variant="ghost">إعادة ضبط</Button></form>
-                      </div>
-                    ) : (
-                      <form action={updateAssignedReplacementAction.bind(null, dispatch.id, item.id)} className="flex gap-2">
-                        <select name="replacement_product_id" required className="min-w-0 flex-1 rounded-md border border-brand-border bg-white px-3 py-2">
-                          <option value="">اختر البديل من الكتالوج المركزي</option>
-                          {replacementProducts.filter((product) => product.id !== item.product_id).map((product) => (
-                            <option key={product.id} value={product.id}>
-                              {product.name} · {Number(product.current_price || 0).toLocaleString("ar-EG")} ج.م
-                            </option>
-                          ))}
-                        </select>
-                        <Button type="submit" size="sm" variant="outline">اقتراح بديل</Button>
-                      </form>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+      <Card className="p-4">
+        <div className="flex justify-between font-bold text-brand-text">
+          <span>
+            {isPending ? "إجمالي عرض السعر الحالي" : "الإجمالي الحالي"}
+          </span>
+          <span>{displayedTotal.toLocaleString("ar-EG")} ج.م</span>
         </div>
-        <div className="mt-4 flex justify-between border-t border-brand-border pt-3 font-bold text-brand-text"><span>الإجمالي الحالي</span><span>{Number(dispatch.order.total || 0).toLocaleString("ar-EG")} ج.م</span></div>
       </Card>
 
       {isPending ? (

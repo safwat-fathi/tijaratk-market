@@ -4,6 +4,7 @@ import {
 	CloseDayResponse,
 	CreateOrderRequest,
 	DayCloseTodayStatusResponse,
+	MerchantOrderInboxSummary,
 } from "@/types/services/orders";
 
 class OrdersService extends HttpService {
@@ -14,6 +15,14 @@ class OrdersService extends HttpService {
 	public async getOrders(date?: string) {
 		const query = date ? `?date=${date}` : "";
 		return this.get<Order[]>(`${query}`, undefined, { authRequired: true });
+	}
+
+	public async getInboxSummary(date?: string) {
+		return this.get<MerchantOrderInboxSummary>(
+			"inbox-summary",
+			date ? { date } : undefined,
+			{ authRequired: true, cache: "no-store" },
+		);
 	}
 
 	public async getTodayDayCloseStatus() {

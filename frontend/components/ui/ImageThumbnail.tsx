@@ -3,6 +3,7 @@
 import { ComponentProps, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import SafeImage from './SafeImage';
+import { isAllowedImageSource } from '@/lib/image-source-policy';
 
 type ImageThumbnailProps = ComponentProps<typeof SafeImage> & {
   thumbnailWrapperClassName?: string;
@@ -28,7 +29,10 @@ export default function ImageThumbnail({ thumbnailWrapperClassName, disableEnlar
     };
   }, [isEnlarged]);
 
-  const isEnlargeable = typeof props.src === 'string' && props.src.trim().length > 0 && !disableEnlarge;
+  const isEnlargeable =
+    typeof props.src === 'string' &&
+    isAllowedImageSource(props.src) &&
+    !disableEnlarge;
 
   return (
     <>

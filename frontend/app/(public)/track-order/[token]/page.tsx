@@ -222,6 +222,11 @@ export default async function TrackOrder({ params }: Props) {
   if (!order) return notFound();
   const deliveryAreaLabel =
     order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
+  const reorderBase = order.zone_storefront
+    ? order.zone_storefront.reorder_url
+    : order.tenant?.slug
+      ? `/${order.tenant.slug}`
+      : null;
 
   return (
     <div className="overflow-hidden rounded-lg border border-brand-border bg-white shadow-soft">
@@ -249,9 +254,9 @@ export default async function TrackOrder({ params }: Props) {
                 <TrackingOrdersIcon />
                 كل طلباتي
               </Link>
-              {(order.zone_storefront?.reorder_url || order.tenant?.slug) && (
+              {reorderBase && (
                 <Link
-                  href={`${order.zone_storefront?.reorder_url ?? `/${order.tenant?.slug}`}?reorder=${order.public_token}`}
+                  href={`${reorderBase}?reorder=${order.public_token}`}
                   className="inline-flex min-h-10 items-center rounded-full border border-transparent bg-brand-primary px-3 py-1.5 text-xs font-medium text-white shadow-soft transition-colors hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
                 >
                   إعادة الطلب

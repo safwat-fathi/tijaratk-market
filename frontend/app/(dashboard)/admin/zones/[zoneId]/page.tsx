@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  startZoneDispatchSessionAction,
   startManagedStoreSessionAction,
   updateZoneActivationAction,
   upsertManagedTenantAccessAction,
@@ -9,7 +8,13 @@ import {
 } from "@/actions/admin-server";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import {
+  getAdminManagedPermissionLabel,
+} from "@/constants/admin-managed-permissions";
 import { adminService } from "@/services/api/admin.service";
+import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
+import { DispatchSessionForm } from "../_components/DispatchSessionForm";
+import { SyncEssentialCatalogButton } from "../_components/SyncEssentialCatalogButton";
 
 export const dynamic = "force-dynamic";
 
@@ -21,14 +26,27 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
   const zoneResponse = await adminService.getZone(zoneId);
   if (!zoneResponse.success || !zoneResponse.data) notFound();
   const zone = zoneResponse.data;
-  const [eligibleResponse, adminsResponse, accessesResponse] = await Promise.all([
+  const [
+    eligibleResponse,
+    adminsResponse,
+    accessesResponse,
+    profileResponse,
+  ] = await Promise.all([
     adminService.getEligibleZoneMerchants(zoneId),
     adminService.getAdminUsers(),
     adminService.getTenantAccesses(zone.operator_tenant.id),
+    adminService.getCurrentAdmin(),
   ]);
   const eligible = eligibleResponse.data ?? [];
   const admins = adminsResponse.data ?? [];
   const accesses = accessesResponse.data ?? [];
+  const currentAccess = accesses.find(
+    (access) => access.admin_user_id === profileResponse.data?.id,
+  );
+  const canStartDispatch = hasActiveManagedPermission(
+    currentAccess,
+    "dispatches.read",
+  );
 
   return (
     <div className="space-y-6">
@@ -47,9 +65,12 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
             <h2 className="font-bold text-gray-900">جاهزية الإطلاق</h2>
             <p className="text-sm text-gray-500">{zone.readiness.active_products} منتج · {zone.readiness.active_eligible_merchants} متجر مؤهل · المصدر {zone.readiness.catalog_source}</p>
           </div>
-          <form action={updateZoneActivationAction.bind(null, zone.id, !zone.is_active)}>
-            <Button type="submit" variant={zone.is_active ? "outline" : "primary"}>{zone.is_active ? "إيقاف الطلبات الجديدة" : "تفعيل المنطقة"}</Button>
-          </form>
+          <div className="flex flex-wrap gap-2">
+            <SyncEssentialCatalogButton zoneId={zone.id} />
+            <form action={updateZoneActivationAction.bind(null, zone.id, !zone.is_active)}>
+              <Button type="submit" variant={zone.is_active ? "outline" : "primary"}>{zone.is_active ? "إيقاف الطلبات الجديدة" : "تفعيل المنطقة"}</Button>
+            </form>
+          </div>
         </div>
       </Card>
 
@@ -93,16 +114,26 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
           <Button type="submit">منح صلاحيات الطلبات والتوزيع</Button>
         </form>
         <div className="mt-4 space-y-2 text-sm">
-          {accesses.filter((access) => access.is_active).map((access) => <p key={access.id}>{access.admin_user?.name} · {access.permissions.join("، ")}</p>)}
+          {accesses
+            .filter((access) => access.is_active)
+            .map((access) => (
+              <p key={access.id}>
+                {access.admin_user?.name} · {access.permissions
+                  .map(getAdminManagedPermissionLabel)
+                  .join("، ")}
+              </p>
+            ))}
         </div>
       </Card>
 
       <Card className="border-amber-200 bg-amber-50 p-5">
         <h2 className="font-bold text-amber-950">بدء جلسة توزيع</h2>
-        <form action={startZoneDispatchSessionAction.bind(null, zone.id, zone.operator_tenant.id)} className="mt-3 flex flex-col gap-3 sm:flex-row">
-          <input name="reason" required minLength={10} maxLength={500} className="flex-1 rounded-md border border-amber-300 px-3 py-2" placeholder="سبب الدخول إلى قائمة توزيع المنطقة" />
-          <Button type="submit">فتح قائمة التوزيع</Button>
-        </form>
+        <DispatchSessionForm
+          zoneId={zone.id}
+          tenantId={zone.operator_tenant.id}
+          canStart={canStartDispatch}
+          className="mt-3 flex flex-col gap-3 sm:flex-row"
+        />
         <form action={startManagedStoreSessionAction.bind(null, zone.operator_tenant.id)} className="mt-3 flex flex-col gap-3 border-t border-amber-200 pt-3 sm:flex-row">
           <input name="reason" required minLength={10} maxLength={500} className="flex-1 rounded-md border border-amber-300 px-3 py-2" placeholder="سبب إدارة الكتالوج المركزي" />
           <Button type="submit" variant="outline">إدارة كتالوج المشغل</Button>

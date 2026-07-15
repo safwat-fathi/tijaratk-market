@@ -58,6 +58,7 @@ model CatalogItem {
   last_seen_at       DateTime? @db.Timestamp(6)
 
   tenant_hidden_catalog_items TenantHiddenCatalogItem[]
+  products                    Product[]                @relation("CatalogItemProducts")
 
   @@unique([source, external_id], map: "UQ_catalog_items_source_external_id")
   @@index([source, is_essential, category], map: "IDX_catalog_items_source_essential_category")
@@ -308,6 +309,7 @@ model Product {
   deleted_at    DateTime?        @db.Timestamp(6)
   deleted_by_id Int?
   tenant_id     Int
+  catalog_item_id Int?
   id            Int              @id(map: "PK_0806c755e0aca124e67c0cf6d7d") @default(autoincrement())
   name          String           @db.VarChar
   image_url     String?
@@ -327,8 +329,11 @@ model Product {
   order_items_replaced            OrderItem[]           @relation("order_items_replaced_by_product_idToproducts")
   order_items_pending_replacement OrderItem[]           @relation("order_items_pending_replacement_product_idToproducts")
   product_price_history           ProductPriceHistory[]
+  catalog_item                    CatalogItem?          @relation("CatalogItemProducts", fields: [catalog_item_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_products_catalog_item_id")
   tenant                          Tenant                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_9c365ebf78f0e8a6d9e4827ea70")
 
+  @@unique([tenant_id, catalog_item_id], map: "UQ_products_tenant_catalog_item_id")
+  @@index([catalog_item_id], map: "IDX_products_catalog_item_id")
   @@index([tenant_id], map: "IDX_9c365ebf78f0e8a6d9e4827ea7")
   @@index([tenant_id], map: "IDX_products_tenant_active", where: raw("(status = 'active'::products_status_enum)"))
   @@index([tenant_id, status, category, created_at], map: "IDX_products_tenant_status_category_created_at")

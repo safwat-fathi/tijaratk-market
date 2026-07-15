@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { rm } from 'node:fs/promises';
 import {
   OrderDispatchAssignmentStatus,
   OrderDispatchStatus,
@@ -63,122 +64,136 @@ export class OrderDispatchService {
     dto: CreateOrderDto,
     prescriptionFile?: Express.Multer.File,
   ) {
-    const zone = await this.zoneStorefrontsService.requireCheckoutZone(slug);
-    if (dto.prescription_unavailability_action && !prescriptionFile) {
-      throw new BadRequestException('Prescription file is required');
-    }
-    if (prescriptionFile && zone.operator_tenant.category !== 'pharmacy') {
-      throw new BadRequestException(
-        'Prescription uploads are only available for pharmacy zones',
-      );
-    }
+    let zone: Awaited<
+      ReturnType<ZoneStorefrontsService['requireCheckoutZone']>
+    >;
+    let created: Awaited<ReturnType<OrdersService['createForTenantId']>>;
 
-    const catalogSource = resolveCatalogSourceForTenantCategory(
-      zone.operator_tenant.category,
-    );
-    if (!catalogSource) {
-      throw new BadRequestException('Unsupported zone category');
-    }
-    const allowedCategories = getAllowedCatalogCategoriesForSource(catalogSource);
-    if ((dto.items ?? []).some((item) => typeof item.product_id !== 'number')) {
-      throw new BadRequestException(
-        'Zone catalog items must reference an available product',
-      );
-    }
-    const productIds = Array.from(
-      new Set(
-        (dto.items ?? [])
-          .map((item) => item.product_id)
-          .filter((id): id is number => typeof id === 'number'),
-      ),
-    );
-    const trustedItems = dto.items?.map((item) => ({
-      product_id: item.product_id,
-      quantity: item.quantity,
-      notes: item.notes,
-      selection_quantity: item.selection_quantity,
-      selection_grams: item.selection_grams,
-      selection_amount_egp: item.selection_amount_egp,
-      unit_option_id: item.unit_option_id,
-    }));
-
-    const forcedDto: CreateOrderDto = {
-      ...dto,
-      items: trustedItems,
-      order_type: trustedItems?.length
-        ? OrderType.CATALOG
-        : OrderType.FREE_TEXT,
-      total: undefined,
-      delivery_area_id: zone.area_id,
-      delivery_area_slug: zone.area.slug,
-      delivery_fee: undefined,
-      order_source: OrderSource.zone_storefront,
-      source_metadata: {
-        zone_storefront_id: zone.id,
-        zone_slug: zone.slug,
-        area_id: zone.area_id,
-        area_slug: zone.area.slug,
-      },
-    };
-
-    const created = await this.zoneStorefrontsService.runInOperatorTenant(
-      zone.operator_tenant_id,
-      async (manager) => {
-        if (productIds.length > 0) {
-          const validProductCount = await manager.product.count({
-            where: {
-              id: { in: productIds },
-              tenant_id: zone.operator_tenant_id,
-              source: ProductSource.catalog,
-              status: ProductStatus.active,
-              is_available: true,
-              deleted_at: null,
-              category: { in: allowedCategories },
-            },
-          });
-          if (validProductCount !== productIds.length) {
-            throw new BadRequestException(
-              'One or more products are unavailable for this zone',
-            );
-          }
-        }
-
-        return this.ordersService.createForTenantId(
-          zone.operator_tenant_id,
-          forcedDto,
-          { source: ActivitySources.Storefront },
-          prescriptionFile,
-          {
-            skipPostCommitEffects: true,
-            afterPersist: async (transactionManager, order) => {
-              const dispatch = await transactionManager.orderDispatch.create({
-                data: {
-                  order_id: order.id,
-                  zone_storefront_id: zone.id,
-                  status: OrderDispatchStatus.pending,
-                },
-              });
-              await this.activityLogService.create(
-                {
-                  tenantId: zone.operator_tenant_id,
-                  entityType: ActivityEntityTypes.OrderDispatch,
-                  entityId: dispatch.id,
-                  action: ActivityActions.OrderDispatchCreated,
-                  title: 'تم إنشاء طلب منطقة في قائمة الإسناد',
-                  newValues: {
-                    order_id: order.id,
-                    status: dispatch.status,
-                    zone_storefront_id: zone.id,
-                  },
-                  source: ActivitySources.Storefront,
-                },
-                transactionManager,
-              );
-            },
-          },
+    try {
+      zone = await this.zoneStorefrontsService.requireCheckoutZone(slug);
+      if (dto.prescription_unavailability_action && !prescriptionFile) {
+        throw new BadRequestException('Prescription file is required');
+      }
+      if (prescriptionFile && zone.operator_tenant.category !== 'pharmacy') {
+        throw new BadRequestException(
+          'Prescription uploads are only available for pharmacy zones',
         );
-      },
-    );
+      }
+
+      const catalogSource = resolveCatalogSourceForTenantCategory(
+        zone.operator_tenant.category,
+      );
+      if (!catalogSource) {
+        throw new BadRequestException('Unsupported zone category');
+      }
+      const allowedCategories =
+        getAllowedCatalogCategoriesForSource(catalogSource);
+      if (
+        (dto.items ?? []).some((item) => typeof item.product_id !== 'number')
+      ) {
+        throw new BadRequestException(
+          'Zone catalog items must reference an available product',
+        );
+      }
+      const productIds = Array.from(
+        new Set(
+          (dto.items ?? [])
+            .map((item) => item.product_id)
+            .filter((id): id is number => typeof id === 'number'),
+        ),
+      );
+      const trustedItems = dto.items?.map((item) => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        notes: item.notes,
+        selection_quantity: item.selection_quantity,
+        selection_grams: item.selection_grams,
+        selection_amount_egp: item.selection_amount_egp,
+        unit_option_id: item.unit_option_id,
+      }));
+
+      const forcedDto: CreateOrderDto = {
+        ...dto,
+        items: trustedItems,
+        order_type: trustedItems?.length
+          ? OrderType.CATALOG
+          : OrderType.FREE_TEXT,
+        total: undefined,
+        delivery_area_id: zone.area_id,
+        delivery_area_slug: zone.area.slug,
+        delivery_fee: undefined,
+        order_source: OrderSource.zone_storefront,
+        source_metadata: {
+          zone_storefront_id: zone.id,
+          zone_slug: zone.slug,
+          area_id: zone.area_id,
+          area_slug: zone.area.slug,
+        },
+      };
+
+      created = await this.zoneStorefrontsService.runInOperatorTenant(
+        zone.operator_tenant_id,
+        async (manager) => {
+          if (productIds.length > 0) {
+            const validProductCount = await manager.product.count({
+              where: {
+                id: { in: productIds },
+                tenant_id: zone.operator_tenant_id,
+                catalog_item_id: { not: null },
+                source: ProductSource.catalog,
+                status: ProductStatus.active,
+                is_available: true,
+                deleted_at: null,
+                category: { in: allowedCategories },
+              },
+            });
+            if (validProductCount !== productIds.length) {
+              throw new BadRequestException(
+                'One or more products are unavailable for this zone',
+              );
+            }
+          }
+
+          return this.ordersService.createForTenantId(
+            zone.operator_tenant_id,
+            forcedDto,
+            { source: ActivitySources.Storefront },
+            prescriptionFile,
+            {
+              skipPostCommitEffects: true,
+              afterPersist: async (transactionManager, order) => {
+                const dispatch = await transactionManager.orderDispatch.create({
+                  data: {
+                    order_id: order.id,
+                    zone_storefront_id: zone.id,
+                    status: OrderDispatchStatus.pending,
+                  },
+                });
+                await this.activityLogService.create(
+                  {
+                    tenantId: zone.operator_tenant_id,
+                    entityType: ActivityEntityTypes.OrderDispatch,
+                    entityId: dispatch.id,
+                    action: ActivityActions.OrderDispatchCreated,
+                    title: 'تم إنشاء طلب منطقة في قائمة الإسناد',
+                    newValues: {
+                      order_id: order.id,
+                      status: dispatch.status,
+                      zone_storefront_id: zone.id,
+                    },
+                    source: ActivitySources.Storefront,
+                  },
+                  transactionManager,
+                );
+              },
+            },
+          );
+        },
+      );
+    } catch (error) {
+      await this.deleteUploadedFileQuietly(prescriptionFile);
+      throw error;
+    }
 
     const completeOrder = await this.zoneStorefrontsService.runInOperatorTenant(
       zone.operator_tenant_id,
@@ -553,7 +568,6 @@ export class OrderDispatchService {
         },
       },
       orderBy: { assigned_at: 'desc' },
-      take: 100,
     });
 
     const dispatches = await Promise.all(
@@ -613,6 +627,7 @@ export class OrderDispatchService {
           where: {
             tenant_id:
               assignment.order_dispatch.zone_storefront.operator_tenant_id,
+            catalog_item_id: { not: null },
             source: ProductSource.catalog,
             status: ProductStatus.active,
             is_available: true,
@@ -1024,6 +1039,7 @@ export class OrderDispatchService {
             where: {
               id: dto.replacement_product_id,
               tenant_id: operatorTenantId,
+              catalog_item_id: { not: null },
               source: ProductSource.catalog,
               status: ProductStatus.active,
               is_available: true,
@@ -1303,5 +1319,18 @@ export class OrderDispatchService {
   /** Normalizes all quote calculations to two decimal places. */
   private roundCurrency(value: number): number {
     return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  }
+
+  /** Removes an upload that failed before the order transaction took ownership. */
+  private async deleteUploadedFileQuietly(
+    prescriptionFile?: Express.Multer.File,
+  ): Promise<void> {
+    if (!prescriptionFile?.path) return;
+
+    try {
+      await rm(prescriptionFile.path, { force: true });
+    } catch {
+      // Best-effort cleanup must not hide the original checkout error.
+    }
   }
 }

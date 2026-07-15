@@ -63,6 +63,16 @@ export class ZoneStorefrontsController {
     private readonly orderDispatchService: OrderDispatchService,
   ) {}
 
+  /** Lists sanitized active and ready zones for public discovery. */
+  @Get('public')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'List public zone storefronts' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Public zones returned' })
+  findPublicZones() {
+    return this.zoneStorefrontsService.findPublic();
+  }
+
   /** Returns sanitized public zone identity and delivery configuration. */
   @Get('public/:slug')
   @UseGuards(ThrottlerGuard)
@@ -163,6 +173,19 @@ export class AdminZoneStorefrontsController {
   @ApiOperation({ summary: 'Get zone storefront details' })
   findOne(@Param('zoneId', ParseIntPipe) zoneId: number) {
     return this.zones.findOneForAdmin(zoneId);
+  }
+
+  /** Synchronizes the complete curated essential catalog into the zone. */
+  @Post(':zoneId/catalog/sync-essentials')
+  @ApiOperation({ summary: 'Synchronize curated essentials into a zone' })
+  syncEssentials(
+    @Req() request: ManagedAdminRequest,
+    @Param('zoneId', ParseIntPipe) zoneId: number,
+  ) {
+    return this.zones.syncEssentialCatalog(
+      zoneId,
+      this.toAdminActor(request),
+    );
   }
 
   /** Lists backend-verified merchant assignment candidates. */

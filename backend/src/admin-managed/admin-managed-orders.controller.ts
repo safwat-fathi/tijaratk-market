@@ -119,14 +119,18 @@ export class AdminManagedOrdersController {
     );
   }
 
-  /** Marks a line unavailable and disables its linked tenant product. */
+  /** Marks a line unavailable and cancels the order when no lines remain. */
   @Patch('items/:itemId/out-of-stock')
   @RequireManagedFeature('order_write')
   @RequireManagedPermissions(
     ADMIN_MANAGED_PERMISSIONS.OrdersUpdatePricing,
     ADMIN_MANAGED_PERMISSIONS.ProductsUpdateAvailability,
   )
-  @ApiOperation({ summary: 'Mark managed order item out of stock' })
+  @ApiOperation({
+    summary: 'Mark managed order item out of stock',
+    description:
+      'Disables the linked tenant product and cancels the order when no deliverable items remain',
+  })
   markOutOfStock(
     @CurrentAdminActor() actor: AdminActorContext,
     @Param('itemId', ParseIntPipe) itemId: number,

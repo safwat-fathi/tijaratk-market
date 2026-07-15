@@ -7,6 +7,11 @@ export type CatalogSource =
   | typeof CATALOG_SOURCE_TALABAT
   | typeof CATALOG_SOURCE_CHEFAA;
 
+export const TENANT_CATEGORIES_WITH_CATALOG_SOURCE = [
+  TenantCategory.grocery,
+  TenantCategory.pharmacy,
+] as const;
+
 export const ADMIN_CATALOG_TYPE_GROCERY = 'grocery';
 export const ADMIN_CATALOG_TYPE_PHARMACY = 'pharmacy';
 
@@ -79,6 +84,27 @@ const CATALOG_SOURCE_BY_IMPORT_FORMAT: Record<
   [CATALOG_IMPORT_FORMAT_TALABAT]: CATALOG_SOURCE_TALABAT,
   [CATALOG_IMPORT_FORMAT_CHEFAA]: CATALOG_SOURCE_CHEFAA,
   [CATALOG_IMPORT_FORMAT_CARREFOUR]: CATALOG_SOURCE_TALABAT,
+};
+
+type CatalogImageRemoteRule = {
+  hostname: string;
+  pathnamePrefix?: string;
+};
+
+const SHARED_CATALOG_IMAGE_HOSTS = new Set(['tijaratk.com']);
+const LOCAL_CATALOG_IMAGE_HOSTS = new Set(['localhost', '127.0.0.1']);
+const MANAGED_CATALOG_IMAGE_PATH_PREFIX = '/uploads/products/';
+
+const CATALOG_IMAGE_REMOTE_RULES_BY_SOURCE: Record<
+  CatalogSource,
+  CatalogImageRemoteRule[]
+> = {
+  [CATALOG_SOURCE_TALABAT]: [
+    { hostname: 'cdn.mafrservices.com' },
+    { hostname: 'talabat.dhmedia.io', pathnamePrefix: '/image/' },
+    { hostname: 'images.deliveryhero.io', pathnamePrefix: '/image/' },
+  ],
+  [CATALOG_SOURCE_CHEFAA]: [{ hostname: 'cdn.chefaa.com' }],
 };
 
 const RAW_CATALOG_CATEGORY_MAP: Record<string, string> = {
@@ -179,6 +205,91 @@ export function isCatalogCategoryAllowedForSource(
   }
 
   return false;
+}
+
+const parseConfiguredCatalogImageHost = (
+  appUrl?: string | null,
+): string | null => {
+  const normalizedAppUrl = appUrl?.trim();
+  if (!normalizedAppUrl) return null;
+
+  try {
+    const parsed = new URL(normalizedAppUrl);
+    if (parsed.protocol === 'https:') return parsed.hostname;
+    if (
+      parsed.protocol === 'http:' &&
+      LOCAL_CATALOG_IMAGE_HOSTS.has(parsed.hostname)
+    ) {
+      return parsed.hostname;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const isManagedCatalogImagePath = (imageReference: string): boolean => {
+  if (!imageReference.startsWith('/') || imageReference.startsWith('//')) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(imageReference, 'https://catalog.local');
+    return parsed.pathname.startsWith(MANAGED_CATALOG_IMAGE_PATH_PREFIX);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Returns whether an image reference is valid for the catalog source. Provider
+ * hosts remain source-specific so pharmacy and grocery catalogs cannot mix
+ * external asset sources.
+ */
+export function isCatalogImageReferenceAllowedForSource(
+  source: string,
+  imageReference?: string | null,
+  appUrl = process.env.APP_URL,
+): boolean {
+  const normalizedReference = imageReference?.trim();
+  if (!normalizedReference) return false;
+  if (isManagedCatalogImagePath(normalizedReference)) return true;
+
+  const sourceRules =
+    CATALOG_IMAGE_REMOTE_RULES_BY_SOURCE[source as CatalogSource];
+  if (!sourceRules) return false;
+
+  try {
+    const parsed = new URL(normalizedReference);
+    if (parsed.username || parsed.password) return false;
+
+    const isLocalHost = LOCAL_CATALOG_IMAGE_HOSTS.has(parsed.hostname);
+    if (
+      parsed.protocol !== 'https:' &&
+      !(parsed.protocol === 'http:' && isLocalHost)
+    ) {
+      return false;
+    }
+
+    const configuredAppHost = parseConfiguredCatalogImageHost(appUrl);
+    if (
+      SHARED_CATALOG_IMAGE_HOSTS.has(parsed.hostname) ||
+      isLocalHost ||
+      (configuredAppHost !== null && parsed.hostname === configuredAppHost)
+    ) {
+      return true;
+    }
+
+    return sourceRules.some(
+      (rule) =>
+        parsed.hostname === rule.hostname &&
+        (!rule.pathnamePrefix ||
+          parsed.pathname.startsWith(rule.pathnamePrefix)),
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**

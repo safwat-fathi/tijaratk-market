@@ -3,11 +3,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/Button";
+import { formatArabicInteger } from "@/lib/utils/number";
 
 export interface NavItem {
   label: string;
   href: string;
   icon?: React.ReactNode;
+  badgeCount?: number;
+  activePrefixes?: string[];
   children?: Omit<NavItem, "icon" | "children">[];
 }
 
@@ -52,6 +55,11 @@ function NavGroup({
         <div className="flex items-center gap-x-3">
           {item.icon}
           {item.label}
+          {item.badgeCount !== undefined && item.badgeCount > 0 ? (
+            <span className="rounded-full bg-brand-primary px-2 py-0.5 text-xs font-bold text-white">
+              {formatArabicInteger(item.badgeCount) || item.badgeCount}
+            </span>
+          ) : null}
         </div>
         <svg
           className={`h-4 w-4 shrink-0 transition-transform ${
@@ -84,6 +92,11 @@ function NavGroup({
                 }`}
               >
                 {child.label}
+                {child.badgeCount !== undefined && child.badgeCount > 0 ? (
+                  <span className="ms-2 rounded-full bg-brand-primary px-2 py-0.5 text-xs font-bold text-white">
+                    {formatArabicInteger(child.badgeCount) || child.badgeCount}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -113,8 +126,12 @@ export function DashboardSidebar({
   const activeHref = allNavItems
     .filter((item) => item.href && item.href !== "#")
     .sort((a, b) => b.href.length - a.href.length)
-    .find(
-      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+    .find((item) =>
+      pathname === item.href ||
+      pathname.startsWith(`${item.href}/`) ||
+      item.activePrefixes?.some(
+        (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+      ),
     )?.href;
 
   const isItemActive = (href: string) => {
@@ -165,6 +182,11 @@ export function DashboardSidebar({
             >
               {item.icon}
               {item.label}
+              {item.badgeCount !== undefined && item.badgeCount > 0 ? (
+                <span className="ms-auto rounded-full bg-brand-primary px-2 py-0.5 text-xs font-bold text-white">
+                  {formatArabicInteger(item.badgeCount) || item.badgeCount}
+                </span>
+              ) : null}
             </Link>
           );
         })}

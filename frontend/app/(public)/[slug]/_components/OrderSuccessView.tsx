@@ -7,7 +7,7 @@ type OrderSuccessViewProps = {
   tenantSlug: string;
   orderToken: string;
   customerAccessCode?: string;
-  newOrderHref?: string;
+  newOrderHref?: string | null;
   newOrderLabel?: string;
   successDescription?: string;
 };
@@ -250,13 +250,15 @@ export default function OrderSuccessView({
           عرض كل طلباتي
         </Link>
 
-        <Link
-          href={newOrderHref ?? `/${tenantSlug}`}
-          prefetch={true}
-          className="w-full rounded-md py-3.5 font-semibold text-muted-foreground transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
-        >
-          {newOrderLabel}
-        </Link>
+        {newOrderHref !== null && (
+          <Link
+            href={newOrderHref ?? `/${tenantSlug}`}
+            prefetch={true}
+            className="w-full rounded-md py-3.5 font-semibold text-muted-foreground transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+          >
+            {newOrderLabel}
+          </Link>
+        )}
       </div>
     </div>
   );

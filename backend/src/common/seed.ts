@@ -47,6 +47,7 @@ async function bootstrap() {
     logger.log('Seeding completed successfully.');
   } catch (error) {
     logger.error('Seeding error:', error);
+    process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
   }

@@ -8,6 +8,7 @@ import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { adminService } from "@/services/api/admin.service";
+import ManagedOutOfStockAction from "./ManagedOutOfStockAction";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,11 @@ export default async function ManagedOrderDetailsPage({
   const order = orderResponse.data;
   const products = productsResponse?.success ? productsResponse.data || [] : [];
   const activity = activityResponse?.success ? activityResponse.data?.items || [] : [];
+  const canMarkItemsOutOfStock =
+    order.status === "draft" || order.status === "confirmed";
+  const deliverableItemCount = order.items.filter(
+    (item) => !item.is_out_of_stock,
+  ).length;
 
   return (
     <div className="space-y-5">
@@ -110,10 +116,14 @@ export default async function ManagedOrderDetailsPage({
                   <Button type="submit" size="sm" variant="outline">حفظ السعر</Button>
                 </form>
               ) : null}
-              {permissions.has("orders.update_pricing") && permissions.has("products.update_availability") && !item.is_out_of_stock ? (
-                <form action={updateManagedOrderItemAction.bind(null, tenantId, orderId, item.id, "out-of-stock")}>
-                  <Button type="submit" size="sm" variant="outline">غير متوفر</Button>
-                </form>
+              {permissions.has("orders.update_pricing") && permissions.has("products.update_availability") && canMarkItemsOutOfStock && !item.is_out_of_stock ? (
+                <ManagedOutOfStockAction
+                  tenantId={tenantId}
+                  orderId={orderId}
+                  itemId={item.id}
+                  itemName={item.name_snapshot}
+                  requiresCancellationConfirmation={deliverableItemCount === 1}
+                />
               ) : null}
             </div>
 

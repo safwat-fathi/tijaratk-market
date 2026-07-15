@@ -1,5 +1,10 @@
 import { Order } from '../models/order';
-import { OrderSource, OrderType, UnavailableItemAction } from '../enums';
+import {
+  OrderSource,
+  OrderStatus,
+  OrderType,
+  UnavailableItemAction,
+} from '../enums';
 
 export interface CreateOrderRequest {
   customer: {
@@ -40,6 +45,16 @@ export interface OrderListResponse {
   page: number;
   last_page: number;
 }
+
+export type MerchantOrderInboxSummary = {
+  owned_status_counts: Record<OrderStatus, number>;
+  assigned_counts: {
+    pending: number;
+    accepted: number;
+    total: number;
+  };
+  new_orders_count: number;
+};
 
 export interface DayCloseSummary {
   orders_count: number;

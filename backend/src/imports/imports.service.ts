@@ -23,12 +23,16 @@ import {
 } from './schemas/catalog-import-row.schema';
 import { parse } from 'csv-parse';
 import {
+  type CatalogSource,
   isCatalogCategoryAllowedForSource,
   normalizeCatalogCategory,
   resolveCatalogSourceForImportFormat,
 } from 'src/products/catalog-source-policy';
 import { ImageProcessorService } from 'src/common/services/image-processor.service';
-import { ImageDownloaderService } from './services/image-downloader.service';
+import {
+  CatalogImportImageService,
+  type ExistingCatalogImageState,
+} from './services/catalog-import-image.service';
 import { parseBooleanLike } from 'src/products/utils/parse-boolean-like';
 
 const EXPECTED_CURRENCY = 'EGP';
@@ -51,7 +55,7 @@ type CatalogItemData = {
   image_url: string | null;
   original_image_url?: string | null;
   category: string;
-  source: string;
+  source: CatalogSource;
   external_id: string | null;
   last_seen_at: Date;
   is_active: boolean;
@@ -77,7 +81,7 @@ export class ImportsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly imageDownloaderService: ImageDownloaderService,
+    private readonly catalogImportImageService: CatalogImportImageService,
     private readonly imageProcessorService: ImageProcessorService,
   ) {}
 
@@ -377,7 +381,12 @@ export class ImportsService {
 
       const incomingExternalUrl = itemData.image_url;
       const { finalImageUrl, finalOriginalImageUrl } =
-        await this.processCatalogItemImage(incomingExternalUrl, existingItem as any, sessionImagesDir);
+        await this.processCatalogItemImage(
+          incomingExternalUrl,
+          existingItem,
+          itemData.source,
+          sessionImagesDir,
+        );
 
       itemData.image_url = finalImageUrl;
       itemData.original_image_url = finalOriginalImageUrl;
@@ -408,63 +417,41 @@ export class ImportsService {
 
   private async processCatalogItemImage(
     incomingExternalUrl: string | null,
-    existingItem: any,
+    existingItem: ExistingCatalogImageState | null,
+    source: CatalogItemData['source'],
     sessionImagesDir: string,
   ) {
-    let finalImageUrl = existingItem?.image_url || null;
-    let finalOriginalImageUrl = existingItem?.original_image_url || null;
-
-    if (incomingExternalUrl) {
-      let processedUrl: string | null = null;
-      let isLocalFile = false;
-
-      if (!this.isExternalImageUrl(incomingExternalUrl)) {
-        const localImagePath = await this.resolveStagedLocalImagePath(
-          incomingExternalUrl,
-          sessionImagesDir,
-        );
-
-        if (!localImagePath) {
-          throw new Error(
-            `Local image matching '${incomingExternalUrl}' was not uploaded in the payload.`,
-          );
-        }
-
-        isLocalFile = true;
-        processedUrl =
-          await this.imageProcessorService.processProductThumbnail(
-            localImagePath,
-          );
-      }
-
-      if (
-        !isLocalFile &&
-        this.isExternalImageUrl(incomingExternalUrl) &&
-        incomingExternalUrl !== existingItem?.original_image_url
-      ) {
-        processedUrl =
-          await this.imageDownloaderService.downloadImage(incomingExternalUrl);
-      }
-
-      if (processedUrl) {
-        finalImageUrl = processedUrl;
-        finalOriginalImageUrl = incomingExternalUrl;
-
-        if (existingItem?.image_url) {
-          await this.imageProcessorService.deleteManagedProductImage(
-            existingItem.image_url,
-          );
-        }
-      } else if (!isLocalFile && this.isExternalImageUrl(incomingExternalUrl)) {
-        finalImageUrl = incomingExternalUrl;
-        finalOriginalImageUrl = incomingExternalUrl;
-      }
-    } else if (!incomingExternalUrl) {
-      finalImageUrl = null;
-      finalOriginalImageUrl = null;
+    if (!incomingExternalUrl || this.isExternalImageUrl(incomingExternalUrl)) {
+      return this.catalogImportImageService.processExternalImage({
+        source,
+        incomingExternalUrl,
+        existingItem,
+      });
     }
 
-    return { finalImageUrl, finalOriginalImageUrl };
+    const localImagePath = await this.resolveStagedLocalImagePath(
+      incomingExternalUrl,
+      sessionImagesDir,
+    );
+
+    if (!localImagePath) {
+      throw new Error(
+        `Local image matching '${incomingExternalUrl}' was not uploaded in the payload.`,
+      );
+    }
+
+    const processedUrl =
+      await this.imageProcessorService.processProductThumbnail(localImagePath);
+    if (existingItem?.image_url && existingItem.image_url !== processedUrl) {
+      await this.imageProcessorService.deleteManagedProductImage(
+        existingItem.image_url,
+      );
+    }
+
+    return {
+      finalImageUrl: processedUrl,
+      finalOriginalImageUrl: incomingExternalUrl,
+    };
   }
 
   /**

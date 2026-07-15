@@ -537,11 +537,25 @@ export class ProductsService {
       );
     }
 
+    if (!catalogItem.is_essential) {
+      const operatedZone =
+        await this.getPrismaClient().zoneStorefront.findUnique({
+          where: { operator_tenant_id: tenantId },
+          select: { id: true },
+        });
+      if (operatedZone) {
+        throw new BadRequestException(
+          'Zone operators can only add curated essential catalog items',
+        );
+      }
+    }
+
     await this.ensureUniqueActiveProductName(tenantId, catalogItem.name);
 
     const product = await this.getPrismaClient().product.create({
       data: {
         tenant_id: tenantId,
+        catalog_item_id: catalogItem.id,
         name: catalogItem.name,
         image_url: catalogItem.image_url,
         category: catalogCategory,
@@ -873,6 +887,7 @@ export class ProductsService {
 
     const dataToInsert = itemsToAdd.map((item) => ({
       tenant_id: tenantId,
+      catalog_item_id: item.id,
       name: item.name,
       image_url: item.image_url,
       category: item.category,

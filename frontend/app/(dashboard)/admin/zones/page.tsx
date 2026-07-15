@@ -1,11 +1,10 @@
 import Link from "next/link";
-import {
-  createZoneStorefrontAction,
-  startZoneDispatchSessionAction,
-} from "@/actions/admin-server";
+import { createZoneStorefrontAction } from "@/actions/admin-server";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { adminService } from "@/services/api/admin.service";
+import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
+import { DispatchSessionForm } from "./_components/DispatchSessionForm";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +16,7 @@ export default async function AdminZonesPage() {
     const assignedResponse = await adminService.getAssignedTenants();
     const assignedZones = (assignedResponse.data ?? []).flatMap((tenant) => {
       const zone = tenant.operated_zone_storefront;
-      return zone && tenant.access.permissions.includes("dispatches.read")
+      return zone && hasActiveManagedPermission(tenant.access, "dispatches.read")
         ? [{ tenant, zone }]
         : [];
     });
@@ -34,20 +33,16 @@ export default async function AdminZonesPage() {
               <Card key={zone.id} className="p-5">
                 <h2 className="font-bold text-gray-900">{zone.name}</h2>
                 <p className="mt-1 text-sm text-gray-500">{zone.area.name_ar}</p>
-                <form
-                  action={startZoneDispatchSessionAction.bind(null, zone.id, tenant.id)}
+                <DispatchSessionForm
+                  zoneId={zone.id}
+                  tenantId={tenant.id}
+                  canStart={hasActiveManagedPermission(
+                    tenant.access,
+                    "dispatches.read",
+                  )}
                   className="mt-4 space-y-3"
-                >
-                  <input
-                    name="reason"
-                    required
-                    minLength={10}
-                    maxLength={500}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2"
-                    placeholder="سبب الدخول إلى قائمة توزيع المنطقة"
-                  />
-                  <Button type="submit">فتح قائمة التوزيع</Button>
-                </form>
+                  inputClassName="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
               </Card>
             );
           })}
@@ -63,8 +58,8 @@ export default async function AdminZonesPage() {
     adminService.getZones(),
     adminService.getDirectoryAreas(),
   ]);
-  const zones = zonesResponse.data ?? [];
-  const areas = areasResponse.data ?? [];
+  const zones = Array.isArray(zonesResponse.data) ? zonesResponse.data : [];
+  const areas = Array.isArray(areasResponse.data) ? areasResponse.data : [];
 
   return (
     <div className="space-y-6">

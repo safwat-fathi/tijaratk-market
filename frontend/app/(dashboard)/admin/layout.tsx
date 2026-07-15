@@ -4,6 +4,12 @@ import { redirect } from "next/navigation";
 import { STORAGE_KEYS } from "@/constants";
 import { adminService } from "@/services/api/admin.service";
 import { AdminShell } from "./_components/AdminShell";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "لوحة تحكم الإدارة",
+  description: "لوحة تحكم الإدارة لمنصة تجارتك",
+};
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();

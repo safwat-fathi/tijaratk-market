@@ -12,13 +12,8 @@ import {
   StoresDirectoryCategoryPage,
   StoresDirectoryStoreCard,
 } from "@/types/models/stores-directory";
-import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
-import {
-  buildCustomerAnalyticsPageLocation,
-  type CustomerAnalyticsSearchParams,
-} from "@/lib/analytics/google-analytics";
 
-type StoresCategorySearchParams = CustomerAnalyticsSearchParams & {
+type StoresCategorySearchParams = {
   search?: string;
   open_now?: string;
   page?: string;
@@ -228,13 +223,6 @@ export default async function StoresCategoryPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
-      <CustomerAnalytics
-        pageLocation={buildCustomerAnalyticsPageLocation(
-          `/stores/${encodeURIComponent(areaSlug)}/${encodeURIComponent(categorySlug)}`,
-          resolvedSearchParams,
-        )}
-        pageTitle={page.seo.title}
-      />
       {jsonLd.map((item, index) => (
         <JsonLd
           key={`${item["@type"]}-${index}`}

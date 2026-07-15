@@ -151,6 +151,17 @@ Production seed:
 pnpm run seed:prod
 ```
 
+Development-only Sheikh Zayed zone storefront fixture (requires at least 100
+distinct active `talabat_csv` catalog products and one active grocery fixture
+merchant):
+
+```bash
+pnpm run seed:zone:dev
+```
+
+Production zone storefronts must be configured through the admin APIs; the
+development fixture is intentionally excluded from the general seed commands.
+
 ## Catalog Management & Cleanup
 
 ### Catalog Source Isolation

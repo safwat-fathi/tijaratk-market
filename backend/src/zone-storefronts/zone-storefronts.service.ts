@@ -24,14 +24,21 @@ import {
   CatalogSource,
   getAllowedCatalogCategoriesForSource,
   resolveCatalogSourceForTenantCategory,
+  TENANT_CATEGORIES_WITH_CATALOG_SOURCE,
 } from 'src/products/catalog-source-policy';
-import { resolveRequiredProductsForTenantCategory } from 'src/products/order-readiness-policy';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateZoneStorefrontDto,
   UpdateZoneStorefrontActivationDto,
   UpsertZoneStorefrontMerchantDto,
 } from './dto/zone-storefront.dto';
+import { isZoneStorefrontPublicOrderingEnabled } from './zone-storefront-feature';
+import {
+  findZoneEssentialCatalogItems,
+  syncZoneEssentialCatalog,
+} from './zone-essential-catalog-sync';
+
+const MIN_SYNCHRONIZED_ZONE_PRODUCTS = 1;
 
 export type ZoneAdminActor = {
   adminId: number;
@@ -91,7 +98,7 @@ export class ZoneStorefrontsService {
 
   /** Returns whether new public zone discovery and checkout are enabled. */
   isPublicOrderingEnabled(): boolean {
-    return String(process.env.ZONE_STOREFRONTS_ENABLED).toLowerCase() === 'true';
+    return isZoneStorefrontPublicOrderingEnabled();
   }
 
   /** Creates an internal operator tenant and its one-to-one zone storefront. */
@@ -247,6 +254,58 @@ export class ZoneStorefrontsService {
     return this.mapAdminZone(zone, await this.getReadiness(zone.id));
   }
 
+  /** Reconciles the operator snapshot with the complete curated essential set. */
+  async syncEssentialCatalog(zoneId: number, actor: ZoneAdminActor) {
+    const zone = await this.requireZone(zoneId);
+    const catalogSource = this.requireCatalogSource(
+      zone.operator_tenant.category,
+    );
+    const essentialItems = await findZoneEssentialCatalogItems(
+      this.prisma,
+      catalogSource,
+    );
+    if (essentialItems.length === 0) {
+      throw new BadRequestException(
+        'No active curated essential catalog items are available for this zone',
+      );
+    }
+
+    return this.runInOperatorTenant(
+      zone.operator_tenant_id,
+      async (manager) => {
+        const result = await syncZoneEssentialCatalog(
+          manager,
+          zone.operator_tenant_id,
+          catalogSource,
+          essentialItems,
+        );
+        await this.activityLogService.create(
+          {
+            tenantId: zone.operator_tenant_id,
+            actorAdminId: actor.adminId,
+            actorAdminName: actor.adminName,
+            actorAdminRole: actor.adminRole,
+            entityType: ActivityEntityTypes.ZoneStorefront,
+            entityId: zone.id,
+            action: ActivityActions.ZoneStorefrontCatalogSynced,
+            title: 'تمت مزامنة المنتجات الأساسية للمنطقة',
+            newValues: result,
+            metadata: {
+              catalog_source: catalogSource,
+              curated_essentials: essentialItems.length,
+            },
+            source: ActivitySources.Admin,
+            requestId: actor.requestId,
+            ipAddress: actor.ipAddress,
+          },
+          manager,
+        );
+        return result;
+      },
+      { maxWait: 10_000, timeout: 120_000 },
+    );
+  }
+
   /** Changes zone activation after validating catalog and merchant readiness. */
   async updateActivation(
     zoneId: number,
@@ -371,6 +430,8 @@ export class ZoneStorefrontsService {
         id: { not: zone.operator_tenant_id },
         category: zone.operator_tenant.category,
         status: TenantStatus.active,
+        deleted_at: null,
+        delivery_available: true,
         operated_zone_storefront: { is: null },
         tenant_delivery_areas: {
           some: {
@@ -408,6 +469,42 @@ export class ZoneStorefrontsService {
     return this.mapPublicZone(zone);
   }
 
+  /** Lists sanitized active and ready storefronts for public discovery. */
+  async findPublic() {
+    if (!this.isPublicOrderingEnabled()) return [];
+
+    const zones = await this.prisma.zoneStorefront.findMany({
+      where: {
+        is_active: true,
+        area: { is_active: true, deleted_at: null },
+        operator_tenant: {
+          status: TenantStatus.active,
+          deleted_at: null,
+          delivery_available: true,
+          category: { in: [...TENANT_CATEGORIES_WITH_CATALOG_SOURCE] },
+        },
+      },
+      include: { area: true, operator_tenant: true },
+      orderBy: [
+        { area: { sort_order: 'asc' } },
+        { name: 'asc' },
+        { id: 'asc' },
+      ],
+    });
+
+    const publicZones = await Promise.all(
+      zones.map(async (zone) => {
+        const readiness = await this.calculateReadiness(zone);
+        return readiness.catalog_ready &&
+          readiness.active_eligible_merchants >= 1
+          ? this.mapPublicZone(zone)
+          : null;
+      }),
+    );
+
+    return publicZones.filter((zone) => zone !== null);
+  }
+
   /** Returns the trusted active zone identity used only by public checkout. */
   async requireCheckoutZone(slug: string) {
     return this.requirePublicZone(slug);
@@ -426,6 +523,7 @@ export class ZoneStorefrontsService {
     return this.runInOperatorTenant(zone.operator_tenant_id, async (manager) => {
       const where: Prisma.ProductWhereInput = {
         tenant_id: zone.operator_tenant_id,
+        catalog_item_id: { not: null },
         source: ProductSource.catalog,
         status: ProductStatus.active,
         is_available: true,
@@ -484,6 +582,7 @@ export class ZoneStorefrontsService {
           by: ['category'],
           where: {
             tenant_id: zone.operator_tenant_id,
+            catalog_item_id: { not: null },
             source: ProductSource.catalog,
             status: ProductStatus.active,
             is_available: true,
@@ -521,6 +620,8 @@ export class ZoneStorefrontsService {
       where: {
         id: tenantId,
         status: TenantStatus.active,
+        deleted_at: null,
+        delivery_available: true,
         category: zone.operator_tenant.category,
         operated_zone_storefront: { is: null },
         tenant_delivery_areas: {
@@ -560,14 +661,18 @@ export class ZoneStorefrontsService {
   async runInOperatorTenant<T>(
     operatorTenantId: number,
     callback: (manager: Prisma.TransactionClient) => Promise<T>,
+    transactionOptions?: { maxWait?: number; timeout?: number },
   ): Promise<T> {
-    return this.prisma.$transaction(async (manager) => {
-      await manager.$executeRaw`SELECT set_config('app.tenant_id', ${String(operatorTenantId)}, true)`;
-      return DbTenantContext.run(
-        { tenantId: operatorTenantId, manager },
-        () => callback(manager),
-      );
-    });
+    return this.prisma.$transaction(
+      async (manager) => {
+        await manager.$executeRaw`SELECT set_config('app.tenant_id', ${String(operatorTenantId)}, true)`;
+        return DbTenantContext.run(
+          { tenantId: operatorTenantId, manager },
+          () => callback(manager),
+        );
+      },
+      transactionOptions,
+    );
   }
 
   /** Resolves an active, ready public zone and rejects disabled discovery. */
@@ -582,8 +687,9 @@ export class ZoneStorefrontsService {
         area: { is_active: true, deleted_at: null },
         operator_tenant: {
           status: TenantStatus.active,
+          deleted_at: null,
           delivery_available: true,
-          category: { in: [TenantCategory.grocery, TenantCategory.pharmacy] },
+          category: { in: [...TENANT_CATEGORIES_WITH_CATALOG_SOURCE] },
         },
       },
       include: { area: true, operator_tenant: true },
@@ -600,17 +706,23 @@ export class ZoneStorefrontsService {
   /** Computes catalog and fulfillment readiness from authoritative backend state. */
   private async getReadiness(zoneId: number) {
     const zone = await this.requireZone(zoneId);
+    return this.calculateReadiness(zone);
+  }
+
+  /** Computes readiness for an already loaded zone without repeating its lookup. */
+  private async calculateReadiness(
+    zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
+  ) {
     const catalogSource = this.requireCatalogSource(zone.operator_tenant.category);
     const allowedCategories = getAllowedCatalogCategoriesForSource(catalogSource);
-    const requiredProducts = resolveRequiredProductsForTenantCategory(
-      zone.operator_tenant.category,
-    );
+    const requiredProducts = MIN_SYNCHRONIZED_ZONE_PRODUCTS;
     const activeProducts = await this.runInOperatorTenant(
       zone.operator_tenant_id,
       (manager) =>
         manager.product.count({
           where: {
             tenant_id: zone.operator_tenant_id,
+            catalog_item_id: { not: null },
             source: ProductSource.catalog,
             status: ProductStatus.active,
             is_available: true,
@@ -625,6 +737,8 @@ export class ZoneStorefrontsService {
         is_active: true,
         tenant: {
           status: TenantStatus.active,
+          deleted_at: null,
+          delivery_available: true,
           category: zone.operator_tenant.category,
           operated_zone_storefront: { is: null },
           tenant_delivery_areas: {
@@ -666,7 +780,9 @@ export class ZoneStorefrontsService {
   }
 
   /** Maps a zone to its explicit customer-safe response contract. */
-  private mapPublicZone(zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>) {
+  private mapPublicZone(
+    zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
+  ) {
     return {
       id: zone.id,
       name: zone.name,

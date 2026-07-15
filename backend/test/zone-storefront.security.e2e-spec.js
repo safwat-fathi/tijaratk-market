@@ -3,6 +3,8 @@ const { Test } = require('@nestjs/testing');
 const request = require('supertest');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
+const { readdir } = require('node:fs/promises');
+const { join } = require('node:path');
 
 const { AppModule } = require('../dist/app.module');
 const {
@@ -95,6 +97,7 @@ describe('Zone storefront security E2E', () => {
       suffix: 'grocery',
       category: 'grocery',
       allowedCategory: 'ألبان و بيض',
+      secondAllowedCategory: 'مشروبات',
       pollutedCategory: 'أدوية',
       merchantCount: 2,
       password,
@@ -107,6 +110,7 @@ describe('Zone storefront security E2E', () => {
       suffix: 'pharmacy',
       category: 'pharmacy',
       allowedCategory: 'أدوية',
+      secondAllowedCategory: 'عناية شخصية',
       pollutedCategory: 'أرز ومكرونة',
       merchantCount: 1,
       password,
@@ -135,6 +139,62 @@ describe('Zone storefront security E2E', () => {
       runId,
     });
     if (app) await app.close();
+  });
+
+  it('discovers only active, ready, source-compatible zones', async () => {
+    const initialResponse = await request(httpServer)
+      .get('/zone-storefronts/public')
+      .expect(200);
+    expect(unwrapBody(initialResponse.body)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: grocery.zone.id }),
+        expect.objectContaining({ id: pharmacy.zone.id }),
+      ]),
+    );
+
+    await prisma.zoneStorefront.update({
+      where: { id: grocery.zone.id },
+      data: { is_active: false },
+    });
+    await prisma.zoneStorefrontMerchant.updateMany({
+      where: { zone_storefront_id: pharmacy.zone.id },
+      data: { is_active: false },
+    });
+    try {
+      const unreadyResponse = await request(httpServer)
+        .get('/zone-storefronts/public')
+        .expect(200);
+      expect(unwrapBody(unreadyResponse.body)).toEqual([]);
+    } finally {
+      await prisma.zoneStorefront.update({
+        where: { id: grocery.zone.id },
+        data: { is_active: true },
+      });
+      await prisma.zoneStorefrontMerchant.updateMany({
+        where: { zone_storefront_id: pharmacy.zone.id },
+        data: { is_active: true },
+      });
+    }
+
+    await prisma.tenant.update({
+      where: { id: grocery.zone.operator_tenant.id },
+      data: { category: 'other' },
+    });
+    try {
+      const incompatibleResponse = await request(httpServer)
+        .get('/zone-storefronts/public')
+        .expect(200);
+      const discoveredIds = unwrapBody(incompatibleResponse.body).map(
+        (zone) => zone.id,
+      );
+      expect(discoveredIds).not.toContain(grocery.zone.id);
+      expect(discoveredIds).toContain(pharmacy.zone.id);
+    } finally {
+      await prisma.tenant.update({
+        where: { id: grocery.zone.operator_tenant.id },
+        data: { category: 'grocery' },
+      });
+    }
   });
 
   it('isolates both vertical catalogs and hides internal operator routes', async () => {
@@ -186,7 +246,166 @@ describe('Zone storefront security E2E', () => {
       expect(unwrapBody(allowedResponse.body).data).toEqual([
         expect.objectContaining({ id: fixture.catalogProduct.id }),
       ]);
+
+      const manualResponse = await request(httpServer)
+        .get(
+          `/zone-storefronts/public/${fixture.zone.slug}/products?search=${encodeURIComponent(fixture.manualProduct.name)}`,
+        )
+        .expect(200);
+      expect(unwrapBody(manualResponse.body).data).toEqual([]);
+
+      for (const excludedName of fixture.excludedCatalogItemNames) {
+        const excludedResponse = await request(httpServer)
+          .get(
+            `/zone-storefronts/public/${fixture.zone.slug}/products?search=${encodeURIComponent(excludedName)}`,
+          )
+          .expect(200);
+        expect(unwrapBody(excludedResponse.body).data).toEqual([]);
+      }
+
+      const categoryResponse = await request(httpServer)
+        .get(`/zone-storefronts/public/${fixture.zone.slug}/categories`)
+        .expect(200);
+      expect(unwrapBody(categoryResponse.body)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ category: fixture.allowedCategory }),
+          expect.objectContaining({ category: fixture.secondAllowedCategory }),
+        ]),
+      );
     }
+  });
+
+  it('synchronizes essentials idempotently and preserves zone-controlled fields', async () => {
+    const fixture = grocery;
+    const legacyCatalogItem = await prisma.catalogItem.create({
+      data: {
+        name: `Legacy essential ${runId}`,
+        category: fixture.allowedCategory,
+        source: fixture.catalogSource,
+        external_id: `zone-legacy-${runId}`,
+        is_active: true,
+        is_essential: true,
+        price: 44,
+      },
+    });
+    const legacyProduct = await withTenant(
+      prisma,
+      fixture.zone.operator_tenant.id,
+      (tx) =>
+        tx.product.create({
+          data: {
+            tenant_id: fixture.zone.operator_tenant.id,
+            name: legacyCatalogItem.name,
+            category: legacyCatalogItem.category,
+            source: 'catalog',
+            status: 'active',
+            current_price: 33,
+            is_available: false,
+          },
+        }),
+    );
+    await withTenant(prisma, fixture.zone.operator_tenant.id, (tx) =>
+      tx.product.update({
+        where: { id: fixture.replacementProduct.id },
+        data: { current_price: 77, is_available: false },
+      }),
+    );
+    await prisma.catalogItem.update({
+      where: { id: fixture.replacementCatalogItem.id },
+      data: {
+        name: `${fixture.replacementCatalogItem.name} محدث`,
+        image_url: `https://example.test/${runId}.png`,
+      },
+    });
+
+    const syncResponse = await request(httpServer)
+      .post(`/admin/zones/${fixture.zone.id}/catalog/sync-essentials`)
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({})
+      .expect(201);
+    const syncResult = unwrapBody(syncResponse.body);
+    expect(syncResult).toEqual(
+      expect.objectContaining({
+        linked: expect.any(Number),
+        active_products: expect.any(Number),
+        active_categories: expect.any(Number),
+      }),
+    );
+    expect(syncResult.linked).toBeGreaterThanOrEqual(1);
+
+    const retained = await withTenant(
+      prisma,
+      fixture.zone.operator_tenant.id,
+      async (tx) => ({
+        replacement: await tx.product.findUniqueOrThrow({
+          where: { id: fixture.replacementProduct.id },
+        }),
+        legacy: await tx.product.findUniqueOrThrow({
+          where: { id: legacyProduct.id },
+        }),
+        manual: await tx.product.findUniqueOrThrow({
+          where: { id: fixture.manualProduct.id },
+        }),
+        polluted: await tx.product.findUniqueOrThrow({
+          where: { id: fixture.pollutedProduct.id },
+        }),
+      }),
+    );
+    expect(retained.replacement).toEqual(
+      expect.objectContaining({
+        name: `${fixture.replacementCatalogItem.name} محدث`,
+        current_price: expect.anything(),
+        is_available: false,
+      }),
+    );
+    expect(Number(retained.replacement.current_price)).toBe(77);
+    expect(retained.legacy).toEqual(
+      expect.objectContaining({
+        catalog_item_id: legacyCatalogItem.id,
+        is_available: false,
+      }),
+    );
+    expect(Number(retained.legacy.current_price)).toBe(33);
+    expect(retained.manual.status).toBe('active');
+    expect(retained.manual.catalog_item_id).toBeNull();
+    expect(retained.polluted.status).toBe('archived');
+
+    await prisma.catalogItem.update({
+      where: { id: legacyCatalogItem.id },
+      data: { is_essential: false },
+    });
+    await request(httpServer)
+      .post(`/admin/zones/${fixture.zone.id}/catalog/sync-essentials`)
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({})
+      .expect(201);
+    const removedLegacy = await withTenant(
+      prisma,
+      fixture.zone.operator_tenant.id,
+      (tx) => tx.product.findUniqueOrThrow({ where: { id: legacyProduct.id } }),
+    );
+    expect(removedLegacy.status).toBe('archived');
+
+    await withTenant(prisma, fixture.zone.operator_tenant.id, (tx) =>
+      tx.product.update({
+        where: { id: fixture.replacementProduct.id },
+        data: { is_available: true },
+      }),
+    );
+
+    const idempotentResponse = await request(httpServer)
+      .post(`/admin/zones/${fixture.zone.id}/catalog/sync-essentials`)
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({})
+      .expect(201);
+    expect(unwrapBody(idempotentResponse.body)).toEqual(
+      expect.objectContaining({
+        created: 0,
+        linked: 0,
+        updated: 0,
+        archived: 0,
+      }),
+    );
   });
 
   it('creates checkout and dispatch atomically from trusted zone data', async () => {
@@ -209,6 +428,10 @@ describe('Zone storefront security E2E', () => {
         where: { zone_storefront_id: fixture.zone.id },
       }),
     ]);
+    const dashboardBeforeCheckout = await getAdminDashboardStats(
+      httpServer,
+      platformAdminToken,
+    );
     await request(httpServer)
       .post(`/zone-storefronts/public/${fixture.zone.slug}/orders`)
       .send({
@@ -228,9 +451,13 @@ describe('Zone storefront security E2E', () => {
         where: { zone_storefront_id: fixture.zone.id },
       }),
     ).toBe(countsBefore[1]);
+    expect(
+      await getAdminDashboardStats(httpServer, platformAdminToken),
+    ).toEqual(dashboardBeforeCheckout);
 
+    const checkoutPhone = generateEgyptPhone(32);
     const response = await createZoneOrder(httpServer, fixture, {
-      phone: generateEgyptPhone(32),
+      phone: checkoutPhone,
       itemOverrides: {
         name: 'Client spoofed name',
         unit_price: 1,
@@ -246,6 +473,7 @@ describe('Zone storefront security E2E', () => {
       },
     });
     fixture.checkout = response;
+    fixture.checkoutPhone = checkoutPhone;
 
     const persisted = await withTenant(
       prisma,
@@ -282,6 +510,64 @@ describe('Zone storefront security E2E', () => {
     expect(Number(persisted.order_items[0].total_price)).toBe(10);
     expect(Number(persisted.total)).toBe(15);
     expect(dispatch.status).toBe('pending');
+
+    const dashboardAfterCheckout = await getAdminDashboardStats(
+      httpServer,
+      platformAdminToken,
+    );
+    expect(dashboardAfterCheckout.totalOrders).toBe(
+      dashboardBeforeCheckout.totalOrders + 1,
+    );
+    expect(dashboardAfterCheckout.completedOrders).toBe(
+      dashboardBeforeCheckout.completedOrders,
+    );
+    fixture.dashboardStatsAfterCheckout = dashboardAfterCheckout;
+  });
+
+  it('removes uploaded prescriptions rejected before zone order persistence', async () => {
+    const filesBefore = await listZonePrescriptionFiles();
+    const image = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const cases = [
+      {
+        slug: `missing-zone-${runId}`,
+        productId: pharmacy.catalogProduct.id,
+        status: 404,
+      },
+      {
+        slug: grocery.zone.slug,
+        productId: grocery.catalogProduct.id,
+        status: 400,
+      },
+      {
+        slug: pharmacy.zone.slug,
+        productId: 2147483647,
+        status: 400,
+      },
+    ];
+
+    for (const [index, testCase] of cases.entries()) {
+      await request(httpServer)
+        .post(`/zone-storefronts/public/${testCase.slug}/orders`)
+        .field(
+          'customer',
+          JSON.stringify({
+            name: 'Prescription Cleanup Customer',
+            phone: generateEgyptPhone(330 + index),
+            address: 'Prescription cleanup address',
+          }),
+        )
+        .field(
+          'items',
+          JSON.stringify([{ product_id: testCase.productId, quantity: '1' }]),
+        )
+        .attach('prescription_file', image, {
+          filename: `cleanup-${index}.png`,
+          contentType: 'image/png',
+        })
+        .expect(testCase.status);
+
+      expect(await listZonePrescriptionFiles()).toEqual(filesBefore);
+    }
   });
 
   it('keeps quotes assignment-scoped through rejection and reassignment', async () => {
@@ -366,6 +652,16 @@ describe('Zone storefront security E2E', () => {
       })
       .expect(201);
 
+    const rejectedInboxResponse = await request(httpServer)
+      .get('/orders/inbox-summary')
+      .set('Authorization', `Bearer ${firstMerchant.token}`)
+      .expect(200);
+    expect(unwrapBody(rejectedInboxResponse.body).assigned_counts).toEqual({
+      pending: 0,
+      accepted: 0,
+      total: 0,
+    });
+
     const rejectedState = await withTenant(
       prisma,
       fixture.zone.operator_tenant.id,
@@ -403,6 +699,32 @@ describe('Zone storefront security E2E', () => {
         }),
       ]),
     );
+
+    const pendingInboxResponse = await request(httpServer)
+      .get('/orders/inbox-summary')
+      .set('Authorization', `Bearer ${secondMerchant.token}`)
+      .expect(200);
+    const pendingInbox = unwrapBody(pendingInboxResponse.body);
+    expect(pendingInbox.assigned_counts).toEqual({
+      pending: 1,
+      accepted: 0,
+      total: 1,
+    });
+    expect(pendingInbox.new_orders_count).toBe(
+      pendingInbox.owned_status_counts.draft + 1,
+    );
+
+    const dashboardAfterReassignment = await getAdminDashboardStats(
+      httpServer,
+      platformAdminToken,
+    );
+    expect(dashboardAfterReassignment.totalOrders).toBe(
+      fixture.dashboardStatsAfterCheckout.totalOrders,
+    );
+    expect(dashboardAfterReassignment.completedOrders).toBe(
+      fixture.dashboardStatsAfterCheckout.completedOrders,
+    );
+
     fixture.currentAssignment = secondAssignment;
   });
 
@@ -482,6 +804,24 @@ describe('Zone storefront security E2E', () => {
     );
     expect(tracking.tenant_id).toBe(fixture.zone.id);
 
+    await prisma.zoneStorefront.update({
+      where: { id: fixture.zone.id },
+      data: { is_active: false },
+    });
+    try {
+      const inactiveTrackingResponse = await request(httpServer)
+        .get(`/orders/tracking/${fixture.checkout.public_token}`)
+        .expect(200);
+      expect(
+        unwrapBody(inactiveTrackingResponse.body).zone_storefront.reorder_url,
+      ).toBeNull();
+    } finally {
+      await prisma.zoneStorefront.update({
+        where: { id: fixture.zone.id },
+        data: { is_active: true },
+      });
+    }
+
     await request(httpServer)
       .patch(
         `/assigned-orders/${fixture.dispatch.id}/items/${fixture.orderItem.id}/replacement`,
@@ -508,6 +848,7 @@ describe('Zone storefront security E2E', () => {
       })
       .expect(201);
     const normalOrder = unwrapBody(normalOrderResponse.body);
+    fixture.normalOrder = normalOrder;
 
     const normalOrders = await request(httpServer)
       .get('/orders')
@@ -521,6 +862,140 @@ describe('Zone storefront security E2E', () => {
     expect(
       unwrapBody(normalOrders.body).some((order) => order.id === normalOrder.id),
     ).toBe(true);
+  });
+
+  it('returns tenant-isolated inbox counters and updates them after confirmation', async () => {
+    const fixture = grocery;
+    const merchant = fixture.merchants[1];
+
+    const inboxResponse = await request(httpServer)
+      .get('/orders/inbox-summary')
+      .set('Authorization', `Bearer ${merchant.token}`)
+      .expect(200);
+    const inbox = unwrapBody(inboxResponse.body);
+    expect(inbox.assigned_counts).toEqual({
+      pending: 0,
+      accepted: 1,
+      total: 1,
+    });
+    expect(inbox.owned_status_counts.draft).toBeGreaterThanOrEqual(1);
+    expect(inbox.new_orders_count).toBe(inbox.owned_status_counts.draft);
+
+    const datedInboxResponse = await request(httpServer)
+      .get('/orders/inbox-summary')
+      .query({ date: '2000-01-01' })
+      .set('Authorization', `Bearer ${merchant.token}`)
+      .expect(200);
+    const datedInbox = unwrapBody(datedInboxResponse.body);
+    expect(datedInbox.owned_status_counts).toEqual({
+      draft: 0,
+      confirmed: 0,
+      out_for_delivery: 0,
+      completed: 0,
+      cancelled: 0,
+      rejected_by_customer: 0,
+    });
+    expect(datedInbox.assigned_counts).toEqual(inbox.assigned_counts);
+    expect(datedInbox.new_orders_count).toBe(0);
+
+    const otherTenantResponse = await request(httpServer)
+      .get('/orders/inbox-summary')
+      .set('Authorization', `Bearer ${pharmacy.merchants[0].token}`)
+      .expect(200);
+    const otherTenantInbox = unwrapBody(otherTenantResponse.body);
+    expect(otherTenantInbox.assigned_counts).toEqual({
+      pending: 0,
+      accepted: 0,
+      total: 0,
+    });
+    expect(otherTenantInbox.new_orders_count).toBe(
+      otherTenantInbox.owned_status_counts.draft,
+    );
+
+    await request(httpServer)
+      .patch(`/orders/${fixture.normalOrder.id}`)
+      .set('Authorization', `Bearer ${merchant.token}`)
+      .send({ status: 'confirmed' })
+      .expect(200);
+
+    const confirmedInboxResponse = await request(httpServer)
+      .get('/orders/inbox-summary')
+      .set('Authorization', `Bearer ${merchant.token}`)
+      .expect(200);
+    const confirmedInbox = unwrapBody(confirmedInboxResponse.body);
+    expect(confirmedInbox.assigned_counts).toEqual(inbox.assigned_counts);
+    expect(confirmedInbox.owned_status_counts.draft).toBe(
+      inbox.owned_status_counts.draft - 1,
+    );
+    expect(confirmedInbox.owned_status_counts.confirmed).toBe(
+      inbox.owned_status_counts.confirmed + 1,
+    );
+    expect(confirmedInbox.new_orders_count).toBe(inbox.new_orders_count - 1);
+  });
+
+  it('counts a completed assigned order once across its full lifecycle', async () => {
+    const fixture = grocery;
+    const merchant = fixture.merchants[0];
+    const dashboardBeforeCheckout = await getAdminDashboardStats(
+      httpServer,
+      platformAdminToken,
+    );
+    const completedOrder = await createZoneOrder(httpServer, fixture, {
+      phone: generateEgyptPhone(42),
+    });
+    const dispatch = await prisma.orderDispatch.findUniqueOrThrow({
+      where: { order_id: completedOrder.id },
+    });
+    const dashboardAfterCheckout = await getAdminDashboardStats(
+      httpServer,
+      platformAdminToken,
+    );
+    expect(dashboardAfterCheckout.totalOrders).toBe(
+      dashboardBeforeCheckout.totalOrders + 1,
+    );
+    expect(dashboardAfterCheckout.completedOrders).toBe(
+      dashboardBeforeCheckout.completedOrders,
+    );
+
+    const assignedDispatch = await assignDispatch({
+      httpServer,
+      adminToken: platformAdminToken,
+      cookie: fixture.managedCookie,
+      operatorTenantId: fixture.zone.operator_tenant.id,
+      dispatchId: dispatch.id,
+      merchantTenantId: merchant.tenantId,
+      expectedVersion: dispatch.version,
+    });
+    const assignment = currentAssignment(assignedDispatch);
+    await request(httpServer)
+      .post(`/assigned-orders/${dispatch.id}/accept`)
+      .set('Authorization', `Bearer ${merchant.token}`)
+      .send({ expected_version: assignment.version })
+      .expect(201);
+    await request(httpServer)
+      .patch(`/assigned-orders/${dispatch.id}/status`)
+      .set('Authorization', `Bearer ${merchant.token}`)
+      .send({ status: 'out_for_delivery' })
+      .expect(200);
+    await request(httpServer)
+      .patch(`/assigned-orders/${dispatch.id}/status`)
+      .set('Authorization', `Bearer ${merchant.token}`)
+      .send({ status: 'completed' })
+      .expect(200);
+
+    const dashboardAfterCompletion = await getAdminDashboardStats(
+      httpServer,
+      platformAdminToken,
+    );
+    expect(dashboardAfterCompletion.totalOrders).toBe(
+      dashboardAfterCheckout.totalOrders,
+    );
+    expect(dashboardAfterCompletion.completedOrders).toBe(
+      dashboardAfterCheckout.completedOrders + 1,
+    );
+    expect(
+      await getAdminDashboardStats(httpServer, platformAdminToken),
+    ).toEqual(dashboardAfterCompletion);
   });
 
   it('keeps tracking and dispatch available when discovery is disabled', async () => {
@@ -546,6 +1021,10 @@ describe('Zone storefront security E2E', () => {
       });
     process.env.ZONE_STOREFRONTS_ENABLED = 'false';
     try {
+      const discoveryResponse = await request(httpServer)
+        .get('/zone-storefronts/public')
+        .expect(200);
+      expect(unwrapBody(discoveryResponse.body)).toEqual([]);
       await request(httpServer)
         .get(`/zone-storefronts/public/${fixture.zone.slug}`)
         .expect(404);
@@ -560,9 +1039,49 @@ describe('Zone storefront security E2E', () => {
           items: [{ product_id: fixture.catalogProduct.id, quantity: '1' }],
         })
         .expect(404);
-      await request(httpServer)
+      const trackingResponse = await request(httpServer)
         .get(`/orders/tracking/${fixture.checkout.public_token}`)
         .expect(200);
+      expect(unwrapBody(trackingResponse.body).zone_storefront).toEqual(
+        expect.objectContaining({
+          id: fixture.zone.id,
+          reorder_url: null,
+        }),
+      );
+
+      const normalTrackingResponse = await request(httpServer)
+        .get(`/orders/tracking/${fixture.normalOrder.public_token}`)
+        .expect(200);
+      expect(unwrapBody(normalTrackingResponse.body)).toEqual(
+        expect.objectContaining({
+          id: fixture.normalOrder.id,
+          zone_storefront: null,
+          tenant: expect.objectContaining({ slug: expect.any(String) }),
+        }),
+      );
+
+      const customerOrdersResponse = await request(httpServer)
+        .get('/customers/public/by-access-code/orders')
+        .query({
+          code: fixture.checkout.customer_access_code,
+          phone: fixture.checkoutPhone,
+        })
+        .expect(200);
+      const customerOrder = unwrapBody(customerOrdersResponse.body).find(
+        (order) => order.id === fixture.checkout.id,
+      );
+      expect(customerOrder).toEqual(
+        expect.objectContaining({
+          zone_storefront: expect.objectContaining({
+            id: fixture.zone.id,
+            reorder_url: null,
+          }),
+          tenant: expect.objectContaining({
+            id: fixture.zone.id,
+            slug: fixture.zone.slug,
+          }),
+        }),
+      );
 
       const acceptedDispatch = await prisma.orderDispatch.findUniqueOrThrow({
         where: { id: fixture.dispatch.id },
@@ -602,6 +1121,7 @@ async function createZoneFixture({
   suffix,
   category,
   allowedCategory,
+  secondAllowedCategory,
   pollutedCategory,
   merchantCount,
   password,
@@ -646,6 +1166,74 @@ async function createZoneFixture({
     .expect(201);
   const zone = unwrapBody(zoneResponse.body);
 
+  const catalogSource = category === 'pharmacy' ? 'chefaa_csv' : 'talabat_csv';
+  const catalogItems = await Promise.all(
+    [allowedCategory, secondAllowedCategory].map((itemCategory, index) =>
+      prisma.catalogItem.create({
+        data: {
+          name: `Zone ${suffix} Essential ${runId} ${index + 1}`,
+          category: itemCategory,
+          source: catalogSource,
+          external_id: `zone-${suffix}-${runId}-${index + 1}`,
+          is_active: true,
+          is_essential: true,
+          essential_sort_order: index + 1,
+          price: 10 + index,
+        },
+      }),
+    ),
+  );
+  const wrongSource =
+    catalogSource === 'talabat_csv' ? 'chefaa_csv' : 'talabat_csv';
+  const wrongSourceCategory =
+    wrongSource === 'chefaa_csv' ? 'أدوية' : 'ألبان و بيض';
+  const excludedCatalogItems = await Promise.all([
+    prisma.catalogItem.create({
+      data: {
+        name: `Zone ${suffix} Nonessential ${runId}`,
+        category: allowedCategory,
+        source: catalogSource,
+        external_id: `zone-${suffix}-${runId}-nonessential`,
+        is_active: true,
+        is_essential: false,
+        price: 12,
+      },
+    }),
+    prisma.catalogItem.create({
+      data: {
+        name: `Zone ${suffix} Invalid Category ${runId}`,
+        category: pollutedCategory,
+        source: catalogSource,
+        external_id: `zone-${suffix}-${runId}-invalid-category`,
+        is_active: true,
+        is_essential: true,
+        price: 12,
+      },
+    }),
+    prisma.catalogItem.create({
+      data: {
+        name: `Zone ${suffix} Inactive ${runId}`,
+        category: secondAllowedCategory,
+        source: catalogSource,
+        external_id: `zone-${suffix}-${runId}-inactive`,
+        is_active: false,
+        is_essential: true,
+        price: 12,
+      },
+    }),
+    prisma.catalogItem.create({
+      data: {
+        name: `Zone ${suffix} Wrong Source ${runId}`,
+        category: wrongSourceCategory,
+        source: wrongSource,
+        external_id: `zone-${suffix}-${runId}-wrong-source`,
+        is_active: true,
+        is_essential: true,
+        price: 12,
+      },
+    }),
+  ]);
+
   await request(httpServer)
     .post(`/admin/zones/${zone.id}/merchants`)
     .set('Authorization', `Bearer ${adminToken}`)
@@ -672,22 +1260,11 @@ async function createZoneFixture({
   }
 
   const pollutedProductName = `Polluted ${suffix} ${runId}`;
-  const products = await withTenant(
+  const fixtureProducts = await withTenant(
     prisma,
     zone.operator_tenant.id,
     async (tx) => {
-      await tx.product.createMany({
-        data: Array.from({ length: 100 }, (_, index) => ({
-          tenant_id: zone.operator_tenant.id,
-          name: `Zone ${suffix} Product ${runId} ${index}`,
-          source: 'catalog',
-          status: 'active',
-          category: allowedCategory,
-          current_price: 10,
-          is_available: true,
-        })),
-      });
-      await tx.product.create({
+      const pollutedProduct = await tx.product.create({
         data: {
           tenant_id: zone.operator_tenant.id,
           name: pollutedProductName,
@@ -698,16 +1275,38 @@ async function createZoneFixture({
           is_available: true,
         },
       });
-      const catalogProducts = await tx.product.findMany({
-        where: { tenant_id: zone.operator_tenant.id, category: allowedCategory },
-        orderBy: { id: 'asc' },
-        take: 2,
+      const manualProduct = await tx.product.create({
+        data: {
+          tenant_id: zone.operator_tenant.id,
+          name: `Manual ${suffix} ${runId}`,
+          source: 'manual',
+          status: 'active',
+          category: allowedCategory,
+          current_price: 15,
+          is_available: true,
+        },
       });
-      return {
-        catalogProduct: catalogProducts[0],
-        replacementProduct: catalogProducts[1],
-      };
+      return { pollutedProduct, manualProduct };
     },
+  );
+  await request(httpServer)
+    .post(`/admin/zones/${zone.id}/catalog/sync-essentials`)
+    .set('Authorization', `Bearer ${adminToken}`)
+    .send({})
+    .expect(201);
+  const products = await withTenant(
+    prisma,
+    zone.operator_tenant.id,
+    (tx) =>
+      tx.product.findMany({
+        where: {
+          tenant_id: zone.operator_tenant.id,
+          catalog_item_id: { in: catalogItems.map((item) => item.id) },
+        },
+      }),
+  );
+  const productByCatalogItemId = new Map(
+    products.map((product) => [product.catalog_item_id, product]),
   );
   await request(httpServer)
     .patch(`/admin/zones/${zone.id}/activation`)
@@ -719,8 +1318,15 @@ async function createZoneFixture({
     area,
     zone,
     merchants,
+    allowedCategory,
+    secondAllowedCategory,
+    catalogSource,
+    catalogProduct: productByCatalogItemId.get(catalogItems[0].id),
+    replacementProduct: productByCatalogItemId.get(catalogItems[1].id),
+    replacementCatalogItem: catalogItems[1],
+    excludedCatalogItemNames: excludedCatalogItems.map((item) => item.name),
     pollutedProductName,
-    ...products,
+    ...fixtureProducts,
   };
 }
 
@@ -858,10 +1464,30 @@ async function loginAdmin(httpServer, phone, password) {
   return unwrapBody(response.body).admin_access_token;
 }
 
+async function getAdminDashboardStats(httpServer, adminToken) {
+  const response = await request(httpServer)
+    .get('/admin/dashboard-stats')
+    .set('Authorization', `Bearer ${adminToken}`)
+    .expect(200);
+  return unwrapBody(response.body);
+}
+
 function unwrapBody(body) {
   return body && typeof body === 'object' && body.data !== undefined
     ? body.data
     : body;
+}
+
+async function listZonePrescriptionFiles() {
+  const directory = join(process.cwd(), 'uploads', 'prescriptions');
+  try {
+    return (await readdir(directory))
+      .filter((name) => name.startsWith('zone-prescription-'))
+      .sort();
+  } catch (error) {
+    if (error?.code === 'ENOENT') return [];
+    throw error;
+  }
 }
 
 async function cleanupZoneFixtures({
@@ -921,6 +1547,9 @@ async function cleanupZoneFixtures({
     await prisma.user.deleteMany({ where: { tenant_id: { in: tenantIds } } });
     await prisma.tenant.deleteMany({ where: { id: { in: tenantIds } } });
     await prisma.directoryArea.deleteMany({ where: { id: { in: areaIds } } });
+    await prisma.catalogItem.deleteMany({
+      where: { external_id: { contains: runId } },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[zone-storefront.security.e2e] cleanup failed: ${message}`);

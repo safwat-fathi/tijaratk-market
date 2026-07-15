@@ -2,23 +2,54 @@ import { formatArabicInteger } from "@/lib/utils/number";
 import { OrderStatus } from "@/types/enums";
 import { ScrollableTabList, TabButton } from "@/components/ui/ScrollableTabs";
 
+export type OrdersTab = OrderStatus | "assigned";
+
 interface StatusTabsProps {
-  currentStatus: OrderStatus;
-  counts: Record<string, number>;
-  onTabChange: (status: OrderStatus) => void;
+  currentStatus: OrdersTab;
+  counts: Record<OrdersTab, number>;
+  onTabChange: (status: OrdersTab) => void;
 }
 
-export default function StatusTabs({ currentStatus, counts, onTabChange }: StatusTabsProps) {
+export default function StatusTabs({
+  currentStatus,
+  counts,
+  onTabChange,
+}: StatusTabsProps) {
   const tabs = [
-    { id: OrderStatus.DRAFT, label: "جديد", color: "text-status-new bg-status-new/15" },
-    { id: OrderStatus.CONFIRMED, label: "مؤكد", color: "text-status-confirmed bg-status-confirmed/15" },
-    { id: OrderStatus.OUT_FOR_DELIVERY, label: "التوصيل", color: "text-amber-800 bg-status-delivery/25" },
-    { id: OrderStatus.COMPLETED, label: "اكتمل", color: "text-status-completed bg-status-completed/15" },
-    { id: OrderStatus.CANCELLED, label: "ملغي", color: "text-status-cancelled bg-status-cancelled/15" },
+    {
+      id: OrderStatus.DRAFT,
+      label: "جديد",
+      color: "text-status-new bg-status-new/15",
+    },
+    {
+      id: OrderStatus.CONFIRMED,
+      label: "مؤكد",
+      color: "text-status-confirmed bg-status-confirmed/15",
+    },
+    {
+      id: OrderStatus.OUT_FOR_DELIVERY,
+      label: "التوصيل",
+      color: "text-amber-800 bg-status-delivery/25",
+    },
+    {
+      id: OrderStatus.COMPLETED,
+      label: "اكتمل",
+      color: "text-status-completed bg-status-completed/15",
+    },
+    {
+      id: OrderStatus.CANCELLED,
+      label: "ملغي",
+      color: "text-status-cancelled bg-status-cancelled/15",
+    },
     {
       id: OrderStatus.REJECTED_BY_CUSTOMER,
       label: "رفض العميل",
       color: "text-status-cancelled bg-status-cancelled/15",
+    },
+    {
+      id: "assigned" as const,
+      label: "الطلبات المسندة",
+      color: "text-brand-primary bg-brand-soft",
     },
   ];
 
@@ -35,17 +66,17 @@ export default function StatusTabs({ currentStatus, counts, onTabChange }: Statu
               variant="pill"
               isActive={isActive}
               className={isActive ? tab.color : ""}
-              onClick={() => onTabChange(tab.id as OrderStatus)}
+              onClick={() => onTabChange(tab.id as OrdersTab)}
             >
               {tab.label}
-              {count > 0 && (
-                <span className={`
+              <span
+                className={`
                   text-xs px-1.5 py-0.5 rounded-full
                   ${isActive ? "bg-white/50" : "bg-brand-soft text-muted-foreground"}
-                `}>
-                  {formatArabicInteger(count) || count}
-                </span>
-              )}
+                `}
+              >
+                {formatArabicInteger(count) || count}
+              </span>
             </TabButton>
           );
         })}

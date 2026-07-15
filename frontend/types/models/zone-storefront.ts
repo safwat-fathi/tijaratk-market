@@ -27,6 +27,15 @@ export type ZoneReadiness = {
   catalog_source?: "talabat_csv" | "chefaa_csv";
 };
 
+export type ZoneEssentialCatalogSyncResult = {
+  created: number;
+  linked: number;
+  updated: number;
+  archived: number;
+  active_products: number;
+  active_categories: number;
+};
+
 export type AdminZoneMerchantMembership = {
   id: number;
   tenant_id: number;

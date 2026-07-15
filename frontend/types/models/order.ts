@@ -92,7 +92,7 @@ export interface Order {
     id: number;
     name: string;
     slug: string;
-    reorder_url: string;
+    reorder_url: string | null;
   } | null;
   fulfilled_by?: { name: string } | null;
   created_at: string;

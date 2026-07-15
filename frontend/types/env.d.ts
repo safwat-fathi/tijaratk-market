@@ -4,7 +4,6 @@ declare module "bun" {
 			NODE_ENV: "development" | "production";
 			NEXT_PUBLIC_API_BASE_URL: string;
 			NEXT_PUBLIC_APP_BASE_URL: string;
-			NEXT_PUBLIC_GA_MEASUREMENT_ID?: string;
 			NEXT_PUBLIC_API_GOLD_PRICE: string;
 			NEXT_PUBLIC_GOLD_API_TOKEN: string;
 			NEXT_PUBLIC_ACCESS_TOKEN: string;
@@ -15,10 +14,4 @@ declare module "bun" {
 			CSRF_SECRET: string;
 		}
 	
-}
-
-declare namespace NodeJS {
-	interface ProcessEnv {
-		readonly NEXT_PUBLIC_GA_MEASUREMENT_ID?: string;
-	}
 }

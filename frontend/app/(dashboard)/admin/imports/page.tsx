@@ -6,6 +6,7 @@ import { uploadCatalogImportAction } from "@/actions/admin-server";
 import { adminService } from "@/services/api/admin.service";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { CancelImportButton } from "./_components/CancelImportButton";
+import { AutoRefresh } from "./_components/AutoRefresh";
 import type { ImportRun, ImportStatus } from "@/types/models/import";
 
 export const dynamic = "force-dynamic";
@@ -46,9 +47,11 @@ const formatDate = (value?: string | null) => {
 
 export default async function AdminImportsPage() {
   const imports = await getImports();
+  const isPolling = imports.some(i => i.status === "pending" || i.status === "processing");
 
   return (
     <div className="space-y-6">
+      {isPolling ? <AutoRefresh intervalMs={3000} /> : null}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">استيراد الكتالوج</h1>
         <p className="mt-1 text-sm text-gray-500">

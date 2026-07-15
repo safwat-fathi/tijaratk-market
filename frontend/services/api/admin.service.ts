@@ -19,6 +19,7 @@ import type {
 	AdminZoneStorefront,
 	EligibleZoneMerchant,
 	ManagedZoneDispatchContext,
+	ZoneEssentialCatalogSyncResult,
 	ZoneOrderDispatch,
 } from "@/types/models/zone-storefront";
 
@@ -37,6 +38,7 @@ type AdminDashboardStats = {
 	activeMerchants: number;
 	pendingApplications: number;
 	totalOrders: number;
+	completedOrders: number;
 	totalPlans: number;
 };
 
@@ -603,6 +605,15 @@ class AdminApiService extends HttpService {
 	public async getEligibleZoneMerchants(zoneId: number) {
 		return this.get<EligibleZoneMerchant[]>(
 			`zones/${zoneId}/eligible-merchants`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async syncZoneEssentialCatalog(zoneId: number) {
+		return this.post<ZoneEssentialCatalogSyncResult>(
+			`zones/${zoneId}/catalog/sync-essentials`,
+			{},
 			undefined,
 			ADMIN_AUTH_OPTIONS,
 		);

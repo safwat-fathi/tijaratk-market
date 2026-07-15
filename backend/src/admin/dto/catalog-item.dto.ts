@@ -248,6 +248,7 @@ export class CreateAdminCatalogItemDto {
   @ApiPropertyOptional({ description: 'Image URL if no file is uploaded' })
   @IsOptional()
   @IsString()
+  @MaxLength(2048)
   image_url?: string | null;
 
   @ApiPropertyOptional({ description: 'External source identifier' })
@@ -307,6 +308,7 @@ export class UpdateAdminCatalogItemDto {
   @ApiPropertyOptional({ description: 'Image URL if no file is uploaded' })
   @IsOptional()
   @IsString()
+  @MaxLength(2048)
   image_url?: string | null;
 
   @ApiPropertyOptional({ description: 'External source identifier' })

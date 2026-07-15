@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { logoutAction } from "@/actions/auth-server";
 import { Logo } from "@/components/ui/Logo";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
@@ -44,15 +43,6 @@ const navigation = [
           strokeLinejoin="round"
           d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
         />
-      </svg>
-    ),
-  },
-  {
-    label: "الطلبات المسندة",
-    href: "/merchant/assigned-orders",
-    icon: (
-      <svg className="me-3 h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M6.75 3.75h10.5A2.25 2.25 0 0 1 19.5 6v12A2.25 2.25 0 0 1 17.25 20.25H6.75A2.25 2.25 0 0 1 4.5 18V6a2.25 2.25 0 0 1 2.25-2.25Z" />
       </svg>
     ),
   },
@@ -184,12 +174,22 @@ import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 export default function MerchantLayoutClient({
   children,
   merchantAppName,
+  newOrdersCount,
 }: {
   children: React.ReactNode;
   merchantAppName: string;
+  newOrdersCount: number;
 }) {
-  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const merchantNavigation = navigation.map((item) =>
+    item.href === "/merchant/orders"
+      ? {
+          ...item,
+          badgeCount: newOrdersCount,
+          activePrefixes: ["/merchant/assigned-orders"],
+        }
+      : item,
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -254,7 +254,7 @@ export default function MerchantLayoutClient({
             iconClassName="h-5 w-5"
           />
         }
-        navigation={navigation}
+        navigation={merchantNavigation}
         logoutAction={logoutAction}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
