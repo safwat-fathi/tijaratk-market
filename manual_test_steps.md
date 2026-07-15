@@ -96,9 +96,9 @@ This document outlines the step-by-step manual UI tests to verify Admin Managed 
 3. Choose **الضرورية فقط** and navigate between public pages. Confirm that no GA `collect` request or Meta Pixel event is emitted.
 4. Reopen **إعدادات ملفات التسويق**, grant consent, and confirm the configured provider scripts load.
 5. Navigate through the directory, category, tenant storefront, and zone storefront. Confirm one sanitized GA `page_view` per tracked page and unchanged Meta events.
-6. Open `/stores?area=AREA&category=CATEGORY&utm_source=facebook&utm_medium=paid_social&utm_campaign=test&utm_content=reel` and confirm the redirect preserves only the four UTM parameters.
+6. Open `/stores?area=AREA&category=CATEGORY` and confirm it redirects to `/stores/AREA/CATEGORY` without adding query parameters.
 7. Create one tenant order and one zone order. Confirm each successful checkout emits exactly one GA `order_submitted` event and one consented Meta `Purchase` event when Meta is configured.
-8. Inspect GA payloads and confirm they contain no order token, customer access code, reorder token, name, phone, address, notes, or prescription details.
+8. Inspect GA payloads and confirm page locations contain only public pathnames and no order token, customer access code, reorder token, name, phone, address, notes, or prescription details.
 9. Withdraw consent and confirm later GA/Meta events stop and accessible `_ga*`, `_gid`, `_fbp`, and `_fbc` cookies are removed.
 10. Re-grant consent and confirm tracking resumes without duplicate pageviews.
 11. In the GA4 web stream, disable Enhanced Measurement page changes based on browser history so it cannot duplicate the application’s manual pageviews.

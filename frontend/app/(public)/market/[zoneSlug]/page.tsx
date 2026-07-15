@@ -10,12 +10,8 @@ import type { Tenant } from "@/types/models/tenant";
 import type { PublicProductsMeta } from "@/types/models/product";
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
-import {
-  buildCustomerAnalyticsPageLocation,
-  type CustomerAnalyticsSearchParams,
-} from "@/lib/analytics/google-analytics";
 
-type ZoneSearchParams = CustomerAnalyticsSearchParams & {
+type ZoneSearchParams = {
   reorder?: string;
   category?: string;
 };
@@ -91,10 +87,7 @@ export default async function ZoneStorefrontPage({
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
       <CustomerAnalytics
-        pageLocation={buildCustomerAnalyticsPageLocation(
-          `/market/${encodeURIComponent(zoneSlug)}`,
-          resolvedSearchParams,
-        )}
+        pageLocation={`/market/${encodeURIComponent(zoneSlug)}`}
         pageTitle={zone.name}
       />
       <MetaStorefrontView

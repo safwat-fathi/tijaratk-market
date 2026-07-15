@@ -21,12 +21,8 @@ import { Metadata } from "next";
 import { getCustomerProfileBySlugFromCookie } from "@/lib/tracking/customer-tracking-cookie";
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
-import {
-  buildCustomerAnalyticsPageLocation,
-  type CustomerAnalyticsSearchParams,
-} from "@/lib/analytics/google-analytics";
 
-type StoreSearchParams = CustomerAnalyticsSearchParams & {
+type StoreSearchParams = {
   reorder?: string;
   category?: string;
   areaSlug?: string;
@@ -174,10 +170,7 @@ export default async function StorePage({ params, searchParams }: Props) {
   return (
     <div className="mx-auto min-h-screen w-full max-w-md bg-background flex flex-col">
       <CustomerAnalytics
-        pageLocation={buildCustomerAnalyticsPageLocation(
-          `/${encodeURIComponent(slug)}`,
-          resolvedSearchParams,
-        )}
+        pageLocation={`/${encodeURIComponent(slug)}`}
         pageTitle={tenant.name}
       />
       <MetaStorefrontView

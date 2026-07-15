@@ -21,14 +21,10 @@ import CategoryGrid, {
 import { AppHeader } from "@/components/layout/AppHeader";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
-import {
-  buildCustomerAnalyticsPageLocation,
-  type CustomerAnalyticsSearchParams,
-} from "@/lib/analytics/google-analytics";
 import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
 import type { ZoneStorefront } from "@/types/models/zone-storefront";
 
-type StoresDirectorySearchParams = CustomerAnalyticsSearchParams & {
+type StoresDirectorySearchParams = {
   area?: string;
 };
 
@@ -504,19 +500,11 @@ async function LegacyStoresDirectoryPage({
 }
 
 export default async function HomePage(props: StoresDirectoryPageProps) {
-  const [publicZones, resolvedSearchParams] = await Promise.all([
-    getPublicZoneStorefronts(),
-    props.searchParams,
-  ]);
+  const publicZones = await getPublicZoneStorefronts();
 
   return (
     <>
-      <CustomerAnalytics
-        pageLocation={buildCustomerAnalyticsPageLocation(
-          STORES_PATH,
-          resolvedSearchParams,
-        )}
-      />
+      <CustomerAnalytics pageLocation={STORES_PATH} />
       {publicZones.length > 0 ? (
         <ZoneStorefrontHome zones={publicZones} />
       ) : (
