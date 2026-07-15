@@ -1,7 +1,7 @@
 import {
-  readMetaMarketingConsent,
-  removeMetaBrowserCookies,
-} from "@/lib/analytics/meta-consent";
+  readMarketingConsent,
+  removeBrowserCookies,
+} from "@/lib/analytics/marketing-consent";
 
 const configuredPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
 
@@ -82,7 +82,7 @@ const ensureMetaPixelFunction = (): MetaPixelFunction | null => {
 
 export const initializeMetaPixel = (): MetaPixelFunction | null => {
   if (
-    readMetaMarketingConsent() !== "granted" ||
+    readMarketingConsent() !== "granted" ||
     !META_PIXEL_ID ||
     !isSafeMetaBrowserLocation()
   ) {
@@ -133,7 +133,7 @@ export const revokeMetaPixelConsent = () => {
   } catch {
     // Consent withdrawal still clears local identifiers below.
   }
-  removeMetaBrowserCookies();
+  removeBrowserCookies(["_fbp", "_fbc"]);
   window.__tijaratkMetaLastPageLocation = undefined;
   window.__tijaratkMetaViewedContent?.clear();
 };

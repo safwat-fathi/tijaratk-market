@@ -493,7 +493,7 @@ model DirectoryArea {
   directory_events          DirectoryEvent[]
   customer_addresses        CustomerAddress[]
   orders                    Order[]
-  zone_storefront           ZoneStorefront?
+  zone_storefronts          ZoneStorefront[]
 
   @@index([parent_area_id], map: "IDX_directory_areas_parent_area_id")
   @@index([is_active, sort_order, name_ar], map: "IDX_directory_areas_active_sort_name")

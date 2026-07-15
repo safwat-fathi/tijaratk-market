@@ -2,6 +2,11 @@ import { notFound, redirect } from "next/navigation";
 import OrderSuccessView from "@/app/(public)/[slug]/_components/OrderSuccessView";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
 import { ordersService } from "@/services/api/orders.service";
+import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import {
+  buildCustomerAnalyticsPageLocation,
+  type CustomerAnalyticsSearchParams,
+} from "@/lib/analytics/google-analytics";
 
 export const metadata = createNoIndexMetadata(
   "تم إرسال طلب المنطقة",
@@ -10,7 +15,12 @@ export const metadata = createNoIndexMetadata(
 
 type ZoneSuccessPageProps = {
   params: Promise<{ zoneSlug: string }>;
-  searchParams: Promise<{ token?: string; customerCode?: string }>;
+  searchParams: Promise<
+    CustomerAnalyticsSearchParams & {
+      token?: string;
+      customerCode?: string;
+    }
+  >;
 };
 
 export default async function ZoneOrderSuccessPage({
@@ -34,6 +44,13 @@ export default async function ZoneOrderSuccessPage({
 
   return (
     <div className="relative mx-auto min-h-screen w-full max-w-md overflow-x-hidden bg-background">
+      <CustomerAnalytics
+        pageLocation={buildCustomerAnalyticsPageLocation(
+          `/market/${encodeURIComponent(zoneSlug)}/success`,
+          resolvedSearchParams,
+        )}
+        pageTitle="تم إرسال طلب المنطقة"
+      />
       <OrderSuccessView
         tenantSlug={zoneSlug}
         orderToken={token}

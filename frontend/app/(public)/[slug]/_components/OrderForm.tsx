@@ -80,7 +80,8 @@ import {
 import {
   DEFAULT_UNAVAILABLE_ITEM_ACTION,
 } from "@/lib/orders/unavailable-item-action";
-import { META_CONSENT_CHANGED_EVENT } from "@/lib/analytics/meta-consent";
+import { MARKETING_CONSENT_CHANGED_EVENT } from "@/lib/analytics/marketing-consent";
+import { sendCustomerAnalyticsEvent } from "@/lib/analytics/google-analytics";
 import { sendMetaPixelEvent } from "@/lib/analytics/meta-pixel";
 
 const initialState: CreateOrderState = {
@@ -544,10 +545,13 @@ export default function OrderForm({
     const handleConsentChange = () => {
       setMetaConsentRevision((current) => current + 1);
     };
-    window.addEventListener(META_CONSENT_CHANGED_EVENT, handleConsentChange);
+    window.addEventListener(
+      MARKETING_CONSENT_CHANGED_EVENT,
+      handleConsentChange,
+    );
     return () =>
       window.removeEventListener(
-        META_CONSENT_CHANGED_EVENT,
+        MARKETING_CONSENT_CHANGED_EVENT,
         handleConsentChange,
       );
   }, []);
@@ -1488,6 +1492,8 @@ export default function OrderForm({
     [effectiveCartSelections, knownProductsById],
   );
 
+  const hasFreeTextRequest = orderRequest.trim().length > 0;
+
   useEffect(() => {
     if (!state.success || hasNavigatedToSuccessRef.current) {
       return;
@@ -1531,8 +1537,17 @@ export default function OrderForm({
     }
 
     hasNavigatedToSuccessRef.current = true;
+    sendCustomerAnalyticsEvent("order_submitted", {
+      store_slug: tenantSlug,
+      storefront_type: storefrontKind,
+      item_count: totalItems,
+      has_free_text: hasFreeTextRequest,
+      has_prescription: hasPrescription,
+    });
     router.replace(`${successUrl.pathname}${successUrl.search}`);
   }, [
+    hasFreeTextRequest,
+    hasPrescription,
     router,
     state.data,
     state.success,

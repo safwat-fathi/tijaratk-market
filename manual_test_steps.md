@@ -1,9 +1,10 @@
-# Manual Test Steps: Admin Operations & Zone Dispatch
+# Manual Test Steps: Admin Operations, Zone Dispatch & Marketing Analytics
 
-This document outlines the step-by-step manual UI tests to verify the newly implemented features for Admin Managed Merchant Operations, Zone Storefronts & Dispatch, and Admin Audit Logging.
+This document outlines the step-by-step manual UI tests to verify Admin Managed Merchant Operations, Zone Storefronts & Dispatch, Admin Audit Logging, and consent-gated Meta/GA4 browser tracking.
 
 ## Prerequisites
-1. **Database Setup**: Ensure all migrations have been applied and the seeders have run:
+1. **Tracking Configuration**: Configure `NEXT_PUBLIC_GA_MEASUREMENT_ID` and/or `NEXT_PUBLIC_META_PIXEL_ID` in the frontend environment.
+2. **Database Setup**: Ensure all migrations have been applied and the seeders have run:
    - `admin.seeder.ts` to create the initial platform admin.
    - `zone-storefront.seeder.ts` to create test zones and configure test merchants for dispatch eligibility.
 
@@ -83,3 +84,22 @@ This document outlines the step-by-step manual UI tests to verify the newly impl
    - IP Address (if available in environment)
    - The outcome (`success`)
    - The exact action and metadata
+
+---
+
+## 4. Consent-Gated GA4 and Meta Tracking
+
+**Objective**: Verify that browser analytics load only after marketing consent and never expose private order data.
+
+1. Clear the `tijaratk_marketing_consent` cookie and open a public directory or storefront page in a new browser session.
+2. Before choosing a preference, confirm that neither `googletagmanager.com/gtag/js` nor `connect.facebook.net/en_US/fbevents.js` is requested.
+3. Choose **الضرورية فقط** and navigate between public pages. Confirm that no GA `collect` request or Meta Pixel event is emitted.
+4. Reopen **إعدادات ملفات التسويق**, grant consent, and confirm the configured provider scripts load.
+5. Navigate through the directory, category, tenant storefront, and zone storefront. Confirm one sanitized GA `page_view` per tracked page and unchanged Meta events.
+6. Open `/stores?area=AREA&category=CATEGORY&utm_source=facebook&utm_medium=paid_social&utm_campaign=test&utm_content=reel` and confirm the redirect preserves only the four UTM parameters.
+7. Create one tenant order and one zone order. Confirm each successful checkout emits exactly one GA `order_submitted` event and one consented Meta `Purchase` event when Meta is configured.
+8. Inspect GA payloads and confirm they contain no order token, customer access code, reorder token, name, phone, address, notes, or prescription details.
+9. Withdraw consent and confirm later GA/Meta events stop and accessible `_ga*`, `_gid`, `_fbp`, and `_fbc` cookies are removed.
+10. Re-grant consent and confirm tracking resumes without duplicate pageviews.
+11. In the GA4 web stream, disable Enhanced Measurement page changes based on browser history so it cannot duplicate the application’s manual pageviews.
+12. After the first `order_submitted` event is received, mark it as a GA4 key event.

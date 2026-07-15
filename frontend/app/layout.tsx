@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans_Arabic, Poppins } from "next/font/google";
 import { SITE_DESCRIPTION, SITE_URL } from "@/lib/marketing-seo";
-import MetaPixel from "@/components/analytics/MetaPixel";
+import MarketingTracking from "@/components/analytics/MarketingTracking";
 import "./globals.css";
 
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
@@ -90,7 +90,7 @@ export default function RootLayout({
 				className={`${ibmPlexSansArabic.variable} ${poppins.variable} font-sans antialiased`}
 			>
 				{children}
-				<MetaPixel />
+				<MarketingTracking />
 			</body>
 		</html>
 	);

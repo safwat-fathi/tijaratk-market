@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import {
-  META_CONSENT_CHANGED_EVENT,
-  readMetaMarketingConsent,
-} from "@/lib/analytics/meta-consent";
+  MARKETING_CONSENT_CHANGED_EVENT,
+  readMarketingConsent,
+} from "@/lib/analytics/marketing-consent";
 import { sendMetaPixelEvent } from "@/lib/analytics/meta-pixel";
 
 type MetaStorefrontViewProps = {
@@ -20,7 +20,7 @@ export default function MetaStorefrontView({
   useEffect(() => {
     const reportView = () => {
       if (
-        readMetaMarketingConsent() !== "granted" ||
+        readMarketingConsent() !== "granted" ||
         new URLSearchParams(window.location.search).has("reorder")
       ) {
         return;
@@ -44,9 +44,9 @@ export default function MetaStorefrontView({
     };
 
     reportView();
-    window.addEventListener(META_CONSENT_CHANGED_EVENT, reportView);
+    window.addEventListener(MARKETING_CONSENT_CHANGED_EVENT, reportView);
     return () =>
-      window.removeEventListener(META_CONSENT_CHANGED_EVENT, reportView);
+      window.removeEventListener(MARKETING_CONSENT_CHANGED_EVENT, reportView);
   }, [contentId, storefrontType]);
 
   return null;

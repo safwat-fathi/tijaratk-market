@@ -5,12 +5,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  META_CONSENT_CHANGED_EVENT,
-  META_CONSENT_SETTINGS_EVENT,
-  readMetaMarketingConsent,
-  writeMetaMarketingConsent,
-  type MetaMarketingConsent,
-} from "@/lib/analytics/meta-consent";
+  MARKETING_CONSENT_CHANGED_EVENT,
+  MARKETING_CONSENT_SETTINGS_EVENT,
+  readMarketingConsent,
+  writeMarketingConsent,
+  type MarketingConsent,
+} from "@/lib/analytics/marketing-consent";
+import {
+  GOOGLE_ANALYTICS_MEASUREMENT_ID,
+  revokeGoogleAnalyticsConsent,
+} from "@/lib/analytics/google-analytics";
 import {
   initializeMetaPixel,
   isSafeMetaBrowserLocation,
@@ -53,47 +57,56 @@ const isAllowlistedPublicPath = (pathname: string) => {
 };
 
 /**
- * Loads Meta Pixel and exposes marketing consent choices only on explicitly
- * allowlisted public pages. The script is never requested before consent.
+ * Coordinates consent for configured browser marketing providers. Provider
+ * scripts are never requested before consent.
  */
-export default function MetaPixel() {
+export default function MarketingTracking() {
   const pathname = usePathname();
-  const [consent, setConsent] = useState<MetaMarketingConsent>(null);
+  const [consent, setConsent] = useState<MarketingConsent>(null);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const dialogRef = useRef<HTMLElement | null>(null);
   const isAllowlistedPage = useMemo(
     () => isAllowlistedPublicPath(pathname),
     [pathname],
   );
+  const hasConfiguredProvider = Boolean(
+    META_PIXEL_ID || GOOGLE_ANALYTICS_MEASUREMENT_ID,
+  );
 
   useEffect(() => {
-    const currentConsent = readMetaMarketingConsent();
+    const currentConsent = readMarketingConsent();
     setConsent(currentConsent);
 
     const handleConsentChanged = (event: Event) => {
-      const nextConsent = (event as CustomEvent<MetaMarketingConsent>).detail;
+      const nextConsent = (event as CustomEvent<MarketingConsent>).detail;
       if (nextConsent === "granted" || nextConsent === "denied") {
         setConsent(nextConsent);
       }
     };
     const handleSettingsRequest = () => setPreferencesOpen(true);
 
-    window.addEventListener(META_CONSENT_CHANGED_EVENT, handleConsentChanged);
-    window.addEventListener(META_CONSENT_SETTINGS_EVENT, handleSettingsRequest);
+    window.addEventListener(
+      MARKETING_CONSENT_CHANGED_EVENT,
+      handleConsentChanged,
+    );
+    window.addEventListener(
+      MARKETING_CONSENT_SETTINGS_EVENT,
+      handleSettingsRequest,
+    );
     return () => {
       window.removeEventListener(
-        META_CONSENT_CHANGED_EVENT,
+        MARKETING_CONSENT_CHANGED_EVENT,
         handleConsentChanged,
       );
       window.removeEventListener(
-        META_CONSENT_SETTINGS_EVENT,
+        MARKETING_CONSENT_SETTINGS_EVENT,
         handleSettingsRequest,
       );
     };
   }, []);
 
   useEffect(() => {
-    if (isAllowlistedPage && readMetaMarketingConsent() === null) {
+    if (isAllowlistedPage && readMarketingConsent() === null) {
       setPreferencesOpen(true);
       return;
     }
@@ -105,6 +118,7 @@ export default function MetaPixel() {
   useEffect(() => {
     if (
       consent !== "granted" ||
+      !META_PIXEL_ID ||
       !isAllowlistedPage ||
       !isSafeMetaBrowserLocation()
     ) {
@@ -112,9 +126,7 @@ export default function MetaPixel() {
     }
 
     const pageKey = `${window.location.pathname}${window.location.search}`;
-    if (window.__tijaratkMetaLastPageLocation === pageKey) {
-      return;
-    }
+    if (window.__tijaratkMetaLastPageLocation === pageKey) return;
 
     if (sendMetaPixelEvent("PageView")) {
       window.__tijaratkMetaLastPageLocation = pageKey;
@@ -127,22 +139,24 @@ export default function MetaPixel() {
     }
   }, [preferencesOpen]);
 
-  if (!META_PIXEL_ID || (!isAllowlistedPage && !preferencesOpen)) {
+  if (!hasConfiguredProvider || (!isAllowlistedPage && !preferencesOpen)) {
     return null;
   }
 
   const allowMarketing = () => {
-    writeMetaMarketingConsent("granted");
+    writeMarketingConsent("granted");
     setPreferencesOpen(false);
   };
 
   const useNecessaryOnly = () => {
     revokeMetaPixelConsent();
-    writeMetaMarketingConsent("denied");
+    revokeGoogleAnalyticsConsent();
+    writeMarketingConsent("denied");
     setPreferencesOpen(false);
   };
 
-  const canLoadScript =
+  const canLoadMetaScript =
+    Boolean(META_PIXEL_ID) &&
     consent === "granted" &&
     isAllowlistedPage &&
     typeof window !== "undefined" &&
@@ -150,7 +164,7 @@ export default function MetaPixel() {
 
   return (
     <>
-      {canLoadScript && (
+      {canLoadMetaScript && (
         <Script
           id="tijaratk-meta-pixel"
           src="https://connect.facebook.net/en_US/fbevents.js"
@@ -165,8 +179,8 @@ export default function MetaPixel() {
           role="dialog"
           aria-modal="false"
           aria-live="polite"
-          aria-labelledby="meta-consent-title"
-          aria-describedby="meta-consent-description"
+          aria-labelledby="marketing-consent-title"
+          aria-describedby="marketing-consent-description"
           tabIndex={-1}
           onKeyDown={(event) => {
             if (event.key === "Escape" && consent !== null) {
@@ -178,19 +192,19 @@ export default function MetaPixel() {
         >
           <div className="space-y-3">
             <h2
-              id="meta-consent-title"
-              className="text-lg font-bold text-brand-text flex items-center gap-2"
+              id="marketing-consent-title"
+              className="flex items-center gap-2 text-lg font-bold text-brand-text"
             >
               <span className="text-xl">🍪</span> نحن نهتم بخصوصيتك
             </h2>
             <p
-              id="meta-consent-description"
+              id="marketing-consent-description"
               className="text-sm leading-6 text-muted-foreground"
             >
               لكي نقدم لك أفضل تجربة وعروضاً تناسب اهتماماتك، نطلب إذنك لاستخدام
-              أدوات تتبع (مثل Meta). يساعدنا هذا في فهم كيفية تفاعلك مع متجرنا،
-              وتوجيه إعلاناتنا بشكل أفضل. يمكنك دائماً تغيير رأيك في أي وقت من أسفل
-              الصفحة. اقرأ المزيد في{" "}
+              أدوات قياس وتسويق مثل Google Analytics وMeta. تساعدنا هذه الأدوات
+              في فهم التفاعل مع المتجر وقياس أداء حملاتنا. يمكنك تغيير اختيارك في
+              أي وقت من أسفل الصفحة. اقرأ المزيد في{" "}
               <Link
                 href="/privacy"
                 className="font-semibold text-brand-primary underline underline-offset-4"
