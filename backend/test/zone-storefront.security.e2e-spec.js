@@ -121,6 +121,7 @@ describe('Zone storefront security E2E', () => {
       prisma,
       adminToken: platformAdminToken,
       runId,
+      area: grocery.area,
       suffix: 'pharmacy',
       category: 'pharmacy',
       allowedCategory: 'أدوية',
@@ -153,6 +154,124 @@ describe('Zone storefront security E2E', () => {
       runId,
     });
     if (app) await app.close();
+  });
+
+  it('allows one zone per category in an area and rejects true duplicates', async () => {
+    expect(pharmacy.area.id).toBe(grocery.area.id);
+
+    const duplicateCategoryResponse = await request(httpServer)
+      .post('/admin/zones')
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({
+        name: `Duplicate grocery ${runId}`,
+        slug: `duplicate-grocery-${runId}`.toLowerCase(),
+        area_id: grocery.area.id,
+        category: 'grocery',
+        operations_phone: generateEgyptPhone(22),
+      })
+      .expect(409);
+    expect(duplicateCategoryResponse.body).toEqual(
+      expect.objectContaining({
+        message: 'يوجد بالفعل واجهة سوبر ماركت لهذه المنطقة.',
+        errors: expect.objectContaining({
+          code: 'ZONE_AREA_CATEGORY_CONFLICT',
+        }),
+      }),
+    );
+
+    const duplicatePharmacyResponse = await request(httpServer)
+      .post('/admin/zones')
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({
+        name: `Duplicate pharmacy ${runId}`,
+        slug: `duplicate-pharmacy-${runId}`.toLowerCase(),
+        area_id: pharmacy.area.id,
+        category: 'pharmacy',
+        operations_phone: generateEgyptPhone(25),
+      })
+      .expect(409);
+    expect(duplicatePharmacyResponse.body).toEqual(
+      expect.objectContaining({
+        message: 'يوجد بالفعل واجهة صيدلية لهذه المنطقة.',
+        errors: expect.objectContaining({
+          code: 'ZONE_AREA_CATEGORY_CONFLICT',
+        }),
+      }),
+    );
+
+    const slugConflictArea = await prisma.directoryArea.create({
+      data: {
+        name_ar: `منطقة تعارض الرابط ${runId}`,
+        name_en: `slug conflict ${runId}`,
+        slug: `zone-slug-conflict-${runId}`.toLowerCase(),
+        is_active: true,
+      },
+    });
+    createdAreaIds.push(slugConflictArea.id);
+    const duplicateSlugResponse = await request(httpServer)
+      .post('/admin/zones')
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({
+        name: `Duplicate slug ${runId}`,
+        slug: grocery.zone.slug,
+        area_id: slugConflictArea.id,
+        category: 'grocery',
+        operations_phone: generateEgyptPhone(23),
+      })
+      .expect(409);
+    expect(duplicateSlugResponse.body.errors).toEqual(
+      expect.objectContaining({ code: 'ZONE_SLUG_CONFLICT' }),
+    );
+
+    const concurrentArea = await prisma.directoryArea.create({
+      data: {
+        name_ar: `منطقة التزامن ${runId}`,
+        name_en: `concurrent zone ${runId}`,
+        slug: `zone-concurrent-${runId}`.toLowerCase(),
+        is_active: true,
+      },
+    });
+    createdAreaIds.push(concurrentArea.id);
+    const concurrentPayload = {
+      name: `Concurrent zone ${runId}`,
+      slug: `concurrent-zone-${runId}`.toLowerCase(),
+      area_id: concurrentArea.id,
+      category: 'pharmacy',
+      operations_phone: generateEgyptPhone(24),
+    };
+    const concurrentResponses = await Promise.all([
+      request(httpServer)
+        .post('/admin/zones')
+        .set('Authorization', `Bearer ${platformAdminToken}`)
+        .send(concurrentPayload),
+      request(httpServer)
+        .post('/admin/zones')
+        .set('Authorization', `Bearer ${platformAdminToken}`)
+        .send(concurrentPayload),
+    ]);
+    expect(concurrentResponses.map((response) => response.status).sort()).toEqual([
+      201,
+      409,
+    ]);
+    const createdResponse = concurrentResponses.find(
+      (response) => response.status === 201,
+    );
+    const conflictResponse = concurrentResponses.find(
+      (response) => response.status === 409,
+    );
+    expect(createdResponse).toBeDefined();
+    expect(conflictResponse).toBeDefined();
+    const createdZone = unwrapBody(createdResponse.body);
+    createdZoneIds.push(createdZone.id);
+    operatorTenantIds.push(createdZone.operator_tenant.id);
+    createdTenantIds.push(createdZone.operator_tenant.id);
+    expect(conflictResponse.body.errors).toEqual(
+      expect.objectContaining({
+        code: expect.stringMatching(
+          /^ZONE_(AREA_CATEGORY|SLUG|OPERATOR_SLUG|CREATE)_CONFLICT$/,
+        ),
+      }),
+    );
   });
 
   it('discovers only active, ready, source-compatible zones', async () => {
@@ -302,6 +421,22 @@ describe('Zone storefront security E2E', () => {
         price: 44,
       },
     });
+    const duplicateName = `Duplicate essential ${runId}`;
+    const duplicateCatalogItems = await Promise.all(
+      [1, 2].map((index) =>
+        prisma.catalogItem.create({
+          data: {
+            name: duplicateName,
+            category: fixture.allowedCategory,
+            source: fixture.catalogSource,
+            external_id: `zone-duplicate-${runId}-${index}`,
+            is_active: true,
+            is_essential: true,
+            price: 50 + index,
+          },
+        }),
+      ),
+    );
     const legacyProduct = await withTenant(
       prisma,
       fixture.zone.operator_tenant.id,
@@ -314,6 +449,22 @@ describe('Zone storefront security E2E', () => {
             source: 'catalog',
             status: 'active',
             current_price: 33,
+            is_available: false,
+          },
+        }),
+    );
+    const duplicateLegacyProduct = await withTenant(
+      prisma,
+      fixture.zone.operator_tenant.id,
+      (tx) =>
+        tx.product.create({
+          data: {
+            tenant_id: fixture.zone.operator_tenant.id,
+            name: duplicateName,
+            category: fixture.allowedCategory,
+            source: 'catalog',
+            status: 'active',
+            current_price: 88,
             is_available: false,
           },
         }),
@@ -341,11 +492,72 @@ describe('Zone storefront security E2E', () => {
     expect(syncResult).toEqual(
       expect.objectContaining({
         linked: expect.any(Number),
+        expected_products: expect.any(Number),
         active_products: expect.any(Number),
         active_categories: expect.any(Number),
+        catalog_in_sync: true,
       }),
     );
     expect(syncResult.linked).toBeGreaterThanOrEqual(1);
+    const expectedProducts = await prisma.catalogItem.count({
+      where: {
+        source: fixture.catalogSource,
+        is_active: true,
+        is_essential: true,
+        deleted_at: null,
+      },
+    });
+    expect(syncResult.expected_products).toBe(expectedProducts);
+    expect(syncResult.active_products).toBe(expectedProducts);
+    const adminZoneResponse = await request(httpServer)
+      .get(`/admin/zones/${fixture.zone.id}`)
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .expect(200);
+    expect(unwrapBody(adminZoneResponse.body).readiness).toEqual(
+      expect.objectContaining({
+        essential_catalog_products: expectedProducts,
+        active_products: expectedProducts,
+        catalog_in_sync: true,
+      }),
+    );
+
+    const duplicateProducts = await withTenant(
+      prisma,
+      fixture.zone.operator_tenant.id,
+      (tx) =>
+        tx.product.findMany({
+          where: {
+            tenant_id: fixture.zone.operator_tenant.id,
+            catalog_item_id: {
+              in: duplicateCatalogItems.map((item) => item.id),
+            },
+          },
+          orderBy: { catalog_item_id: 'asc' },
+        }),
+    );
+    expect(duplicateProducts).toHaveLength(2);
+    expect(duplicateProducts.every((product) => product.is_available)).toBe(
+      true,
+    );
+    expect(duplicateProducts.map((product) => product.catalog_item_id)).toEqual(
+      duplicateCatalogItems.map((item) => item.id).sort((a, b) => a - b),
+    );
+    expect(duplicateProducts.map((product) => product.id)).toContain(
+      duplicateLegacyProduct.id,
+    );
+    expect(
+      Number(
+        duplicateProducts.find(
+          (product) => product.id === duplicateLegacyProduct.id,
+        ).current_price,
+      ),
+    ).toBe(88);
+    const publicProductsResponse = await request(httpServer)
+      .get(`/zone-storefronts/public/${fixture.zone.slug}/products?limit=1`)
+      .expect(200);
+    expect(unwrapBody(publicProductsResponse.body).meta.total).toBe(
+      expectedProducts,
+    );
 
     const retained = await withTenant(
       prisma,
@@ -369,14 +581,14 @@ describe('Zone storefront security E2E', () => {
       expect.objectContaining({
         name: `${fixture.replacementCatalogItem.name} محدث`,
         current_price: expect.anything(),
-        is_available: false,
+        is_available: true,
       }),
     );
     expect(Number(retained.replacement.current_price)).toBe(77);
     expect(retained.legacy).toEqual(
       expect.objectContaining({
         catalog_item_id: legacyCatalogItem.id,
-        is_available: false,
+        is_available: true,
       }),
     );
     expect(Number(retained.legacy.current_price)).toBe(33);
@@ -384,10 +596,22 @@ describe('Zone storefront security E2E', () => {
     expect(retained.manual.catalog_item_id).toBeNull();
     expect(retained.polluted.status).toBe('archived');
 
-    await prisma.catalogItem.update({
+    await request(httpServer)
+      .patch(`/admin/catalog-items/${legacyCatalogItem.id}`)
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({ is_active: false, is_essential: true })
+      .expect(400);
+    await request(httpServer)
+      .patch(`/admin/catalog-items/${legacyCatalogItem.id}`)
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({ is_active: false })
+      .expect(200);
+    const deactivatedCatalogItem = await prisma.catalogItem.findUniqueOrThrow({
       where: { id: legacyCatalogItem.id },
-      data: { is_essential: false },
     });
+    expect(deactivatedCatalogItem).toEqual(
+      expect.objectContaining({ is_active: false, is_essential: false }),
+    );
     await request(httpServer)
       .post(`/admin/zones/${fixture.zone.id}/catalog/sync-essentials`)
       .set('Authorization', `Bearer ${platformAdminToken}`)
@@ -1426,6 +1650,7 @@ async function createZoneFixture({
   prisma,
   adminToken,
   runId,
+  area: providedArea,
   suffix,
   category,
   allowedCategory,
@@ -1434,18 +1659,22 @@ async function createZoneFixture({
   merchantCount,
   password,
 }) {
-  const area = await prisma.directoryArea.create({
-    data: {
-      name_ar: `منطقة ${suffix} ${runId}`,
-      name_en: `${suffix} zone ${runId}`,
-      slug: `zone-area-${suffix}-${runId}`.toLowerCase(),
-      is_active: true,
-    },
-  });
+  const area =
+    providedArea ??
+    (await prisma.directoryArea.create({
+      data: {
+        name_ar: `منطقة ${suffix} ${runId}`,
+        name_en: `${suffix} zone ${runId}`,
+        slug: `zone-area-${suffix}-${runId}`.toLowerCase(),
+        is_active: true,
+      },
+    }));
   const merchants = [];
   for (let index = 0; index < merchantCount; index += 1) {
     const storeName = `Zone ${suffix} Merchant ${index + 1} ${runId}`;
-    const phone = generateEgyptPhone(100 + merchants.length + area.id);
+    const phone = generateEgyptPhone(
+      (category === 'pharmacy' ? 500 : 100) + merchants.length + area.id,
+    );
     await signupTenant(httpServer, {
       storeName,
       ownerName: `${suffix} owner ${index + 1}`,
@@ -1514,7 +1743,7 @@ async function createZoneFixture({
         source: catalogSource,
         external_id: `zone-${suffix}-${runId}-invalid-category`,
         is_active: true,
-        is_essential: true,
+        is_essential: false,
         price: 12,
       },
     }),
@@ -1525,7 +1754,7 @@ async function createZoneFixture({
         source: catalogSource,
         external_id: `zone-${suffix}-${runId}-inactive`,
         is_active: false,
-        is_essential: true,
+        is_essential: false,
         price: 12,
       },
     }),

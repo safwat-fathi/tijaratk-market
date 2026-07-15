@@ -25,7 +25,10 @@ export default function Toast({
 	const closeAnimationClass =
 		position === "bottom" ? "translate-y-4 opacity-0" : "-translate-y-4 opacity-0";
 	const visibilityClass = isClosing ? closeAnimationClass : "translate-y-0 opacity-100";
-	const toneClass = "border-brand-text bg-brand-text text-white";
+	const toneClass =
+		type === "error"
+			? "border-(--status-error) bg-(--status-error) text-white"
+			: "border-brand-text bg-brand-text text-white";
 
 	useEffect(() => {
 		setMounted(true);
@@ -51,8 +54,10 @@ export default function Toast({
 
 	return createPortal(
 		<div
-			className={`fixed ${positionClass} left-1/2 z-[60] flex -translate-x-1/2 transform items-center gap-3 rounded-md border px-4 py-3 shadow-float transition-[opacity,transform] duration-200 ${visibilityClass} ${toneClass}`}
-			aria-live="polite"
+			className={`fixed ${positionClass} left-1/2 z-[60] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 transform items-center gap-3 rounded-md border px-4 py-3 shadow-float transition-[opacity,transform] duration-200 ${visibilityClass} ${toneClass}`}
+			role={type === "error" ? "alert" : "status"}
+			aria-live={type === "error" ? "assertive" : "polite"}
+			aria-atomic="true"
 		>
 			<div
 				className="rounded-full bg-white/10 p-1"
@@ -92,9 +97,10 @@ export default function Toast({
 			</div>
 			<p className="font-medium text-sm">{message}</p>
 			<button
+				type="button"
 				onClick={() => setIsClosing(true)}
 				aria-label="إغلاق التنبيه"
-				className="ml-2 text-white/70 hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30 cursor-pointer"
+				className="ml-2 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-md text-white/70 hover:text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
 			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"

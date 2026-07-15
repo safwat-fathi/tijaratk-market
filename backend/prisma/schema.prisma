@@ -79,6 +79,26 @@ model CatalogCategory {
   @@map("catalog_categories")
 }
 
+/// Durable, source-scoped work state for reconciling essential catalog rows
+/// into every matching zone operator snapshot. This control-plane table does
+/// not use tenant RLS.
+model ZoneCatalogReconciliation {
+  source                String    @id @db.VarChar(64)
+  requested_revision    Int       @default(0)
+  completed_revision    Int       @default(0)
+  processing_revision   Int?
+  processing_started_at DateTime? @db.Timestamptz(6)
+  next_attempt_at       DateTime  @default(now()) @db.Timestamptz(6)
+  attempt_count         Int       @default(0)
+  last_error            String?
+  requested_at          DateTime  @default(now()) @db.Timestamptz(6)
+  completed_at          DateTime? @db.Timestamptz(6)
+  updated_at            DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([next_attempt_at], map: "IDX_zone_catalog_reconciliations_next_attempt")
+  @@map("zone_catalog_reconciliations")
+}
+
 model ImportRun {
   id                 Int              @id @default(autoincrement())
   type               ImportType
@@ -911,10 +931,11 @@ enum OrderDispatchAssignmentStatus {
 /// Cross-tenant control-plane record for a public zone storefront. This table intentionally does not use tenant RLS.
 model ZoneStorefront {
   id                 Int      @id @default(autoincrement())
-  area_id            Int      @unique(map: "UQ_zone_storefronts_area_id")
+  area_id            Int
   operator_tenant_id Int      @unique(map: "UQ_zone_storefronts_operator_tenant_id")
   name               String   @db.VarChar(120)
   slug               String   @unique(map: "UQ_zone_storefronts_slug") @db.VarChar(120)
+  category           TenantCategory
   operations_phone   String   @db.VarChar(32)
   is_active          Boolean  @default(false)
   created_at         DateTime @default(now()) @db.Timestamp(6)
@@ -925,6 +946,7 @@ model ZoneStorefront {
   merchants       ZoneStorefrontMerchant[]
   dispatches      OrderDispatch[]
 
+  @@unique([area_id, category], map: "UQ_zone_storefronts_area_category")
   @@index([is_active, slug], map: "IDX_zone_storefronts_active_slug")
   @@map("zone_storefronts")
 }

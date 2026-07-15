@@ -42,6 +42,7 @@ type ExistingFixtureZone = {
   area_id: number;
   operator_tenant_id: number;
   slug: string;
+  category: TenantCategory;
   is_active: boolean;
   operator_tenant: FixtureOperatorIdentity;
 };
@@ -71,7 +72,15 @@ export async function seedZoneStorefront(prisma: PrismaClient) {
       findFixtureCatalogProducts(prisma),
       findFixtureMerchants(prisma),
       prisma.zoneStorefront.findFirst({
-        where: { OR: [{ area_id: area.id }, { slug: ZONE_SLUG }] },
+        where: {
+          OR: [
+            {
+              area_id: area.id,
+              category: TenantCategory.grocery,
+            },
+            { slug: ZONE_SLUG },
+          ],
+        },
         include: { operator_tenant: true },
       }),
       prisma.tenant.findMany({
@@ -218,6 +227,7 @@ function assertFixturePrerequisites(input: {
     if (
       input.existingZone.area_id !== input.areaId ||
       input.existingZone.slug !== ZONE_SLUG ||
+      input.existingZone.category !== TenantCategory.grocery ||
       operator.slug !== OPERATOR_SLUG ||
       operator.phone !== OPERATOR_PHONE ||
       !isSafeFixtureOperator(operator)
@@ -343,6 +353,7 @@ async function ensureZoneStorefront(
     data: {
       name: ZONE_NAME,
       slug: ZONE_SLUG,
+      category: TenantCategory.grocery,
       operator_tenant_id: operatorTenantId,
       area_id: areaId,
       operations_phone: OPERATIONS_PHONE,

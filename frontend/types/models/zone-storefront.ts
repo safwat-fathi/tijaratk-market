@@ -1,4 +1,8 @@
-import type { Product, PublicProductCategory, PublicProductsResponse } from "@/types/models/product";
+import type {
+  Product,
+  PublicProductCategory,
+  PublicProductsResponse,
+} from "@/types/models/product";
 import type { OrderItem } from "@/types/models/order";
 
 export type ZoneStorefront = {
@@ -21,7 +25,9 @@ export type ZoneStorefront = {
 
 export type ZoneReadiness = {
   catalog_ready: boolean;
+  catalog_in_sync: boolean;
   active_products: number;
+  essential_catalog_products: number;
   required_products?: number;
   active_eligible_merchants: number;
   catalog_source?: "talabat_csv" | "chefaa_csv";
@@ -32,8 +38,10 @@ export type ZoneEssentialCatalogSyncResult = {
   linked: number;
   updated: number;
   archived: number;
+  expected_products: number;
   active_products: number;
   active_categories: number;
+  catalog_in_sync: boolean;
 };
 
 export type AdminZoneMerchantMembership = {

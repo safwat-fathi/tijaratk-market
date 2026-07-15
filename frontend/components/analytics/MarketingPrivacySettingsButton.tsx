@@ -11,23 +11,17 @@ export default function MarketingPrivacySettingsButton() {
 
   return (
     <>
-      <span
-        className="hidden text-[#222B2E]/20 sm:inline"
-        aria-hidden="true"
-      >
+      <span className="hidden text-[#222B2E]/20 sm:inline" aria-hidden="true">
         •
       </span>
       <button
         type="button"
         onClick={openMetaConsentSettings}
-        className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+        className="cursor-pointer text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
       >
         إعدادات ملفات التسويق
       </button>
-      <span
-        className="hidden text-[#222B2E]/20 sm:inline"
-        aria-hidden="true"
-      >
+      <span className="hidden text-[#222B2E]/20 sm:inline" aria-hidden="true">
         •
       </span>
     </>

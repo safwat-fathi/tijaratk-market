@@ -13,6 +13,8 @@ import {
 import { ZoneStorefrontNotificationsService } from './zone-storefront-notifications.service';
 import { ZoneStorefrontsService } from './zone-storefronts.service';
 import { MetaConversionsModule } from 'src/meta-conversions/meta-conversions.module';
+import { ZoneCatalogReconciliationService } from './zone-catalog-reconciliation.service';
+import { ZoneCatalogReconciliationWorker } from './zone-catalog-reconciliation.worker';
 
 /** Encapsulates public zones, control-plane membership, and manual dispatch. */
 @Module({
@@ -33,7 +35,13 @@ import { MetaConversionsModule } from 'src/meta-conversions/meta-conversions.mod
     ZoneStorefrontsService,
     OrderDispatchService,
     ZoneStorefrontNotificationsService,
+    ZoneCatalogReconciliationService,
+    ZoneCatalogReconciliationWorker,
   ],
-  exports: [ZoneStorefrontsService, OrderDispatchService],
+  exports: [
+    ZoneStorefrontsService,
+    ZoneCatalogReconciliationService,
+    OrderDispatchService,
+  ],
 })
 export class ZoneStorefrontsModule {}

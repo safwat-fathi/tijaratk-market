@@ -34,6 +34,9 @@ import {
   type ExistingCatalogImageState,
 } from './services/catalog-import-image.service';
 import { parseBooleanLike } from 'src/products/utils/parse-boolean-like';
+import {
+  enqueueZoneCatalogReconciliation,
+} from 'src/zone-storefronts/zone-catalog-reconciliation.repository';
 
 const EXPECTED_CURRENCY = 'EGP';
 const PROGRESS_UPDATE_INTERVAL = 100;
@@ -60,11 +63,13 @@ type CatalogItemData = {
   last_seen_at: Date;
   is_active: boolean;
   is_essential?: boolean;
+  deleted_at?: Date | null;
 };
 
 type CatalogReplacementState = {
-  source: string | null;
+  source: CatalogSource | null;
   externalIds: Set<string>;
+  affectedSources: Set<CatalogSource>;
 };
 
 /**
@@ -199,6 +204,7 @@ export class ImportsService {
     const replacementState: CatalogReplacementState = {
       source: null,
       externalIds: new Set<string>(),
+      affectedSources: new Set<CatalogSource>(),
     };
 
     await this.prisma.importRun.update({
@@ -304,7 +310,7 @@ export class ImportsService {
     }
 
     await this.flushRowErrors(importRunId);
-    await this.finishImport(importRunId, counters);
+    await this.finishImport(importRunId, counters, replacementState);
   }
 
   private async processBatch(
@@ -364,6 +370,7 @@ export class ImportsService {
 
     try {
       const itemData = this.mapCatalogRow(parsed.data);
+      replacementState.affectedSources.add(itemData.source);
       this.trackReplacementSource(mode, itemData, replacementState);
       const existingItem = await this.findExistingCatalogItem(itemData);
 
@@ -630,7 +637,11 @@ export class ImportsService {
     }
 
     return this.prisma.catalogItem.findFirst({
-      where: { name: itemData.name, category: itemData.category },
+      where: {
+        source: itemData.source,
+        name: itemData.name,
+        category: itemData.category,
+      },
       orderBy: { id: 'asc' },
     });
   }
@@ -649,6 +660,10 @@ export class ImportsService {
     if (!category || !isCatalogCategoryAllowedForSource(source, category)) {
       throw new Error(`Category ${category} is not allowed for ${source}`);
     }
+    const parsedEssential =
+      'is_essential' in row.data && row.data.is_essential !== undefined
+        ? (parseBooleanLike(row.data.is_essential) ?? false)
+        : undefined;
 
     return {
       name: row.data.name.trim(),
@@ -660,8 +675,11 @@ export class ImportsService {
       external_id: this.normalizeOptionalText(row.data.product_id),
       last_seen_at: new Date(),
       is_active: true,
-      ...('is_essential' in row.data && row.data.is_essential !== undefined
-        ? { is_essential: parseBooleanLike(row.data.is_essential) ?? false }
+      ...(parsedEssential !== undefined
+        ? {
+            is_essential: parsedEssential,
+            ...(parsedEssential ? { deleted_at: null } : {}),
+          }
         : {}),
     };
   }
@@ -795,6 +813,7 @@ export class ImportsService {
   private async finishImport(
     importRunId: number,
     counters: CatalogImportCounters,
+    replacementState: CatalogReplacementState,
   ) {
     let status: ImportStatus = ImportStatus.failed;
     if (counters.failedRows === 0) {
@@ -803,13 +822,24 @@ export class ImportsService {
       status = ImportStatus.partial_success;
     }
 
-    await this.prisma.importRun.update({
-      where: { id: importRunId },
-      data: {
-        ...this.toImportProgressData(counters),
-        status,
-        finished_at: new Date(),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.importRun.update({
+        where: { id: importRunId },
+        data: {
+          ...this.toImportProgressData(counters),
+          status,
+          finished_at: new Date(),
+        },
+      });
+
+      if (
+        status === ImportStatus.success ||
+        status === ImportStatus.partial_success
+      ) {
+        for (const source of replacementState.affectedSources) {
+          await enqueueZoneCatalogReconciliation(tx, source);
+        }
+      }
     });
   }
 
@@ -832,6 +862,8 @@ export class ImportsService {
       },
       data: {
         is_active: false,
+        is_essential: false,
+        essential_sort_order: null,
         updated_at: new Date(),
       },
     });

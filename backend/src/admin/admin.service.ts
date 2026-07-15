@@ -34,6 +34,7 @@ import {
   getAllowedCatalogCategoriesForSource,
   isCatalogCategoryAllowedForSource,
   isCatalogImageReferenceAllowedForSource,
+  normalizeCatalogCategoryForSource,
   resolveCatalogSourceForTenantCategory,
 } from 'src/products/catalog-source-policy';
 import {
@@ -58,6 +59,9 @@ import {
   ActivityEntityTypes,
   ActivitySources,
 } from 'src/activity-log/constants/activity-types';
+import {
+  enqueueZoneCatalogReconciliation,
+} from 'src/zone-storefronts/zone-catalog-reconciliation.repository';
 
 const CATALOG_EXPORT_COLUMNS = [
   'catalog_item_id',
@@ -938,6 +942,10 @@ export class AdminService {
           },
           data: { category: newName },
         });
+        await enqueueZoneCatalogReconciliation(
+          tx,
+          category.source as CatalogSource,
+        );
 
         return updatedCategory;
       });
@@ -1019,12 +1027,18 @@ export class AdminService {
       this.ensureActiveCatalogCategory(source, toCategory),
     ]);
 
-    const result = await this.prisma.catalogItem.updateMany({
-      where: {
-        source,
-        category: fromCategory,
-      },
-      data: { category: toCategory },
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.catalogItem.updateMany({
+        where: {
+          source,
+          category: fromCategory,
+        },
+        data: { category: toCategory },
+      });
+      if (updated.count > 0) {
+        await enqueueZoneCatalogReconciliation(tx, source);
+      }
+      return updated;
     });
 
     if (result.count === 0) {
@@ -1239,9 +1253,10 @@ export class AdminService {
   ) {
     const source = dto.source;
     this.ensureSupportedCatalogSource(source);
+    this.rejectContradictoryEssentialState(dto.is_active, dto.is_essential);
 
     const name = dto.name?.trim();
-    const category = dto.category?.trim();
+    const category = normalizeCatalogCategoryForSource(source, dto.category);
     if (!name || !category) {
       throw new BadRequestException('Name and category are required');
     }
@@ -1262,19 +1277,25 @@ export class AdminService {
       ? await this.imageProcessorService.processProductThumbnail(file.path)
       : requestedImageUrl;
 
-    return this.prisma.catalogItem.create({
-      data: {
-        name,
-        category,
-        source,
-        price: dto.price,
-        currency: this.normalizeCurrency(dto.currency),
-        image_url: imageUrl,
-        external_id: this.normalizeNullableString(dto.external_id),
-        is_active: dto.is_active ?? true,
-        is_essential: dto.is_essential ?? false,
-        essential_sort_order: dto.essential_sort_order,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const item = await tx.catalogItem.create({
+        data: {
+          name,
+          category,
+          source,
+          price: dto.price,
+          currency: this.normalizeCurrency(dto.currency),
+          image_url: imageUrl,
+          external_id: this.normalizeNullableString(dto.external_id),
+          is_active:
+            dto.is_essential === true ? true : (dto.is_active ?? true),
+          is_essential: dto.is_essential ?? false,
+          essential_sort_order:
+            dto.is_essential === true ? dto.essential_sort_order : null,
+        },
+      });
+      await enqueueZoneCatalogReconciliation(tx, source);
+      return item;
     });
   }
 
@@ -1287,6 +1308,7 @@ export class AdminService {
     file?: Express.Multer.File,
   ) {
     const item = await this.findAdminCatalogItem(id);
+    this.rejectContradictoryEssentialState(dto.is_active, dto.is_essential);
 
     const data: Prisma.CatalogItemUpdateInput = {};
     if (dto.name !== undefined) {
@@ -1295,7 +1317,13 @@ export class AdminService {
       data.name = name;
     }
     if (dto.category !== undefined) {
-      const category = dto.category.trim();
+      const category = normalizeCatalogCategoryForSource(
+        item.source,
+        dto.category,
+      );
+      if (!category) {
+        throw new BadRequestException('Category is not supported for source');
+      }
       await this.ensureActiveCatalogCategory(item.source, category);
       data.category = category;
     }
@@ -1325,15 +1353,32 @@ export class AdminService {
     if (dto.external_id !== undefined) {
       data.external_id = this.normalizeNullableString(dto.external_id);
     }
-    if (dto.is_active !== undefined) data.is_active = dto.is_active;
-    if (dto.is_essential !== undefined) data.is_essential = dto.is_essential;
     if (dto.essential_sort_order !== undefined) {
       data.essential_sort_order = dto.essential_sort_order;
     }
+    if (dto.is_active === false) {
+      data.is_active = false;
+      data.is_essential = false;
+      data.essential_sort_order = null;
+    } else if (dto.is_active === true) {
+      data.is_active = true;
+    }
+    if (dto.is_essential === true) {
+      data.is_essential = true;
+      data.is_active = true;
+      data.deleted_at = null;
+    } else if (dto.is_essential === false) {
+      data.is_essential = false;
+      data.essential_sort_order = null;
+    }
 
-    const updatedItem = await this.prisma.catalogItem.update({
-      where: { id },
-      data,
+    const updatedItem = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.catalogItem.update({ where: { id }, data });
+      await enqueueZoneCatalogReconciliation(
+        tx,
+        item.source as CatalogSource,
+      );
+      return updated;
     });
 
     if (item.image_url && item.image_url !== updatedItem.image_url) {
@@ -1353,9 +1398,13 @@ export class AdminService {
     if (!hasCategory && !hasActive && !hasEssential) {
       throw new BadRequestException('At least one bulk action is required');
     }
+    this.rejectContradictoryEssentialState(dto.is_active, dto.is_essential);
 
     const items = await this.prisma.catalogItem.findMany({
-      where: { id: { in: dto.ids } },
+      where: {
+        id: { in: dto.ids },
+        source: { in: [CATALOG_SOURCE_TALABAT, CATALOG_SOURCE_CHEFAA] },
+      },
       select: { id: true, source: true },
     });
 
@@ -1365,22 +1414,58 @@ export class AdminService {
 
     const data: Prisma.CatalogItemUpdateManyMutationInput = {};
     if (hasCategory) {
-      const category = dto.category?.trim();
+      const requestedCategory = dto.category?.trim();
+      const normalizedCategories = new Set(
+        items.map((item) =>
+          normalizeCatalogCategoryForSource(item.source, requestedCategory),
+        ),
+      );
+      const [category] = normalizedCategories;
       if (!category) throw new BadRequestException('Category is required');
+      if (normalizedCategories.size !== 1) {
+        throw new BadRequestException(
+          'Category is not supported for all selected catalog sources',
+        );
+      }
 
       const sources = Array.from(new Set(items.map((item) => item.source)));
       for (const source of sources) {
-        await this.ensureActiveCatalogCategory(source as CatalogSource, category);
+        await this.ensureActiveCatalogCategory(
+          source as CatalogSource,
+          category,
+        );
       }
 
       data.category = category;
     }
-    if (hasActive) data.is_active = dto.is_active;
-    if (hasEssential) data.is_essential = dto.is_essential;
+    if (dto.is_active === false) {
+      data.is_active = false;
+      data.is_essential = false;
+      data.essential_sort_order = null;
+    } else if (dto.is_active === true) {
+      data.is_active = true;
+    }
+    if (dto.is_essential === true) {
+      data.is_essential = true;
+      data.is_active = true;
+      data.deleted_at = null;
+    } else if (dto.is_essential === false) {
+      data.is_essential = false;
+      data.essential_sort_order = null;
+    }
 
-    const result = await this.prisma.catalogItem.updateMany({
-      where: { id: { in: dto.ids } },
-      data,
+    const sources = Array.from(
+      new Set(items.map((item) => item.source as CatalogSource)),
+    );
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.catalogItem.updateMany({
+        where: { id: { in: dto.ids } },
+        data,
+      });
+      for (const source of sources) {
+        await enqueueZoneCatalogReconciliation(tx, source);
+      }
+      return updated;
     });
 
     return { success: true, count: result.count };
@@ -1390,11 +1475,21 @@ export class AdminService {
    * Deactivate a global catalog item instead of hard deleting it.
    */
   async deleteAdminCatalogItem(id: number) {
-    await this.findAdminCatalogItem(id);
+    const item = await this.findAdminCatalogItem(id);
 
-    await this.prisma.catalogItem.update({
-      where: { id },
-      data: { is_active: false },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.catalogItem.update({
+        where: { id },
+        data: {
+          is_active: false,
+          is_essential: false,
+          essential_sort_order: null,
+        },
+      });
+      await enqueueZoneCatalogReconciliation(
+        tx,
+        item.source as CatalogSource,
+      );
     });
 
     return { success: true };
@@ -1503,7 +1598,10 @@ export class AdminService {
     }
 
     const name = dto.name?.trim();
-    const category = dto.category?.trim();
+    const category = normalizeCatalogCategoryForSource(
+      CATALOG_SOURCE_TALABAT,
+      dto.category,
+    );
     if (!name || !category) {
       throw new BadRequestException('Name and category are required');
     }
@@ -1514,17 +1612,21 @@ export class AdminService {
       ? await this.imageProcessorService.processProductThumbnail(file.path)
       : this.normalizeNullableString(dto.image_url);
 
-    return this.prisma.catalogItem.create({
-      data: {
-        name,
-        category,
-        price: dto.price,
-        image_url: imageUrl,
-        source: CATALOG_SOURCE_TALABAT,
-        is_active: true,
-        is_essential: true,
-        essential_sort_order: dto.essential_sort_order,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const item = await tx.catalogItem.create({
+        data: {
+          name,
+          category,
+          price: dto.price,
+          image_url: imageUrl,
+          source: CATALOG_SOURCE_TALABAT,
+          is_active: true,
+          is_essential: true,
+          essential_sort_order: dto.essential_sort_order,
+        },
+      });
+      await enqueueZoneCatalogReconciliation(tx, CATALOG_SOURCE_TALABAT);
+      return item;
     });
   }
 
@@ -1542,7 +1644,15 @@ export class AdminService {
       data.name = name;
     }
     if (dto.category !== undefined) {
-      const category = dto.category.trim();
+      const category = normalizeCatalogCategoryForSource(
+        CATALOG_SOURCE_TALABAT,
+        dto.category,
+      );
+      if (!category) {
+        throw new BadRequestException(
+          'Category is not supported for supermarket essentials',
+        );
+      }
       await this.ensureActiveCatalogCategory(CATALOG_SOURCE_TALABAT, category);
       data.category = category;
     }
@@ -1554,14 +1664,21 @@ export class AdminService {
     } else if (dto.image_url !== undefined) {
       data.image_url = this.normalizeNullableString(dto.image_url);
     }
-    if (dto.is_active !== undefined) data.is_active = dto.is_active;
     if (dto.essential_sort_order !== undefined) {
       data.essential_sort_order = dto.essential_sort_order;
     }
+    if (dto.is_active === false) {
+      data.is_active = false;
+      data.is_essential = false;
+      data.essential_sort_order = null;
+    } else if (dto.is_active === true) {
+      data.is_active = true;
+    }
 
-    const updatedItem = await this.prisma.catalogItem.update({
-      where: { id },
-      data,
+    const updatedItem = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.catalogItem.update({ where: { id }, data });
+      await enqueueZoneCatalogReconciliation(tx, CATALOG_SOURCE_TALABAT);
+      return updated;
     });
 
     if (item.image_url && item.image_url !== updatedItem.image_url) {
@@ -1576,12 +1693,15 @@ export class AdminService {
   async deleteSupermarketEssential(id: number) {
     await this.findSupermarketCatalogItem(id, true);
 
-    await this.prisma.catalogItem.update({
-      where: { id },
-      data: {
-        is_essential: false,
-        essential_sort_order: null,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.catalogItem.update({
+        where: { id },
+        data: {
+          is_essential: false,
+          essential_sort_order: null,
+        },
+      });
+      await enqueueZoneCatalogReconciliation(tx, CATALOG_SOURCE_TALABAT);
     });
 
     return { success: true };
@@ -1893,10 +2013,29 @@ export class AdminService {
   private async markCatalogItemAsSupermarketEssential(id: number) {
     await this.findSupermarketCatalogItem(id, false);
 
-    return this.prisma.catalogItem.update({
-      where: { id },
-      data: { is_essential: true },
+    return this.prisma.$transaction(async (tx) => {
+      const item = await tx.catalogItem.update({
+        where: { id },
+        data: {
+          is_essential: true,
+          is_active: true,
+          deleted_at: null,
+        },
+      });
+      await enqueueZoneCatalogReconciliation(tx, CATALOG_SOURCE_TALABAT);
+      return item;
     });
+  }
+
+  private rejectContradictoryEssentialState(
+    isActive?: boolean,
+    isEssential?: boolean,
+  ): void {
+    if (isActive === false && isEssential === true) {
+      throw new BadRequestException(
+        'An essential catalog item cannot be inactive',
+      );
+    }
   }
 
   private async findSupermarketCatalogItem(

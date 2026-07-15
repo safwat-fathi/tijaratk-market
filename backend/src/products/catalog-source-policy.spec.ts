@@ -2,6 +2,7 @@ import {
   CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
   isCatalogImageReferenceAllowedForSource,
+  normalizeCatalogCategoryForSource,
 } from './catalog-source-policy';
 
 describe('catalog image source policy', () => {
@@ -105,5 +106,37 @@ describe('catalog image source policy', () => {
         '/uploads/products/../private/file.webp',
       ),
     ).toBe(false);
+  });
+});
+
+describe('catalog category source policy', () => {
+  it.each(['أرز ومكرونة وحبوب', 'ارز ومكرونة وحبوب', 'ارز ومكرونة'])(
+    'normalizes the legacy grocery alias %s',
+    (category) => {
+      expect(
+        normalizeCatalogCategoryForSource(CATALOG_SOURCE_TALABAT, category),
+      ).toBe('أرز ومكرونة');
+    },
+  );
+
+  it.each([
+    ['زيوت وسمن', 'زيت وسمن'],
+    ['سناكس وحلويات', 'سناكس و حلويات'],
+    ['شيبسي ومقبلات', 'شيبس ومقبلات'],
+    ['عصائر', 'مشروبات'],
+    ['منتجات الالبان', 'ألبان و بيض'],
+  ])('normalizes grocery category %s to %s', (category, expected) => {
+    expect(
+      normalizeCatalogCategoryForSource(CATALOG_SOURCE_TALABAT, category),
+    ).toBe(expected);
+  });
+
+  it('does not apply the grocery fallback to pharmacy categories', () => {
+    expect(
+      normalizeCatalogCategoryForSource(
+        CATALOG_SOURCE_CHEFAA,
+        'أرز ومكرونة وحبوب',
+      ),
+    ).toBeNull();
   });
 });

@@ -10,7 +10,8 @@ import type {
 } from '../../generated/prisma/client';
 import {
   CATALOG_SOURCE_CHEFAA,
-  getAllowedCatalogCategoriesForSource,
+  CATALOG_SOURCE_TALABAT,
+  normalizeCatalogCategoryForSource,
   type CatalogSource,
 } from 'src/products/catalog-source-policy';
 
@@ -24,15 +25,17 @@ export type ZoneEssentialCatalogSyncResult = {
   linked: number;
   updated: number;
   archived: number;
+  expected_products: number;
   active_products: number;
   active_categories: number;
+  catalog_in_sync: boolean;
 };
 
 type CatalogReader = Pick<PrismaClient, 'catalogItem'>;
 
 /**
- * Reads the complete curated essential set for one catalog source. Exact
- * name/category duplicates are collapsed deterministically before any writes.
+ * Reads every curated essential row for one catalog source. Catalog IDs are
+ * authoritative, so duplicate names and categories remain separate products.
  */
 export async function findZoneEssentialCatalogItems(
   client: CatalogReader,
@@ -44,7 +47,6 @@ export async function findZoneEssentialCatalogItems(
       is_active: true,
       is_essential: true,
       deleted_at: null,
-      category: { in: getAllowedCatalogCategoriesForSource(source) },
     },
     select: {
       id: true,
@@ -61,19 +63,29 @@ export async function findZoneEssentialCatalogItems(
     ],
   });
 
-  const seen = new Set<string>();
-  return rows.filter((row) => {
-    if (!row.name.trim() || !row.category.trim()) return false;
-    const key = exactCatalogKey(row.name, row.category);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+  return rows.map((row) => {
+    const name = row.name.trim();
+    const normalizedCategory = normalizeCatalogCategoryForSource(
+      source,
+      row.category,
+    );
+    const category =
+      normalizedCategory ??
+      (source === CATALOG_SOURCE_TALABAT ? 'أخرى' : null);
+
+    if (!name || !category) {
+      throw new Error(
+        `Essential catalog item ${row.id} has an invalid ${source} identity`,
+      );
+    }
+
+    return { ...row, name, category };
   });
 }
 
 /**
- * Reconciles a zone operator's explicit catalog snapshot. Price and
- * availability are deliberately absent from retained-product updates.
+ * Reconciles a zone operator's explicit catalog snapshot. Retained prices and
+ * order configuration are preserved while essential visibility is enforced.
  */
 export async function syncZoneEssentialCatalog(
   tx: Prisma.TransactionClient,
@@ -81,10 +93,6 @@ export async function syncZoneEssentialCatalog(
   source: CatalogSource,
   catalogItems: ZoneEssentialCatalogItem[],
 ): Promise<ZoneEssentialCatalogSyncResult> {
-  if (catalogItems.length === 0) {
-    throw new Error('Zone essential synchronization requires at least one item');
-  }
-
   const existingProducts = await tx.product.findMany({
     where: {
       tenant_id: tenantId,
@@ -100,6 +108,7 @@ export async function syncZoneEssentialCatalog(
       category: true,
       source: true,
       status: true,
+      is_available: true,
       deleted_at: true,
       catalog_item_id: true,
     },
@@ -112,7 +121,7 @@ export async function syncZoneEssentialCatalog(
   );
   const unlinkedByExactIdentity = new Map<
     string,
-    (typeof existingProducts)[number]
+    Array<(typeof existingProducts)[number]>
   >();
   for (const product of existingProducts) {
     if (
@@ -122,9 +131,9 @@ export async function syncZoneEssentialCatalog(
       continue;
     }
     const key = exactCatalogKey(product.name, product.category);
-    if (!unlinkedByExactIdentity.has(key)) {
-      unlinkedByExactIdentity.set(key, product);
-    }
+    const candidates = unlinkedByExactIdentity.get(key) ?? [];
+    candidates.push(product);
+    unlinkedByExactIdentity.set(key, candidates);
   }
 
   let created = 0;
@@ -136,9 +145,10 @@ export async function syncZoneEssentialCatalog(
 
   for (const item of catalogItems) {
     const linkedProduct = byCatalogItemId.get(item.id);
-    const legacyProduct = linkedProduct
+    const legacyCandidates = linkedProduct
       ? undefined
       : unlinkedByExactIdentity.get(exactCatalogKey(item.name, item.category));
+    const legacyProduct = legacyCandidates?.shift();
     const existing = linkedProduct ?? legacyProduct;
 
     if (existing) {
@@ -148,6 +158,7 @@ export async function syncZoneEssentialCatalog(
         existing.image_url !== item.image_url ||
         existing.category !== item.category ||
         existing.status !== ProductStatus.active ||
+        existing.is_available !== true ||
         existing.deleted_at !== null;
       if (wasUnlinked || identityChanged) {
         await tx.product.update({
@@ -159,6 +170,7 @@ export async function syncZoneEssentialCatalog(
             category: item.category,
             source: ProductSource.catalog,
             status: ProductStatus.active,
+            is_available: true,
             deleted_at: null,
             updated_at: now,
           },
@@ -199,6 +211,7 @@ export async function syncZoneEssentialCatalog(
     const insertedRows = await tx.product.findMany({
       where: {
         tenant_id: tenantId,
+        source: ProductSource.catalog,
         catalog_item_id: { in: missingItems.map((item) => item.id) },
       },
       select: { id: true },
@@ -209,14 +222,27 @@ export async function syncZoneEssentialCatalog(
   const archived = await tx.product.updateMany({
     where: {
       tenant_id: tenantId,
-      status: ProductStatus.active,
       id: { notIn: retainedProductIds },
-      OR: [
-        { source: ProductSource.catalog },
-        { catalog_item_id: { not: null } },
+      AND: [
+        {
+          OR: [
+            { source: ProductSource.catalog },
+            { catalog_item_id: { not: null } },
+          ],
+        },
+        {
+          OR: [
+            { status: { not: ProductStatus.archived } },
+            { is_available: true },
+          ],
+        },
       ],
     },
-    data: { status: ProductStatus.archived, updated_at: now },
+    data: {
+      status: ProductStatus.archived,
+      is_available: false,
+      updated_at: now,
+    },
   });
 
   const categories = Array.from(
@@ -237,7 +263,6 @@ export async function syncZoneEssentialCatalog(
     status: ProductStatus.active,
     is_available: true,
     deleted_at: null,
-    category: { in: getAllowedCatalogCategoriesForSource(source) },
   };
   const [activeProducts, activeCategoryRows] = await Promise.all([
     tx.product.count({ where: publicProductWhere }),
@@ -252,8 +277,10 @@ export async function syncZoneEssentialCatalog(
     linked,
     updated,
     archived: archived.count,
+    expected_products: catalogItems.length,
     active_products: activeProducts,
     active_categories: activeCategoryRows.length,
+    catalog_in_sync: activeProducts === catalogItems.length,
   };
 }
 

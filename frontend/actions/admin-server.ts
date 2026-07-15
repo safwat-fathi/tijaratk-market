@@ -322,12 +322,101 @@ const createZoneSchema = z.object({
   delivery_fee: z.coerce.number().min(0).optional(),
 });
 
-export async function createZoneStorefrontAction(formData: FormData): Promise<void> {
-  const parsed = createZoneSchema.parse(Object.fromEntries(formData.entries()));
-  const response = await adminService.createZone(parsed);
-  if (!response.success) throw new Error(response.message || "تعذر إنشاء المنطقة");
+const zoneCreateValidationMessages: Record<string, string> = {
+  name: "اكتب اسمًا عامًا من حرفين على الأقل.",
+  slug: "اكتب رابطًا بالإنجليزية باستخدام حروف صغيرة وأرقام وشرطات فقط.",
+  area_id: "اختر المنطقة.",
+  category: "اختر قطاعًا صحيحًا.",
+  operations_phone: "اكتب رقم هاتف عمليات صحيحًا.",
+  delivery_fee: "اكتب رسوم توصيل تساوي صفرًا أو أكثر.",
+};
+
+export type ZoneCreateActionState = ActionState & {
+  conflictCode?: string;
+};
+
+const getZoneCreateConflictCode = (value: unknown): string | undefined => {
+  if (!value || typeof value !== "object") return undefined;
+
+  const errors = (value as Record<string, unknown>).errors;
+  if (!errors || typeof errors !== "object") return undefined;
+
+  const code = (errors as Record<string, unknown>).code;
+  return typeof code === "string" ? code : undefined;
+};
+
+const getZoneCreateFieldErrors = (
+  conflictCode: string | undefined,
+  message: string,
+): ActionState["errors"] => {
+  if (conflictCode === "ZONE_AREA_CATEGORY_CONFLICT") {
+    return { area_id: [message], category: [message] };
+  }
+  if (
+    conflictCode === "ZONE_SLUG_CONFLICT" ||
+    conflictCode === "ZONE_OPERATOR_SLUG_CONFLICT"
+  ) {
+    return { slug: [message] };
+  }
+  return undefined;
+};
+
+const getAdminSafeZoneCreateMessage = (message?: string): string => {
+  const normalized = message?.trim();
+  return normalized && /[\u0600-\u06FF]/.test(normalized)
+    ? normalized
+    : "تعذر إنشاء واجهة المنطقة. تحقق من البيانات وحاول مرة أخرى.";
+};
+
+export async function createZoneStorefrontAction(
+  _previousState: ZoneCreateActionState,
+  formData: FormData,
+): Promise<ZoneCreateActionState> {
+  void _previousState;
+  const parsed = createZoneSchema.safeParse(
+    Object.fromEntries(formData.entries()),
+  );
+  if (!parsed.success) {
+    const invalidFields = new Set(
+      parsed.error.issues
+        .map((issue) => issue.path[0])
+        .filter((field): field is string => typeof field === "string"),
+    );
+    return {
+      success: false,
+      message: "يرجى مراجعة بيانات واجهة المنطقة.",
+      errors: Object.fromEntries(
+        Array.from(invalidFields, (field) => [
+          field,
+          [zoneCreateValidationMessages[field] ?? "راجع هذه القيمة."],
+        ]),
+      ),
+      timestamp: Date.now(),
+    };
+  }
+
+  const response = await adminService.createZone(parsed.data);
+  if (!response.success) {
+    const message = getAdminSafeZoneCreateMessage(response.message);
+    const conflictCode = getZoneCreateConflictCode(response.data);
+    return {
+      success: false,
+      message,
+      conflictCode,
+      errors: getZoneCreateFieldErrors(conflictCode, message),
+      timestamp: Date.now(),
+    };
+  }
+  if (!response.data?.id) {
+    return {
+      success: false,
+      message: "تم إنشاء الواجهة دون إرجاع معرّف صالح. حدّث الصفحة وحاول مرة أخرى.",
+      timestamp: Date.now(),
+    };
+  }
+
   revalidatePath("/admin/zones");
-  redirect(`/admin/zones/${response.data?.id}`);
+  redirect(`/admin/zones/${response.data.id}`);
 }
 
 export async function updateZoneActivationAction(
@@ -352,14 +441,9 @@ export async function syncZoneEssentialCatalogAction(
   const id = positiveIdSchema.parse(zoneId);
   const response = await adminService.syncZoneEssentialCatalog(id);
   if (!response.success || !response.data) {
-    const hasNoEssentials = response.message
-      ?.toLowerCase()
-      .includes("essential");
     return {
       success: false,
-      message: hasNoEssentials
-        ? "لا توجد منتجات أساسية نشطة ومؤهلة لمزامنتها مع هذه المنطقة."
-        : "تعذر مزامنة المنتجات الأساسية للمنطقة. حاول مرة أخرى.",
+      message: "تعذر مزامنة المنتجات الأساسية للمنطقة. حاول مرة أخرى.",
     };
   }
 
@@ -371,9 +455,10 @@ export async function syncZoneEssentialCatalogAction(
   return {
     success: true,
     message:
-      `تمت المزامنة بنجاح: ${result.active_products} منتج نشط في ` +
+      `تمت المزامنة بنجاح: ${result.active_products}/${result.expected_products} منتج في ` +
       `${result.active_categories} قسم، مع إضافة ${result.created} ` +
-      `وربط ${result.linked} وأرشفة ${result.archived}.`,
+      `وربط ${result.linked} وأرشفة ${result.archived}` +
+      `${result.catalog_in_sync ? "." : "، وما زالت المزامنة غير مكتملة."}`,
   };
 }
 

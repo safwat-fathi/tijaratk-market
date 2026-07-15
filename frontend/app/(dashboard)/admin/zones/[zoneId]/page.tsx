@@ -63,7 +63,15 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="font-bold text-gray-900">جاهزية الإطلاق</h2>
-            <p className="text-sm text-gray-500">{zone.readiness.active_products} منتج · {zone.readiness.active_eligible_merchants} متجر مؤهل · المصدر {zone.readiness.catalog_source}</p>
+            <p className="text-sm text-gray-500">
+              {zone.readiness.active_products}/
+              {zone.readiness.essential_catalog_products} منتج ·{" "}
+              {zone.readiness.active_eligible_merchants} متجر مؤهل ·{" "}
+              {zone.readiness.catalog_in_sync
+                ? "الكتالوج متطابق"
+                : "الكتالوج قيد المزامنة"}{" "}
+              · المصدر {zone.readiness.catalog_source}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <SyncEssentialCatalogButton zoneId={zone.id} />

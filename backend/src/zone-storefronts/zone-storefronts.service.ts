@@ -37,8 +37,22 @@ import {
   findZoneEssentialCatalogItems,
   syncZoneEssentialCatalog,
 } from './zone-essential-catalog-sync';
+import {
+  enqueueZoneCatalogReconciliation,
+} from './zone-catalog-reconciliation.repository';
 
 const MIN_SYNCHRONIZED_ZONE_PRODUCTS = 1;
+
+const ZONE_AREA_CATEGORY_CONFLICT = 'ZONE_AREA_CATEGORY_CONFLICT';
+const ZONE_SLUG_CONFLICT = 'ZONE_SLUG_CONFLICT';
+const ZONE_OPERATOR_SLUG_CONFLICT = 'ZONE_OPERATOR_SLUG_CONFLICT';
+const ZONE_CREATE_CONFLICT = 'ZONE_CREATE_CONFLICT';
+
+type ZoneCreateConflictCode =
+  | typeof ZONE_AREA_CATEGORY_CONFLICT
+  | typeof ZONE_SLUG_CONFLICT
+  | typeof ZONE_OPERATOR_SLUG_CONFLICT
+  | typeof ZONE_CREATE_CONFLICT;
 
 export type ZoneAdminActor = {
   adminId: number;
@@ -58,6 +72,8 @@ type PublicProductQuery = {
 type ZoneReadiness = {
   catalog_ready: boolean;
   active_products: number;
+  essential_catalog_products: number;
+  catalog_in_sync: boolean;
   active_eligible_merchants: number;
   required_products?: number;
   catalog_source?: CatalogSource;
@@ -67,6 +83,7 @@ type AdminZoneRecord = {
   id: number;
   name: string;
   slug: string;
+  category: TenantCategory;
   operations_phone: string;
   is_active: boolean;
   created_at: Date;
@@ -115,94 +132,102 @@ export class ZoneStorefrontsService {
       );
     }
 
-    const [area, existingZone, conflictingTenant] = await Promise.all([
+    const [area, conflict] = await Promise.all([
       this.prisma.directoryArea.findFirst({
         where: { id: dto.area_id, is_active: true, deleted_at: null },
         select: { id: true },
       }),
-      this.prisma.zoneStorefront.findFirst({
-        where: { OR: [{ area_id: dto.area_id }, { slug }] },
-        select: { id: true },
-      }),
-      this.prisma.tenant.findUnique({
-        where: { slug: this.buildOperatorSlug(slug) },
-        select: { id: true },
-      }),
+      this.findCreateConflict(dto.area_id, dto.category, slug),
     ]);
 
     if (!area) throw new NotFoundException('Directory area not found');
-    if (existingZone) {
-      throw new ConflictException('Area or storefront slug is already in use');
-    }
-    if (conflictingTenant) {
-      throw new ConflictException('Internal operator slug is already in use');
-    }
+    if (conflict) this.throwCreateConflict(conflict, dto.category);
 
-    return this.prisma.$transaction(async (manager) => {
-      const operatorTenant = await manager.tenant.create({
-        data: {
-          name,
-          slug: this.buildOperatorSlug(slug),
-          phone: this.buildOperatorPhone(slug),
-          category: dto.category,
-          status: TenantStatus.active,
-          delivery_fee: dto.delivery_fee ?? 20,
-          delivery_available: true,
-          onboarding_completed: true,
-          onboarding_step: 4,
-        },
-      });
-
-      await manager.tenantDeliveryArea.create({
-        data: {
-          tenant_id: operatorTenant.id,
-          area_id: dto.area_id,
-          is_active: true,
-        },
-      });
-
-      const zone = await manager.zoneStorefront.create({
-        data: {
-          name,
-          slug,
-          operations_phone: dto.operations_phone.trim(),
-          area_id: dto.area_id,
-          operator_tenant_id: operatorTenant.id,
-          is_active: false,
-        },
-        include: { area: true, operator_tenant: true },
-      });
-
-      await manager.$executeRaw`SELECT set_config('app.tenant_id', ${String(operatorTenant.id)}, true)`;
-      await this.activityLogService.create(
-        {
-          tenantId: operatorTenant.id,
-          actorAdminId: actor.adminId,
-          actorAdminName: actor.adminName,
-          actorAdminRole: actor.adminRole,
-          entityType: ActivityEntityTypes.ZoneStorefront,
-          entityId: zone.id,
-          action: ActivityActions.ZoneStorefrontCreated,
-          title: 'تم إنشاء واجهة منطقة مركزية',
-          newValues: {
-            area_id: zone.area_id,
-            slug: zone.slug,
-            category: operatorTenant.category,
-            catalog_source: catalogSource,
+    try {
+      return await this.prisma.$transaction(async (manager) => {
+        const operatorTenant = await manager.tenant.create({
+          data: {
+            name,
+            slug: this.buildOperatorSlug(slug),
+            phone: this.buildOperatorPhone(slug),
+            category: dto.category,
+            status: TenantStatus.active,
+            delivery_fee: dto.delivery_fee ?? 20,
+            delivery_available: true,
+            onboarding_completed: true,
+            onboarding_step: 4,
           },
-          source: ActivitySources.Admin,
-          requestId: actor.requestId,
-          ipAddress: actor.ipAddress,
-        },
-        manager,
-      );
+        });
 
-      return this.mapAdminZone(zone, {
-        catalog_ready: false,
-        active_eligible_merchants: 0,
-        active_products: 0,
+        await manager.tenantDeliveryArea.create({
+          data: {
+            tenant_id: operatorTenant.id,
+            area_id: dto.area_id,
+            is_active: true,
+          },
+        });
+
+        const zone = await manager.zoneStorefront.create({
+          data: {
+            name,
+            slug,
+            category: dto.category,
+            operations_phone: dto.operations_phone.trim(),
+            area_id: dto.area_id,
+            operator_tenant_id: operatorTenant.id,
+            is_active: false,
+          },
+          include: { area: true, operator_tenant: true },
+        });
+
+        await manager.$executeRaw`SELECT set_config('app.tenant_id', ${String(operatorTenant.id)}, true)`;
+        await this.activityLogService.create(
+          {
+            tenantId: operatorTenant.id,
+            actorAdminId: actor.adminId,
+            actorAdminName: actor.adminName,
+            actorAdminRole: actor.adminRole,
+            entityType: ActivityEntityTypes.ZoneStorefront,
+            entityId: zone.id,
+            action: ActivityActions.ZoneStorefrontCreated,
+            title: 'تم إنشاء واجهة منطقة مركزية',
+            newValues: {
+              area_id: zone.area_id,
+              slug: zone.slug,
+              category: zone.category,
+              catalog_source: catalogSource,
+            },
+            source: ActivitySources.Admin,
+            requestId: actor.requestId,
+            ipAddress: actor.ipAddress,
+          },
+          manager,
+        );
+        await enqueueZoneCatalogReconciliation(manager, catalogSource);
+
+        return this.mapAdminZone(zone, {
+          catalog_ready: false,
+          catalog_in_sync: false,
+          active_eligible_merchants: 0,
+          active_products: 0,
+          essential_catalog_products: 0,
+        });
       });
-    });
+    } catch (error) {
+      const uniqueConstraintConflict =
+        this.getUniqueConstraintConflict(error);
+      if (!uniqueConstraintConflict) throw error;
+
+      const concurrentConflict = await this.findCreateConflict(
+        dto.area_id,
+        dto.category,
+        slug,
+      );
+      this.throwCreateConflict(
+        concurrentConflict ?? uniqueConstraintConflict,
+        dto.category,
+      );
+    }
   }
 
   /** Lists configured zones with catalog and assignment readiness. */
@@ -256,6 +281,18 @@ export class ZoneStorefrontsService {
 
   /** Reconciles the operator snapshot with the complete curated essential set. */
   async syncEssentialCatalog(zoneId: number, actor: ZoneAdminActor) {
+    return this.reconcileEssentialCatalog(zoneId, actor);
+  }
+
+  /** Runs the same reconciliation for the durable background worker. */
+  async syncEssentialCatalogAutomatically(zoneId: number) {
+    return this.reconcileEssentialCatalog(zoneId);
+  }
+
+  private async reconcileEssentialCatalog(
+    zoneId: number,
+    actor?: ZoneAdminActor,
+  ) {
     const zone = await this.requireZone(zoneId);
     const catalogSource = this.requireCatalogSource(
       zone.operator_tenant.category,
@@ -264,12 +301,6 @@ export class ZoneStorefrontsService {
       this.prisma,
       catalogSource,
     );
-    if (essentialItems.length === 0) {
-      throw new BadRequestException(
-        'No active curated essential catalog items are available for this zone',
-      );
-    }
-
     return this.runInOperatorTenant(
       zone.operator_tenant_id,
       async (manager) => {
@@ -282,9 +313,9 @@ export class ZoneStorefrontsService {
         await this.activityLogService.create(
           {
             tenantId: zone.operator_tenant_id,
-            actorAdminId: actor.adminId,
-            actorAdminName: actor.adminName,
-            actorAdminRole: actor.adminRole,
+            actorAdminId: actor?.adminId,
+            actorAdminName: actor?.adminName,
+            actorAdminRole: actor?.adminRole,
             entityType: ActivityEntityTypes.ZoneStorefront,
             entityId: zone.id,
             action: ActivityActions.ZoneStorefrontCatalogSynced,
@@ -294,9 +325,9 @@ export class ZoneStorefrontsService {
               catalog_source: catalogSource,
               curated_essentials: essentialItems.length,
             },
-            source: ActivitySources.Admin,
-            requestId: actor.requestId,
-            ipAddress: actor.ipAddress,
+            source: actor ? ActivitySources.Admin : ActivitySources.System,
+            requestId: actor?.requestId,
+            ipAddress: actor?.ipAddress,
           },
           manager,
         );
@@ -492,8 +523,11 @@ export class ZoneStorefrontsService {
       ],
     });
 
+    const categoryCompatibleZones = zones.filter(
+      (zone) => zone.category === zone.operator_tenant.category,
+    );
     const publicZones = await Promise.all(
-      zones.map(async (zone) => {
+      categoryCompatibleZones.map(async (zone) => {
         const readiness = await this.calculateReadiness(zone);
         return readiness.catalog_ready &&
           readiness.active_eligible_merchants >= 1
@@ -654,6 +688,9 @@ export class ZoneStorefrontsService {
       include: { area: true, operator_tenant: true },
     });
     if (!zone) throw new NotFoundException('Zone storefront not found');
+    if (zone.category !== zone.operator_tenant.category) {
+      throw new BadRequestException('Zone storefront category is inconsistent');
+    }
     return zone;
   }
 
@@ -695,6 +732,9 @@ export class ZoneStorefrontsService {
       include: { area: true, operator_tenant: true },
     });
     if (!zone) throw new NotFoundException('Zone storefront not found');
+    if (zone.category !== zone.operator_tenant.category) {
+      throw new NotFoundException('Zone storefront not found');
+    }
 
     const readiness = await this.getReadiness(zone.id);
     if (!readiness.catalog_ready || readiness.active_eligible_merchants < 1) {
@@ -716,44 +756,55 @@ export class ZoneStorefrontsService {
     const catalogSource = this.requireCatalogSource(zone.operator_tenant.category);
     const allowedCategories = getAllowedCatalogCategoriesForSource(catalogSource);
     const requiredProducts = MIN_SYNCHRONIZED_ZONE_PRODUCTS;
-    const activeProducts = await this.runInOperatorTenant(
-      zone.operator_tenant_id,
-      (manager) =>
-        manager.product.count({
+    const [essentialCatalogProducts, activeProducts, activeEligibleMerchants] =
+      await Promise.all([
+        this.prisma.catalogItem.count({
           where: {
-            tenant_id: zone.operator_tenant_id,
-            catalog_item_id: { not: null },
-            source: ProductSource.catalog,
-            status: ProductStatus.active,
-            is_available: true,
+            source: catalogSource,
+            is_essential: true,
+            is_active: true,
             deleted_at: null,
-            category: { in: allowedCategories },
           },
         }),
-    );
-    const activeEligibleMerchants = await this.prisma.zoneStorefrontMerchant.count({
-      where: {
-        zone_storefront_id: zone.id,
-        is_active: true,
-        tenant: {
-          status: TenantStatus.active,
-          deleted_at: null,
-          delivery_available: true,
-          category: zone.operator_tenant.category,
-          operated_zone_storefront: { is: null },
-          tenant_delivery_areas: {
-            some: {
-              area_id: zone.area_id,
-              is_active: true,
+        this.runInOperatorTenant(zone.operator_tenant_id, (manager) =>
+          manager.product.count({
+            where: {
+              tenant_id: zone.operator_tenant_id,
+              catalog_item_id: { not: null },
+              source: ProductSource.catalog,
+              status: ProductStatus.active,
+              is_available: true,
               deleted_at: null,
+              category: { in: allowedCategories },
+            },
+          }),
+        ),
+        this.prisma.zoneStorefrontMerchant.count({
+          where: {
+            zone_storefront_id: zone.id,
+            is_active: true,
+            tenant: {
+              status: TenantStatus.active,
+              deleted_at: null,
+              delivery_available: true,
+              category: zone.operator_tenant.category,
+              operated_zone_storefront: { is: null },
+              tenant_delivery_areas: {
+                some: {
+                  area_id: zone.area_id,
+                  is_active: true,
+                  deleted_at: null,
+                },
+              },
             },
           },
-        },
-      },
-    });
+        }),
+      ]);
     return {
       catalog_ready: activeProducts >= requiredProducts,
+      catalog_in_sync: activeProducts === essentialCatalogProducts,
       active_products: activeProducts,
+      essential_catalog_products: essentialCatalogProducts,
       required_products: requiredProducts,
       active_eligible_merchants: activeEligibleMerchants,
       catalog_source: catalogSource,
@@ -768,6 +819,98 @@ export class ZoneStorefrontsService {
   /** Builds a unique non-customer-facing identity for the userless operator. */
   private buildOperatorPhone(publicSlug: string): string {
     return `internal-zone:${publicSlug}`;
+  }
+
+  /** Resolves expected create conflicts without relying on database errors. */
+  private async findCreateConflict(
+    areaId: number,
+    category: TenantCategory,
+    slug: string,
+  ): Promise<ZoneCreateConflictCode | null> {
+    const [areaCategoryZone, slugZone, operatorIdentity] = await Promise.all([
+      this.prisma.zoneStorefront.findFirst({
+        where: { area_id: areaId, category },
+        select: { id: true },
+      }),
+      this.prisma.zoneStorefront.findUnique({
+        where: { slug },
+        select: { id: true },
+      }),
+      this.prisma.tenant.findFirst({
+        where: {
+          OR: [
+            { slug: this.buildOperatorSlug(slug) },
+            { phone: this.buildOperatorPhone(slug) },
+          ],
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (areaCategoryZone) return ZONE_AREA_CATEGORY_CONFLICT;
+    if (slugZone) return ZONE_SLUG_CONFLICT;
+    if (operatorIdentity) return ZONE_OPERATOR_SLUG_CONFLICT;
+    return null;
+  }
+
+  /** Converts expected create conflicts into stable, admin-safe responses. */
+  private throwCreateConflict(
+    code: ZoneCreateConflictCode,
+    category: TenantCategory,
+  ): never {
+    const message = (() => {
+      if (code === ZONE_AREA_CATEGORY_CONFLICT) {
+        return category === TenantCategory.pharmacy
+          ? 'يوجد بالفعل واجهة صيدلية لهذه المنطقة.'
+          : 'يوجد بالفعل واجهة سوبر ماركت لهذه المنطقة.';
+      }
+      if (code === ZONE_SLUG_CONFLICT) {
+        return 'الرابط مستخدم بالفعل. اختر رابطًا مختلفًا.';
+      }
+      if (code === ZONE_OPERATOR_SLUG_CONFLICT) {
+        return 'الرابط محجوز لواجهة داخلية. اختر رابطًا مختلفًا.';
+      }
+      return 'تعذر إنشاء واجهة المنطقة بسبب تعارض متزامن. حاول مرة أخرى.';
+    })();
+
+    throw new ConflictException({ code, message });
+  }
+
+  private getUniqueConstraintConflict(
+    error: unknown,
+  ): ZoneCreateConflictCode | null {
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      error.code !== 'P2002'
+    ) {
+      return null;
+    }
+
+    const rawTarget = error.meta?.target;
+    const target = Array.isArray(rawTarget)
+      ? rawTarget.map(String).join(',')
+      : String(rawTarget ?? '');
+
+    if (
+      target.includes('UQ_zone_storefronts_area_category') ||
+      (target.includes('area_id') && target.includes('category'))
+    ) {
+      return ZONE_AREA_CATEGORY_CONFLICT;
+    }
+    if (
+      target.includes('UQ_zone_storefronts_slug') ||
+      target === 'slug'
+    ) {
+      return ZONE_SLUG_CONFLICT;
+    }
+    if (
+      target.includes('UQ_2310ecc5cb8be427097154b18fc') ||
+      target.includes('UQ_23d5a62128e1a248126c8453ff0') ||
+      target === 'phone'
+    ) {
+      return ZONE_OPERATOR_SLUG_CONFLICT;
+    }
+    return ZONE_CREATE_CONFLICT;
   }
 
   /** Rejects unsupported zone verticals through the centralized source policy. */
@@ -787,7 +930,7 @@ export class ZoneStorefrontsService {
       id: zone.id,
       name: zone.name,
       slug: zone.slug,
-      category: zone.operator_tenant.category,
+      category: zone.category,
       delivery_fee: zone.operator_tenant.delivery_fee,
       delivery_available: zone.operator_tenant.delivery_available,
       delivery_starts_at: zone.operator_tenant.delivery_starts_at,

@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { createZoneStorefrontAction } from "@/actions/admin-server";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { adminService } from "@/services/api/admin.service";
 import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
+import { CreateZoneStorefrontForm } from "./_components/CreateZoneStorefrontForm";
 import { DispatchSessionForm } from "./_components/DispatchSessionForm";
 
 export const dynamic = "force-dynamic";
@@ -70,43 +69,7 @@ export default async function AdminZonesPage() {
 
       <Card className="p-5">
         <h2 className="text-lg font-bold text-gray-900">إنشاء منطقة</h2>
-        <form action={createZoneStorefrontAction} className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="text-sm font-semibold text-gray-700">
-            الاسم العام
-            <input name="name" required minLength={2} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" placeholder="تجارة الشيخ زايد" />
-          </label>
-          <label className="text-sm font-semibold text-gray-700">
-            الرابط
-            <input name="slug" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" placeholder="sheikh-zayed" dir="ltr" />
-          </label>
-          <label className="text-sm font-semibold text-gray-700">
-            المنطقة
-            <select name="area_id" required className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2">
-              <option value="">اختر المنطقة</option>
-              {areas.filter((area) => area.is_active).map((area) => (
-                <option key={area.id} value={area.id}>{area.name_ar}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-semibold text-gray-700">
-            القطاع
-            <select name="category" required className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2">
-              <option value="grocery">سوبر ماركت</option>
-              <option value="pharmacy">صيدلية</option>
-            </select>
-          </label>
-          <label className="text-sm font-semibold text-gray-700">
-            هاتف عمليات المنطقة
-            <input name="operations_phone" required className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" dir="ltr" />
-          </label>
-          <label className="text-sm font-semibold text-gray-700">
-            رسوم التوصيل
-            <input name="delivery_fee" type="number" min="0" step="0.01" defaultValue="20" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" />
-          </label>
-          <div className="md:col-span-2">
-            <Button type="submit">إنشاء المنطقة بحالة غير مفعلة</Button>
-          </div>
-        </form>
+        <CreateZoneStorefrontForm areas={areas} />
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -122,9 +85,9 @@ export default async function AdminZonesPage() {
               </span>
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="rounded-md bg-gray-50 p-2"><strong className="block text-base">{zone.readiness.active_products}</strong>منتج</div>
+              <div className="rounded-md bg-gray-50 p-2"><strong className="block text-base">{zone.readiness.active_products}/{zone.readiness.essential_catalog_products}</strong>منتج</div>
               <div className="rounded-md bg-gray-50 p-2"><strong className="block text-base">{zone.readiness.active_eligible_merchants}</strong>متجر مؤهل</div>
-              <div className="rounded-md bg-gray-50 p-2"><strong className="block text-base">{zone.readiness.catalog_ready ? "جاهز" : "ناقص"}</strong>الكتالوج</div>
+              <div className="rounded-md bg-gray-50 p-2"><strong className="block text-base">{zone.readiness.catalog_in_sync ? "متطابق" : zone.readiness.catalog_ready ? "جاهز جزئياً" : "ناقص"}</strong>الكتالوج</div>
             </div>
             <Link href={`/admin/zones/${zone.id}`} className="mt-4 inline-flex text-sm font-semibold text-brand-primary hover:underline">إدارة المنطقة</Link>
           </Card>
