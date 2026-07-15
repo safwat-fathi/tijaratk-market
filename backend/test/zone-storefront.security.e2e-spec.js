@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
 const { readdir } = require('node:fs/promises');
 const { join } = require('node:path');
+const { createHash, createHmac } = require('node:crypto');
 
 const { AppModule } = require('../dist/app.module');
 const {
@@ -24,6 +25,13 @@ const { PrismaService } = require('../dist/prisma/prisma.service');
 const {
   requestLoggingMiddleware,
 } = require('../dist/common/middlewares/request-logging.middleware');
+const {
+  MetaConversionsWorker,
+} = require('../dist/meta-conversions/meta-conversions.worker');
+const {
+  MetaConversionsService,
+} = require('../dist/meta-conversions/meta-conversions.service');
+const { decrypt } = require('../dist/common/utils/encryption.util');
 
 process.env.ADMIN_MANAGED_STORES_ENABLED = 'true';
 process.env.ADMIN_PRODUCT_WRITE_ENABLED = 'true';
@@ -51,7 +59,13 @@ describe('Zone storefront security E2E', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(MetaConversionsWorker)
+      .useValue({
+        onApplicationBootstrap: () => undefined,
+        onModuleDestroy: () => undefined,
+      })
+      .compile();
     app = moduleRef.createNestApplication();
     app.useGlobalFilters(new AllExceptionFilter());
     app.use(cookieParser());
@@ -522,6 +536,300 @@ describe('Zone storefront security E2E', () => {
       dashboardBeforeCheckout.completedOrders,
     );
     fixture.dashboardStatsAfterCheckout = dashboardAfterCheckout;
+  });
+
+  it('enqueues encrypted Meta purchases only for signed consented public checkouts', async () => {
+    const fixture = grocery;
+    await withMetaTestConfig(async ({ signingSecret }) => {
+      const unsignedPhone = generateEgyptPhone(320);
+      const signedHeaders = buildSignedMetaHeaders(signingSecret, {
+        ip: '203.0.113.24',
+        userAgent: 'Tijaratk Meta E2E Browser/1.0',
+      });
+      const unsignedOrder = await createZoneOrder(httpServer, fixture, {
+        phone: unsignedPhone,
+        headers: signedHeaders,
+      });
+      expect(unsignedOrder.meta_purchase).toBeUndefined();
+      expect(
+        await prisma.metaConversionOutbox.findUnique({
+          where: { order_id: unsignedOrder.id },
+        }),
+      ).toBeNull();
+
+      const zonePhone = generateEgyptPhone(321);
+      const consentCookies = [
+        'tijaratk_marketing_consent=granted',
+        '_fbp=fb.1.1721000000000.123456789',
+        '_fbc=fb.1.1721000000000.AbCdEf123',
+      ].join('; ');
+      const zoneOrder = await createZoneOrder(httpServer, fixture, {
+        phone: zonePhone,
+        headers: signedHeaders,
+        cookies: consentCookies,
+      });
+      expect(zoneOrder.meta_purchase).toEqual({
+        event_id: expect.any(String),
+        value: 15,
+        currency: 'EGP',
+      });
+
+      const zoneOutbox = await prisma.metaConversionOutbox.findUniqueOrThrow({
+        where: { order_id: zoneOrder.id },
+      });
+      expect(zoneOutbox).toEqual(
+        expect.objectContaining({
+          event_id: zoneOrder.meta_purchase.event_id,
+          event_name: 'Purchase',
+          status: 'pending',
+          attempt_count: 0,
+          encrypted_payload: expect.any(String),
+        }),
+      );
+      expect(
+        await prisma.metaConversionOutbox.count({
+          where: { order_id: zoneOrder.id },
+        }),
+      ).toBe(1);
+      expect(zoneOutbox.encrypted_payload).not.toContain(zonePhone);
+
+      const zonePayload = JSON.parse(decrypt(zoneOutbox.encrypted_payload));
+      expect(zonePayload).toEqual(
+        expect.objectContaining({
+          event_name: 'Purchase',
+          event_id: zoneOrder.meta_purchase.event_id,
+          action_source: 'website',
+          event_source_url: `https://tijaratk.com/market/${fixture.zone.slug}`,
+          user_data: expect.objectContaining({
+            ph: [hashMetaPhone(zonePhone)],
+            client_ip_address: '203.0.113.24',
+            client_user_agent: 'Tijaratk Meta E2E Browser/1.0',
+            fbp: 'fb.1.1721000000000.123456789',
+            fbc: 'fb.1.1721000000000.AbCdEf123',
+          }),
+          custom_data: expect.objectContaining({
+            currency: 'EGP',
+            value: 15,
+            conversion_type: 'order_created',
+            storefront_type: 'zone',
+            content_ids: [String(fixture.catalogProduct.id)],
+          }),
+        }),
+      );
+      const serializedZonePayload = JSON.stringify(zonePayload);
+      expect(serializedZonePayload).not.toContain(zonePhone);
+      expect(serializedZonePayload).not.toContain('Zone Customer');
+      expect(serializedZonePayload).not.toContain('Zone delivery address');
+
+      const merchant = fixture.merchants[0];
+      const merchantTenant = await prisma.tenant.update({
+        where: { id: merchant.tenantId },
+        data: {
+          onboarding_completed: true,
+          delivery_available: true,
+          delivery_fee: 0,
+        },
+      });
+      await withTenant(prisma, merchant.tenantId, (tx) =>
+        tx.product.createMany({
+          data: Array.from({ length: 100 }, (_, index) => ({
+            tenant_id: merchant.tenantId,
+            name: `Meta merchant product ${runId} ${index + 1}`,
+            category: fixture.allowedCategory,
+            source: 'manual',
+            status: 'active',
+            current_price: 12,
+            is_available: true,
+          })),
+        }),
+      );
+      const merchantProduct = await withTenant(
+        prisma,
+        merchant.tenantId,
+        (tx) =>
+          tx.product.findFirstOrThrow({
+            where: {
+              tenant_id: merchant.tenantId,
+              name: { startsWith: `Meta merchant product ${runId}` },
+            },
+            orderBy: { id: 'asc' },
+          }),
+      );
+
+      const merchantPhone = generateEgyptPhone(322);
+      const merchantResponse = await request(httpServer)
+        .post(`/orders/${merchantTenant.slug}`)
+        .set('Cookie', consentCookies)
+        .set(signedHeaders)
+        .send({
+          customer: {
+            name: 'Meta Merchant Customer',
+            phone: merchantPhone,
+            address: 'Meta merchant delivery address',
+          },
+          items: [{ product_id: merchantProduct.id, quantity: '1' }],
+        })
+        .expect(201);
+      const merchantOrder = unwrapBody(merchantResponse.body);
+      expect(merchantOrder.meta_purchase).toEqual({
+        event_id: expect.any(String),
+        value: 12,
+        currency: 'EGP',
+      });
+      const merchantOutbox =
+        await prisma.metaConversionOutbox.findUniqueOrThrow({
+          where: { order_id: merchantOrder.id },
+        });
+      const merchantPayload = JSON.parse(
+        decrypt(merchantOutbox.encrypted_payload),
+      );
+      expect(merchantPayload).toEqual(
+        expect.objectContaining({
+          event_id: merchantOrder.meta_purchase.event_id,
+          event_source_url: `https://tijaratk.com/${merchantTenant.slug}`,
+          user_data: expect.objectContaining({
+            ph: [hashMetaPhone(merchantPhone)],
+          }),
+          custom_data: expect.objectContaining({
+            storefront_type: 'tenant',
+            conversion_type: 'order_created',
+          }),
+        }),
+      );
+
+      const dashboardResponse = await request(httpServer)
+        .post('/orders')
+        .set('Authorization', `Bearer ${merchant.token}`)
+        .send({
+          customer: { phone: generateEgyptPhone(323) },
+          free_text_payload: { text: 'Dashboard order must not be tracked' },
+        })
+        .expect(201);
+      const dashboardOrder = unwrapBody(dashboardResponse.body);
+      expect(dashboardOrder.meta_purchase).toBeUndefined();
+      expect(
+        await prisma.metaConversionOutbox.findUnique({
+          where: { order_id: dashboardOrder.id },
+        }),
+      ).toBeNull();
+
+      const metaService = app.get(MetaConversionsService);
+      const originalFetch = global.fetch;
+      try {
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ events_received: 1 }),
+        });
+        const concurrentWorkers = Array.from(
+          { length: 3 },
+          () => new MetaConversionsWorker(prisma, metaService),
+        );
+        await Promise.all(concurrentWorkers.map((worker) => worker.tick()));
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+
+        const deliveredRows = await prisma.metaConversionOutbox.findMany({
+          where: { id: { in: [zoneOutbox.id, merchantOutbox.id] } },
+          orderBy: { id: 'asc' },
+        });
+        expect(deliveredRows).toHaveLength(2);
+        for (const deliveredRow of deliveredRows) {
+          expect(deliveredRow.status).toBe('sent');
+          expect(deliveredRow.encrypted_payload).toBeNull();
+          expect(deliveredRow.sent_at).toBeTruthy();
+        }
+
+        const retryOrder = await createZoneOrder(httpServer, fixture, {
+          phone: generateEgyptPhone(324),
+          headers: buildSignedMetaHeaders(signingSecret, {
+            ip: '203.0.113.25',
+            userAgent: 'Tijaratk Retry E2E Browser/1.0',
+          }),
+          cookies: consentCookies,
+        });
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: false,
+          status: 500,
+        });
+        const retryWorker = new MetaConversionsWorker(prisma, metaService);
+        await retryWorker.tick();
+        const retryRow = await prisma.metaConversionOutbox.findUniqueOrThrow({
+          where: { order_id: retryOrder.id },
+        });
+        expect(retryRow).toEqual(
+          expect.objectContaining({
+            status: 'pending',
+            attempt_count: 1,
+            last_error_code: 'http_500',
+          }),
+        );
+        expect(retryRow.next_attempt_at.getTime()).toBeGreaterThan(Date.now());
+
+        await prisma.metaConversionOutbox.update({
+          where: { id: retryRow.id },
+          data: {
+            status: 'processing',
+            locked_by: 'crashed-worker',
+            locked_at: new Date(Date.now() - 3 * 60 * 1000),
+            next_attempt_at: new Date(0),
+          },
+        });
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ events_received: 1 }),
+        });
+        await retryWorker.tick();
+        expect(
+          await prisma.metaConversionOutbox.findUniqueOrThrow({
+            where: { id: retryRow.id },
+          }),
+        ).toEqual(expect.objectContaining({ status: 'pending' }));
+        await retryWorker.tick();
+        expect(
+          await prisma.metaConversionOutbox.findUniqueOrThrow({
+            where: { id: retryRow.id },
+          }),
+        ).toEqual(
+          expect.objectContaining({
+            status: 'sent',
+            encrypted_payload: null,
+          }),
+        );
+
+        const deadOrder = await createZoneOrder(httpServer, fixture, {
+          phone: generateEgyptPhone(325),
+          headers: buildSignedMetaHeaders(signingSecret, {
+            ip: '203.0.113.26',
+            userAgent: 'Tijaratk Dead Letter E2E Browser/1.0',
+          }),
+          cookies: consentCookies,
+        });
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: false,
+          status: 400,
+        });
+        const deadLetterWorker = new MetaConversionsWorker(
+          prisma,
+          metaService,
+        );
+        await deadLetterWorker.tick();
+        expect(
+          await prisma.metaConversionOutbox.findUniqueOrThrow({
+            where: { order_id: deadOrder.id },
+          }),
+        ).toEqual(
+          expect.objectContaining({
+            status: 'dead_letter',
+            attempt_count: 1,
+            last_error_code: 'http_400',
+            terminal_at: expect.any(Date),
+          }),
+        );
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
   });
 
   it('removes uploaded prescriptions rejected before zone order persistence', async () => {
@@ -1331,8 +1639,13 @@ async function createZoneFixture({
 }
 
 async function createZoneOrder(httpServer, fixture, options) {
-  const response = await request(httpServer)
-    .post(`/zone-storefronts/public/${fixture.zone.slug}/orders`)
+  const checkoutRequest = request(httpServer).post(
+    `/zone-storefronts/public/${fixture.zone.slug}/orders`,
+  );
+  if (options.headers) checkoutRequest.set(options.headers);
+  if (options.cookies) checkoutRequest.set('Cookie', options.cookies);
+
+  const response = await checkoutRequest
     .send({
       customer: {
         name: 'Zone Customer',
@@ -1350,6 +1663,61 @@ async function createZoneOrder(httpServer, fixture, options) {
     })
     .expect(201);
   return unwrapBody(response.body);
+}
+
+function buildSignedMetaHeaders(signingSecret, { ip, userAgent }) {
+  const encodedContext = Buffer.from(
+    JSON.stringify({ ip, userAgent, timestamp: Date.now() }),
+  ).toString('base64url');
+  const signature = createHmac('sha256', signingSecret)
+    .update(encodedContext)
+    .digest('base64url');
+  return {
+    'x-tijaratk-meta-context': encodedContext,
+    'x-tijaratk-meta-context-signature': signature,
+  };
+}
+
+function hashMetaPhone(phone) {
+  return createHash('sha256').update(phone.replace(/\D/g, '')).digest('hex');
+}
+
+async function withMetaTestConfig(callback) {
+  const keys = [
+    'CLIENT_URL',
+    'ENCRYPTION_PASSWORD',
+    'META_CAPI_ACCESS_TOKEN',
+    'META_CAPI_TEST_EVENT_CODE',
+    'META_CONTEXT_SIGNING_SECRET',
+    'META_GRAPH_API_VERSION',
+    'META_PIXEL_ID',
+  ];
+  const previous = Object.fromEntries(
+    keys.map((key) => [key, process.env[key]]),
+  );
+  const signingSecret = `meta-e2e-signing-${Date.now()}`;
+
+  Object.assign(process.env, {
+    CLIENT_URL: 'https://tijaratk.com',
+    ENCRYPTION_PASSWORD: 'meta-e2e-encryption-password',
+    META_CAPI_ACCESS_TOKEN: 'meta-e2e-access-token',
+    META_CONTEXT_SIGNING_SECRET: signingSecret,
+    META_GRAPH_API_VERSION: 'v23.0',
+    META_PIXEL_ID: '123456789012345',
+  });
+  delete process.env.META_CAPI_TEST_EVENT_CODE;
+
+  try {
+    return await callback({ signingSecret });
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous[key];
+      }
+    }
+  }
 }
 
 async function startManagedSession({

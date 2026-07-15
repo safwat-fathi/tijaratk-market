@@ -41,6 +41,7 @@ import {
 } from './dto/zone-storefront.dto';
 import { ZoneStorefrontNotificationsService } from './zone-storefront-notifications.service';
 import { ZoneStorefrontsService } from './zone-storefronts.service';
+import type { MetaTrackingContext } from 'src/meta-conversions/meta-conversions.types';
 
 type MerchantRequestActor = {
   tenantId: number;
@@ -63,6 +64,7 @@ export class OrderDispatchService {
     slug: string,
     dto: CreateOrderDto,
     prescriptionFile?: Express.Multer.File,
+    metaTrackingContext?: MetaTrackingContext,
   ) {
     let zone: Awaited<
       ReturnType<ZoneStorefrontsService['requireCheckoutZone']>
@@ -161,6 +163,7 @@ export class OrderDispatchService {
             prescriptionFile,
             {
               skipPostCommitEffects: true,
+              metaTrackingContext,
               afterPersist: async (transactionManager, order) => {
                 const dispatch = await transactionManager.orderDispatch.create({
                   data: {
@@ -223,6 +226,9 @@ export class OrderDispatchService {
       delivery_fee: completeOrder.delivery_fee,
       total: completeOrder.total,
       customer_access_code: created.customer_access_code,
+      ...(created.meta_purchase
+        ? { meta_purchase: created.meta_purchase }
+        : {}),
       zone_storefront: {
         id: zone.id,
         name: zone.name,

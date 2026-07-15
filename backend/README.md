@@ -51,6 +51,19 @@ Auth, session, and security:
 - `ENCRYPTION_PASSWORD`: Encryption password for sensitive values.
 - `IP_HASH_SALT`: Salt used when hashing IP-derived identifiers.
 
+Meta Conversions API:
+
+- `META_PIXEL_ID`: Dataset/Pixel ID for the company-level `Tijaratk Sales` data source.
+- `META_CAPI_ACCESS_TOKEN`: Server-only token generated in Meta Events Manager.
+- `META_GRAPH_API_VERSION`: Required explicit Graph API version (initial rollout example: `v23.0`).
+- `META_CAPI_TEST_EVENT_CODE`: Optional temporary Test Events code; remove it after validation.
+- `META_CONTEXT_SIGNING_SECRET`: HMAC secret shared with the Next.js server only.
+- `ENCRYPTION_PASSWORD`: Required and non-empty whenever CAPI is enabled because retry payloads are encrypted at rest.
+
+The Meta outbox worker runs in each API process, coordinates claims with
+`FOR UPDATE SKIP LOCKED`, and delivers events after the order transaction has
+committed. Delivery failures never change an order result.
+
 WhatsApp providers:
 
 - `ACCOUNT_SID`: Twilio account SID.
@@ -195,6 +208,23 @@ pnpm run test:e2e
 ```
 
 `test:e2e` currently delegates to the security e2e flow.
+
+## Meta Rollout
+
+Use `META_CAPI_TEST_EVENT_CODE` while checking consented merchant and zone
+orders in Events Manager, including browser/server `Purchase` deduplication by
+event ID. Then remove the test code.
+
+Create the reporting conversion manually once in Meta Events Manager:
+
+- Name: `Tijaratk Order Created`
+- Data source: `Tijaratk Sales`
+- Event and optimization category: `Purchase`
+- Rule: `conversion_type` equals `order_created`
+- Value: dynamic Purchase value; do not configure a fixed value
+
+Use the standard `Purchase` event—not the custom conversion—as the Sales
+campaign optimization event.
 
 ## Project Structure
 

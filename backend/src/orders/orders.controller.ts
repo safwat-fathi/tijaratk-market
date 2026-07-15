@@ -42,6 +42,7 @@ import { ResetOrderItemReplacementDto } from './dto/reset-order-item-replacement
 import { Request } from 'express';
 import { OrderSource } from '../../generated/prisma/client';
 import { OrderInboxSummaryDto } from './dto/order-inbox-summary.dto';
+import { MetaConversionsService } from 'src/meta-conversions/meta-conversions.service';
 
 @ApiTags('Orders')
 @Controller('orders')
@@ -51,7 +52,10 @@ export class OrdersController {
     'tracking',
   ]);
 
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly metaConversionsService: MetaConversionsService,
+  ) {}
 
   @Post()
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
@@ -187,6 +191,7 @@ export class OrdersController {
     description: 'Order created successfully',
   })
   createPublic(
+    @Req() request: Request,
     @Param('tenant_slug') tenantSlug: string,
     @Body() createOrderDto: CreateOrderDto,
     @UploadedFile() prescriptionFile?: Express.Multer.File,
@@ -199,6 +204,11 @@ export class OrdersController {
       tenantSlug,
       createOrderDto,
       prescriptionFile,
+      this.metaConversionsService.buildTrackingContext(
+        request,
+        'tenant',
+        `/${encodeURIComponent(tenantSlug)}`,
+      ),
     );
   }
 

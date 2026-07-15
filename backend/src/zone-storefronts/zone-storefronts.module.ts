@@ -12,10 +12,17 @@ import {
 } from './zone-storefronts.controller';
 import { ZoneStorefrontNotificationsService } from './zone-storefront-notifications.service';
 import { ZoneStorefrontsService } from './zone-storefronts.service';
+import { MetaConversionsModule } from 'src/meta-conversions/meta-conversions.module';
 
 /** Encapsulates public zones, control-plane membership, and manual dispatch. */
 @Module({
-  imports: [PrismaModule, OrdersModule, ActivityLogModule, AdminManagedModule],
+  imports: [
+    PrismaModule,
+    OrdersModule,
+    ActivityLogModule,
+    AdminManagedModule,
+    MetaConversionsModule,
+  ],
   controllers: [
     ZoneStorefrontsController,
     AdminZoneStorefrontsController,

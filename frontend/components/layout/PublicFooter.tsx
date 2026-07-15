@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import MarketingPrivacySettingsButton from "@/components/analytics/MarketingPrivacySettingsButton";
 
 export function PublicFooter() {
   return (
@@ -58,9 +59,7 @@ export function PublicFooter() {
             >
               شروط الاستخدام
             </Link>
-            <span className="text-[#222B2E]/20 hidden sm:inline" aria-hidden="true">
-              •
-            </span>
+            <MarketingPrivacySettingsButton />
             <Link
               href="/return-policy"
               className="text-sm font-bold text-brand-primary transition-colors hover:text-[#27AE60]"

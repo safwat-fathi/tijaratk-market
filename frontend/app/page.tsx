@@ -18,15 +18,10 @@ import CategoryGrid, {
 } from "@/components/stores-directory/CategoryGrid";
 import { AppHeader } from "@/components/layout/AppHeader";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
-import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
-import {
-  buildCustomerAnalyticsPageLocation,
-  type CustomerAnalyticsSearchParams,
-} from "@/lib/analytics/google-analytics";
 import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
 import type { ZoneStorefront } from "@/types/models/zone-storefront";
 
-type StoresDirectorySearchParams = CustomerAnalyticsSearchParams & {
+type StoresDirectorySearchParams = {
   area?: string;
 };
 
@@ -421,13 +416,6 @@ export default async function StoresDirectoryPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
-      <CustomerAnalytics
-        pageLocation={buildCustomerAnalyticsPageLocation(
-          STORES_PATH,
-          resolvedSearchParams,
-        )}
-        pageTitle={seo.title}
-      />
       {jsonLd.map((item, index) => (
         <JsonLd
           key={`${item["@type"]}-${index}`}

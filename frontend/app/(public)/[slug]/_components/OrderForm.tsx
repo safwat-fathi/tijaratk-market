@@ -34,6 +34,7 @@ import {
   createOrderAction,
   createZoneOrderAction,
   type CreateOrderState,
+  type MetaPurchaseResult,
 } from "@/actions/order-actions";
 import { OrderSource, UnavailableItemAction } from "@/types/enums";
 import { useRouter } from "next/navigation";
@@ -70,6 +71,7 @@ import {
   buildCategoryTabs,
   buildCartItems,
   calculateCartSummary,
+  resolveSelectionLineTotal,
   type PaginationState,
 } from "../_utils/order-form";
 import {
@@ -78,7 +80,8 @@ import {
 import {
   DEFAULT_UNAVAILABLE_ITEM_ACTION,
 } from "@/lib/orders/unavailable-item-action";
-import { sendCustomerAnalyticsEvent } from "@/lib/analytics/google-analytics";
+import { META_CONSENT_CHANGED_EVENT } from "@/lib/analytics/meta-consent";
+import { sendMetaPixelEvent } from "@/lib/analytics/meta-pixel";
 
 const initialState: CreateOrderState = {
   success: false,
@@ -94,6 +97,7 @@ const STICKY_HEADER_SELECTOR = "[data-store-header]";
 const SUBMIT_BAR_SELECTOR = "[data-order-submit-bar]";
 const VIEWPORT_SCROLL_MARGIN = 16;
 const CUSTOMER_PHONE_SEARCH_MIN_LENGTH = 7;
+const META_SEARCH_MAX_LENGTH = 100;
 
 const DEFAULT_PAGINATION_STATE: PaginationState = {
   page: 1,
@@ -109,6 +113,31 @@ const normalizeOptionalRequestText = (value: string) => {
 };
 
 const normalizeProductSearch = (value: string) => value.trim().replace(/\s+/g, " ");
+
+const resemblesPersonalIdentifier = (value: string) => {
+  if (/[^\s@]+@[^\s@]+\.[^\s@]+/.test(value)) {
+    return true;
+  }
+
+  return value.replace(/\D/g, "").length >= 7;
+};
+
+const hasPositiveSelection = (selection: ProductCartSelection | null) => {
+  if (!selection) return false;
+  if (selection.selection_mode === "weight") {
+    return Number(selection.selection_grams || 0) > 0;
+  }
+  if (selection.selection_mode === "price") {
+    return Number(selection.selection_amount_egp || 0) > 0;
+  }
+  return Number(selection.selection_quantity || 0) > 0;
+};
+
+const resolveMetaSelectionQuantity = (selection: ProductCartSelection) => {
+  if (selection.selection_mode !== "quantity") return 1;
+  const quantity = Number(selection.selection_quantity || 0);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+};
 
 const buildProductsStateKey = (categoryKey: string, searchTerm: string) =>
   `${categoryKey}::${searchTerm}`;
@@ -282,6 +311,35 @@ const getCreatedCustomerAccessCode = (data: unknown) => {
   return typeof customerAccessCode === "string"
     ? customerAccessCode.trim()
     : "";
+};
+
+const getCreatedMetaPurchase = (
+  data: unknown,
+): MetaPurchaseResult | undefined => {
+  if (!data || typeof data !== "object" || !("meta_purchase" in data)) {
+    return undefined;
+  }
+
+  const purchase = (data as { meta_purchase?: unknown }).meta_purchase;
+  if (!purchase || typeof purchase !== "object") {
+    return undefined;
+  }
+
+  const candidate = purchase as Partial<MetaPurchaseResult>;
+  if (
+    typeof candidate.event_id !== "string" ||
+    !candidate.event_id.trim() ||
+    !Number.isFinite(Number(candidate.value)) ||
+    candidate.currency !== "EGP"
+  ) {
+    return undefined;
+  }
+
+  return {
+    event_id: candidate.event_id.trim(),
+    value: Number(candidate.value),
+    currency: "EGP",
+  };
 };
 
 type OrderFormProps = {
@@ -475,6 +533,48 @@ export default function OrderForm({
   const isAutoScrollingRef = useRef(false);
   const autoScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isIntersectingRef = useRef(false);
+  const metaCartPresenceRef = useRef(
+    new Set(Object.keys(cartSelections).map(Number)),
+  );
+  const reportedMetaSearchesRef = useRef(new Set<string>());
+  const hasReportedMetaCheckoutRef = useRef(false);
+  const [metaConsentRevision, setMetaConsentRevision] = useState(0);
+
+  useEffect(() => {
+    const handleConsentChange = () => {
+      setMetaConsentRevision((current) => current + 1);
+    };
+    window.addEventListener(META_CONSENT_CHANGED_EVENT, handleConsentChange);
+    return () =>
+      window.removeEventListener(
+        META_CONSENT_CHANGED_EVENT,
+        handleConsentChange,
+      );
+  }, []);
+
+  useEffect(() => {
+    const normalizedSearch = debouncedProductSearch.trim();
+    if (normalizedSearch.length < 2) {
+      return;
+    }
+
+    const searchKey = normalizedSearch.toLocaleLowerCase("ar-EG");
+    if (reportedMetaSearchesRef.current.has(searchKey)) {
+      return;
+    }
+
+    const includeSearchString = !resemblesPersonalIdentifier(normalizedSearch);
+    const wasSent = sendMetaPixelEvent("Search", {
+      content_category: "product",
+      storefront_type: storefrontKind,
+      ...(includeSearchString
+        ? { search_string: normalizedSearch.slice(0, META_SEARCH_MAX_LENGTH) }
+        : {}),
+    });
+    if (wasSent) {
+      reportedMetaSearchesRef.current.add(searchKey);
+    }
+  }, [debouncedProductSearch, metaConsentRevision, storefrontKind]);
 
   useEffect(() => {
     const storageKey = `tijaratk:storefront-attribution:${tenantSlug}`;
@@ -989,6 +1089,48 @@ export default function OrderForm({
     [],
   );
 
+  const reportMetaCartTransition = useCallback(
+    (
+      productId: number,
+      selection: ProductCartSelection | null,
+      product?: Product,
+    ) => {
+      const wasPresent = metaCartPresenceRef.current.has(productId);
+      const isPresent = hasPositiveSelection(selection);
+
+      if (!isPresent) {
+        metaCartPresenceRef.current.delete(productId);
+        return;
+      }
+      if (wasPresent || !selection) {
+        return;
+      }
+
+      const quantity = resolveMetaSelectionQuantity(selection);
+      const lineTotal = resolveSelectionLineTotal(selection, product);
+      const itemPrice =
+        lineTotal !== null && quantity > 0
+          ? Number((lineTotal / quantity).toFixed(2))
+          : undefined;
+      sendMetaPixelEvent("AddToCart", {
+        content_ids: [String(productId)],
+        content_type: "product",
+        contents: [
+          {
+            id: String(productId),
+            quantity,
+            ...(itemPrice !== undefined ? { item_price: itemPrice } : {}),
+          },
+        ],
+        currency: "EGP",
+        value: lineTotal ?? 0,
+        storefront_type: storefrontKind,
+      });
+      metaCartPresenceRef.current.add(productId);
+    },
+    [storefrontKind],
+  );
+
   const handleUpdateSelection = (
     product: Product,
     selection: ProductCartSelection | null,
@@ -997,6 +1139,7 @@ export default function OrderForm({
       return;
     }
 
+    reportMetaCartTransition(product.id, selection, product);
     setCartSelections((prev) => {
       if (!selection) {
         const next = { ...prev };
@@ -1243,6 +1386,11 @@ export default function OrderForm({
 
   const handleReviewSelectionUpdate = useCallback(
     (productId: number, nextSelection: ProductCartSelection | null) => {
+      reportMetaCartTransition(
+        productId,
+        nextSelection,
+        knownProductsById[productId],
+      );
       setCartSelections((prev) => {
         const nextMap = new Map<number, ProductCartSelection>(
           Object.entries(prev).map(([id, selection]) => [
@@ -1266,7 +1414,7 @@ export default function OrderForm({
         >;
       });
     },
-    [],
+    [knownProductsById, reportMetaCartTransition],
   );
 
   const knownProductsByIdMap = useMemo(
@@ -1317,7 +1465,28 @@ export default function OrderForm({
     [effectiveCartSelections, knownProductsById, knownProductsByIdMap],
   );
 
-  const hasFreeTextRequest = orderRequest.trim().length > 0;
+  const metaCartContents = useMemo(
+    () =>
+      Object.entries(effectiveCartSelections).map(([productId, selection]) => {
+        const parsedProductId = Number(productId);
+        const quantity = resolveMetaSelectionQuantity(selection);
+        const lineTotal = resolveSelectionLineTotal(
+          selection,
+          knownProductsById[parsedProductId],
+        );
+        const itemPrice =
+          lineTotal !== null && quantity > 0
+            ? Number((lineTotal / quantity).toFixed(2))
+            : undefined;
+
+        return {
+          id: String(parsedProductId),
+          quantity,
+          ...(itemPrice !== undefined ? { item_price: itemPrice } : {}),
+        };
+      }),
+    [effectiveCartSelections, knownProductsById],
+  );
 
   useEffect(() => {
     if (!state.success || hasNavigatedToSuccessRef.current) {
@@ -1327,6 +1496,28 @@ export default function OrderForm({
     const publicToken = getCreatedOrderPublicToken(state.data);
     if (!publicToken) {
       return;
+    }
+
+    const metaPurchase = getCreatedMetaPurchase(state.data);
+    if (metaPurchase) {
+      sendMetaPixelEvent(
+        "Purchase",
+        {
+          currency: metaPurchase.currency,
+          value: metaPurchase.value,
+          conversion_type: "order_created",
+          storefront_type: storefrontKind,
+          num_items: totalItems,
+          ...(metaCartContents.length > 0
+            ? {
+                content_type: "product",
+                content_ids: metaCartContents.map((content) => content.id),
+                contents: metaCartContents,
+              }
+            : {}),
+        },
+        metaPurchase.event_id,
+      );
     }
 
     const customerAccessCode = getCreatedCustomerAccessCode(state.data);
@@ -1340,22 +1531,14 @@ export default function OrderForm({
     }
 
     hasNavigatedToSuccessRef.current = true;
-    sendCustomerAnalyticsEvent("order_submitted", {
-      store_slug: tenantSlug,
-      storefront_type: storefrontKind,
-      item_count: totalItems,
-      has_free_text: hasFreeTextRequest,
-      has_prescription: hasPrescription,
-    });
     router.replace(`${successUrl.pathname}${successUrl.search}`);
   }, [
-    hasFreeTextRequest,
-    hasPrescription,
     router,
     state.data,
     state.success,
     storefrontKind,
     tenantSlug,
+    metaCartContents,
     totalItems,
   ]);
 
@@ -1455,8 +1638,36 @@ export default function OrderForm({
       return;
     }
 
+    if (!hasReportedMetaCheckoutRef.current) {
+      const wasSent = sendMetaPixelEvent("InitiateCheckout", {
+        currency: "EGP",
+        value: hasPricedItems ? Number(estimatedTotal.toFixed(2)) : 0,
+        num_items: totalItems,
+        storefront_type: storefrontKind,
+        ...(metaCartContents.length > 0
+          ? {
+              content_type: "product",
+              content_ids: metaCartContents.map((content) => content.id),
+              contents: metaCartContents,
+            }
+          : {}),
+      });
+      if (wasSent) {
+        hasReportedMetaCheckoutRef.current = true;
+      }
+    }
+
     setIsReviewSheetOpen(true);
-  }, [focusOrderFormField, isPending, validateBeforeReview]);
+  }, [
+    estimatedTotal,
+    focusOrderFormField,
+    hasPricedItems,
+    isPending,
+    metaCartContents,
+    storefrontKind,
+    totalItems,
+    validateBeforeReview,
+  ]);
 
   const handleFormSubmitCapture = useCallback(
     (event: FormEvent<HTMLFormElement>) => {

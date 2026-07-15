@@ -59,6 +59,11 @@ import { OrderInboxSummaryDto } from './dto/order-inbox-summary.dto';
 import {
   resolveZoneStorefrontReorderUrl,
 } from 'src/zone-storefronts/zone-storefront-feature';
+import { MetaConversionsService } from 'src/meta-conversions/meta-conversions.service';
+import type {
+  MetaPurchaseResponse,
+  MetaTrackingContext,
+} from 'src/meta-conversions/meta-conversions.types';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -123,6 +128,8 @@ export type OrderCreationOptions = {
   ) => Promise<void>;
   /** Lets an outer workflow own cache invalidation and post-commit notifications. */
   skipPostCommitEffects?: boolean;
+  /** Carries consented browser matching data for transactional Meta enqueueing. */
+  metaTrackingContext?: MetaTrackingContext;
 };
 
 export type OrderReplacementOptions = {
@@ -149,6 +156,7 @@ export class OrdersService {
     private readonly orderWhatsappService: OrderWhatsappService,
     private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
     private readonly activityLogService: ActivityLogService,
+    private readonly metaConversionsService: MetaConversionsService,
     @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
@@ -156,7 +164,13 @@ export class OrdersService {
     tenantSlug: string,
     createOrderDto: CreateOrderDto,
     prescriptionUpload?: PrescriptionUpload,
-  ): Promise<Order> {
+    metaTrackingContext?: MetaTrackingContext,
+  ): Promise<
+    Order & {
+      customer_access_code: string;
+      meta_purchase?: MetaPurchaseResponse;
+    }
+  > {
     const tenant = await this.tenantsService.findOneBySlug(tenantSlug);
     if (!tenant) {
       await this.deleteUploadedFileQuietly(prescriptionUpload);
@@ -234,6 +248,7 @@ export class OrdersService {
       createOrderDto,
       { source: 'storefront' },
       prescriptionUpload,
+      { metaTrackingContext },
     );
   }
 
@@ -246,9 +261,15 @@ export class OrdersService {
     actor: OrderActivityActor = { source: 'storefront' },
     prescriptionUpload?: PrescriptionUpload,
     options: OrderCreationOptions = {},
-  ): Promise<Order & { customer_access_code: string }> {
+  ): Promise<
+    Order & {
+      customer_access_code: string;
+      meta_purchase?: MetaPurchaseResponse;
+    }
+  > {
     let isFirstOrder = false;
     let customerAccessCode = '';
+    let metaPurchase: MetaPurchaseResponse | undefined;
 
     let savedOrder: Order;
     try {
@@ -356,6 +377,7 @@ export class OrdersService {
           data: orderPayload,
         });
 
+        let persistedOrderItems: OrderItem[] = [];
         if (hasItems) {
           const orderItemsPayload = this.buildOrderItemsPayload(
             items,
@@ -369,6 +391,7 @@ export class OrdersService {
           const orderItems = await manager.orderItem.findMany({
             where: { order_id: persistedOrder.id },
           });
+          persistedOrderItems = orderItems;
 
           const pricedLines = orderItems
             .map((item) =>
@@ -458,6 +481,13 @@ export class OrdersService {
 
         await options.afterPersist?.(manager, persistedOrder as Order);
 
+        metaPurchase = await this.metaConversionsService.enqueuePurchase({
+          manager,
+          order: persistedOrder,
+          orderItems: persistedOrderItems,
+          context: options.metaTrackingContext,
+        });
+
         return persistedOrder;
       });
     } catch (error) {
@@ -469,7 +499,11 @@ export class OrdersService {
       return {
         ...savedOrder,
         customer_access_code: customerAccessCode,
-      } as Order & { customer_access_code: string };
+        ...(metaPurchase ? { meta_purchase: metaPurchase } : {}),
+      } as Order & {
+        customer_access_code: string;
+        meta_purchase?: MetaPurchaseResponse;
+      };
     }
 
     const completeOrder = await this.findOne(savedOrder.id);
@@ -479,7 +513,11 @@ export class OrdersService {
     return {
       ...completeOrder,
       customer_access_code: customerAccessCode,
-    } as Order & { customer_access_code: string };
+      ...(metaPurchase ? { meta_purchase: metaPurchase } : {}),
+    } as Order & {
+      customer_access_code: string;
+      meta_purchase?: MetaPurchaseResponse;
+    };
   }
 
   /** Invalidates order-derived dashboard caches after an external transaction commits. */

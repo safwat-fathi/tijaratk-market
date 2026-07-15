@@ -15,6 +15,7 @@ import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import {
   persistCreatedOrderCustomerTracking,
 } from '@/lib/tracking/customer-tracking-cookie';
+import { buildMetaRequestContextHeaders } from '@/lib/analytics/meta-request-context';
 
 export async function updateOrderStatus(
   orderId: number,
@@ -190,11 +191,23 @@ export async function closeDayAction(): Promise<{
   }
 }
 
+export type MetaPurchaseResult = {
+  event_id: string;
+  value: number;
+  currency: 'EGP';
+};
+
+export type CreatedOrderActionData = {
+  public_token?: string;
+  customer_access_code?: string;
+  meta_purchase?: MetaPurchaseResult;
+};
+
 export type CreateOrderState = {
   success: boolean;
   message: string;
   errors?: Record<string, string[]>;
-  data?: unknown;
+  data?: CreatedOrderActionData;
 };
 
 type CreateOrderCartItem = {
@@ -226,6 +239,7 @@ type CreatedOrderMeta = {
   public_token?: unknown;
   customer_access_code?: unknown;
   created_at?: unknown;
+  meta_purchase?: unknown;
 };
 
 const parseCartItems = (cart?: string): CreateOrderCartItem[] => {
@@ -425,11 +439,34 @@ const persistCreatedOrderTrackingArtifacts = async ({
   }
 };
 
-function extractOrderMeta(data: unknown): { publicToken: string; customerAccessCode: string } {
+function extractOrderMeta(data: unknown): {
+  publicToken: string;
+  customerAccessCode: string;
+  metaPurchase?: MetaPurchaseResult;
+} {
   const meta = data as CreatedOrderMeta | undefined;
+  const rawMetaPurchase = meta?.meta_purchase;
+  const metaPurchase =
+    rawMetaPurchase &&
+    typeof rawMetaPurchase === 'object' &&
+    'event_id' in rawMetaPurchase &&
+    typeof rawMetaPurchase.event_id === 'string' &&
+    rawMetaPurchase.event_id.trim() &&
+    'value' in rawMetaPurchase &&
+    Number.isFinite(Number(rawMetaPurchase.value)) &&
+    'currency' in rawMetaPurchase &&
+    rawMetaPurchase.currency === 'EGP'
+      ? {
+          event_id: rawMetaPurchase.event_id.trim(),
+          value: Number(rawMetaPurchase.value),
+          currency: 'EGP' as const,
+        }
+      : undefined;
+
   return {
     publicToken: typeof meta?.public_token === 'string' ? meta.public_token.trim() : '',
     customerAccessCode: typeof meta?.customer_access_code === 'string' ? meta.customer_access_code.trim() : '',
+    ...(metaPurchase ? { metaPurchase } : {}),
   };
 }
 
@@ -460,7 +497,12 @@ export async function createOrderAction(
   const formDataPayload = buildCreateOrderFormData(payload, formData);
 
   try {
-    const response = await ordersService.createPublicOrder(tenantSlug, formDataPayload);
+    const metaRequestHeaders = await buildMetaRequestContextHeaders();
+    const response = await ordersService.createPublicOrder(
+      tenantSlug,
+      formDataPayload,
+      metaRequestHeaders,
+    );
 
     if (response.success) {
       await persistCreatedOrderTrackingArtifacts({
@@ -469,7 +511,7 @@ export async function createOrderAction(
         customerData,
       });
 
-      const { publicToken, customerAccessCode } = extractOrderMeta(response.data);
+      const { publicToken, customerAccessCode, metaPurchase } = extractOrderMeta(response.data);
 
       return {
         success: true,
@@ -480,6 +522,7 @@ export async function createOrderAction(
               ...(customerAccessCode
                 ? { customer_access_code: customerAccessCode }
                 : {}),
+              ...(metaPurchase ? { meta_purchase: metaPurchase } : {}),
             }
           : response.data,
       };
@@ -532,9 +575,11 @@ export async function createZoneOrderAction(
   const formDataPayload = buildCreateOrderFormData(payload, formData);
 
   try {
+    const metaRequestHeaders = await buildMetaRequestContextHeaders();
     const response = await zoneStorefrontsService.createPublicOrder(
       zoneSlug,
       formDataPayload,
+      metaRequestHeaders,
     );
     if (!response.success) {
       return {
@@ -549,7 +594,7 @@ export async function createZoneOrderAction(
       responseData: response.data,
       customerData,
     });
-    const { publicToken, customerAccessCode } = extractOrderMeta(response.data);
+    const { publicToken, customerAccessCode, metaPurchase } = extractOrderMeta(response.data);
     return {
       success: true,
       message: 'تم إنشاء الطلب بنجاح',
@@ -559,6 +604,7 @@ export async function createZoneOrderAction(
             ...(customerAccessCode
               ? { customer_access_code: customerAccessCode }
               : {}),
+            ...(metaPurchase ? { meta_purchase: metaPurchase } : {}),
           }
         : response.data,
     };

@@ -277,6 +277,7 @@ model Order {
   delivery_area DirectoryArea? @relation(fields: [delivery_area_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_orders_delivery_area")
   cancellation_policy_events TenantCancellationPolicyEvent[]
   order_dispatch             OrderDispatch?
+  meta_conversion_outbox     MetaConversionOutbox?
 
   @@index([delivery_area_id], map: "IDX_orders_delivery_area_id")
   @@index([tenant_id], map: "IDX_527dd6efd5f3402f729c6b3e82")
@@ -543,6 +544,32 @@ model DirectoryEvent {
   @@map("directory_events")
 }
 
+/// Operational outbox for consented Meta Conversions API events.
+model MetaConversionOutbox {
+  id                   Int                        @id(map: "PK_meta_conversion_outbox_id") @default(autoincrement())
+  order_id             Int                        @unique(map: "UQ_meta_conversion_outbox_order_id")
+  event_id             String                     @unique(map: "UQ_meta_conversion_outbox_event_id") @db.VarChar(128)
+  event_name           String                     @db.VarChar(64)
+  encrypted_payload    String?
+  status               MetaConversionOutboxStatus @default(pending)
+  attempt_count        Int                        @default(0)
+  next_attempt_at      DateTime                   @default(now()) @db.Timestamptz(6)
+  locked_at            DateTime?                  @db.Timestamptz(6)
+  locked_by            String?                    @db.VarChar(160)
+  last_error_code      String?                    @db.VarChar(64)
+  last_error_message   String?
+  sent_at              DateTime?                  @db.Timestamptz(6)
+  terminal_at          DateTime?                  @db.Timestamptz(6)
+  created_at           DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime                   @default(now()) @updatedAt @db.Timestamptz(6)
+  order                Order                      @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_meta_conversion_outbox_order")
+
+  @@index([status, next_attempt_at], map: "IDX_meta_conversion_outbox_status_next_attempt")
+  @@index([locked_at], map: "IDX_meta_conversion_outbox_locked_at")
+  @@index([terminal_at], map: "IDX_meta_conversion_outbox_terminal_at")
+  @@map("meta_conversion_outbox")
+}
+
 model User {
   created_at DateTime  @default(now()) @db.Timestamp(6)
   updated_at DateTime  @default(now()) @db.Timestamp(6)
@@ -668,6 +695,15 @@ enum DirectoryEventType {
   storefront_order_created
 
   @@map("directory_events_type_enum")
+}
+
+enum MetaConversionOutboxStatus {
+  pending
+  processing
+  sent
+  dead_letter
+
+  @@map("meta_conversion_outbox_status_enum")
 }
 
 enum ProductOrderMode {

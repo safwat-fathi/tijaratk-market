@@ -78,9 +78,20 @@ export default async function AssignedOrderPage({
         <h2 className="font-bold text-brand-text">بيانات العميل للتنفيذ</h2>
         <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <p>الاسم: {dispatch.order.customer_name || "عميل"}</p>
-          <a href={`tel:${dispatch.order.customer_phone}`} className="text-brand-primary">الهاتف: {dispatch.order.customer_phone}</a>
-          <p className="sm:col-span-2">العنوان: {dispatch.order.delivery_address}</p>
-          {dispatch.order.delivery_time_window_snapshot ? <p className="sm:col-span-2">موعد التوصيل: {dispatch.order.delivery_time_window_snapshot}</p> : null}
+          <a
+            href={`tel:${dispatch.order.customer_phone}`}
+            className="text-brand-primary"
+          >
+            الهاتف: {dispatch.order.customer_phone}
+          </a>
+          <p className="sm:col-span-2">
+            العنوان: {dispatch.order.delivery_address}
+          </p>
+          {dispatch.order.delivery_time_window_snapshot ? (
+            <p className="sm:col-span-2">
+              موعد التوصيل: {dispatch.order.delivery_time_window_snapshot}
+            </p>
+          ) : null}
         </div>
       </Card>
 
@@ -105,12 +116,46 @@ export default async function AssignedOrderPage({
         <div className="grid gap-4 md:grid-cols-2">
           <Card className="p-5">
             <h2 className="font-bold text-brand-text">قبول الطلب</h2>
-            <p className="mt-1 text-sm text-muted-foreground">يطبق عرض السعر ويثبت الإجمالي فوراً للعميل.</p>
-            <form action={acceptAssignedOrderAction.bind(null, dispatch.id)} className="mt-3"><input type="hidden" name="expected_version" value={assignment.version} /><Button type="submit" className="w-full">قبول وتأكيد السعر</Button></form>
+            <p className="mt-1 text-sm text-muted-foreground">
+              يطبق عرض السعر ويثبت الإجمالي فوراً للعميل.
+            </p>
+            <form
+              action={acceptAssignedOrderAction.bind(null, dispatch.id)}
+              className="mt-3"
+            >
+              <input
+                type="hidden"
+                name="expected_version"
+                value={assignment.version}
+              />
+              <Button type="submit" className="w-full">
+                قبول وتأكيد السعر
+              </Button>
+            </form>
           </Card>
           <Card className="border-red-200 p-5">
             <h2 className="font-bold text-red-900">رفض الإسناد</h2>
-            <form action={rejectAssignedOrderAction.bind(null, dispatch.id)} className="mt-3 space-y-3"><input type="hidden" name="expected_version" value={assignment.version} /><textarea name="reason" required minLength={3} maxLength={500} className="w-full rounded-md border border-red-300 px-3 py-2" placeholder="سبب الرفض المطلوب للعمليات" /><Button type="submit" variant="destructive" className="w-full">رفض وإعادة الطلب للعمليات</Button></form>
+            <form
+              action={rejectAssignedOrderAction.bind(null, dispatch.id)}
+              className="mt-3 space-y-3"
+            >
+              <input
+                type="hidden"
+                name="expected_version"
+                value={assignment.version}
+              />
+              <textarea
+                name="reason"
+                required
+                minLength={3}
+                maxLength={500}
+                className="w-full rounded-md border border-red-300 px-3 py-2"
+                placeholder="سبب الرفض المطلوب للعمليات"
+              />
+              <Button type="submit" variant="destructive" className="w-full">
+                رفض وإعادة الطلب للعمليات
+              </Button>
+            </form>
           </Card>
         </div>
       ) : null}
@@ -119,11 +164,37 @@ export default async function AssignedOrderPage({
         <Card className="p-5">
           <h2 className="font-bold text-brand-text">تقدم التنفيذ</h2>
           <div className="mt-3 flex flex-wrap gap-3">
-            {dispatch.order.status === "confirmed" ? <form action={updateAssignedOrderStatusAction.bind(null, dispatch.id, "out_for_delivery")}><Button type="submit">خرج للتوصيل</Button></form> : null}
-            {dispatch.order.status === "out_for_delivery" ? <form action={updateAssignedOrderStatusAction.bind(null, dispatch.id, "completed")}><Button type="submit">تم التوصيل</Button></form> : null}
-            {dispatch.order.status === "completed" ? <span className="rounded-full bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800">تم إكمال الطلب</span> : null}
+            {dispatch.order.status === "confirmed" ? (
+              <form
+                action={updateAssignedOrderStatusAction.bind(
+                  null,
+                  dispatch.id,
+                  "out_for_delivery",
+                )}
+              >
+                <Button type="submit">خرج للتوصيل</Button>
+              </form>
+            ) : null}
+            {dispatch.order.status === "out_for_delivery" ? (
+              <form
+                action={updateAssignedOrderStatusAction.bind(
+                  null,
+                  dispatch.id,
+                  "completed",
+                )}
+              >
+                <Button type="submit">تم التوصيل</Button>
+              </form>
+            ) : null}
+            {dispatch.order.status === "completed" ? (
+              <span className="rounded-full bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800">
+                تم إكمال الطلب
+              </span>
+            ) : null}
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">الإلغاء غير متاح للمتجر؛ تواصل مع عمليات المنطقة للتصعيد.</p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            الإلغاء غير متاح للمتجر؛ تواصل مع عمليات المنطقة للتصعيد.
+          </p>
         </Card>
       ) : null}
     </div>

@@ -46,12 +46,13 @@ class ZoneStorefrontsService extends HttpService {
   public async createPublicOrder(
     slug: string,
     payload: CreateOrderRequest | FormData,
+    headers?: HeadersInit,
   ) {
     return this.post<{
       id: number;
       public_token: string;
       customer_access_code?: string;
-    }>(`public/${slug}/orders`, payload);
+    }>(`public/${slug}/orders`, payload, undefined, { headers });
   }
 }
 

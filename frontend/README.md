@@ -33,6 +33,18 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:<backend-port>
 
 Use the same backend port configured by `HTTP_SERVER_PORT` in the backend environment.
 
+Optional Meta browser tracking is disabled unless configured:
+
+```bash
+NEXT_PUBLIC_META_PIXEL_ID=<tijaratk-sales-pixel-id>
+META_CONTEXT_SIGNING_SECRET=<same-server-only-secret-as-backend>
+```
+
+The public Pixel ID is safe to expose to the browser. The signing secret is
+server-only and must never use a `NEXT_PUBLIC_` prefix. Meta's script and
+browser events remain blocked until the customer explicitly allows marketing
+cookies.
+
 ## Running Locally
 
 > AI agents: these commands are documented for human developers only. Do not run them. If verification is needed, ask the user to run the relevant command and share the output.

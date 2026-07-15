@@ -53,6 +53,7 @@ import { ZoneStorefrontsService } from './zone-storefronts.service';
 import { diskStorage } from 'multer';
 import { randomUUID } from 'node:crypto';
 import { extname, join } from 'node:path';
+import { MetaConversionsService } from 'src/meta-conversions/meta-conversions.service';
 
 /** Public customer-safe zone storefront endpoints. */
 @ApiTags('Zone Storefronts')
@@ -61,6 +62,7 @@ export class ZoneStorefrontsController {
   constructor(
     private readonly zoneStorefrontsService: ZoneStorefrontsService,
     private readonly orderDispatchService: OrderDispatchService,
+    private readonly metaConversionsService: MetaConversionsService,
   ) {}
 
   /** Lists sanitized active and ready zones for public discovery. */
@@ -129,6 +131,7 @@ export class ZoneStorefrontsController {
   })
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Zone order created' })
   createOrder(
+    @Req() request: Request,
     @Param('slug') slug: string,
     @Body() dto: CreateOrderDto,
     @UploadedFile() prescriptionFile?: Express.Multer.File,
@@ -137,6 +140,11 @@ export class ZoneStorefrontsController {
       slug,
       dto,
       prescriptionFile,
+      this.metaConversionsService.buildTrackingContext(
+        request,
+        'zone',
+        `/market/${encodeURIComponent(slug)}`,
+      ),
     );
   }
 }

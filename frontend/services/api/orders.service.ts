@@ -74,8 +74,9 @@ class OrdersService extends HttpService {
 	public async createPublicOrder(
 		tenantSlug: string,
 		payload: CreateOrderRequest | FormData,
+		headers?: HeadersInit,
 	) {
-		return this.post<Order>(`${tenantSlug}`, payload);
+		return this.post<Order>(`${tenantSlug}`, payload, undefined, { headers });
 	}
 
 	public async updateOrder(
