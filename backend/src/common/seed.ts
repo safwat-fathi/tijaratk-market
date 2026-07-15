@@ -11,6 +11,7 @@ import {
 import { seedAdmin } from './seeders/admin.seeder';
 import { DirectoryStatus, PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { passwordExtension } from '../prisma/password.extension';
 
 import { EGYPT_DIRECTORY_AREAS } from './seeders/directory-areas.seeder';
 
@@ -33,7 +34,8 @@ async function bootstrap() {
   }
 
   const adapter = new PrismaPg({ connectionString: seedDatabaseUrl });
-  const prisma = new PrismaClient({ adapter });
+  const rawPrisma = new PrismaClient({ adapter });
+  const prisma = rawPrisma.$extends(passwordExtension) as unknown as PrismaClient;
 
   await prisma.$connect();
 

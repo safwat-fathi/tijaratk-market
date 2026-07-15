@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { passwordExtension } from './password.extension';
 
 @Injectable()
 export class PrismaService
@@ -55,6 +56,13 @@ export class PrismaService
         },
       );
     }
+
+    const extendedClient = this.$extends(passwordExtension) as unknown as this;
+
+    extendedClient.onModuleInit = this.onModuleInit.bind(this);
+    extendedClient.onModuleDestroy = this.onModuleDestroy.bind(this);
+
+    return extendedClient;
   }
 
   async onModuleInit() {

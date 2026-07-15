@@ -1,6 +1,5 @@
 import { Logger } from '@nestjs/common';
 import { AdminRole, PrismaClient } from '../../../generated/prisma/client';
-import * as bcrypt from 'bcrypt';
 
 export async function seedAdmin(prisma: PrismaClient) {
   const logger = new Logger('AdminSeeder');
@@ -23,11 +22,10 @@ export async function seedAdmin(prisma: PrismaClient) {
     });
 
     if (!existingAdmin) {
-      const hashedPassword = await bcrypt.hash(adminPassword, 10);
       await prisma.adminUser.create({
         data: {
           phone: adminPhone,
-          password: hashedPassword,
+          password: adminPassword,
           name: adminName,
           role: AdminRole.platform_admin,
         },

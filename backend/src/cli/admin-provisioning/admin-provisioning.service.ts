@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import * as bcrypt from 'bcrypt';
 import { parsePhoneNumber } from 'libphonenumber-js';
 import {
   AdminAuditEntityType,
@@ -11,7 +10,6 @@ import { AdminAuditService } from '../../admin-audit/admin-audit.service';
 import { normalizePhoneNumber } from '../../common/utils/phone.utils';
 import { PrismaService } from '../../prisma/prisma.service';
 
-const BCRYPT_COST = 10;
 const ADMIN_NAME_MIN_LENGTH = 2;
 const ADMIN_NAME_MAX_LENGTH = 160;
 const ADMIN_PASSWORD_MIN_LENGTH = 12;
@@ -88,7 +86,6 @@ export class AdminProvisioningService {
       );
     }
 
-    const passwordHash = await bcrypt.hash(input.password, BCRYPT_COST);
     const requestId = `cli-${randomUUID()}`;
 
     try {
@@ -97,7 +94,7 @@ export class AdminProvisioningService {
           data: {
             name,
             phone,
-            password: passwordHash,
+            password: input.password,
             role,
             is_active: true,
           },

@@ -179,17 +179,18 @@ export default function MetaPixel() {
           <div className="space-y-3">
             <h2
               id="meta-consent-title"
-              className="text-lg font-bold text-brand-text"
+              className="text-lg font-bold text-brand-text flex items-center gap-2"
             >
-              ملفات تعريف الارتباط للتسويق
+              <span className="text-xl">🍪</span> نحن نهتم بخصوصيتك
             </h2>
             <p
               id="meta-consent-description"
               className="text-sm leading-6 text-muted-foreground"
             >
-              نستخدم أدوات Meta، بعد موافقتك فقط، لقياس أداء الإعلانات
-              والطلبات وتحسين الحملات. يمكنك تغيير اختيارك في أي وقت من تذييل
-              الموقع. اقرأ المزيد في{" "}
+              لكي نقدم لك أفضل تجربة وعروضاً تناسب اهتماماتك، نطلب إذنك لاستخدام
+              أدوات تتبع (مثل Meta). يساعدنا هذا في فهم كيفية تفاعلك مع متجرنا،
+              وتوجيه إعلاناتنا بشكل أفضل. يمكنك دائماً تغيير رأيك في أي وقت من أسفل
+              الصفحة. اقرأ المزيد في{" "}
               <Link
                 href="/privacy"
                 className="font-semibold text-brand-primary underline underline-offset-4"
@@ -213,7 +214,7 @@ export default function MetaPixel() {
               onClick={allowMarketing}
               className="min-h-11 rounded-full bg-brand-primary px-5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/30"
             >
-              السماح بملفات التسويق
+              السماح بالتسويق
             </button>
           </div>
 

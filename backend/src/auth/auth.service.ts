@@ -268,11 +268,9 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired reset code');
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { password: passwordHash },
+      data: { password: password },
     });
 
     return {
@@ -292,10 +290,9 @@ export class AuthService {
       throw new BadRequestException('Incorrect current password');
     }
 
-    const passwordHash = await bcrypt.hash(newPass, 10);
     await this.prisma.user.update({
       where: { id: userId },
-      data: { password: passwordHash },
+      data: { password: newPass },
     });
 
     return {
