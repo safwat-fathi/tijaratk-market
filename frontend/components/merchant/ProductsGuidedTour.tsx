@@ -103,7 +103,6 @@ export function ProductsGuidedTour() {
         continuous
         run={run}
         scrollToFirstStep
-        scrollOffset={150}
         steps={steps}
       locale={{
         back: "السابق",
