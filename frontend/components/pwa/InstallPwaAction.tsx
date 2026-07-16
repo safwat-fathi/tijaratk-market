@@ -18,6 +18,7 @@ type InstallPwaActionProps = {
   iconClassName?: string;
   buttonText?: string;
   label?: string;
+  id?: string;
 };
 
 const isBeforeInstallPromptEvent = (
@@ -48,6 +49,7 @@ export default function InstallPwaAction({
   iconClassName,
   buttonText,
   label = "حفظ على الشاشة الرئيسية",
+  id,
 }: InstallPwaActionProps) {
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
@@ -175,6 +177,7 @@ export default function InstallPwaAction({
   return (
     <>
       <button
+        id={id}
         type="button"
         onClick={installPrompt ? handleInstall : () => setIsOpen(true)}
         className={cn(

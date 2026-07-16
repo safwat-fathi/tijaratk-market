@@ -2,6 +2,7 @@ import { adminService } from "@/services/api/admin.service";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminPagination } from "../_components/AdminPagination";
 
@@ -13,6 +14,11 @@ type Props = {
 
 type AdminOrder = {
   id: number;
+  tenant_id?: number;
+  tenant?: {
+    id: number;
+    name?: string | null;
+  } | null;
   customer_name?: string | null;
   created_at: string | Date;
   total?: number | string | null;
@@ -29,6 +35,10 @@ type PaginationMeta = {
 type ApiListPayload<T> = T[] | { data?: T[]; meta?: PaginationMeta };
 
 const DEFAULT_PAGE_SIZE = 20;
+const ORDER_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("ar-EG", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 function parsePositiveInteger(
   value: string | string[] | undefined,
@@ -138,7 +148,10 @@ export default async function AdminOrdersPage(props: Props) {
                     العميل
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
-                    التاريخ
+                    المتجر
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
+                    التاريخ والوقت
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-brand-text uppercase">
                     التكلفة
@@ -152,40 +165,62 @@ export default async function AdminOrdersPage(props: Props) {
                 {orders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-6 py-8 text-center text-sm text-gray-500"
                     >
                       لا توجد طلبات
                     </td>
                   </tr>
                 ) : (
-                  orders.map((order) => (
-                    <tr key={order.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-text">
-                        #{order.id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                        {order.customer_name || "-"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                        {new Date(order.created_at).toLocaleDateString("ar-EG")}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                        {order.total} EGP
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span
-                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            order.status === "completed"
-                              ? "bg-status-success/20 text-status-success"
-                              : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+                  orders.map((order) => {
+                    const tenantId = order.tenant?.id ?? order.tenant_id;
+                    const tenantName =
+                      order.tenant?.name ||
+                      (tenantId ? `متجر #${tenantId}` : "-");
+                    const createdAt = new Date(order.created_at);
+
+                    return (
+                      <tr key={order.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-text">
+                          #{order.id}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
+                          {order.customer_name || "-"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
+                          {tenantId ? (
+                            <Link
+                              href={`/admin/merchants/${tenantId}`}
+                              className="text-brand-primary hover:underline"
+                            >
+                              {tenantName}
+                            </Link>
+                          ) : (
+                            tenantName
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
+                          <time dateTime={createdAt.toISOString()}>
+                            {ORDER_DATE_TIME_FORMATTER.format(createdAt)}
+                          </time>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
+                          {order.total} EGP
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span
+                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              order.status === "completed"
+                                ? "bg-status-success/20 text-status-success"
+                                : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {order.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -16,7 +16,7 @@ export function ProductsGuidedTour() {
     if (!hasCompletedTour) {
       const isMobile = window.matchMedia("(max-width: 1023px)").matches;
 
-      const desktopSteps: Step[] = [
+      const tourSteps: Step[] = [
         {
           target: "body",
           placement: "center",
@@ -38,50 +38,56 @@ export function ProductsGuidedTour() {
             "بعد تجهيز ملف الـ CSV، قم برفعه هنا لإضافة كل المنتجات أو تحديث أسعارها بسرعة وسهولة.",
         },
         {
+          target: "#tour-product-readiness",
+          title: "مؤشر إكتمال المنتجات",
+          content:
+            "هذا المؤشر يوضح لك عدد المنتجات المطلوبة. متجرك لن يظهر للعملاء ولن يستقبل طلبات إلا بعد وصولك للعدد المطلوب، لذلك احرص على إضافة منتجاتك حتى يكتمل المؤشر.",
+        },
+        {
           target: "#add-core-assortment-btn",
           title: "التشكيلة الأساسية",
           content:
             "بضغطة واحدة، يمكنك إضافة تشكيلة المنتجات الأساسية والأكثر مبيعاً لمتجرك لتبدأ البيع فوراً.",
         },
         {
-          target: "div[role='tablist']",
-          title: "خيارات الإضافة",
+          target: "#section-tab-catalog",
+          title: "الكتالوج الجاهز",
           content:
-            "تنقل بين إضافة منتج يدوياً إذا لم يكن متوفراً، أو الاختيار السريع من الكتالوج الجاهز، أو استعراض وإدارة منتجاتك الحالية.",
+            "هذا هو الكتالوج الموحد. يحتوي على آلاف المنتجات الجاهزة بصورها وتفاصيلها لتضيفها لمتجرك بسهولة.",
+          placement: "bottom",
+        },
+        {
+          target: ".tour-hide-item-btn",
+          title: "إخفاء المنتجات",
+          content:
+            "إذا كان هناك منتج في الكتالوج لا تبيعه ولا تريده أن يظهر لك مرة أخرى، يمكنك إخفاؤه بالضغط هنا.",
+        },
+        {
+          target: "#tour-show-hidden-btn",
+          title: "المنتجات المخفية",
+          content:
+            "في أي وقت، يمكنك الضغط هنا لاستعراض جميع المنتجات التي قمت بإخفائها لإعادتها للكتالوج إذا أردت.",
+          placement: "bottom",
         },
       ];
 
-      const mobileSteps: Step[] = [
-        {
-          target: "body",
-          placement: "center",
-          title: "إدارة المنتجات",
-          content:
-            "هنا يمكنك إضافة منتجاتك الجديدة إما برفع ملف، أو اختيارها من الكتالوج، أو إضافتها يدوياً. استكشف الخيارات المتاحة لك.",
-          skipBeacon: true,
-        },
-        {
-          target: "#csv-upload-form",
-          title: "رفع المنتجات",
-          content:
-            "ارفع ملف الـ CSV هنا لإضافة المنتجات أو تحديثها بسرعة.",
-        },
-        {
-          target: "div[role='tablist']",
-          title: "خيارات الإضافة",
-          content:
-            "تنقل بين إضافة منتج يدوياً، أو الاختيار من الكتالوج، أو استعراض منتجاتك.",
-        },
-      ];
-
-      setSteps(isMobile ? mobileSteps : desktopSteps);
+      setSteps(tourSteps);
       setRun(true);
     }
   }, []);
 
   const handleJoyrideCallback = (data: EventData) => {
-    const { status } = data;
+    const { status, type, action, index } = data;
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
+
+    // Auto-click the catalog tab to show elements for subsequent steps
+    if (type === "step:after" && action === "next") {
+      const catalogStepIndex = 5;
+      
+      if (index === catalogStepIndex) {
+        document.getElementById("section-tab-catalog")?.click();
+      }
+    }
 
     if (finishedStatuses.includes(status)) {
       setRun(false);
@@ -92,12 +98,13 @@ export function ProductsGuidedTour() {
   if (!isClient || steps.length === 0) return null;
 
   return (
-    <Joyride
-      onEvent={handleJoyrideCallback}
-      continuous
-      run={run}
-      scrollToFirstStep
-      steps={steps}
+      <Joyride
+        onEvent={handleJoyrideCallback}
+        continuous
+        run={run}
+        scrollToFirstStep
+        scrollOffset={150}
+        steps={steps}
       locale={{
         back: "السابق",
         close: "إغلاق",

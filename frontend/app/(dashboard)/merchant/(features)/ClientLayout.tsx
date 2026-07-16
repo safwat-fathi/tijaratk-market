@@ -224,6 +224,7 @@ export default function MerchantLayoutClient({
         </div>
         <div className="flex items-center gap-2">
           <InstallPwaAction
+            id="tour-pwa-install-mobile"
             appName={merchantAppName}
             className="border-brand-border bg-brand-soft text-brand-primary hover:bg-brand-soft/80 focus-visible:ring-brand-accent/20"
             iconClassName="h-5 w-5"
@@ -251,6 +252,7 @@ export default function MerchantLayoutClient({
         }
         topContent={
           <InstallPwaAction
+            id="tour-pwa-install-desktop"
             appName={merchantAppName}
             buttonText="تثبيت التطبيق"
             className="w-full justify-start border-brand-border bg-brand-soft/60 text-brand-primary hover:bg-brand-soft focus-visible:ring-brand-accent/20"

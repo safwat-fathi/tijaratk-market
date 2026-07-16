@@ -45,10 +45,22 @@ export function GuidedTour() {
             "تابع طلبات عملائك الواردة، وقم بتحديث حالاتها من قيد الانتظار إلى قيد التوصيل أو مكتملة.",
         },
         {
+          target: '.hidden.lg\\:fixed a[href="/merchant/activity"]',
+          title: "سجل النشاط",
+          content:
+            "تتبع جميع الحركات والتغييرات التي تمت في متجرك، مثل إضافة المنتجات أو تعديلها.",
+        },
+        {
           target: '.hidden.lg\\:fixed a[href="/merchant/settings"]',
           title: "الإعدادات",
           content:
             "قم بضبط إعدادات متجرك، وتحديث بياناتك الشخصية ومعلومات المتجر وطرق الدفع والتوصيل.",
+        },
+        {
+          target: "#tour-pwa-install-desktop",
+          title: "تثبيت التطبيق",
+          content:
+            "قم بتثبيت التطبيق على جهازك للوصول السريع لمتجرك وتجربة استخدام أسهل وأسرع.",
         },
       ];
 
@@ -65,8 +77,44 @@ export function GuidedTour() {
           target: "#mobile-menu-trigger",
           title: "القائمة الرئيسية",
           content:
-            "اضغط هنا في أي وقت لفتح القائمة الجانبية والوصول إلى المنتجات، الطلبات والإعدادات.",
+            "سيتم فتح القائمة الجانبية الآن للوصول إلى المنتجات والطلبات وغيرها.",
           placement: "bottom",
+        },
+        {
+          target: '.lg\\:hidden a[href="/merchant"]',
+          title: "نظرة عامة",
+          content:
+            "هنا يمكنك متابعة أداء متجرك، ومراجعة الإحصائيات السريعة مثل عدد الطلبات المنجزة والمبيعات.",
+        },
+        {
+          target: '.lg\\:hidden a[href="/merchant/products/new"]',
+          title: "إدارة المنتجات",
+          content:
+            "من هذا القسم، يمكنك إضافة منتجات جديدة وتعديل تفاصيلها وأسعارها ومخزونها بكل سهولة.",
+        },
+        {
+          target: '.lg\\:hidden a[href="/merchant/orders"]',
+          title: "إدارة الطلبات",
+          content:
+            "تابع طلبات عملائك الواردة، وقم بتحديث حالاتها من قيد الانتظار إلى قيد التوصيل أو مكتملة.",
+        },
+        {
+          target: '.lg\\:hidden a[href="/merchant/activity"]',
+          title: "سجل النشاط",
+          content:
+            "تتبع جميع الحركات والتغييرات التي تمت في متجرك، مثل إضافة المنتجات أو تعديلها.",
+        },
+        {
+          target: '.lg\\:hidden a[href="/merchant/settings"]',
+          title: "الإعدادات",
+          content:
+            "قم بضبط إعدادات متجرك، وتحديث بياناتك الشخصية ومعلومات المتجر وطرق الدفع والتوصيل.",
+        },
+        {
+          target: "#tour-pwa-install-mobile",
+          title: "تثبيت التطبيق",
+          content:
+            "قم بتثبيت التطبيق على جوالك للوصول السريع لمتجرك وتجربة استخدام أسهل وأسرع.",
         },
       ];
 
@@ -76,8 +124,16 @@ export function GuidedTour() {
   }, []);
 
   const handleJoyrideCallback = (data: EventData) => {
-    const { status } = data;
+    const { status, type, action, index } = data;
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
+
+    // Open mobile sidebar when transitioning from the trigger step to the sidebar steps
+    if (type === "step:after" && action === "next") {
+      const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+      if (isMobile && index === 1) {
+        document.getElementById("mobile-menu-trigger")?.click();
+      }
+    }
 
     if (finishedStatuses.includes(status)) {
       setRun(false);

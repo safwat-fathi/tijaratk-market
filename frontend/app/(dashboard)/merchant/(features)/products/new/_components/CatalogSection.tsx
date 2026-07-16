@@ -133,6 +133,7 @@ export default function CatalogSection({
           </div>
           {onToggleShowingHidden && (
             <button
+              id="tour-show-hidden-btn"
               type="button"
               onClick={onToggleShowingHidden}
               className="text-sm font-medium text-gray-600 hover:text-gray-900 underline underline-offset-2"
@@ -265,7 +266,7 @@ export default function CatalogSection({
                               type="button"
                               onClick={() => onHideCatalogItem?.(item)}
                               disabled={Boolean(pendingCatalogIds[item.id])}
-                              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 disabled:opacity-60"
+                              className="tour-hide-item-btn rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 disabled:opacity-60"
                             >
                               {pendingCatalogIds[item.id] ? "...جاري" : "إخفاء"}
                             </button>
