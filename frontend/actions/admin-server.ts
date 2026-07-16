@@ -35,6 +35,12 @@ export type ActionState = {
   timestamp?: number;
 };
 
+export type ZoneMutationActionResult = {
+  success: boolean;
+  message: string;
+  timestamp: number;
+};
+
 export type DirectoryStatusActionState = {
   success: boolean;
   message?: string;
@@ -43,6 +49,55 @@ export type DirectoryStatusActionState = {
 export type DispatchSessionStartResult = {
   success: false;
   message: string;
+};
+
+const zoneMutationMessages: Record<string, string> = {
+  ZONE_OPERATOR_NOT_READY:
+    "مشغل المنطقة غير جاهز لاستقبال الطلبات. راجع حالة المشغل وإتاحة التوصيل.",
+  ZONE_CATALOG_NOT_READY:
+    "كتالوج المنطقة غير جاهز. نفّذ مزامنة المنتجات الأساسية أولاً.",
+  ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT:
+    "يلزم وجود متجر تنفيذ واحد على الأقل يكون نشطاً ومؤهلاً داخل المنطقة.",
+  MERCHANT_INACTIVE: "المتجر غير نشط حالياً. فعّل المتجر أولاً.",
+  MERCHANT_DELETED: "المتجر محذوف ولا يمكن إضافته إلى المنطقة.",
+  MERCHANT_DELIVERY_DISABLED:
+    "التوصيل متوقف في هذا المتجر. فعّل التوصيل أولاً.",
+  MERCHANT_CATEGORY_MISMATCH:
+    "تصنيف المتجر لا يطابق تصنيف واجهة المنطقة.",
+  MERCHANT_IS_ZONE_OPERATOR:
+    "مشغل منطقة داخلي لا يمكن استخدامه كمتجر تنفيذ.",
+  MERCHANT_DELIVERY_AREA_MISSING:
+    "المتجر لا يغطي منطقة التوصيل هذه. أضفها إلى مناطق توصيل المتجر أولاً.",
+  MERCHANT_DELIVERY_AREA_INACTIVE:
+    "تغطية المتجر لهذه المنطقة متوقفة. فعّل المنطقة ضمن مناطق توصيل المتجر أولاً.",
+  MERCHANT_NOT_FOUND: "تعذر العثور على المتجر المطلوب.",
+};
+
+const getZoneMutationMessage = (
+  data: unknown,
+  message: string | undefined,
+  fallback: string,
+) => {
+  const code =
+    data && typeof data === "object" && "code" in data
+      ? String((data as { code?: unknown }).code ?? "")
+      : "";
+  if (code && zoneMutationMessages[code]) return zoneMutationMessages[code];
+
+  const normalized = message?.trim();
+  if (normalized === "Merchant is not eligible for this zone") {
+    return "المتجر غير مؤهل لهذه المنطقة. راجع حالته وإتاحة التوصيل ومناطق التغطية.";
+  }
+  if (normalized === "At least one eligible active merchant is required") {
+    return zoneMutationMessages.ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT;
+  }
+  if (normalized === "Zone catalog is not ready") {
+    return zoneMutationMessages.ZONE_CATALOG_NOT_READY;
+  }
+  if (normalized === "Zone operator is not ready for ordering") {
+    return zoneMutationMessages.ZONE_OPERATOR_NOT_READY;
+  }
+  return normalized || fallback;
 };
 
 const UPDATE_PRODUCT_FALLBACK_MESSAGE = "تعذر تعديل المنتج، حاول مرة أخرى.";
@@ -422,12 +477,31 @@ export async function createZoneStorefrontAction(
 export async function updateZoneActivationAction(
   zoneId: number,
   isActive: boolean,
-): Promise<void> {
+): Promise<ZoneMutationActionResult> {
   const id = positiveIdSchema.parse(zoneId);
   const response = await adminService.updateZoneActivation(id, isActive);
-  if (!response.success) throw new Error(response.message || "تعذر تحديث حالة المنطقة");
+  if (!response.success) {
+    return {
+      success: false,
+      message: getZoneMutationMessage(
+        response.data,
+        response.message,
+        "تعذر تحديث حالة المنطقة.",
+      ),
+      timestamp: Date.now(),
+    };
+  }
   revalidatePath("/admin/zones");
-  revalidatePath(`/admin/zones/${id}`);
+  revalidatePath("/admin/zones/" + id);
+  revalidatePath("/");
+  if (response.data?.slug) {
+    revalidatePath("/market/" + response.data.slug);
+  }
+  return {
+    success: true,
+    message: isActive ? "تم تفعيل المنطقة بنجاح." : "تم إيقاف الطلبات الجديدة.",
+    timestamp: Date.now(),
+  };
 }
 
 export type ZoneEssentialCatalogSyncActionResult = {
@@ -465,7 +539,7 @@ export async function syncZoneEssentialCatalogAction(
 export async function upsertZoneMerchantAction(
   zoneId: number,
   formData: FormData,
-): Promise<void> {
+): Promise<ZoneMutationActionResult> {
   const id = positiveIdSchema.parse(zoneId);
   const payload = z.object({
     tenant_id: z.coerce.number().int().positive(),
@@ -473,8 +547,30 @@ export async function upsertZoneMerchantAction(
     is_active: z.enum(["true", "false"]).transform((value) => value === "true"),
   }).parse(Object.fromEntries(formData.entries()));
   const response = await adminService.upsertZoneMerchant(id, payload);
-  if (!response.success) throw new Error(response.message || "تعذر تحديث عضوية المتجر");
-  revalidatePath(`/admin/zones/${id}`);
+  if (!response.success) {
+    return {
+      success: false,
+      message: getZoneMutationMessage(
+        response.data,
+        response.message,
+        "تعذر تحديث عضوية المتجر.",
+      ),
+      timestamp: Date.now(),
+    };
+  }
+  revalidatePath("/admin/zones");
+  revalidatePath("/admin/zones/" + id);
+  revalidatePath("/");
+  if (response.data?.slug) {
+    revalidatePath("/market/" + response.data.slug);
+  }
+  return {
+    success: true,
+    message: payload.is_active
+      ? "تم تفعيل عضوية المتجر في المنطقة."
+      : "تم إيقاف عضوية المتجر في المنطقة.",
+    timestamp: Date.now(),
+  };
 }
 
 export async function startZoneDispatchSessionAction(

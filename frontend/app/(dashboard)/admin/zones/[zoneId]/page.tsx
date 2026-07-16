@@ -2,9 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   startManagedStoreSessionAction,
-  updateZoneActivationAction,
   upsertManagedTenantAccessAction,
-  upsertZoneMerchantAction,
 } from "@/actions/admin-server";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -15,6 +13,10 @@ import { adminService } from "@/services/api/admin.service";
 import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
 import { DispatchSessionForm } from "../_components/DispatchSessionForm";
 import { SyncEssentialCatalogButton } from "../_components/SyncEssentialCatalogButton";
+import {
+  ZoneActivationControl,
+  ZoneMerchantControls,
+} from "./_components/ZoneAdminControls";
 
 export const dynamic = "force-dynamic";
 
@@ -75,37 +77,26 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
           </div>
           <div className="flex flex-wrap gap-2">
             <SyncEssentialCatalogButton zoneId={zone.id} />
-            <form action={updateZoneActivationAction.bind(null, zone.id, !zone.is_active)}>
-              <Button type="submit" variant={zone.is_active ? "outline" : "primary"}>{zone.is_active ? "إيقاف الطلبات الجديدة" : "تفعيل المنطقة"}</Button>
-            </form>
+            <ZoneActivationControl
+              zoneId={zone.id}
+              isActive={zone.is_active}
+              blockers={zone.readiness.activation_blockers}
+            />
           </div>
         </div>
       </Card>
 
       <Card className="p-5">
         <h2 className="text-lg font-bold text-gray-900">متاجر التنفيذ</h2>
-        <form action={upsertZoneMerchantAction.bind(null, zone.id)} className="mt-4 grid gap-3 md:grid-cols-4">
-          <select name="tenant_id" required className="rounded-md border border-gray-300 bg-white px-3 py-2 md:col-span-2">
-            <option value="">اختر متجراً يغطي المنطقة</option>
-            {eligible.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}
-          </select>
-          <input name="priority" type="number" defaultValue="0" className="rounded-md border border-gray-300 px-3 py-2" aria-label="الأولوية" />
-          <input type="hidden" name="is_active" value="true" />
-          <Button type="submit">حفظ العضوية</Button>
-        </form>
-        <div className="mt-4 space-y-2">
-          {zone.merchants.map((membership) => (
-            <div key={membership.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 p-3 text-sm">
-              <div><strong>{membership.tenant.name}</strong><p className="text-xs text-gray-500">أولوية {membership.priority} · {membership.is_active ? "نشط" : "متوقف"}</p></div>
-              <form action={upsertZoneMerchantAction.bind(null, zone.id)}>
-                <input type="hidden" name="tenant_id" value={membership.tenant_id} />
-                <input type="hidden" name="priority" value={membership.priority} />
-                <input type="hidden" name="is_active" value={String(!membership.is_active)} />
-                <Button type="submit" size="sm" variant="outline">{membership.is_active ? "إيقاف" : "إعادة تفعيل"}</Button>
-              </form>
-            </div>
-          ))}
-        </div>
+        <p className="mt-1 text-sm text-gray-500">
+          متوقف تعني أن عضوية المتجر في هذه المنطقة غير مفعلة، ولا تعني
+          بالضرورة أن المتجر نفسه متوقف.
+        </p>
+        <ZoneMerchantControls
+          zoneId={zone.id}
+          eligibleMerchants={eligible}
+          memberships={zone.merchants}
+        />
       </Card>
 
       <Card className="p-5">

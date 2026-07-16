@@ -23,6 +23,21 @@ export type ZoneStorefront = {
   };
 };
 
+export type ZoneActivationBlocker =
+  | "ZONE_OPERATOR_NOT_READY"
+  | "ZONE_CATALOG_NOT_READY"
+  | "ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT";
+
+export type MerchantEligibilityBlocker =
+  | "MERCHANT_NOT_FOUND"
+  | "MERCHANT_INACTIVE"
+  | "MERCHANT_DELETED"
+  | "MERCHANT_DELIVERY_DISABLED"
+  | "MERCHANT_CATEGORY_MISMATCH"
+  | "MERCHANT_IS_ZONE_OPERATOR"
+  | "MERCHANT_DELIVERY_AREA_MISSING"
+  | "MERCHANT_DELIVERY_AREA_INACTIVE";
+
 export type ZoneReadiness = {
   catalog_ready: boolean;
   catalog_in_sync: boolean;
@@ -30,6 +45,7 @@ export type ZoneReadiness = {
   essential_catalog_products: number;
   required_products?: number;
   active_eligible_merchants: number;
+  activation_blockers: ZoneActivationBlocker[];
   catalog_source?: "talabat_csv" | "chefaa_csv";
 };
 
@@ -49,6 +65,10 @@ export type AdminZoneMerchantMembership = {
   tenant_id: number;
   priority: number;
   is_active: boolean;
+  eligibility: {
+    eligible: boolean;
+    blocker: MerchantEligibilityBlocker | null;
+  };
   tenant: {
     id: number;
     name: string;

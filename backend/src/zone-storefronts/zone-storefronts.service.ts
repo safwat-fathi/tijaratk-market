@@ -75,8 +75,37 @@ type ZoneReadiness = {
   essential_catalog_products: number;
   catalog_in_sync: boolean;
   active_eligible_merchants: number;
+  activation_blockers: ZoneActivationBlocker[];
   required_products?: number;
   catalog_source?: CatalogSource;
+};
+
+const ZONE_ACTIVATION_BLOCKERS = {
+  operatorNotReady: 'ZONE_OPERATOR_NOT_READY',
+  catalogNotReady: 'ZONE_CATALOG_NOT_READY',
+  noEligibleMerchant: 'ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT',
+} as const;
+
+type ZoneActivationBlocker =
+  (typeof ZONE_ACTIVATION_BLOCKERS)[keyof typeof ZONE_ACTIVATION_BLOCKERS];
+
+const MERCHANT_ELIGIBILITY_BLOCKERS = {
+  notFound: 'MERCHANT_NOT_FOUND',
+  inactive: 'MERCHANT_INACTIVE',
+  deleted: 'MERCHANT_DELETED',
+  deliveryDisabled: 'MERCHANT_DELIVERY_DISABLED',
+  categoryMismatch: 'MERCHANT_CATEGORY_MISMATCH',
+  zoneOperator: 'MERCHANT_IS_ZONE_OPERATOR',
+  deliveryAreaMissing: 'MERCHANT_DELIVERY_AREA_MISSING',
+  deliveryAreaInactive: 'MERCHANT_DELIVERY_AREA_INACTIVE',
+} as const;
+
+type MerchantEligibilityBlocker =
+  (typeof MERCHANT_ELIGIBILITY_BLOCKERS)[keyof typeof MERCHANT_ELIGIBILITY_BLOCKERS];
+
+type MerchantEligibility = {
+  eligible: boolean;
+  blocker: MerchantEligibilityBlocker | null;
 };
 
 type AdminZoneRecord = {
@@ -101,8 +130,25 @@ type AdminZoneRecord = {
     category: TenantCategory;
     status: TenantStatus;
     delivery_fee: Prisma.Decimal;
+    delivery_available?: boolean;
+    deleted_at?: Date | null;
   };
-  merchants?: unknown[];
+  merchants?: Array<{
+    id: number;
+    zone_storefront_id: number;
+    tenant_id: number;
+    priority: number;
+    is_active: boolean;
+    created_at: Date;
+    updated_at: Date;
+    tenant: {
+      id: number;
+      name: string;
+      status: TenantStatus;
+      slug?: string;
+      category?: TenantCategory;
+    };
+  }>;
 };
 
 /** Manages zone configuration and sanitized public catalog discovery. */
@@ -211,6 +257,10 @@ export class ZoneStorefrontsService {
           active_eligible_merchants: 0,
           active_products: 0,
           essential_catalog_products: 0,
+          activation_blockers: [
+            ZONE_ACTIVATION_BLOCKERS.catalogNotReady,
+            ZONE_ACTIVATION_BLOCKERS.noEligibleMerchant,
+          ],
         });
       });
     } catch (error) {
@@ -245,9 +295,16 @@ export class ZoneStorefrontsService {
     });
 
     return Promise.all(
-      zones.map(async (zone) =>
-        this.mapAdminZone(zone, await this.getReadiness(zone.id)),
-      ),
+      zones.map(async (zone) => {
+        const [readiness, merchantEligibility] = await Promise.all([
+          this.calculateReadiness(zone),
+          this.getMerchantEligibilityMap(
+            zone,
+            zone.merchants.map((membership) => membership.tenant_id),
+          ),
+        ]);
+        return this.mapAdminZone(zone, readiness, merchantEligibility);
+      }),
     );
   }
 
@@ -276,7 +333,15 @@ export class ZoneStorefrontsService {
     });
     if (!zone) throw new NotFoundException('Zone storefront not found');
 
-    return this.mapAdminZone(zone, await this.getReadiness(zone.id));
+    const [readiness, merchantEligibility] = await Promise.all([
+      this.calculateReadiness(zone),
+      this.getMerchantEligibilityMap(
+        zone,
+        zone.merchants.map((membership) => membership.tenant_id),
+      ),
+    ]);
+
+    return this.mapAdminZone(zone, readiness, merchantEligibility);
   }
 
   /** Reconciles the operator snapshot with the complete curated essential set. */
@@ -345,21 +410,16 @@ export class ZoneStorefrontsService {
   ) {
     const zone = await this.requireZone(zoneId);
     if (dto.is_active) {
-      if (
-        zone.operator_tenant.status !== TenantStatus.active ||
-        zone.operator_tenant.delivery_available !== true ||
-        !resolveCatalogSourceForTenantCategory(zone.operator_tenant.category)
-      ) {
-        throw new BadRequestException('Zone operator is not ready for ordering');
-      }
-      const readiness = await this.getReadiness(zone.id);
-      if (!readiness.catalog_ready) {
-        throw new BadRequestException('Zone catalog is not ready');
-      }
-      if (readiness.active_eligible_merchants < 1) {
-        throw new BadRequestException(
-          'At least one eligible active merchant is required',
-        );
+      const readiness = await this.calculateReadiness(zone);
+      const blocker = readiness.activation_blockers[0];
+      if (blocker) {
+        const message =
+          blocker === ZONE_ACTIVATION_BLOCKERS.operatorNotReady
+            ? 'Zone operator is not ready for ordering'
+            : blocker === ZONE_ACTIVATION_BLOCKERS.catalogNotReady
+              ? 'Zone catalog is not ready'
+              : 'At least one eligible active merchant is required';
+        throw new BadRequestException({ code: blocker, message });
       }
     }
 
@@ -458,19 +518,8 @@ export class ZoneStorefrontsService {
     const zone = await this.requireZone(zoneId);
     const tenants = await this.prisma.tenant.findMany({
       where: {
+        ...this.buildEligibleMerchantWhere(zone),
         id: { not: zone.operator_tenant_id },
-        category: zone.operator_tenant.category,
-        status: TenantStatus.active,
-        deleted_at: null,
-        delivery_available: true,
-        operated_zone_storefront: { is: null },
-        tenant_delivery_areas: {
-          some: {
-            area_id: zone.area_id,
-            is_active: true,
-            deleted_at: null,
-          },
-        },
       },
       select: {
         id: true,
@@ -651,32 +700,20 @@ export class ZoneStorefrontsService {
   ) {
     const zone = await this.requireZone(zoneId);
     const merchant = await this.prisma.tenant.findFirst({
-      where: {
-        id: tenantId,
-        status: TenantStatus.active,
-        deleted_at: null,
-        delivery_available: true,
-        category: zone.operator_tenant.category,
-        operated_zone_storefront: { is: null },
-        tenant_delivery_areas: {
-          some: {
-            area_id: zone.area_id,
-            is_active: true,
-            deleted_at: null,
-          },
-        },
-        ...(requireMembership
-          ? {
-              zone_storefront_memberships: {
-                some: { zone_storefront_id: zone.id, is_active: true },
-              },
-            }
-          : {}),
-      },
+      where: this.buildEligibleMerchantWhere(
+        zone,
+        tenantId,
+        requireMembership,
+      ),
       select: { id: true, name: true, phone: true, category: true },
     });
     if (!merchant) {
-      throw new BadRequestException('Merchant is not eligible for this zone');
+      const eligibility = await this.getMerchantEligibility(zone, tenantId);
+      throw new BadRequestException({
+        message: 'Merchant is not eligible for this zone',
+        code:
+          eligibility.blocker ?? MERCHANT_ELIGIBILITY_BLOCKERS.notFound,
+      });
     }
     return merchant;
   }
@@ -783,20 +820,7 @@ export class ZoneStorefrontsService {
           where: {
             zone_storefront_id: zone.id,
             is_active: true,
-            tenant: {
-              status: TenantStatus.active,
-              deleted_at: null,
-              delivery_available: true,
-              category: zone.operator_tenant.category,
-              operated_zone_storefront: { is: null },
-              tenant_delivery_areas: {
-                some: {
-                  area_id: zone.area_id,
-                  is_active: true,
-                  deleted_at: null,
-                },
-              },
-            },
+            tenant: this.buildEligibleMerchantWhere(zone),
           },
         }),
       ]);
@@ -808,7 +832,128 @@ export class ZoneStorefrontsService {
       required_products: requiredProducts,
       active_eligible_merchants: activeEligibleMerchants,
       catalog_source: catalogSource,
+      activation_blockers: this.getActivationBlockers(
+        zone,
+        activeProducts >= requiredProducts,
+        activeEligibleMerchants,
+      ),
     };
+  }
+
+  /** Builds the single authoritative Prisma filter for zone fulfillment eligibility. */
+  private buildEligibleMerchantWhere(
+    zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
+    tenantId?: number,
+    requireMembership = false,
+  ): Prisma.TenantWhereInput {
+    return {
+      ...(tenantId ? { id: tenantId } : {}),
+      status: TenantStatus.active,
+      deleted_at: null,
+      delivery_available: true,
+      category: zone.operator_tenant.category,
+      operated_zone_storefront: { is: null },
+      tenant_delivery_areas: {
+        some: {
+          area_id: zone.area_id,
+          is_active: true,
+          deleted_at: null,
+        },
+      },
+      ...(requireMembership
+        ? {
+            zone_storefront_memberships: {
+              some: { zone_storefront_id: zone.id, is_active: true },
+            },
+          }
+        : {}),
+    };
+  }
+
+  /** Explains why configured merchants do or do not satisfy the eligibility filter. */
+  private async getMerchantEligibilityMap(
+    zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
+    tenantIds: number[],
+  ): Promise<Map<number, MerchantEligibility>> {
+    if (tenantIds.length === 0) return new Map();
+
+    const tenants = await this.prisma.tenant.findMany({
+      where: { id: { in: tenantIds } },
+      select: {
+        id: true,
+        status: true,
+        deleted_at: true,
+        delivery_available: true,
+        category: true,
+        operated_zone_storefront: { select: { id: true } },
+        tenant_delivery_areas: {
+          where: { area_id: zone.area_id },
+          select: { is_active: true, deleted_at: true },
+          take: 1,
+        },
+      },
+    });
+    const tenantById = new Map(tenants.map((tenant) => [tenant.id, tenant]));
+
+    return new Map(
+      tenantIds.map((tenantId) => {
+        const tenant = tenantById.get(tenantId);
+        const deliveryArea = tenant?.tenant_delivery_areas[0];
+        let blocker: MerchantEligibilityBlocker | null = null;
+
+        if (!tenant) blocker = MERCHANT_ELIGIBILITY_BLOCKERS.notFound;
+        else if (tenant.deleted_at)
+          blocker = MERCHANT_ELIGIBILITY_BLOCKERS.deleted;
+        else if (tenant.status !== TenantStatus.active)
+          blocker = MERCHANT_ELIGIBILITY_BLOCKERS.inactive;
+        else if (!tenant.delivery_available)
+          blocker = MERCHANT_ELIGIBILITY_BLOCKERS.deliveryDisabled;
+        else if (tenant.category !== zone.operator_tenant.category)
+          blocker = MERCHANT_ELIGIBILITY_BLOCKERS.categoryMismatch;
+        else if (tenant.operated_zone_storefront)
+          blocker = MERCHANT_ELIGIBILITY_BLOCKERS.zoneOperator;
+        else if (!deliveryArea)
+          blocker = MERCHANT_ELIGIBILITY_BLOCKERS.deliveryAreaMissing;
+        else if (!deliveryArea.is_active || deliveryArea.deleted_at)
+          blocker = MERCHANT_ELIGIBILITY_BLOCKERS.deliveryAreaInactive;
+
+        return [tenantId, { eligible: blocker === null, blocker }];
+      }),
+    );
+  }
+
+  private async getMerchantEligibility(
+    zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
+    tenantId: number,
+  ): Promise<MerchantEligibility> {
+    const eligibility = await this.getMerchantEligibilityMap(zone, [tenantId]);
+    return (
+      eligibility.get(tenantId) ?? {
+        eligible: false,
+        blocker: MERCHANT_ELIGIBILITY_BLOCKERS.notFound,
+      }
+    );
+  }
+
+  private getActivationBlockers(
+    zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
+    catalogReady: boolean,
+    activeEligibleMerchants: number,
+  ): ZoneActivationBlocker[] {
+    const blockers: ZoneActivationBlocker[] = [];
+    if (
+      zone.operator_tenant.status !== TenantStatus.active ||
+      zone.operator_tenant.deleted_at ||
+      zone.operator_tenant.delivery_available !== true ||
+      !resolveCatalogSourceForTenantCategory(zone.operator_tenant.category)
+    ) {
+      blockers.push(ZONE_ACTIVATION_BLOCKERS.operatorNotReady);
+    }
+    if (!catalogReady) blockers.push(ZONE_ACTIVATION_BLOCKERS.catalogNotReady);
+    if (activeEligibleMerchants < 1) {
+      blockers.push(ZONE_ACTIVATION_BLOCKERS.noEligibleMerchant);
+    }
+    return blockers;
   }
 
   /** Builds the private slug used only by trusted operator-tenant workflows. */
@@ -947,7 +1092,11 @@ export class ZoneStorefrontsService {
   }
 
   /** Maps trusted admin details and readiness without exposing tenant credentials. */
-  private mapAdminZone(zone: AdminZoneRecord, readiness: ZoneReadiness) {
+  private mapAdminZone(
+    zone: AdminZoneRecord,
+    readiness: ZoneReadiness,
+    merchantEligibility = new Map<number, MerchantEligibility>(),
+  ) {
     return {
       id: zone.id,
       name: zone.name,
@@ -964,7 +1113,13 @@ export class ZoneStorefrontsService {
         status: zone.operator_tenant.status,
         delivery_fee: zone.operator_tenant.delivery_fee,
       },
-      merchants: zone.merchants ?? [],
+      merchants: (zone.merchants ?? []).map((membership) => ({
+        ...membership,
+        eligibility: merchantEligibility.get(membership.tenant_id) ?? {
+          eligible: false,
+          blocker: MERCHANT_ELIGIBILITY_BLOCKERS.notFound,
+        },
+      })),
       readiness,
     };
   }
