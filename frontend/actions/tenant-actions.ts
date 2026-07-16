@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { tenantsService } from "@/services/api/tenants.service";
-import { merchantDirectoryService } from "@/services/api/stores-directory.service";
 
 export type UpdateDeliverySettingsState = {
   success: boolean;
@@ -13,117 +12,77 @@ export type UpdateDeliverySettingsState = {
 
 const deliveryTimePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-const optionalDeliveryFeeSchema = z.preprocess(
-  value => (value === "" || value === undefined || value === null ? undefined : value),
-  z.coerce
-    .number({ error: "أدخل قيمة رقمية صحيحة" })
-    .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر")
-    .optional(),
-);
+const deliveryConfigurationSchema = z
+  .object({
+    delivery_available: z.boolean(),
+    delivery_starts_at: z.string().nullable().optional(),
+    delivery_ends_at: z.string().nullable().optional(),
+    primary_area_id: z.coerce.number().int().min(1, "اختر المنطقة الأساسية"),
+    delivery_areas: z.array(
+      z.object({
+        area_id: z.coerce.number().int().min(1),
+        delivery_fee: z.coerce
+          .number({ error: "أدخل قيمة رقمية صحيحة" })
+          .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر"),
+      }),
+    ),
+  })
+  .superRefine((data, ctx) => {
+    const areaIds = data.delivery_areas.map((area) => area.area_id);
+    if (new Set(areaIds).size !== areaIds.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "لا يمكن تكرار منطقة التوصيل",
+        path: ["delivery_areas"],
+      });
+    }
+    if (data.delivery_available && data.delivery_areas.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "اختر منطقة توصيل واحدة على الأقل",
+        path: ["delivery_areas"],
+      });
+    }
 
-const optionalDeliveryTimeSchema = z
-  .string()
-  .optional()
-  .or(z.literal(""))
-  .transform(value => value || undefined);
+    const start = data.delivery_starts_at || "";
+    const end = data.delivery_ends_at || "";
+    if (Boolean(start) !== Boolean(end)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "أدخل وقت البداية والنهاية للتوصيل",
+        path: ["delivery_configuration"],
+      });
+    } else if (
+      start &&
+      end &&
+      (!deliveryTimePattern.test(start) ||
+        !deliveryTimePattern.test(end) ||
+        end <= start)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "تأكد أن وقت النهاية بعد وقت البداية",
+        path: ["delivery_configuration"],
+      });
+    }
+  });
 
-const validateDeliveryDetails = (
-  data: {
-    delivery_available: boolean;
-    delivery_fee?: number;
-    delivery_starts_at?: string;
-    delivery_ends_at?: string;
-  },
-  ctx: z.RefinementCtx,
-) => {
-  if (!data.delivery_available) {
-    return;
-  }
-
-  if (data.delivery_fee === undefined) {
-    ctx.addIssue({
-      code: "custom",
-      message: "أدخل قيمة رقمية صحيحة",
-      path: ["delivery_fee"],
-    });
-  }
-
-  if (
-    data.delivery_starts_at &&
-    !deliveryTimePattern.test(data.delivery_starts_at)
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      message: "صيغة الوقت غير صحيحة",
-      path: ["delivery_starts_at"],
-    });
-  }
-
-  if (data.delivery_ends_at && !deliveryTimePattern.test(data.delivery_ends_at)) {
-    ctx.addIssue({
-      code: "custom",
-      message: "صيغة الوقت غير صحيحة",
-      path: ["delivery_ends_at"],
-    });
-  }
-
-  const hasStart = !!data.delivery_starts_at;
-  const hasEnd = !!data.delivery_ends_at;
-  if (hasStart !== hasEnd) {
-    ctx.addIssue({
-      code: "custom",
-      message: "أدخل وقت البداية والنهاية للتوصيل",
-      path: ["delivery_ends_at"],
-    });
-    return;
-  }
-
-  if (
-    data.delivery_starts_at &&
-    data.delivery_ends_at &&
-    deliveryTimePattern.test(data.delivery_starts_at) &&
-    deliveryTimePattern.test(data.delivery_ends_at) &&
-    data.delivery_ends_at <= data.delivery_starts_at
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      message: "وقت النهاية يجب أن يكون بعد وقت البداية",
-      path: ["delivery_ends_at"],
-    });
+const parseDeliveryConfiguration = (value: FormDataEntryValue | null) => {
+  try {
+    const parsed =
+      typeof value === "string" ? (JSON.parse(value) as unknown) : value;
+    return deliveryConfigurationSchema.safeParse(parsed);
+  } catch {
+    return deliveryConfigurationSchema.safeParse(null);
   }
 };
-
-const normalizeDeliveryDetails = <
-  T extends {
-    delivery_available: boolean;
-    delivery_fee?: number;
-    delivery_starts_at?: string;
-    delivery_ends_at?: string;
-  },
->(
-  data: T,
-) => ({
-  ...data,
-  delivery_fee: data.delivery_available ? (data.delivery_fee ?? 0) : 0,
-  delivery_starts_at: data.delivery_available
-    ? data.delivery_starts_at
-    : undefined,
-  delivery_ends_at: data.delivery_available ? data.delivery_ends_at : undefined,
-});
-
-const updateDeliverySettingsSchema = z.object({
-  delivery_fee: optionalDeliveryFeeSchema,
-  delivery_available: z.enum(["true", "false"]).transform(value => value === "true"),
-  delivery_starts_at: optionalDeliveryTimeSchema,
-  delivery_ends_at: optionalDeliveryTimeSchema,
-}).superRefine(validateDeliveryDetails).transform(normalizeDeliveryDetails);
 
 export async function updateDeliverySettingsAction(
   _prevState: UpdateDeliverySettingsState,
   formData: FormData,
 ): Promise<UpdateDeliverySettingsState> {
-  const validatedFields = updateDeliverySettingsSchema.safeParse(
-    Object.fromEntries(formData.entries()),
+  const validatedFields = parseDeliveryConfiguration(
+    formData.get("delivery_configuration"),
   );
 
   if (!validatedFields.success) {
@@ -134,7 +93,9 @@ export async function updateDeliverySettingsAction(
     };
   }
 
-  const response = await tenantsService.updateMyDeliverySettings(validatedFields.data);
+  const response = await tenantsService.updateMyDeliverySettings(
+    validatedFields.data,
+  );
 
   if (!response.success) {
     return {
@@ -146,6 +107,9 @@ export async function updateDeliverySettingsAction(
   const tenantSlug = response.data?.slug;
   revalidatePath("/merchant");
   revalidatePath("/merchant/settings/delivery");
+  revalidatePath("/");
+  revalidatePath("/stores");
+  revalidatePath("/stores/[areaSlug]/[categorySlug]", "page");
   if (tenantSlug) {
     revalidatePath(`/${tenantSlug}`);
   }
@@ -165,10 +129,20 @@ export async function toggleStoreAvailabilityAction(
   }
 
   const response = await tenantsService.updateMyDeliverySettings({
-    delivery_fee: Number(tenantRes.data.delivery_fee) || 0,
-    delivery_starts_at: tenantRes.data.delivery_starts_at || undefined,
-    delivery_ends_at: tenantRes.data.delivery_ends_at || undefined,
     delivery_available: deliveryAvailable,
+    delivery_starts_at: tenantRes.data.delivery_starts_at || null,
+    delivery_ends_at: tenantRes.data.delivery_ends_at || null,
+    primary_area_id: tenantRes.data.directory_profile?.area_id || 0,
+    delivery_areas:
+      tenantRes.data.tenant_delivery_areas
+        ?.filter(
+          (area) =>
+            area.is_active !== false && area.area?.is_active !== false,
+        )
+        .map((area) => ({
+          area_id: area.area_id,
+          delivery_fee: Number(area.delivery_fee),
+        })) || [],
   });
 
   if (!response.success) {
@@ -181,6 +155,9 @@ export async function toggleStoreAvailabilityAction(
   const tenantSlug = response.data?.slug;
   revalidatePath("/merchant");
   revalidatePath("/merchant/settings");
+  revalidatePath("/");
+  revalidatePath("/stores");
+  revalidatePath("/stores/[areaSlug]/[categorySlug]", "page");
   if (tenantSlug) {
     revalidatePath(`/${tenantSlug}`);
   }
@@ -226,18 +203,6 @@ const updateStoreSettingsSchema = z.object({
     .enum(["true", "false", "on", "off"])
     .optional()
     .transform(value => value === "true" || value === "on"),
-  delivery_fee: optionalDeliveryFeeSchema,
-  delivery_available: z.enum(["true", "false", "on", "off"]).optional().transform(value => value === "true" || value === "on"),
-  delivery_starts_at: optionalDeliveryTimeSchema,
-  delivery_ends_at: optionalDeliveryTimeSchema,
-  area_id: z.preprocess(
-    value =>
-      value === "" || value === undefined || value === null
-        ? undefined
-        : value,
-    z.coerce.number().int().min(1).optional(),
-  ),
-  delivery_area_ids: z.array(z.coerce.number()).optional(),
 }).refine(
   data => Boolean(data.instapay_account_name) === Boolean(data.instapay_account_number),
   {
@@ -254,30 +219,31 @@ const updateStoreSettingsSchema = z.object({
     message: "أدخل الاسم ورقم المحفظة معاً",
     path: ["ewallet_account_number"],
   },
-).superRefine(validateDeliveryDetails).transform(normalizeDeliveryDetails);
+);
 
 export async function updateStoreSettingsAction(
   _prevState: UpdateStoreSettingsState,
   formData: FormData,
 ): Promise<UpdateStoreSettingsState> {
-  const data: Record<string, unknown> = Object.fromEntries(formData.entries());
-  
-  // Extract all delivery_area_ids since formData.entries() only gets the last value for multiple inputs
-  data.delivery_area_ids = formData.getAll("delivery_area_ids");
+  const validatedFields = updateStoreSettingsSchema.safeParse(
+    Object.fromEntries(formData.entries()),
+  );
+  const deliveryConfiguration = parseDeliveryConfiguration(
+    formData.get("delivery_configuration"),
+  );
 
-  // If a checkbox is not checked, it might not be included in FormData, 
-  // so we ensure delivery_available defaults to off if absent
-  if (!data.delivery_available) {
-    data.delivery_available = "off";
-  }
-
-  const validatedFields = updateStoreSettingsSchema.safeParse(data);
-
-  if (!validatedFields.success) {
+  if (!validatedFields.success || !deliveryConfiguration.success) {
     return {
       success: false,
       message: "يرجى تصحيح الأخطاء قبل الحفظ.",
-      errors: validatedFields.error.flatten().fieldErrors,
+      errors: {
+        ...(validatedFields.success
+          ? {}
+          : validatedFields.error.flatten().fieldErrors),
+        ...(deliveryConfiguration.success
+          ? {}
+          : deliveryConfiguration.error.flatten().fieldErrors),
+      },
     };
   }
 
@@ -289,28 +255,7 @@ export async function updateStoreSettingsAction(
     ewallet_account_name,
     ewallet_account_number,
     card_on_delivery_available,
-    area_id,
-    delivery_area_ids,
-    ...deliveryData
   } = validatedFields.data;
-
-  const deliveryAreaValidation = await validateDeliveryAreasInsideMainArea(
-    area_id,
-    delivery_area_ids ?? [],
-  );
-
-  if (!deliveryAreaValidation.success) {
-    return {
-      success: false,
-      message: "يرجى تصحيح الأخطاء قبل الحفظ.",
-      errors: {
-        delivery_area_ids: [
-          deliveryAreaValidation.message ||
-            "مناطق التوصيل يجب أن تكون داخل المنطقة الأساسية.",
-        ],
-      },
-    };
-  }
 
   // 1. Update general settings
   const generalRes = await tenantsService.updateMyGeneralSettings({
@@ -332,7 +277,9 @@ export async function updateStoreSettingsAction(
   }
 
   // 2. Update delivery settings
-  const deliveryRes = await tenantsService.updateMyDeliverySettings(deliveryData);
+  const deliveryRes = await tenantsService.updateMyDeliverySettings(
+    deliveryConfiguration.data,
+  );
 
   if (!deliveryRes.success) {
     return {
@@ -341,22 +288,12 @@ export async function updateStoreSettingsAction(
     };
   }
 
-  // 3. Update directory profile
-  const profileRes = await merchantDirectoryService.updateProfile({
-    area_id: area_id ?? undefined,
-    delivery_area_ids: delivery_area_ids,
-  });
-
-  if (!profileRes.success) {
-    return {
-      success: false,
-      message: profileRes.message || "تعذر حفظ إعدادات المناطق.",
-    };
-  }
-
   const tenantSlug = generalRes.data?.slug;
   revalidatePath("/merchant");
   revalidatePath("/merchant/settings");
+  revalidatePath("/");
+  revalidatePath("/stores");
+  revalidatePath("/stores/[areaSlug]/[categorySlug]", "page");
   if (tenantSlug) {
     revalidatePath(`/${tenantSlug}`);
   }
@@ -365,47 +302,4 @@ export async function updateStoreSettingsAction(
     success: true,
     message: "تم حفظ التغييرات بنجاح.",
   };
-}
-
-async function validateDeliveryAreasInsideMainArea(
-  areaId: number | undefined,
-  deliveryAreaIds: number[],
-) {
-  const uniqueDeliveryAreaIds = Array.from(new Set(deliveryAreaIds));
-
-  if (uniqueDeliveryAreaIds.length === 0) {
-    return { success: true };
-  }
-
-  if (!areaId) {
-    return {
-      success: false,
-      message: "اختر المنطقة الأساسية أولاً.",
-    };
-  }
-
-  const areasResponse = await merchantDirectoryService.getActiveAreas();
-
-  if (!areasResponse.success || !areasResponse.data) {
-    return {
-      success: false,
-      message: "تعذر التحقق من مناطق التوصيل. حاول مرة أخرى.",
-    };
-  }
-
-  const allowedAreaIds = new Set(
-    areasResponse.data
-      .filter(area => area.id === areaId || area.parent_area_id === areaId)
-      .map(area => area.id),
-  );
-  const allDeliveryAreasAllowed = uniqueDeliveryAreaIds.every(areaId =>
-    allowedAreaIds.has(areaId),
-  );
-
-  return allDeliveryAreasAllowed
-    ? { success: true }
-    : {
-        success: false,
-        message: "مناطق التوصيل يجب أن تكون داخل المنطقة الأساسية.",
-      };
 }

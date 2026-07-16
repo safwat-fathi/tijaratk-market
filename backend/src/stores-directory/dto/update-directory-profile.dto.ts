@@ -1,7 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsArray,
   IsEnum,
   IsInt,
   IsOptional,
@@ -76,11 +75,4 @@ export class UpdateDirectoryProfileDto {
   @MaxLength(300)
   seo_description?: string;
 
-  @ApiPropertyOptional({ example: [1, 2], type: [Number] })
-  @IsOptional()
-  @IsArray()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  delivery_area_ids?: number[];
 }

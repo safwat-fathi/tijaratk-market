@@ -1,0 +1,142 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Joyride, type EventData, STATUS, type Step } from "react-joyride";
+
+const PRODUCTS_TOUR_COMPLETED_KEY = "tijaratk_merchant_products_tour_completed";
+
+export function ProductsGuidedTour() {
+  const [run, setRun] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [steps, setSteps] = useState<Step[]>([]);
+
+  useEffect(() => {
+    setIsClient(true);
+    const hasCompletedTour = localStorage.getItem(PRODUCTS_TOUR_COMPLETED_KEY);
+    if (!hasCompletedTour) {
+      const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+
+      const desktopSteps: Step[] = [
+        {
+          target: "body",
+          placement: "center",
+          title: "إدارة المنتجات",
+          content:
+            "هنا يمكنك إضافة منتجاتك الجديدة إما برفع ملف، أو اختيارها من الكتالوج الجاهز، أو إضافتها يدوياً خطوة بخطوة.",
+          skipBeacon: true,
+        },
+        {
+          target: 'a[href="/api/merchant/products/import-template"]',
+          title: "قالب الاستيراد",
+          content:
+            "يمكنك تحميل قالب CSV لملء بيانات منتجاتك ثم رفعها دفعة واحدة لتوفير الوقت.",
+        },
+        {
+          target: "#csv-upload-form",
+          title: "رفع المنتجات دفعة واحدة",
+          content:
+            "بعد تجهيز ملف الـ CSV، قم برفعه هنا لإضافة كل المنتجات أو تحديث أسعارها بسرعة وسهولة.",
+        },
+        {
+          target: "#add-core-assortment-btn",
+          title: "التشكيلة الأساسية",
+          content:
+            "بضغطة واحدة، يمكنك إضافة تشكيلة المنتجات الأساسية والأكثر مبيعاً لمتجرك لتبدأ البيع فوراً.",
+        },
+        {
+          target: "div[role='tablist']",
+          title: "خيارات الإضافة",
+          content:
+            "تنقل بين إضافة منتج يدوياً إذا لم يكن متوفراً، أو الاختيار السريع من الكتالوج الجاهز، أو استعراض وإدارة منتجاتك الحالية.",
+        },
+      ];
+
+      const mobileSteps: Step[] = [
+        {
+          target: "body",
+          placement: "center",
+          title: "إدارة المنتجات",
+          content:
+            "هنا يمكنك إضافة منتجاتك الجديدة إما برفع ملف، أو اختيارها من الكتالوج، أو إضافتها يدوياً. استكشف الخيارات المتاحة لك.",
+          skipBeacon: true,
+        },
+        {
+          target: "#csv-upload-form",
+          title: "رفع المنتجات",
+          content:
+            "ارفع ملف الـ CSV هنا لإضافة المنتجات أو تحديثها بسرعة.",
+        },
+        {
+          target: "div[role='tablist']",
+          title: "خيارات الإضافة",
+          content:
+            "تنقل بين إضافة منتج يدوياً، أو الاختيار من الكتالوج، أو استعراض منتجاتك.",
+        },
+      ];
+
+      setSteps(isMobile ? mobileSteps : desktopSteps);
+      setRun(true);
+    }
+  }, []);
+
+  const handleJoyrideCallback = (data: EventData) => {
+    const { status } = data;
+    const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
+
+    if (finishedStatuses.includes(status)) {
+      setRun(false);
+      localStorage.setItem(PRODUCTS_TOUR_COMPLETED_KEY, "true");
+    }
+  };
+
+  if (!isClient || steps.length === 0) return null;
+
+  return (
+    <Joyride
+      onEvent={handleJoyrideCallback}
+      continuous
+      run={run}
+      scrollToFirstStep
+      steps={steps}
+      locale={{
+        back: "السابق",
+        close: "إغلاق",
+        last: "إنهاء الجولة",
+        next: "التالي",
+        nextWithProgress: "التالي ({current} من {total})",
+        skip: "تخطي الجولة",
+      }}
+      options={{
+        arrowColor: "#fff",
+        backgroundColor: "#fff",
+        primaryColor: "#059669", // emerald-600
+        textColor: "#1f2937", // gray-800
+        overlayColor: "rgba(0, 0, 0, 0.6)",
+        zIndex: 10000,
+        showProgress: true,
+        buttons: ["back", "skip", "primary"],
+      }}
+      styles={{
+        tooltipContainer: {
+          textAlign: "right",
+          direction: "rtl",
+          fontFamily: "inherit",
+        },
+        buttonPrimary: {
+          backgroundColor: "#059669",
+          color: "#fff",
+          padding: "8px 16px",
+          borderRadius: "8px",
+          fontWeight: 600,
+        },
+        buttonBack: {
+          color: "#4b5563",
+          marginRight: 10,
+        },
+        buttonSkip: {
+          color: "#6b7280",
+        },
+      }}
+    />
+  );
+}

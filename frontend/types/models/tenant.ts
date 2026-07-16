@@ -7,7 +7,6 @@ export interface Tenant {
   slug: string;
   category: TenantCategory;
   status?: "pending" | "active" | "inactive" | "suspended" | "rejected";
-  delivery_fee?: number | string;
   delivery_available?: boolean;
   delivery_starts_at?: string | null;
   delivery_ends_at?: string | null;
@@ -51,6 +50,7 @@ export interface TenantDirectoryProfile {
   profile_completion_score: number;
   area?: DirectoryArea | null;
   delivery_area_ids?: number[];
+  delivery_areas?: TenantDeliveryArea[];
   tenant?: {
     tenant_delivery_areas?: TenantDeliveryArea[];
   };
@@ -60,12 +60,26 @@ export interface TenantDeliveryArea {
   id?: number;
   tenant_id?: number;
   area_id: number;
+  delivery_fee: number | string;
   is_active?: boolean;
+  area?: DirectoryArea;
 }
+
+export type DeliveryAreaFeeInput = {
+  area_id: number;
+  delivery_fee: number;
+};
+
+export type DeliveryConfigurationInput = {
+  delivery_available: boolean;
+  delivery_starts_at?: string | null;
+  delivery_ends_at?: string | null;
+  primary_area_id: number;
+  delivery_areas: DeliveryAreaFeeInput[];
+};
 
 export type TenantDeliverySettings = Pick<
   Tenant,
-  | "delivery_fee"
   | "delivery_available"
   | "delivery_starts_at"
   | "delivery_ends_at"
@@ -74,4 +88,6 @@ export type TenantDeliverySettings = Pick<
   | "ewallet_account_name"
   | "ewallet_account_number"
   | "card_on_delivery_available"
+  | "tenant_delivery_areas"
+  | "directory_profile"
 >;

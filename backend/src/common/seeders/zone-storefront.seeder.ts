@@ -330,10 +330,23 @@ async function ensureDeliveryCoverage(
   tenantId: number,
   areaId: number,
 ) {
+  const tenant = await tx.tenant.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { delivery_fee: true },
+  });
   await tx.tenantDeliveryArea.upsert({
     where: { tenant_id_area_id: { tenant_id: tenantId, area_id: areaId } },
-    update: { is_active: true, deleted_at: null },
-    create: { tenant_id: tenantId, area_id: areaId, is_active: true },
+    update: {
+      delivery_fee: tenant.delivery_fee,
+      is_active: true,
+      deleted_at: null,
+    },
+    create: {
+      tenant_id: tenantId,
+      area_id: areaId,
+      delivery_fee: tenant.delivery_fee,
+      is_active: true,
+    },
   });
 }
 

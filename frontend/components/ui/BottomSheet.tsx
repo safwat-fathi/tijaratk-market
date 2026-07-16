@@ -14,6 +14,7 @@ type BottomSheetProps = {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  desktopDialog?: boolean;
 };
 
 export default function BottomSheet({
@@ -24,6 +25,7 @@ export default function BottomSheet({
   children,
   footer,
   className,
+  desktopDialog = false,
 }: BottomSheetProps) {
   useBodyScrollLock(isOpen);
   const titleId = useId();
@@ -81,11 +83,17 @@ export default function BottomSheet({
         className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
       />
 
-      <div className="absolute inset-x-0 bottom-0 flex justify-center">
+      <div
+        className={cn(
+          "absolute inset-x-0 bottom-0 flex justify-center",
+          desktopDialog && "sm:inset-0 sm:items-center sm:p-6",
+        )}
+      >
         <div
           ref={sheetRef}
           className={cn(
             "flex max-h-[92dvh] w-full max-w-md animate-slide-up flex-col overflow-hidden rounded-t-xl bg-white shadow-float transition-transform duration-200 whitespace-normal",
+            desktopDialog && "sm:max-w-2xl sm:rounded-xl",
             className,
           )}
         >

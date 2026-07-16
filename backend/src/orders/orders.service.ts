@@ -64,6 +64,7 @@ import type {
   MetaPurchaseResponse,
   MetaTrackingContext,
 } from 'src/meta-conversions/meta-conversions.types';
+import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -157,6 +158,7 @@ export class OrdersService {
     private readonly tenantCancellationPolicyService: TenantCancellationPolicyService,
     private readonly activityLogService: ActivityLogService,
     private readonly metaConversionsService: MetaConversionsService,
+    private readonly deliveryConfigurationService: DeliveryConfigurationService,
     @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
@@ -274,11 +276,20 @@ export class OrdersService {
     let savedOrder: Order;
     try {
       savedOrder = await this.withTenantManager(tenantId, async (manager) => {
-        const deliveryAreaId = await this.resolveDeliveryAreaId(
-          manager,
-          tenantId,
-          createOrderDto,
-        );
+        const deliverySelection =
+          await this.deliveryConfigurationService.resolveOrderDelivery(
+            manager,
+            tenantId,
+            {
+              areaId: createOrderDto.delivery_area_id,
+              areaSlug:
+                createOrderDto.delivery_area_slug?.trim() ||
+                this.resolveSourceMetadataAreaSlug(
+                  createOrderDto.source_metadata,
+                ),
+            },
+          );
+        const deliveryAreaId = deliverySelection.areaId;
         const customer = await this.customersService.findOrCreate(
           createOrderDto.customer.phone,
           tenantId,
@@ -328,7 +339,7 @@ export class OrdersService {
         const tenant = await manager.tenant.findUnique({
           where: { id: tenantId },
         });
-        const deliveryFee = Number(tenant?.delivery_fee || 0);
+        const deliveryFee = deliverySelection.deliveryFee;
 
         const deliveryTimeWindowSnapshot =
           this.resolveDeliveryTimeWindowSnapshot(tenant);
@@ -2542,47 +2553,6 @@ export class OrdersService {
         error,
       );
     }
-  }
-
-  private async resolveDeliveryAreaId(
-    manager: Prisma.TransactionClient,
-    tenantId: number,
-    createOrderDto: CreateOrderDto,
-  ): Promise<number | null> {
-    const areaId = createOrderDto.delivery_area_id;
-    const areaSlug =
-      createOrderDto.delivery_area_slug?.trim() ||
-      this.resolveSourceMetadataAreaSlug(createOrderDto.source_metadata);
-
-    if (!areaId && !areaSlug) {
-      const directoryProfile = await manager.tenantDirectoryProfile.findUnique({
-        where: { tenant_id: tenantId },
-        select: { area_id: true },
-      });
-      return directoryProfile?.area_id ?? null;
-    }
-
-    const areaWhere: Prisma.DirectoryAreaWhereInput = {
-      is_active: true,
-      ...(areaId ? { id: areaId } : { slug: areaSlug as string }),
-    };
-
-    const deliveryArea = await manager.tenantDeliveryArea.findFirst({
-      where: {
-        tenant_id: tenantId,
-        is_active: true,
-        area: areaWhere,
-      },
-      include: { area: true },
-    });
-
-    if (!deliveryArea) {
-      throw new BadRequestException(
-        'Selected delivery area is not available for this store',
-      );
-    }
-
-    return deliveryArea.area_id;
   }
 
   private resolveSourceMetadataAreaSlug(

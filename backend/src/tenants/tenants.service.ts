@@ -8,12 +8,14 @@ import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-se
 import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
 import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
 import { getDashboardCacheVersionKey } from 'src/merchant-dashboard/merchant-dashboard.service';
+import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
 
 @Injectable()
 export class TenantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storesDirectoryService: StoresDirectoryService,
+    private readonly deliveryConfigurationService: DeliveryConfigurationService,
     @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
@@ -60,17 +62,62 @@ export class TenantsService {
   async findOneBySlug(slug: string) {
     return this.prisma.tenant.findUnique({
       where: { slug },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        category: true,
+        slug: true,
+        status: true,
+        delivery_available: true,
+        delivery_starts_at: true,
+        delivery_ends_at: true,
+        instapay_account_name: true,
+        instapay_account_number: true,
+        ewallet_account_name: true,
+        ewallet_account_number: true,
+        card_on_delivery_available: true,
+        onboarding_completed: true,
         directory_profile: {
           include: { area: true },
         },
         operated_zone_storefront: { select: { id: true } },
+        tenant_delivery_areas: {
+          where: {
+            is_active: true,
+            deleted_at: null,
+            area: { is_active: true, deleted_at: null },
+          },
+          select: {
+            id: true,
+            area_id: true,
+            delivery_fee: true,
+            is_active: true,
+            area: {
+              select: {
+                id: true,
+                name_ar: true,
+                name_en: true,
+                slug: true,
+                parent_area_id: true,
+                city: true,
+                governorate: true,
+                is_active: true,
+                sort_order: true,
+              },
+            },
+          },
+          orderBy: [
+            { area: { sort_order: 'asc' } },
+            { area: { name_ar: 'asc' } },
+          ],
+        },
       },
     });
   }
 
-  async findOneById(id: number): Promise<Tenant | null> {
-    return this.prisma.tenant.findUnique({ where: { id } });
+  async findOneById(id: number) {
+    return this.deliveryConfigurationService.getConfiguration(id);
   }
 
   /**
@@ -79,19 +126,9 @@ export class TenantsService {
   async updateDeliverySettings(
     id: number,
     dto: UpdateTenantDeliverySettingsDto,
-  ): Promise<Tenant> {
-    const deliveryStartsAt = dto.delivery_starts_at?.trim() || null;
-    const deliveryEndsAt = dto.delivery_ends_at?.trim() || null;
-
-    const tenant = await this.prisma.tenant.update({
-      where: { id },
-      data: {
-        delivery_fee: dto.delivery_fee,
-        delivery_available: dto.delivery_available,
-        delivery_starts_at: deliveryStartsAt,
-        delivery_ends_at: deliveryEndsAt,
-      },
-    });
+  ) {
+    const tenant =
+      await this.deliveryConfigurationService.updateConfiguration(id, dto);
 
     await this.storesDirectoryService.recalculateTenantReadiness(id);
 
@@ -104,7 +141,7 @@ export class TenantsService {
   async updateGeneralSettings(
     id: number,
     dto: UpdateTenantSettingsDto,
-  ): Promise<Tenant> {
+  ) {
     const normalizeOptionalText = (value?: string) => {
       const normalized = value?.trim();
       return normalized || null;
@@ -115,7 +152,7 @@ export class TenantsService {
       select: { category: true },
     });
 
-    const tenant = await this.prisma.tenant.update({
+    await this.prisma.tenant.update({
       where: { id },
       data: {
         name: dto.name,
@@ -139,7 +176,7 @@ export class TenantsService {
       );
     }
 
-    return tenant;
+    return this.findOneById(id);
   }
 
   /**
@@ -148,13 +185,14 @@ export class TenantsService {
   async updateOnboardingProgress(
     id: number,
     dto: import('./dto/update-tenant-onboarding.dto').UpdateTenantOnboardingDto,
-  ): Promise<Tenant> {
-    return this.prisma.tenant.update({
+  ) {
+    await this.prisma.tenant.update({
       where: { id },
       data: {
         ...(dto.onboarding_completed !== undefined && { onboarding_completed: dto.onboarding_completed }),
         ...(dto.onboarding_step !== undefined && { onboarding_step: dto.onboarding_step }),
       },
     });
+    return this.findOneById(id);
   }
 }

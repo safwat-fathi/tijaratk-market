@@ -46,4 +46,17 @@ describe('StoresDirectoryService area search', () => {
 
     await expect(service.findAreas('منطقة مخفية')).resolves.toEqual([]);
   });
+
+  it('uses the lowest active relationship fee for generic store listings', () => {
+    const service = new StoresDirectoryService({} as any);
+
+    const fees = (service as any).buildDeliveryFeeMap([
+      { tenant: { id: 10 }, delivery_fee: 25 },
+      { tenant: { id: 10 }, delivery_fee: 15 },
+      { tenant: { id: 11 }, delivery_fee: 0 },
+    ]);
+
+    expect(fees.get(10)).toBe(15);
+    expect(fees.get(11)).toBe(0);
+  });
 });

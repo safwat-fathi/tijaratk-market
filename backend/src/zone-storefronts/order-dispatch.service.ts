@@ -123,7 +123,6 @@ export class OrderDispatchService {
         total: undefined,
         delivery_area_id: zone.area_id,
         delivery_area_slug: zone.area.slug,
-        delivery_fee: undefined,
         order_source: OrderSource.zone_storefront,
         source_metadata: {
           zone_storefront_id: zone.id,

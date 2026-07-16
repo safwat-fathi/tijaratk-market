@@ -63,6 +63,7 @@ import CategoryProductsView from "./CategoryProductsView";
 import OrderNotesSection from "./OrderNotesSection";
 import PrescriptionUploadForm from "./PrescriptionUploadForm";
 import DeliveryDetailsSection from "./DeliveryDetailsSection";
+import DeliveryAreaSelector from "./DeliveryAreaSelector";
 import OrderSubmitBar from "./OrderSubmitBar";
 import OrderReviewSheet from "./OrderReviewSheet";
 import {
@@ -444,6 +445,8 @@ export default function OrderForm({
     resolvedInitialCategory !== ALL_PRODUCTS_CATEGORY,
   );
   const [isReviewSheetOpen, setIsReviewSheetOpen] = useState(false);
+  const [isDeliveryAreaSelectorOpen, setIsDeliveryAreaSelectorOpen] =
+    useState(false);
   const [toastState, setToastState] = useState<ToastState | null>(null);
   const [validationErrors, setValidationErrors] =
     useState<OrderFormValidationErrors>({});
@@ -471,7 +474,46 @@ export default function OrderForm({
         initialProducts.map((product) => [product.id, product]),
       ) as Record<number, Product>,
   );
-  const deliveryAvailable = deliverySettings?.delivery_available !== false;
+  const deliveryAreas = useMemo(
+    () =>
+      (deliverySettings.tenant_delivery_areas || []).filter(
+        (deliveryArea) =>
+          deliveryArea.is_active !== false && Boolean(deliveryArea.area),
+      ),
+    [deliverySettings.tenant_delivery_areas],
+  );
+  const [selectedDeliveryAreaId, setSelectedDeliveryAreaId] = useState<
+    number | undefined
+  >(() => {
+    const reorderArea = deliveryAreas.find(
+      (deliveryArea) =>
+        deliveryArea.area_id === initialOrder?.delivery_area_id,
+    );
+    if (initialOrder?.delivery_area_id && !reorderArea) {
+      return undefined;
+    }
+
+    const linkedArea = deliveryAreas.find(
+      (deliveryArea) => deliveryArea.area?.slug === areaSlug,
+    );
+    if (linkedArea) return linkedArea.area_id;
+
+    if (reorderArea) return reorderArea.area_id;
+
+    return deliveryAreas.length === 1 ? deliveryAreas[0].area_id : undefined;
+  });
+  const selectedDeliveryArea = useMemo(
+    () =>
+      deliveryAreas.find(
+        (deliveryArea) => deliveryArea.area_id === selectedDeliveryAreaId,
+      ),
+    [deliveryAreas, selectedDeliveryAreaId],
+  );
+  const selectedDeliveryFee = selectedDeliveryArea
+    ? Number(selectedDeliveryArea.delivery_fee)
+    : 0;
+  const deliveryAvailable =
+    deliverySettings?.delivery_available !== false && deliveryAreas.length > 0;
   const cardOnDeliveryAvailable =
     deliverySettings.card_on_delivery_available === true;
   const storeOpen = deliveryAvailable;
@@ -974,6 +1016,57 @@ export default function OrderForm({
 
   useEffect(() => {
     if (
+      selectedDeliveryAreaId &&
+      deliveryAreas.some(
+        (deliveryArea) => deliveryArea.area_id === selectedDeliveryAreaId,
+      )
+    ) {
+      return;
+    }
+
+    const linkedArea = deliveryAreas.find(
+      (deliveryArea) => deliveryArea.area?.slug === areaSlug,
+    );
+    const reorderArea = deliveryAreas.find(
+      (deliveryArea) =>
+        deliveryArea.area_id === initialOrder?.delivery_area_id,
+    );
+    if (initialOrder?.delivery_area_id && !reorderArea) {
+      setSelectedDeliveryAreaId(undefined);
+      return;
+    }
+    const nextArea =
+      linkedArea ||
+      reorderArea ||
+      (deliveryAreas.length === 1 ? deliveryAreas[0] : undefined);
+
+    setSelectedDeliveryAreaId(nextArea?.area_id);
+  }, [
+    areaSlug,
+    deliveryAreas,
+    initialOrder?.delivery_area_id,
+    selectedDeliveryAreaId,
+  ]);
+
+  useEffect(() => {
+    if (
+      storefrontKind === "zone" ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    if (selectedDeliveryArea?.area?.slug) {
+      url.searchParams.set("areaSlug", selectedDeliveryArea.area.slug);
+    } else {
+      url.searchParams.delete("areaSlug");
+    }
+    window.history.replaceState(null, "", url.toString());
+  }, [selectedDeliveryArea, storefrontKind]);
+
+  useEffect(() => {
+    if (
       storefrontKind === "zone" ||
       savedCustomerProfile ||
       initialOrder?.customer
@@ -1457,6 +1550,8 @@ export default function OrderForm({
     () => calculateCartSummary(effectiveCartSelections, knownProductsById),
     [effectiveCartSelections, knownProductsById],
   );
+  const estimatedTotalWithDelivery =
+    estimatedTotal + (selectedDeliveryArea ? selectedDeliveryFee : 0);
 
   const cartItems = useMemo(
     () =>
@@ -1640,6 +1735,15 @@ export default function OrderForm({
       return;
     }
 
+    if (deliveryAvailable && !selectedDeliveryArea) {
+      setIsDeliveryAreaSelectorOpen(true);
+      setToastState({
+        message: "حدد منطقة التوصيل أولاً لمعرفة الرسوم وإكمال الطلب",
+        type: "error",
+      });
+      return;
+    }
+
     hasHandledInvalidRef.current = false;
     const nextErrors = validateBeforeReview();
     const firstErrorField = getFirstValidationErrorField(nextErrors);
@@ -1656,7 +1760,9 @@ export default function OrderForm({
     if (!hasReportedMetaCheckoutRef.current) {
       const wasSent = sendMetaPixelEvent("InitiateCheckout", {
         currency: "EGP",
-        value: hasPricedItems ? Number(estimatedTotal.toFixed(2)) : 0,
+        value: hasPricedItems
+          ? Number(estimatedTotalWithDelivery.toFixed(2))
+          : 0,
         num_items: totalItems,
         storefront_type: storefrontKind,
         ...(metaCartContents.length > 0
@@ -1674,12 +1780,14 @@ export default function OrderForm({
 
     setIsReviewSheetOpen(true);
   }, [
-    estimatedTotal,
+    deliveryAvailable,
+    estimatedTotalWithDelivery,
     focusOrderFormField,
     hasPricedItems,
     isPending,
     metaCartContents,
     storefrontKind,
+    selectedDeliveryArea,
     totalItems,
     validateBeforeReview,
   ]);
@@ -1816,8 +1924,12 @@ export default function OrderForm({
         onInvalidCapture={handleFormInvalidCapture}
       >
         <input type="hidden" name="cart" value={JSON.stringify(cartItems)} />
-        {areaSlug && (
-          <input type="hidden" name="delivery_area_slug" value={areaSlug} />
+        {selectedDeliveryArea?.area?.slug && (
+          <input
+            type="hidden"
+            name="delivery_area_slug"
+            value={selectedDeliveryArea.area.slug}
+          />
         )}
         {resolvedLandingAttribution && (
           <>
@@ -1830,7 +1942,12 @@ export default function OrderForm({
               type="hidden"
               name="source_metadata"
               value={JSON.stringify(
-                resolvedLandingAttribution.sourceMetadata,
+                selectedDeliveryArea?.area?.slug
+                  ? {
+                      ...resolvedLandingAttribution.sourceMetadata,
+                      areaSlug: selectedDeliveryArea.area.slug,
+                    }
+                  : resolvedLandingAttribution.sourceMetadata,
               )}
             />
           </>
@@ -1843,6 +1960,16 @@ export default function OrderForm({
           name="unavailable_item_action"
           value={unavailableItemAction}
         />
+
+        {deliveryAreas.length > 0 ? (
+          <DeliveryAreaSelector
+            areas={deliveryAreas}
+            selectedAreaId={selectedDeliveryAreaId}
+            isOpen={isDeliveryAreaSelectorOpen}
+            onOpenChange={setIsDeliveryAreaSelectorOpen}
+            onSelect={setSelectedDeliveryAreaId}
+          />
+        ) : null}
 
         <div className="px-4 pt-4">
           <label className="relative block">
@@ -1981,6 +2108,9 @@ export default function OrderForm({
 
         <DeliveryDetailsSection
           deliverySettings={deliverySettings}
+          deliveryFee={
+            selectedDeliveryArea ? selectedDeliveryFee : null
+          }
           customerName={customerName}
           customerPhone={customerPhone}
           deliveryAddress={deliveryAddress}
@@ -2018,7 +2148,7 @@ export default function OrderForm({
         <OrderSubmitBar
           totalItems={totalItems}
           hasPricedItems={hasPricedItems}
-          estimatedTotal={estimatedTotal}
+          estimatedTotal={estimatedTotalWithDelivery}
           orderRequest={orderRequest}
           isPending={isPending}
           deliveryAvailable={deliveryAvailable}
@@ -2043,7 +2173,7 @@ export default function OrderForm({
           onClose={() => closeReviewSheet(true)}
           onEditManualRequest={handleEditManualRequestFromSheet}
           onUpdateSelection={handleReviewSelectionUpdate}
-          deliveryFee={Number(deliverySettings?.delivery_fee ?? 0)}
+          deliveryFee={selectedDeliveryFee}
         />
       </form>
 

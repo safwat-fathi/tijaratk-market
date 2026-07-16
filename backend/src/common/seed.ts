@@ -260,10 +260,15 @@ async function seedRankingDirectoryProfile(
           area_id: area.id,
         },
       },
-      update: { is_active: true, deleted_at: null },
+      update: {
+        delivery_fee: tenant.delivery_fee,
+        is_active: true,
+        deleted_at: null,
+      },
       create: {
         tenant_id: tenant.id,
         area_id: area.id,
+        delivery_fee: tenant.delivery_fee,
         is_active: true,
       },
     });

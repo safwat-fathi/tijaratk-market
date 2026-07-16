@@ -8,6 +8,7 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { TenantCancellationPolicyModule } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.module';
 import { ActivityLogModule } from 'src/activity-log/activity-log.module';
 import { MetaConversionsModule } from 'src/meta-conversions/meta-conversions.module';
+import { DeliveryConfigurationModule } from 'src/delivery-configuration/delivery-configuration.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { MetaConversionsModule } from 'src/meta-conversions/meta-conversions.mod
     TenantCancellationPolicyModule,
     ActivityLogModule,
     MetaConversionsModule,
+    DeliveryConfigurationModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderWhatsappService],

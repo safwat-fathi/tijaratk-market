@@ -23,6 +23,7 @@ import InstallPwaAction from "@/components/pwa/InstallPwaAction";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
 import type { ZoneStorefront } from "@/types/models/zone-storefront";
+import { formatCurrency } from "@/lib/utils/currency";
 
 type StoresDirectorySearchParams = {
   area?: string;
@@ -310,6 +311,13 @@ const StoreCard = ({ store }: { store: StoresDirectoryStoreCard }) => (
       <p className="mt-1 line-clamp-1 text-sm text-gray-500">
         {store.areaName || store.address || "متجر محلي على تجارتك"}
       </p>
+      {store.deliveryAvailable ? (
+        <p className="mt-1 text-xs font-bold text-[#0F5A3D]">
+          {store.deliveryFee > 0
+            ? `التوصيل يبدأ من ${formatCurrency(store.deliveryFee)}`
+            : "توصيل مجاني"}
+        </p>
+      ) : null}
     </div>
   </Link>
 );

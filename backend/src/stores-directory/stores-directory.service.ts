@@ -56,7 +56,6 @@ type StoreCardTenant = {
   category: TenantCategory;
   status: TenantStatus;
   delivery_available: boolean;
-  delivery_fee: Prisma.Decimal;
   delivery_starts_at: string | null;
   delivery_ends_at: string | null;
   directory_profile: {
@@ -110,6 +109,7 @@ export class StoresDirectoryService {
     const uniqueTenants = this.getUniqueTenantsFromDeliveryAreas(deliveryAreas);
     const categoryCounts = this.buildCategoryCounts(uniqueTenants);
     const featuredTenants = uniqueTenants.slice(0, 8);
+    const deliveryFees = this.buildDeliveryFeeMap(deliveryAreas);
 
     return {
       areas: this.toPublicAreaSummaries(deliveryAreas),
@@ -119,7 +119,13 @@ export class StoresDirectoryService {
         tenantCategory: category.tenantCategory,
         storesCount: categoryCounts.get(category.slug) ?? 0,
       })),
-      featuredStores: this.toStoreCards(featuredTenants),
+      featuredStores: this.toStoreCards(
+        featuredTenants,
+        undefined,
+        undefined,
+        undefined,
+        deliveryFees,
+      ),
       seo: {
         title: 'Stores Directory | Tijaratk',
         description:
@@ -154,6 +160,7 @@ export class StoresDirectoryService {
     const featuredTenants = deliveryAreas
       .slice(0, 6)
       .map((item) => item.tenant);
+    const deliveryFees = this.buildDeliveryFeeMap(deliveryAreas);
 
     return {
       area: this.toAreaDto(area),
@@ -162,6 +169,8 @@ export class StoresDirectoryService {
         featuredTenants,
         area.name_ar,
         area.slug,
+        undefined,
+        deliveryFees,
       ),
       seo: {
         title:
@@ -310,6 +319,12 @@ export class StoresDirectoryService {
               item.readinessLevel,
             ),
           },
+        ]),
+      ),
+      new Map(
+        paginatedRows.map((item) => [
+          item.row.tenant.id,
+          Number(item.row.delivery_fee),
         ]),
       ),
     );
@@ -575,14 +590,6 @@ export class StoresDirectoryService {
       await this.ensureAreaExists(areaId);
     }
 
-    if (dto.delivery_area_ids) {
-      await this.ensureAreasExist(dto.delivery_area_ids);
-      await this.ensureDeliveryAreasInsideMainArea(
-        areaId,
-        dto.delivery_area_ids,
-      );
-    }
-
     const profileData = this.toProfileData(dto);
     const completion = await this.calculateReadinessForTenantInput(tenantId, {
       logoUrl: dto.logo_url ?? existingProfile?.logo_url,
@@ -613,32 +620,6 @@ export class StoresDirectoryService {
         },
       });
 
-      if (dto.delivery_area_ids) {
-        await tx.tenantDeliveryArea.updateMany({
-          where: { tenant_id: tenantId },
-          data: { is_active: false },
-        });
-
-        for (const deliveryAreaId of Array.from(
-          new Set(dto.delivery_area_ids),
-        )) {
-          await tx.tenantDeliveryArea.upsert({
-            where: {
-              tenant_id_area_id: {
-                tenant_id: tenantId,
-                area_id: deliveryAreaId,
-              },
-            },
-            update: { is_active: true, deleted_at: null },
-            create: {
-              tenant_id: tenantId,
-              area_id: deliveryAreaId,
-              is_active: true,
-            },
-          });
-        }
-      }
-
       return tx.tenantDirectoryProfile.findUniqueOrThrow({
         where: { tenant_id: tenantId },
         include: this.merchantProfileInclude(),
@@ -660,12 +641,17 @@ export class StoresDirectoryService {
           category: true,
           status: true,
           delivery_available: true,
-          delivery_fee: true,
           delivery_starts_at: true,
           delivery_ends_at: true,
           tenant_delivery_areas: {
-            where: { is_active: true, deleted_at: null },
-            select: { area_id: true },
+            where: { deleted_at: null },
+            select: {
+              id: true,
+              area_id: true,
+              delivery_fee: true,
+              is_active: true,
+              area: true,
+            },
             orderBy: { area_id: 'asc' },
           },
         },
@@ -675,14 +661,26 @@ export class StoresDirectoryService {
 
   private withDeliveryAreaIds<
     T extends {
-      tenant?: { tenant_delivery_areas?: { area_id: number }[] } | null;
+      tenant?: {
+        tenant_delivery_areas?: Array<{
+          area_id: number;
+          delivery_fee: Prisma.Decimal;
+          is_active: boolean;
+        }>;
+      } | null;
     },
   >(profile: T) {
     return {
       ...profile,
       delivery_area_ids:
-        profile.tenant?.tenant_delivery_areas?.map((area) => area.area_id) ??
-        [],
+        profile.tenant?.tenant_delivery_areas
+          ?.filter((area) => area.is_active)
+          .map((area) => area.area_id) ?? [],
+      delivery_areas:
+        profile.tenant?.tenant_delivery_areas?.map((area) => ({
+          ...area,
+          delivery_fee: Number(area.delivery_fee),
+        })) ?? [],
     };
   }
 
@@ -706,48 +704,6 @@ export class StoresDirectoryService {
 
     if (!area) {
       throw new NotFoundException('Directory area not found');
-    }
-  }
-
-  private async ensureAreasExist(ids: number[]) {
-    const uniqueIds = Array.from(new Set(ids));
-    const count = await this.prisma.directoryArea.count({
-      where: { id: { in: uniqueIds }, deleted_at: null },
-    });
-
-    if (count !== uniqueIds.length) {
-      throw new BadRequestException('One or more directory areas are invalid');
-    }
-  }
-
-  private async ensureDeliveryAreasInsideMainArea(
-    areaId: number | null,
-    deliveryAreaIds: number[],
-  ) {
-    console.log("ensureDeliveryAreasInsideMainArea", {areaId, deliveryAreaIds}); const uniqueDeliveryAreaIds = Array.from(new Set(deliveryAreaIds));
-
-    if (uniqueDeliveryAreaIds.length === 0) {
-      return;
-    }
-
-    if (!areaId) {
-      throw new BadRequestException(
-        'مناطق التوصيل يجب أن تكون داخل المنطقة الأساسية',
-      );
-    }
-
-    const allowedAreasCount = await this.prisma.directoryArea.count({
-      where: {
-        id: { in: uniqueDeliveryAreaIds },
-        deleted_at: null,
-        OR: [{ id: areaId }, { parent_area_id: areaId }],
-      },
-    });
-
-    if (allowedAreasCount !== uniqueDeliveryAreaIds.length) {
-      throw new BadRequestException(
-        'مناطق التوصيل يجب أن تكون داخل المنطقة الأساسية',
-      );
     }
   }
 
@@ -798,7 +754,6 @@ export class StoresDirectoryService {
           category: true,
           status: true,
           delivery_available: true,
-          delivery_fee: true,
           delivery_starts_at: true,
           delivery_ends_at: true,
           directory_profile: {
@@ -955,6 +910,7 @@ export class StoresDirectoryService {
         badges: StoreBadge[];
       }
     >,
+    deliveryFees?: Map<number, number>,
   ) {
     return tenants.map((tenant) => {
       const displayName = tenant.directory_profile?.display_name || tenant.name;
@@ -975,7 +931,7 @@ export class StoresDirectoryService {
           null,
         areaSlug: fallbackAreaSlug || null,
         deliveryAvailable: tenant.delivery_available,
-        deliveryFee: Number(tenant.delivery_fee || 0),
+        deliveryFee: deliveryFees?.get(tenant.id) ?? 0,
         deliveryAvailableNow: this.isDeliveryAvailableNow(tenant),
         readinessLevel:
           meta?.readinessLevel ??
@@ -996,6 +952,23 @@ export class StoresDirectoryService {
         whatsappUrl: whatsappNumber ? `https://wa.me/${whatsappNumber}` : null,
       };
     });
+  }
+
+  private buildDeliveryFeeMap<
+    T extends {
+      delivery_fee: Prisma.Decimal;
+      tenant: { id: number };
+    },
+  >(deliveryAreas: T[]) {
+    const fees = new Map<number, number>();
+    for (const deliveryArea of deliveryAreas) {
+      const fee = Number(deliveryArea.delivery_fee);
+      const current = fees.get(deliveryArea.tenant.id);
+      if (current === undefined || fee < current) {
+        fees.set(deliveryArea.tenant.id, fee);
+      }
+    }
+    return fees;
   }
 
   private isDeliveryAvailableNow(

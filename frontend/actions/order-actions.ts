@@ -347,9 +347,6 @@ const buildCreateOrderFormData = (
     formDataPayload.append('total', payload.total.toString());
   }
   if (payload.notes) formDataPayload.append('notes', payload.notes);
-  if (payload.delivery_fee !== undefined) {
-    formDataPayload.append('delivery_fee', payload.delivery_fee.toString());
-  }
   if (payload.order_source) {
     formDataPayload.append('order_source', payload.order_source);
   }

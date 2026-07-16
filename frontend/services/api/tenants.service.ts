@@ -1,14 +1,10 @@
 import HttpService from "@/services/base/http.service";
-import { Tenant } from "@/types/models/tenant";
+import {
+  DeliveryConfigurationInput,
+  Tenant,
+} from "@/types/models/tenant";
 
 const PUBLIC_STOREFRONT_REVALIDATE_SECONDS = 60;
-
-type UpdateTenantDeliverySettingsRequest = {
-  delivery_fee: number;
-  delivery_available: boolean;
-  delivery_starts_at?: string | null;
-  delivery_ends_at?: string | null;
-};
 
 type UpdateTenantSettingsRequest = {
   name: string;
@@ -39,7 +35,7 @@ class TenantsService extends HttpService {
   }
 
   public async updateMyDeliverySettings(
-    payload: UpdateTenantDeliverySettingsRequest,
+    payload: DeliveryConfigurationInput,
   ) {
     return this.patch<Tenant>("me/delivery", payload, undefined, {
       authRequired: true,

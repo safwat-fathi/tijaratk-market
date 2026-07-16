@@ -37,6 +37,8 @@ import {
   CreateDirectoryAreaDto,
   UpdateDirectoryAreaDto,
 } from './dto/directory-area.dto';
+import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
+import { UpdateDeliveryConfigurationDto } from 'src/delivery-configuration/dto/update-delivery-configuration.dto';
 
 /**
  * Stores directory controller exposes public SEO directory and management APIs.
@@ -46,6 +48,7 @@ import {
 export class StoresDirectoryController {
   constructor(
     private readonly storesDirectoryService: StoresDirectoryService,
+    private readonly deliveryConfigurationService: DeliveryConfigurationService,
   ) {}
 
   @Get('stores')
@@ -233,6 +236,23 @@ export class StoresDirectoryController {
     @Body() dto: UpdateDirectoryProfileDto,
   ) {
     return this.storesDirectoryService.adminUpdateTenantProfile(tenantId, dto);
+  }
+
+  @Patch('admin/tenants/:tenantId/delivery-configuration')
+  @UseGuards(AdminAuthGuard)
+  @RequirePlatformAdmin()
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({ summary: 'Update tenant delivery zones and fees as admin' })
+  @ApiParam({ name: 'tenantId', type: Number })
+  @ApiBody({ type: UpdateDeliveryConfigurationDto })
+  adminUpdateTenantDeliveryConfiguration(
+    @Param('tenantId', ParseIntPipe) tenantId: number,
+    @Body() dto: UpdateDeliveryConfigurationDto,
+  ) {
+    return this.deliveryConfigurationService.updateConfiguration(
+      tenantId,
+      dto,
+    );
   }
 
   private getTenantIdFromRequest(req: Request): number {

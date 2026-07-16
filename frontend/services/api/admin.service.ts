@@ -74,7 +74,10 @@ type AdminTenantDirectoryProfile = {
 };
 
 type AdminTenantDeliveryArea = {
+	id?: number;
 	area_id: number;
+	delivery_fee: number | string;
+	is_active?: boolean;
 	area: AdminDirectoryArea;
 };
 
@@ -109,6 +112,9 @@ export type AdminTenant = {
 	slug: string;
 	status: "pending" | "active" | "inactive" | "suspended" | "rejected";
 	category?: AdminTenantCategory;
+	delivery_available?: boolean;
+	delivery_starts_at?: string | null;
+	delivery_ends_at?: string | null;
 	last_bulk_essentials_added_at?: string | null;
 	_count?: AdminTenantCount;
 	tenant_subscriptions?: AdminTenantSubscription[];
@@ -358,7 +364,6 @@ export type ManagedMerchantContext = {
 
 type UpdateTenantDirectoryProfilePayload = {
 	area_id?: number;
-	delivery_area_ids?: number[];
 	directory_status?: "draft" | "listed" | "hidden" | "suspended";
 };
 
@@ -770,6 +775,24 @@ class AdminApiService extends HttpService {
 		payload: UpdateTenantDirectoryProfilePayload,
 	) {
 		return this.patch<AdminTenant>(`tenants/${id}/directory-profile`, payload, undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async updateTenantDeliveryConfiguration(
+		id: number,
+		payload: {
+			delivery_available: boolean;
+			delivery_starts_at?: string | null;
+			delivery_ends_at?: string | null;
+			primary_area_id: number;
+			delivery_areas: Array<{ area_id: number; delivery_fee: number }>;
+		},
+	) {
+		return this.patch<AdminTenant>(
+			`tenants/${id}/delivery-configuration`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
 	}
 
 	public async getTenantBulkEssentialStages(tenantId: number) {
