@@ -6,6 +6,7 @@ import { logoutAction } from "@/actions/auth-server";
 import { Logo } from "@/components/ui/Logo";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
 import { SupportWidget } from "@/components/ui/SupportWidget";
+import { GuidedTour } from "@/components/merchant/GuidedTour";
 
 const navigation = [
   {
@@ -193,9 +194,11 @@ export default function MerchantLayoutClient({
 
   return (
     <div className="min-h-screen bg-background">
+      <GuidedTour />
       {/* Mobile sidebar placeholder/trigger */}
       <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-x-6 border-b border-brand-border bg-white px-4 py-4 shadow-soft sm:px-6 lg:hidden">
         <button
+          id="mobile-menu-trigger"
           type="button"
           className="-m-2.5 rounded-md p-2.5 text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 lg:hidden"
           onClick={() => setSidebarOpen(true)}

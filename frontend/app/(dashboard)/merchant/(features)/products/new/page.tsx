@@ -1,5 +1,6 @@
 import ProductOnboardingClient from './_components/ProductOnboardingClient';
 import MerchantCsvUploadClient from './_components/MerchantCsvUploadClient';
+import { ProductsGuidedTour } from '@/components/merchant/ProductsGuidedTour';
 import { productsService } from '@/services/api/products.service';
 import {
   CatalogItemsResponse,
@@ -129,6 +130,7 @@ export default async function NewProductPage() {
 
   return (
     <div className="space-y-4">
+      <ProductsGuidedTour />
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h1 className="text-2xl font-bold text-gray-900">إضافة منتجات</h1>

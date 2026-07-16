@@ -1781,6 +1781,7 @@ async function createZoneFixture({
     data: merchants.map((merchant) => ({
       tenant_id: merchant.tenantId,
       area_id: area.id,
+      delivery_fee: 15,
       is_active: true,
     })),
   });

@@ -34,6 +34,7 @@ export default function ProductOnboardingHeader({
         <div className="flex items-center gap-2">
           {onOpenBulkWizard && (
             <button
+              id="add-core-assortment-btn"
               onClick={onOpenBulkWizard}
               className="rounded-full bg-brand-primary px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-brand-primary/90"
             >

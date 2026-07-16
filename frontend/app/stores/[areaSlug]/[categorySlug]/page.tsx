@@ -13,6 +13,7 @@ import {
   StoresDirectoryStoreCard,
 } from "@/types/models/stores-directory";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import { formatCurrency } from "@/lib/utils/currency";
 
 type StoresCategorySearchParams = {
   search?: string;
@@ -196,6 +197,14 @@ const StoreCard = ({
       <p className="mt-1 line-clamp-1 text-sm text-gray-500">
         {store.areaName || store.address || "متجر محلي على تجارتك"}
       </p>
+      {store.deliveryAvailable ? (
+        <p className="mt-1 text-xs font-bold text-[#0F5A3D]">
+          رسوم التوصيل:{" "}
+          {store.deliveryFee > 0
+            ? formatCurrency(store.deliveryFee)
+            : "مجاني"}
+        </p>
+      ) : null}
     </div>
   </Link>
 );

@@ -77,11 +77,26 @@ export default async function ZoneStorefrontPage({
     category: zone.category,
     status: "active",
     onboarding_completed: true,
-    delivery_fee: zone.delivery_fee,
     delivery_available: zone.delivery_available,
     delivery_starts_at: zone.delivery_starts_at,
     delivery_ends_at: zone.delivery_ends_at,
     card_on_delivery_available: zone.card_on_delivery_available,
+    tenant_delivery_areas: [
+      {
+        area_id: zone.area.id,
+        delivery_fee: Number(zone.delivery_fee || 0),
+        is_active: true,
+        area: {
+          ...zone.area,
+          name_en: zone.area.name_en ?? null,
+          parent_area_id: null,
+          city: null,
+          governorate: null,
+          is_active: true,
+          sort_order: 0,
+        },
+      },
+    ],
   };
 
   return (

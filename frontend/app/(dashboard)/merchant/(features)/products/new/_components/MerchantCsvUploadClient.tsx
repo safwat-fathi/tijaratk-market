@@ -36,6 +36,7 @@ export default function MerchantCsvUploadClient() {
   return (
     <div className="mt-4">
       <form
+        id="csv-upload-form"
         action={handleUploadProductSheet}
         className="grid gap-2 rounded-md border border-brand-border bg-gray-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
       >

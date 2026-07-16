@@ -47,7 +47,6 @@ class MerchantDirectoryService extends HttpService {
 
   public async updateProfile(payload: {
     area_id?: number;
-    delivery_area_ids?: number[];
   }) {
     return this.patch<TenantDirectoryProfile>("directory-profile", payload, undefined, {
       authRequired: true,

@@ -449,6 +449,9 @@ export class AdminService {
         slug: true,
         status: true,
         category: true,
+        delivery_available: true,
+        delivery_starts_at: true,
+        delivery_ends_at: true,
         last_bulk_essentials_added_at: true,
         created_at: true,
         updated_at: true,
@@ -458,7 +461,7 @@ export class AdminService {
           include: { area: true },
         },
         tenant_delivery_areas: {
-          where: { is_active: true, deleted_at: null },
+          where: { deleted_at: null },
           include: { area: true },
           orderBy: [
             { area: { sort_order: 'asc' } },
@@ -536,6 +539,27 @@ export class AdminService {
       const updatedTenant = await tx.tenant.update({
         where: { id },
         data: { status },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          slug: true,
+          status: true,
+          category: true,
+          delivery_available: true,
+          delivery_starts_at: true,
+          delivery_ends_at: true,
+          last_bulk_essentials_added_at: true,
+          directory_profile: { include: { area: true } },
+          tenant_delivery_areas: {
+            where: { deleted_at: null },
+            include: { area: true },
+            orderBy: [
+              { area: { sort_order: 'asc' } },
+              { area: { name_ar: 'asc' } },
+            ],
+          },
+        },
       });
 
       await this.tenantCancellationPolicyService.recordAdminStatusChange(

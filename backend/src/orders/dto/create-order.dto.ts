@@ -152,13 +152,6 @@ export class CreateOrderDto {
   @MaxLength(255)
   notes?: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  delivery_fee?: number;
-
   @ApiPropertyOptional({ enum: OrderSource, example: OrderSource.directory })
   @IsOptional()
   @IsEnum(OrderSource)

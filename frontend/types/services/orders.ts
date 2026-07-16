@@ -29,7 +29,6 @@ export interface CreateOrderRequest {
   free_text_payload?: { text: string };
   order_type: OrderType;
   total?: number;
-  delivery_fee?: number;
   order_source?: OrderSource;
   source_metadata?: Record<string, unknown>;
   delivery_area_id?: number;

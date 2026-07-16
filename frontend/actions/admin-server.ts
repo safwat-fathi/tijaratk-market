@@ -882,6 +882,7 @@ const parsePositiveInteger = (value: FormDataEntryValue | null) => {
 };
 
 const DIRECTORY_STATUSES = new Set(["draft", "listed", "hidden", "suspended"]);
+const ADMIN_DELIVERY_TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const parseDirectoryStatus = (value: FormDataEntryValue | null) => {
   if (typeof value !== "string" || !DIRECTORY_STATUSES.has(value)) {
@@ -891,31 +892,106 @@ const parseDirectoryStatus = (value: FormDataEntryValue | null) => {
   return value as "draft" | "listed" | "hidden" | "suspended";
 };
 
-export async function updateTenantAreasAction(tenantId: number, formData: FormData): Promise<void> {
-  const areaId = parsePositiveInteger(formData.get("area_id"));
-  if (!areaId) {
-    throw new Error("يجب اختيار المنطقة الأساسية للمتجر");
-  }
+export type AdminDeliveryConfigurationState = {
+  success: boolean;
+  message: string;
+  errors?: Record<string, string[]>;
+};
 
-  const deliveryAreaIds = formData
-    .getAll("delivery_area_ids")
-    .map(parsePositiveInteger)
-    .filter((value): value is number => typeof value === "number");
-
-  const uniqueDeliveryAreaIds = Array.from(new Set([areaId, ...deliveryAreaIds]));
-  const directoryStatus = parseDirectoryStatus(formData.get("directory_status"));
-
-  const response = await adminService.updateTenantDirectoryProfile(tenantId, {
-    area_id: areaId,
-    delivery_area_ids: uniqueDeliveryAreaIds,
-    directory_status: directoryStatus,
+const adminDeliveryConfigurationSchema = z
+  .object({
+    delivery_available: z.boolean(),
+    delivery_starts_at: z.string().nullable().optional(),
+    delivery_ends_at: z.string().nullable().optional(),
+    primary_area_id: z.coerce.number().int().positive(),
+    delivery_areas: z.array(
+      z.object({
+        area_id: z.coerce.number().int().positive(),
+        delivery_fee: z.coerce.number().min(0),
+      }),
+    ),
+  })
+  .superRefine((data, ctx) => {
+    if (data.delivery_available && data.delivery_areas.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["delivery_areas"],
+        message: "اختر منطقة توصيل واحدة على الأقل",
+      });
+    }
+    const areaIds = data.delivery_areas.map((area) => area.area_id);
+    if (new Set(areaIds).size !== areaIds.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["delivery_areas"],
+        message: "لا يمكن تكرار منطقة التوصيل",
+      });
+    }
+    const start = data.delivery_starts_at || "";
+    const end = data.delivery_ends_at || "";
+    if (Boolean(start) !== Boolean(end)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["delivery_configuration"],
+        message: "أدخل وقت البداية والنهاية للتوصيل",
+      });
+    } else if (
+      start &&
+      end &&
+      (!ADMIN_DELIVERY_TIME_PATTERN.test(start) ||
+        !ADMIN_DELIVERY_TIME_PATTERN.test(end) ||
+        end <= start)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["delivery_configuration"],
+        message: "تأكد أن وقت النهاية بعد وقت البداية",
+      });
+    }
   });
 
+export async function updateTenantAreasAction(
+  tenantId: number,
+  _previousState: AdminDeliveryConfigurationState,
+  formData: FormData,
+): Promise<AdminDeliveryConfigurationState> {
+  let input: unknown = null;
+  try {
+    input = JSON.parse(String(formData.get("delivery_configuration") || ""));
+  } catch {
+    input = null;
+  }
+  const parsed = adminDeliveryConfigurationSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: "راجع مناطق ورسوم التوصيل.",
+      errors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const response = await adminService.updateTenantDeliveryConfiguration(
+    tenantId,
+    parsed.data,
+  );
   if (!response.success) {
-    throw new Error(response.message || "تعذر تحديث مناطق المتجر");
+    return {
+      success: false,
+      message: response.message || "تعذر تحديث مناطق ورسوم التوصيل",
+    };
   }
 
   revalidatePath("/admin/merchants");
+  revalidatePath("/");
+  revalidatePath("/stores");
+  revalidatePath("/stores/[areaSlug]/[categorySlug]", "page");
+  if (response.data?.slug) {
+    revalidatePath(`/${response.data.slug}`);
+  }
+  return {
+    success: true,
+    message: "تم حفظ مناطق ورسوم التوصيل.",
+  };
 }
 
 export async function updateTenantDirectoryStatusAction(

@@ -148,12 +148,6 @@ export class AdminTenantResponseDto {
   status: TenantStatus;
 
   @ApiProperty({
-    description: 'The flat delivery fee for orders',
-    example: 15.0,
-  })
-  delivery_fee: number;
-
-  @ApiProperty({
     description: 'Indicates if delivery is currently available',
     example: true,
   })

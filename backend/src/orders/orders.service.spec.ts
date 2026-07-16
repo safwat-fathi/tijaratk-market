@@ -112,6 +112,8 @@ describe('OrdersService markOrderItemOutOfStock', () => {
       whatsapp as any,
       cancellationPolicy as any,
       activityLog as any,
+      {} as any,
+      {} as any,
       cache as any,
     );
 

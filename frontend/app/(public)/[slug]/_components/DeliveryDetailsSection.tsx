@@ -6,6 +6,7 @@ import BottomSheet from "@/components/ui/BottomSheet";
 
 type DeliveryDetailsSectionProps = {
   deliverySettings: TenantDeliverySettings;
+  deliveryFee: number | null;
   notes: string;
   customerName: string;
   customerPhone: string;
@@ -29,6 +30,7 @@ type DeliveryDetailsSectionProps = {
 
 export default function DeliveryDetailsSection({
   deliverySettings,
+  deliveryFee,
   notes,
   customerName,
   customerPhone,
@@ -53,7 +55,9 @@ export default function DeliveryDetailsSection({
   const [accessCodeLookupState, setAccessCodeLookupState] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
-  const deliveryAvailable = deliverySettings?.delivery_available !== false;
+  const deliveryAvailable =
+    deliverySettings?.delivery_available !== false &&
+    (deliverySettings.tenant_delivery_areas?.length || 0) > 0;
   const hasMultipleSavedAddresses = savedAddressOptions.length > 1;
   const hasSavedCustomerSuggestion = Boolean(suggestedCustomerProfile);
   const hasSingleSavedAddress = savedAddressOptions.length === 1;
@@ -66,8 +70,12 @@ export default function DeliveryDetailsSection({
     savedCustomerSuggestionMessage =
       "يمكنك استخدام البيانات المحفوظة لتعبئة تفاصيل التوصيل.";
   }
-  const deliveryFee =
-    formatCurrency(deliverySettings?.delivery_fee ?? 0) ?? "غير محدد";
+  const deliveryFeeLabel =
+    deliveryFee === null
+      ? "اختر منطقة التوصيل"
+      : Number(deliveryFee) > 0
+        ? formatCurrency(deliveryFee)
+        : "مجاني";
 
   let deliveryTimeWindow: string | null = null;
   if (
@@ -83,6 +91,7 @@ export default function DeliveryDetailsSection({
     };
     deliveryTimeWindow = `من ${formatTime(deliverySettings?.delivery_starts_at)} إلى ${formatTime(deliverySettings?.delivery_ends_at)}`;
   }
+  const deliveryTimeWindowLabel = deliveryTimeWindow || "طوال اليوم";
 
   return (
     <div
@@ -126,10 +135,10 @@ export default function DeliveryDetailsSection({
             {deliveryAvailable ? (
               <>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  رسوم التوصيل: {deliveryFee}
+                  رسوم التوصيل: {deliveryFeeLabel}
                 </p>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  مواعيد التوصيل: {deliveryTimeWindow}
+                  مواعيد التوصيل: {deliveryTimeWindowLabel}
                 </p>
               </>
             ) : (

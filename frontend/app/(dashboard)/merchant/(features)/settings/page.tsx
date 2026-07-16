@@ -29,9 +29,7 @@ export default async function SettingsPage() {
     tenant.directory_profile = profileResponse.data;
     tenant.tenant_delivery_areas =
       profileResponse.data.tenant?.tenant_delivery_areas ??
-      profileResponse.data.delivery_area_ids?.map((areaId) => ({
-        area_id: areaId,
-      })) ??
+      profileResponse.data.delivery_areas ??
       [];
   }
 

@@ -81,6 +81,7 @@ type ZoneReadiness = {
 
 type AdminZoneRecord = {
   id: number;
+  area_id: number;
   name: string;
   slug: string;
   category: TenantCategory;
@@ -100,7 +101,11 @@ type AdminZoneRecord = {
     name: string;
     category: TenantCategory;
     status: TenantStatus;
-    delivery_fee: Prisma.Decimal;
+    tenant_delivery_areas: Array<{
+      area_id: number;
+      delivery_fee: Prisma.Decimal;
+      is_active: boolean;
+    }>;
   };
   merchants?: unknown[];
 };
@@ -163,6 +168,7 @@ export class ZoneStorefrontsService {
           data: {
             tenant_id: operatorTenant.id,
             area_id: dto.area_id,
+            delivery_fee: dto.delivery_fee ?? 20,
             is_active: true,
           },
         });
@@ -177,7 +183,16 @@ export class ZoneStorefrontsService {
             operator_tenant_id: operatorTenant.id,
             is_active: false,
           },
-          include: { area: true, operator_tenant: true },
+          include: {
+            area: true,
+            operator_tenant: {
+              include: {
+                tenant_delivery_areas: {
+                  where: { is_active: true, deleted_at: null },
+                },
+              },
+            },
+          },
         });
 
         await manager.$executeRaw`SELECT set_config('app.tenant_id', ${String(operatorTenant.id)}, true)`;
@@ -235,7 +250,13 @@ export class ZoneStorefrontsService {
     const zones = await this.prisma.zoneStorefront.findMany({
       include: {
         area: true,
-        operator_tenant: true,
+        operator_tenant: {
+          include: {
+            tenant_delivery_areas: {
+              where: { is_active: true, deleted_at: null },
+            },
+          },
+        },
         merchants: {
           include: { tenant: { select: { id: true, name: true, status: true } } },
           orderBy: [{ priority: 'desc' }, { id: 'asc' }],
@@ -257,7 +278,13 @@ export class ZoneStorefrontsService {
       where: { id: zoneId },
       include: {
         area: true,
-        operator_tenant: true,
+        operator_tenant: {
+          include: {
+            tenant_delivery_areas: {
+              where: { is_active: true, deleted_at: null },
+            },
+          },
+        },
         merchants: {
           include: {
             tenant: {
@@ -515,7 +542,16 @@ export class ZoneStorefrontsService {
           category: { in: [...TENANT_CATEGORIES_WITH_CATALOG_SOURCE] },
         },
       },
-      include: { area: true, operator_tenant: true },
+      include: {
+        area: true,
+        operator_tenant: {
+          include: {
+            tenant_delivery_areas: {
+              where: { is_active: true, deleted_at: null },
+            },
+          },
+        },
+      },
       orderBy: [
         { area: { sort_order: 'asc' } },
         { name: 'asc' },
@@ -685,7 +721,16 @@ export class ZoneStorefrontsService {
   async requireZone(zoneId: number) {
     const zone = await this.prisma.zoneStorefront.findUnique({
       where: { id: zoneId },
-      include: { area: true, operator_tenant: true },
+      include: {
+        area: true,
+        operator_tenant: {
+          include: {
+            tenant_delivery_areas: {
+              where: { is_active: true, deleted_at: null },
+            },
+          },
+        },
+      },
     });
     if (!zone) throw new NotFoundException('Zone storefront not found');
     if (zone.category !== zone.operator_tenant.category) {
@@ -729,7 +774,16 @@ export class ZoneStorefrontsService {
           category: { in: [...TENANT_CATEGORIES_WITH_CATALOG_SOURCE] },
         },
       },
-      include: { area: true, operator_tenant: true },
+      include: {
+        area: true,
+        operator_tenant: {
+          include: {
+            tenant_delivery_areas: {
+              where: { is_active: true, deleted_at: null },
+            },
+          },
+        },
+      },
     });
     if (!zone) throw new NotFoundException('Zone storefront not found');
     if (zone.category !== zone.operator_tenant.category) {
@@ -931,7 +985,7 @@ export class ZoneStorefrontsService {
       name: zone.name,
       slug: zone.slug,
       category: zone.category,
-      delivery_fee: zone.operator_tenant.delivery_fee,
+      delivery_fee: this.resolveZoneDeliveryFee(zone),
       delivery_available: zone.operator_tenant.delivery_available,
       delivery_starts_at: zone.operator_tenant.delivery_starts_at,
       delivery_ends_at: zone.operator_tenant.delivery_ends_at,
@@ -962,10 +1016,31 @@ export class ZoneStorefrontsService {
         name: zone.operator_tenant.name,
         category: zone.operator_tenant.category,
         status: zone.operator_tenant.status,
-        delivery_fee: zone.operator_tenant.delivery_fee,
+        delivery_fee: this.resolveZoneDeliveryFee(zone),
       },
       merchants: zone.merchants ?? [],
       readiness,
     };
+  }
+
+  private resolveZoneDeliveryFee(zone: {
+    area_id: number;
+    operator_tenant: {
+      tenant_delivery_areas: Array<{
+        area_id: number;
+        delivery_fee: Prisma.Decimal;
+        is_active: boolean;
+      }>;
+    };
+  }) {
+    const deliveryArea = zone.operator_tenant.tenant_delivery_areas.find(
+      (area) => area.area_id === zone.area_id && area.is_active,
+    );
+    if (!deliveryArea) {
+      throw new BadRequestException(
+        'Zone storefront delivery fee is not configured',
+      );
+    }
+    return deliveryArea.delivery_fee;
   }
 }
