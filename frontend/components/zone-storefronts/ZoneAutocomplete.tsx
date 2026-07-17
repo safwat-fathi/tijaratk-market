@@ -115,7 +115,7 @@ export default function ZoneAutocomplete({ options }: Props) {
           onBlur={() => window.setTimeout(() => setIsFocused(false), 120)}
           onKeyDown={handleKeyDown}
           placeholder="اكتب اسم منطقتك..."
-          className="brand-focus min-h-12 w-full rounded-xl border border-brand-border bg-white py-3 pl-4 pr-12 text-base font-semibold text-brand-text shadow-soft placeholder:font-normal placeholder:text-gray-500"
+          className="brand-focus min-h-12 w-full rounded-xl border border-brand-border bg-white py-3 pl-4 pr-12 text-base font-semibold text-brand-text shadow-soft placeholder:font-normal"
           autoComplete="off"
           aria-describedby={`${INPUT_ID}-hint`}
           aria-autocomplete="list"

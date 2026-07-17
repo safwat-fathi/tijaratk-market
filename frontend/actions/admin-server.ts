@@ -21,6 +21,8 @@ import type {
 import type {
   AdminCatalogItem,
   AdminCatalogSource,
+  AdminDirectoryArea,
+  AdminDirectoryAreaPayload,
   AdminManagedPermission,
   AdminProductSheetUploadSummary,
   DeleteTenantProductsSummary,
@@ -48,6 +50,11 @@ export type DirectoryStatusActionState = {
 
 export type DispatchSessionStartResult = {
   success: false;
+  message: string;
+};
+
+export type ManagedProductCategoryMoveActionResult = {
+  success: boolean;
   message: string;
 };
 
@@ -834,15 +841,75 @@ export async function updateManagedProductDetailsAction(
   formData: FormData,
 ): Promise<void> {
   const name = z.string().trim().min(1).max(120).parse(formData.get("name"));
-  const category = String(formData.get("category") || "").trim();
+  const category = parseNullableString(formData.get("category"));
   const response = await adminService.updateManagedProduct(
     tenantId,
     productId,
     "details",
-    { name, category },
+    { name, ...(category ? { category } : {}) },
   );
   if (!response.success) throw new Error(response.message || "تعذر تحديث بيانات المنتج");
   await revalidateManagedProductPaths(tenantId);
+}
+
+export async function moveManagedProductCategoryAction(
+  tenantId: number,
+  productId: number,
+  categoryValue: string,
+): Promise<ManagedProductCategoryMoveActionResult> {
+  try {
+    const normalizedTenantId = positiveIdSchema.parse(tenantId);
+    const normalizedProductId = positiveIdSchema.parse(productId);
+    const category = z.string().trim().min(1).max(64).parse(categoryValue);
+    const [categoriesResponse, productResponse] = await Promise.all([
+      adminService.getManagedProductCategories(normalizedTenantId),
+      adminService.getManagedProduct(normalizedTenantId, normalizedProductId),
+    ]);
+
+    if (!categoriesResponse.success || !productResponse.success || !productResponse.data) {
+      return {
+        success: false,
+        message: "تعذر التحقق من المنتج أو التصنيف المحدد",
+      };
+    }
+
+    if (!categoriesResponse.data?.includes(category)) {
+      return {
+        success: false,
+        message: "التصنيف الهدف غير متاح لهذا المتجر",
+      };
+    }
+
+    if (productResponse.data.category === category) {
+      return {
+        success: false,
+        message: "المنتج موجود بالفعل في هذا التصنيف",
+      };
+    }
+
+    const response = await adminService.updateManagedProduct(
+      normalizedTenantId,
+      normalizedProductId,
+      "details",
+      { category },
+    );
+
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر نقل المنتج إلى التصنيف المحدد",
+      };
+    }
+
+    await revalidateManagedProductPaths(tenantId);
+    return { success: true, message: "تم نقل المنتج إلى التصنيف المحدد" };
+  } catch (error) {
+    console.error("Move managed product category failed:", error);
+    return {
+      success: false,
+      message: "تعذر نقل المنتج إلى التصنيف المحدد. حاول مرة أخرى.",
+    };
+  }
 }
 
 export async function updateManagedProductAvailabilityAction(
@@ -1949,97 +2016,6 @@ export async function adminMoveCatalogCategoryProductsAction(
   revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
 }
 
-export async function adminCreateTenantProductCategoryAction(
-  tenantId: number,
-  formData: FormData,
-): Promise<void> {
-  const name = parseNullableString(formData.get("name"));
-  if (!name) {
-    throw new Error("اسم التصنيف مطلوب");
-  }
-
-  const response = await adminService.createAdminTenantProductCategory(
-    tenantId,
-    { name },
-  );
-
-  if (!response.success) {
-    throw new Error(response.message || "تعذر إضافة تصنيف التاجر");
-  }
-
-  revalidatePath(ADMIN_CATEGORIES_PATH);
-  revalidatePath("/admin/products");
-}
-
-export async function adminUpdateTenantProductCategoryAction(
-  tenantId: number,
-  categoryId: number,
-  formData: FormData,
-): Promise<void> {
-  const name = parseNullableString(formData.get("name"));
-  if (!name) {
-    throw new Error("اسم التصنيف مطلوب");
-  }
-
-  const response = await adminService.updateAdminTenantProductCategory(
-    tenantId,
-    categoryId,
-    { name },
-  );
-
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تعديل تصنيف التاجر");
-  }
-
-  revalidatePath(ADMIN_CATEGORIES_PATH);
-  revalidatePath("/admin/products");
-}
-
-export async function adminMoveTenantProductCategoryProductsAction(
-  tenantId: number,
-  fromCategoryValue: string,
-  formData: FormData,
-): Promise<void> {
-  const fromCategory = parseNullableString(fromCategoryValue);
-  const toCategory = parseNullableString(formData.get("to_category"));
-
-  if (!fromCategory || !toCategory) {
-    throw new Error("اختر تصنيف المصدر والتصنيف الهدف");
-  }
-
-  const response = await adminService.moveAdminTenantProductCategoryProducts(
-    tenantId,
-    {
-      from_category: fromCategory,
-      to_category: toCategory,
-    },
-  );
-
-  if (!response.success) {
-    throw new Error(response.message || "تعذر نقل منتجات التصنيف");
-  }
-
-  revalidatePath(ADMIN_CATEGORIES_PATH);
-  revalidatePath("/admin/products");
-}
-
-export async function adminDeleteTenantProductCategoryAction(
-  tenantId: number,
-  categoryId: number,
-): Promise<void> {
-  const response = await adminService.deleteAdminTenantProductCategory(
-    tenantId,
-    categoryId,
-  );
-
-  if (!response.success) {
-    throw new Error(response.message || "تعذر حذف تصنيف التاجر");
-  }
-
-  revalidatePath(ADMIN_CATEGORIES_PATH);
-  revalidatePath("/admin/products");
-}
-
 export async function togglePlanStatusAction(id: number, currentStatus: boolean): Promise<void> {
   const response = await adminService.togglePlanStatus(id, !currentStatus);
   if (response.success) {
@@ -2088,28 +2064,83 @@ export async function cancelImportAction(id: number): Promise<void> {
   revalidatePath(`/admin/imports/${id}`);
 }
 
-import { AdminDirectoryArea } from "@/services/api/admin.service";
+const directoryAreaMutationMessages: Record<string, string> = {
+  AREA_PARENT_NOT_FOUND:
+    "تعذر العثور على المنطقة الرئيسية المحددة. اختر منطقة رئيسية أخرى.",
+  AREA_PARENT_MUST_BE_MAIN:
+    "المنطقة المحددة تابعة لمنطقة أخرى. اختر منطقة رئيسية مباشرة.",
+  AREA_PARENT_SELF_REFERENCE:
+    "لا يمكن أن تكون المنطقة هي المنطقة الرئيسية لنفسها.",
+  AREA_HAS_CHILDREN:
+    "هذه المنطقة مرتبطة بمناطق فرعية. انقلها أو حوّلها إلى مناطق رئيسية أولاً.",
+};
 
-export async function createDirectoryAreaAction(payload: Partial<AdminDirectoryArea>): Promise<void> {
+const getDirectoryAreaMutationMessage = (
+  data: unknown,
+  message: string | undefined,
+  fallback: string,
+) => {
+  const dataRecord =
+    data && typeof data === "object"
+      ? (data as Record<string, unknown>)
+      : undefined;
+  const errorDetails =
+    dataRecord?.errors && typeof dataRecord.errors === "object"
+      ? (dataRecord.errors as Record<string, unknown>)
+      : dataRecord;
+  const code =
+    errorDetails && "code" in errorDetails
+      ? String(errorDetails.code ?? "")
+      : "";
+
+  return directoryAreaMutationMessages[code] ?? message ?? fallback;
+};
+
+export async function createDirectoryAreaAction(
+  payload: AdminDirectoryAreaPayload,
+): Promise<AdminDirectoryArea> {
   const response = await adminService.createDirectoryArea(payload);
-  if (!response.success) {
-    throw new Error(response.message || "تعذر إضافة المنطقة");
+  if (!response.success || !response.data) {
+    throw new Error(
+      getDirectoryAreaMutationMessage(
+        response.data,
+        response.message,
+        "تعذر إضافة المنطقة",
+      ),
+    );
   }
   revalidatePath("/admin/areas");
+  return response.data;
 }
 
-export async function updateDirectoryAreaAction(id: number, payload: Partial<AdminDirectoryArea>): Promise<void> {
+export async function updateDirectoryAreaAction(
+  id: number,
+  payload: AdminDirectoryAreaPayload,
+): Promise<AdminDirectoryArea> {
   const response = await adminService.updateDirectoryArea(id, payload);
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تحديث المنطقة");
+  if (!response.success || !response.data) {
+    throw new Error(
+      getDirectoryAreaMutationMessage(
+        response.data,
+        response.message,
+        "تعذر تحديث المنطقة",
+      ),
+    );
   }
   revalidatePath("/admin/areas");
+  return response.data;
 }
 
 export async function deleteDirectoryAreaAction(id: number): Promise<void> {
   const response = await adminService.deleteDirectoryArea(id);
   if (!response.success) {
-    throw new Error(response.message || "تعذر حذف المنطقة، قد تكون مستخدمة");
+    throw new Error(
+      getDirectoryAreaMutationMessage(
+        response.data,
+        response.message,
+        "تعذر حذف المنطقة، قد تكون مستخدمة",
+      ),
+    );
   }
   revalidatePath("/admin/areas");
 }

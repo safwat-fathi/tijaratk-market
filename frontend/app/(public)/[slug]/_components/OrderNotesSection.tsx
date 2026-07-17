@@ -14,6 +14,7 @@ export default function OrderNotesSection({
   return (
     <div
       id="order-notes"
+      data-customer-tour="manual-order"
       className="mt-4 scroll-mt-52 rounded-lg border border-brand-border bg-white p-5 shadow-soft transition-[box-shadow] focus-within:ring-4 focus-within:ring-brand-accent/15"
     >
       <div className="flex items-center gap-3 mb-3">
@@ -50,7 +51,7 @@ export default function OrderNotesSection({
             ? "شريط كاتفلام أو كريم شعر"
             : "مثال: 1 كجم طماطم، 2 كيلو سكر…\nعيش، لبن، زيت\n"
         }
-        className="h-22 w-full resize-none rounded-md border border-brand-border bg-brand-soft/40 p-4 text-base transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
+        className="h-22 w-full resize-none rounded-md border border-brand-border bg-brand-soft/40 p-4 text-base transition-colors focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
         value={orderRequest}
         onChange={(e) => onOrderRequestChange(e.target.value)}
       />

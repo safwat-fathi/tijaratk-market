@@ -53,6 +53,17 @@ export type AdminDirectoryArea = {
 	is_active: boolean;
 };
 
+export type AdminDirectoryAreaPayload = Pick<
+	AdminDirectoryArea,
+	| "name_ar"
+	| "name_en"
+	| "slug"
+	| "parent_area_id"
+	| "city"
+	| "governorate"
+	| "is_active"
+>;
+
 type AdminTenantCount = {
 	orders: number;
 	customers: number;
@@ -204,11 +215,6 @@ export type AdminTenantProductCategory = {
 
 type MoveAdminCatalogCategoryProductsPayload = {
 	source: AdminCatalogSource;
-	from_category: string;
-	to_category: string;
-};
-
-type MoveAdminTenantProductCategoryProductsPayload = {
 	from_category: string;
 	to_category: string;
 };
@@ -496,6 +502,22 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async getManagedProduct(tenantId: number, productId: number) {
+		return this.get<Product>(
+			`managed-tenants/${tenantId}/products/${productId}`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async getManagedProductCategories(tenantId: number) {
+		return this.get<string[]>(
+			`managed-tenants/${tenantId}/product-categories`,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
 	public async getManagedCatalog(tenantId: number, limit = 40) {
 		return this.get<CatalogItemsResponse>(
 			`managed-tenants/${tenantId}/catalog`,
@@ -750,11 +772,11 @@ class AdminApiService extends HttpService {
 		return this.get<AdminDirectoryArea[]>("directory/areas", undefined, ADMIN_AUTH_OPTIONS);
 	}
 
-	public async createDirectoryArea(payload: Partial<AdminDirectoryArea>) {
+	public async createDirectoryArea(payload: AdminDirectoryAreaPayload) {
 		return this.post<AdminDirectoryArea>("directory/areas", payload, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
-	public async updateDirectoryArea(id: number, payload: Partial<AdminDirectoryArea>) {
+	public async updateDirectoryArea(id: number, payload: AdminDirectoryAreaPayload) {
 		return this.patch<AdminDirectoryArea>(`directory/areas/${id}`, payload, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
@@ -1053,48 +1075,6 @@ class AdminApiService extends HttpService {
 	public async getAdminTenantProductCategories(tenantId: number) {
 		return this.get<AdminTenantProductCategory[]>(
 			`tenants/${tenantId}/product-categories`,
-			undefined,
-			ADMIN_AUTH_OPTIONS
-		);
-	}
-
-	public async createAdminTenantProductCategory(tenantId: number, payload: { name: string }) {
-		return this.post<AdminTenantProductCategory>(
-			`tenants/${tenantId}/product-categories`,
-			payload,
-			undefined,
-			ADMIN_AUTH_OPTIONS
-		);
-	}
-
-	public async updateAdminTenantProductCategory(
-		tenantId: number,
-		categoryId: number,
-		payload: { name: string },
-	) {
-		return this.patch<AdminTenantProductCategory>(
-			`tenants/${tenantId}/product-categories/${categoryId}`,
-			payload,
-			undefined,
-			ADMIN_AUTH_OPTIONS
-		);
-	}
-
-	public async deleteAdminTenantProductCategory(tenantId: number, categoryId: number) {
-		return this.delete<{ success: boolean }>(
-			`tenants/${tenantId}/product-categories/${categoryId}`,
-			undefined,
-			ADMIN_AUTH_OPTIONS
-		);
-	}
-
-	public async moveAdminTenantProductCategoryProducts(
-		tenantId: number,
-		payload: MoveAdminTenantProductCategoryProductsPayload,
-	) {
-		return this.post<{ success: boolean; count: number }>(
-			`tenants/${tenantId}/product-categories/move-products`,
-			payload,
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);

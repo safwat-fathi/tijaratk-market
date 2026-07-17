@@ -96,6 +96,7 @@ export default function DeliveryDetailsSection({
   return (
     <div
       id="delivery-details-section"
+      data-customer-tour="delivery-details"
       className="mt-8 scroll-mt-24 rounded-lg border border-brand-border bg-white p-5 shadow-soft"
     >
       <div className="mb-4 flex items-center gap-3 border-b border-brand-border pb-4">
@@ -160,7 +161,10 @@ export default function DeliveryDetailsSection({
       </div>
 
       <div className="space-y-5">
-        <div className="rounded-lg border border-brand-border bg-brand-soft/30 p-4">
+        <div
+          data-customer-tour="customer-code"
+          className="rounded-lg border border-brand-border bg-brand-soft/30 p-4"
+        >
           <p className="text-sm font-bold text-brand-text">لديك كود عميل؟</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
@@ -405,7 +409,7 @@ export default function DeliveryDetailsSection({
           <textarea
             name="notes"
             placeholder="مثال: اضرب الجرس، سيب الطلب عند الباب…"
-            className="h-24 w-full resize-none rounded-md border border-brand-border bg-brand-soft/40 p-4 text-base transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
+            className="h-24 w-full resize-none rounded-md border border-brand-border bg-brand-soft/40 p-4 text-base transition-colors focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
             value={notes}
             onChange={(e) => onNotesChange(e.target.value)}
           />

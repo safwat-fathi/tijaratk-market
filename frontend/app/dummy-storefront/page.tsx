@@ -46,7 +46,7 @@ export default function DummyStorefront() {
 <div className=" py-3">
 <div className="relative">
 <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline">search</span>
-<input className="w-full bg-off-white border border-outline-variant/50 rounded-full py-3 pr-12 pl-4 focus:ring-2 focus:ring-accent-green focus:border-transparent outline-none font-body-md-ar text-body-md-ar placeholder:text-outline shadow-sm" placeholder="ابحث عن دواء أو منتج" type="text"/>
+<input className="w-full bg-off-white border border-outline-variant/50 rounded-full py-3 pr-12 pl-4 focus:ring-2 focus:ring-accent-green focus:border-transparent outline-none font-body-md-ar text-body-md-ar shadow-sm" placeholder="ابحث عن دواء أو منتج" type="text"/>
 </div>
 </div>
 {/*  Info Row  */}

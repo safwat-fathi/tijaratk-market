@@ -45,7 +45,10 @@ export default function PrescriptionUploadForm({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="mt-4 rounded-lg border border-brand-border bg-white p-5 shadow-soft transition-[box-shadow] focus-within:ring-4 focus-within:ring-brand-accent/15">
+    <div
+      data-customer-tour="prescription"
+      className="mt-4 rounded-lg border border-brand-border bg-white p-5 shadow-soft transition-[box-shadow] focus-within:ring-4 focus-within:ring-brand-accent/15"
+    >
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}

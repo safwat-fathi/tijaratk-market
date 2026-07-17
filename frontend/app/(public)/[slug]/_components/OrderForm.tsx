@@ -1971,7 +1971,7 @@ export default function OrderForm({
           />
         ) : null}
 
-        <div className="px-4 pt-4">
+        <div className="px-4 pt-4" data-customer-tour="catalog">
           <label className="relative block">
             <span className="sr-only">البحث عن منتج</span>
             <Search
@@ -1994,7 +1994,7 @@ export default function OrderForm({
                 }
               }}
               placeholder={searchPlaceholder}
-              className="h-14 w-full rounded-full border border-brand-border bg-white pr-12 pl-4 text-right text-base text-brand-text shadow-soft outline-none transition-shadow placeholder:text-muted-foreground focus:ring-4 focus:ring-brand-accent/20"
+              className="h-14 w-full rounded-full border border-brand-border bg-white pr-12 pl-4 text-right text-base text-brand-text shadow-soft outline-none transition-shadow focus:ring-4 focus:ring-brand-accent/20"
               dir="rtl"
             />
           </label>
@@ -2017,6 +2017,7 @@ export default function OrderForm({
             <button
               type="button"
               onClick={() => setIsPaymentSheetOpen(true)}
+              data-customer-tour="payment-methods"
               className="inline-flex min-h-10 items-center gap-2 rounded-full border border-brand-border bg-white px-3 py-2 text-sm font-semibold text-brand-text shadow-sm transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
             >
               <WalletCards className="h-4 w-4" aria-hidden="true" />

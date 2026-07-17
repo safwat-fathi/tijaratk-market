@@ -177,7 +177,10 @@ export default async function StorePage({ params, searchParams }: Props) {
         contentId={`tenant:${tenant.id}`}
         storefrontType="tenant"
       />
-      <StoreHeader tenant={tenant} />
+      <StoreHeader
+        tenant={tenant}
+        enableCustomerTour={tenant.onboarding_completed}
+      />
       
       {!tenant.onboarding_completed ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">

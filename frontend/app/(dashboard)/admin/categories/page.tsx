@@ -13,13 +13,9 @@ import type {
 } from "@/services/api/admin.service";
 import {
   adminCreateCatalogCategoryAction,
-  adminCreateTenantProductCategoryAction,
   adminDeleteCatalogCategoryAction,
-  adminDeleteTenantProductCategoryAction,
   adminMoveCatalogCategoryProductsAction,
-  adminMoveTenantProductCategoryProductsAction,
   adminUpdateCatalogCategoryAction,
-  adminUpdateTenantProductCategoryAction,
 } from "@/actions/admin-server";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { resolveImageUrl } from "@/app/(dashboard)/merchant/(features)/products/new/_utils/product-onboarding";
@@ -271,7 +267,6 @@ export default async function AdminCategoriesPage(props: Props) {
     (category) => category.name,
   );
   const catalogMoveTargetOptions = Array.from(new Set(catalogCategoryOptions));
-  const tenantMoveTargetOptions = Array.from(new Set(tenantCategoryOptions));
   const tenantOptions = filteredTenants.map((tenant) => ({
     value: tenant.id,
     label: tenant.name,
@@ -496,7 +491,7 @@ export default async function AdminCategoriesPage(props: Props) {
             تصنيفات منتجات التاجر
           </h2>
           <p className="text-sm text-brand-muted">
-            اختر تاجرًا لإضافة أو تعديل تصنيفاته الخاصة.
+            عرض تصنيفات المنتجات فقط. لنقل منتج، افتح جلسة إدارة المتجر.
           </p>
         </div>
 
@@ -622,30 +617,17 @@ export default async function AdminCategoriesPage(props: Props) {
               </div>
             </form>
 
-            <form
-              action={adminCreateTenantProductCategoryAction.bind(
-                null,
-                selectedTenant.id,
-              )}
-              className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]"
-            >
-              <label className="space-y-1">
-                <span className="text-sm font-medium text-brand-text">
-                  تصنيف جديد لـ {selectedTenant.name}
-                </span>
-                <input
-                  name="name"
-                  required
-                  maxLength={64}
-                  className="h-10 w-full rounded-md border border-brand-border px-3 text-sm"
-                />
-              </label>
-              <div className="flex items-end">
-                <Button type="submit" className="min-h-10 h-10 w-full sm:w-auto">
-                  إضافة
-                </Button>
-              </div>
-            </form>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand-border bg-brand-soft/50 p-4">
+              <p className="text-sm text-brand-text">
+                لإدارة منتجات {selectedTenant.name} ونقل كل منتج على حدة، افتح جلسة إدارة المتجر.
+              </p>
+              <Link
+                href={`/admin/merchants/${selectedTenant.id}`}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-brand-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-primary/90"
+              >
+                إدارة المتجر
+              </Link>
+            </div>
 
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-brand-border">
@@ -657,15 +639,12 @@ export default async function AdminCategoriesPage(props: Props) {
                     <th className="px-4 py-3 text-right text-xs font-medium uppercase text-brand-text">
                       المنتجات
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase text-brand-text">
-                      إجراءات
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-border bg-white">
                   {filteredTenantCategories.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={2} className="px-4 py-8 text-center text-sm text-gray-500">
                         {data.tenantCategories.length === 0
                           ? "لا توجد تصنيفات خاصة بهذا التاجر"
                           : "لا توجد تصنيفات مطابقة للفلاتر"}
@@ -673,12 +652,14 @@ export default async function AdminCategoriesPage(props: Props) {
                     </tr>
                   ) : (
                     filteredTenantCategories.map((category) => (
-                      <TenantCategoryRow
-                        key={category.id}
-                        tenantId={selectedTenant.id}
-                        category={category}
-                        targetCategories={tenantMoveTargetOptions}
-                      />
+                      <tr key={category.id}>
+                        <td className="px-4 py-3 text-sm font-semibold text-brand-text">
+                          {category.name}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-brand-muted">
+                          {category.count}
+                        </td>
+                      </tr>
                     ))
                   )}
                 </tbody>
@@ -799,63 +780,5 @@ function SummaryChips({
         </span>
       ))}
     </div>
-  );
-}
-
-function TenantCategoryRow({
-  tenantId,
-  category,
-  targetCategories,
-}: {
-  tenantId: number;
-  category: AdminTenantProductCategory;
-  targetCategories: string[];
-}) {
-  const canDelete = category.count === 0;
-  const moveTargets = targetCategories.filter((name) => name !== category.name);
-  const canMove = category.count > 0 && moveTargets.length > 0;
-
-  return (
-    <tr>
-      <td className="px-4 py-3 text-sm font-semibold text-brand-text">
-        {category.name}
-      </td>
-      <td className="px-4 py-3 text-sm text-brand-muted">{category.count}</td>
-      <td className="min-w-32 px-4 py-3">
-        <div className="flex items-center justify-end gap-2">
-          <MoveCategoryItemsSheet
-            sourceName={category.name}
-            itemCount={category.count}
-            targetCategories={moveTargets}
-            itemLabel="منتجات"
-            action={adminMoveTenantProductCategoryProductsAction.bind(
-              null,
-              tenantId,
-              category.name,
-            )}
-            disabled={!canMove}
-          />
-          <EditCategorySheet
-            initialName={category.name}
-            action={adminUpdateTenantProductCategoryAction.bind(
-              null,
-              tenantId,
-              category.id,
-            )}
-          />
-          <form
-            action={adminDeleteTenantProductCategoryAction.bind(
-              null,
-              tenantId,
-              category.id,
-            )}
-          >
-            <Button type="submit" size="sm" variant="destructive" disabled={!canDelete}>
-              حذف
-            </Button>
-          </form>
-        </div>
-      </td>
-    </tr>
   );
 }

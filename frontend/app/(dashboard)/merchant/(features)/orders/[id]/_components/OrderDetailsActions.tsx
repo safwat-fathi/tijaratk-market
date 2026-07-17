@@ -151,7 +151,7 @@ export default function OrderDetailsActions({
                 placeholder="سبب الرفض (اختياري)"
                 rows={4}
                 disabled={isPending}
-                className="mt-2 w-full resize-none rounded-xl border border-brand-border bg-white px-3 py-3 text-sm text-brand-text outline-none transition-colors placeholder:text-muted-foreground focus:border-status-error focus:ring-4 focus:ring-status-error/10 disabled:opacity-60"
+                className="mt-2 w-full resize-none rounded-xl border border-brand-border bg-white px-3 py-3 text-sm text-brand-text outline-none transition-colors focus:border-status-error focus:ring-4 focus:ring-status-error/10 disabled:opacity-60"
               />
             </label>
           </div>

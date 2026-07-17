@@ -122,11 +122,12 @@ export default function EditProductSheet({
               {imageActionLabel}
             </span>
             <span className="mt-2 block text-xs text-muted-foreground">
-              JPG أو PNG أو WEBP أو HEIC حتى 15 ميجابايت.
+              التقط صورة بالكاميرا أو اختر صورة من جهازك. JPG أو PNG أو WEBP أو HEIC حتى 15 ميجابايت.
             </span>
             <input
               type="file"
               accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+              capture="environment"
               onChange={onEditImageChange}
               className="sr-only"
             />

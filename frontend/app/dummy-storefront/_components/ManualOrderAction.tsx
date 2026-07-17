@@ -44,7 +44,7 @@ export default function ManualOrderAction() {
             </div>
             
             <textarea 
-              className="w-full bg-[#F7F8F6] border border-outline-variant/30 rounded-xl p-3 font-body-md-ar text-sm resize-none focus:ring-2 focus:ring-accent-green focus:border-transparent outline-none h-24 placeholder:text-outline"
+              className="w-full bg-[#F7F8F6] border border-outline-variant/30 rounded-xl p-3 font-body-md-ar text-sm resize-none focus:ring-2 focus:ring-accent-green focus:border-transparent outline-none h-24"
               placeholder="شريط كاتفلام أو كريم شعر"
             ></textarea>
 

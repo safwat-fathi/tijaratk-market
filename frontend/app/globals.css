@@ -69,6 +69,13 @@
   --animate-pulse-soft: pulseSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+@utility input-placeholder {
+  &::placeholder {
+    color: var(--input-placeholder);
+    opacity: 1;
+  }
+}
+
 @layer base {
   :root {
     --brand-primary: #0F5A3D;
@@ -78,6 +85,7 @@
     --brand-bg: #F7F8F6;
     --brand-text: #222B2E;
     --brand-border: #DDE5E1;
+    --input-placeholder: #65766F;
     --status-new: #2D9CDB;
     --status-confirmed: #27AE60;
     --status-delivery: #F2C94C;
@@ -126,6 +134,7 @@
     --brand-bg: #10221B;
     --brand-text: #F7F8F6;
     --brand-border: #173028;
+    --input-placeholder: #A5B8B0;
 
     --background: 156.7 35.5% 10.2%;
     --foreground: 80 14.3% 96.9%;
@@ -180,6 +189,9 @@
   }
   button, a, input, select, textarea {
     touch-action: manipulation;
+  }
+  input, textarea {
+    @apply input-placeholder;
   }
   input[type="password"],
   input[type="tel"] {

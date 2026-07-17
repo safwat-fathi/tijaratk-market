@@ -121,7 +121,7 @@ export default function CategoryGrid({
               type: "category",
               categorySlug: selectedCategory?.slug ?? "",
             }}
-            inputClassName="w-full rounded-full border border-gray-300 bg-white py-3 pl-6 pr-12 text-base font-medium text-[#222B2E] placeholder-gray-400 shadow-sm focus:border-[#27AE60] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/20"
+            inputClassName="w-full rounded-full border border-gray-300 bg-white py-3 pl-6 pr-12 text-base font-medium text-[#222B2E] shadow-sm focus:border-[#27AE60] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/20"
             iconClassName="h-5 w-5 text-gray-400"
           />
 

@@ -2,6 +2,7 @@ import { TENANT_CATEGORIES, type TenantCategory } from "@/constants";
 import { Tenant } from "@/types/models/tenant";
 import { AppHeader } from "@/components/layout/AppHeader";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
+import CustomerStorefrontOnboarding from "@/components/storefront/CustomerStorefrontOnboarding";
 
 type TenantCategoryMeta =
 	(typeof TENANT_CATEGORIES)[keyof typeof TENANT_CATEGORIES];
@@ -25,14 +26,30 @@ export const resolveTenantCategoryMeta = (
 	}
 };
 
-export default function StoreHeader({ tenant }: { tenant: Tenant }) {
+type StoreHeaderProps = {
+	tenant: Tenant;
+	enableCustomerTour?: boolean;
+};
+
+export default function StoreHeader({
+	tenant,
+	enableCustomerTour = false,
+}: StoreHeaderProps) {
 	const categoryMeta = resolveTenantCategoryMeta(tenant.category);
 
 	return (
 		<AppHeader
 			title={tenant.name}
 			subtitle={categoryMeta.labels.ar}
-			actions={<InstallPwaAction appName={tenant.name} />}
+			actions={
+				<>
+					{enableCustomerTour ? <CustomerStorefrontOnboarding /> : null}
+					<InstallPwaAction
+						appName={tenant.name}
+						id="customer-storefront-pwa-install"
+					/>
+				</>
+			}
 			data-store-header={true}
 			headerClassName="sticky top-0 z-40 rounded-b-xl border-b border-white/10 bg-brand-primary text-white shadow-soft backdrop-blur-md transition-[background-color,box-shadow] duration-200"
 		/>

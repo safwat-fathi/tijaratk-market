@@ -1099,7 +1099,10 @@ export default function ProductList({
 		<>
 			<div className="space-y-4">
 				{onRequestCustomAvailability && (
-					<div className="rounded-2xl border border-dashed border-brand-accent/70 bg-brand-soft/60 p-4 shadow-soft">
+					<div
+						data-customer-tour="missing-product"
+						className="rounded-2xl border border-dashed border-brand-accent/70 bg-brand-soft/60 p-4 shadow-soft"
+					>
 						<p className="text-sm font-bold text-brand-text">مش لاقي المنتج؟</p>
 						<p className="mt-1 text-sm text-muted-foreground">
 							اكتب اسمه وهنبلغ التاجر إنك محتاجه.

@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { adminService } from "@/services/api/admin.service";
+import { ManagedProductCategoryMoveSheet } from "./ManagedProductCategoryMoveSheet";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,18 @@ export default async function ManagedProductsPage({
 }) {
   const { tenantId: tenantIdValue } = await params;
   const tenantId = Number(tenantIdValue);
-  const [sessionResponse, activeResponse, archivedResponse, catalogResponse] = await Promise.all([
+  const [
+    sessionResponse,
+    activeResponse,
+    archivedResponse,
+    catalogResponse,
+    categoriesResponse,
+  ] = await Promise.all([
     adminService.getCurrentManagementSession(),
     adminService.getManagedProducts(tenantId, "active"),
     adminService.getManagedProducts(tenantId, "archived"),
     adminService.getManagedCatalog(tenantId, 24),
+    adminService.getManagedProductCategories(tenantId),
   ]);
   if (!sessionResponse.data || !activeResponse.success || !archivedResponse.success) {
     redirect(`/api/auth/admin/managed-session/revoke?redirect=${encodeURIComponent(`/admin/merchants/${tenantId}`)}`);
@@ -33,6 +41,9 @@ export default async function ManagedProductsPage({
   const permissions = new Set(sessionResponse.data.permissions);
   const products = [...(activeResponse.data || []), ...(archivedResponse.data || [])];
   const catalogItems = catalogResponse.success ? catalogResponse.data?.data || [] : [];
+  const productCategories = categoriesResponse.success
+    ? categoriesResponse.data || []
+    : [];
 
   return (
     <div className="space-y-6">
@@ -91,11 +102,15 @@ export default async function ManagedProductsPage({
                 <tr key={product.id}>
                   <td className="px-4 py-3">
                     {permissions.has("products.update") ? (
-                      <form action={updateManagedProductDetailsAction.bind(null, tenantId, product.id)} className="space-y-2">
-                        <input name="name" required maxLength={120} defaultValue={product.name} className="block w-44 rounded-md border border-gray-300 px-2 py-1 font-semibold" />
-                        <input name="category" maxLength={64} defaultValue={product.category || ""} placeholder="التصنيف" className="block w-44 rounded-md border border-gray-300 px-2 py-1 text-xs" />
-                        <Button type="submit" size="sm" variant="outline">حفظ البيانات</Button>
-                      </form>
+                      <>
+                        <form action={updateManagedProductDetailsAction.bind(null, tenantId, product.id)} className="space-y-2">
+                          <input name="name" required maxLength={120} defaultValue={product.name} className="block w-44 rounded-md border border-gray-300 px-2 py-1 font-semibold" />
+                          <Button type="submit" size="sm" variant="outline">حفظ البيانات</Button>
+                        </form>
+                        <p className="mt-2 text-xs text-gray-500">
+                          {product.category || "بدون تصنيف"}
+                        </p>
+                      </>
                     ) : (
                       <>
                         <p className="font-semibold text-gray-900">{product.name}</p>
@@ -115,6 +130,15 @@ export default async function ManagedProductsPage({
                   <td className="px-4 py-3">{product.status}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
+                      {permissions.has("products.update") ? (
+                        <ManagedProductCategoryMoveSheet
+                          tenantId={tenantId}
+                          productId={product.id}
+                          productName={product.name}
+                          currentCategory={product.category || ""}
+                          categories={productCategories}
+                        />
+                      ) : null}
                       {permissions.has("products.update_availability") ? (
                         <form action={updateManagedProductAvailabilityAction.bind(null, tenantId, product.id, !product.is_available)}>
                           <Button type="submit" size="sm" variant="outline">{product.is_available ? "إخفاء" : "إتاحة"}</Button>

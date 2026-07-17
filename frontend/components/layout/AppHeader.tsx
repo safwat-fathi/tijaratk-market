@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClipboardList } from "lucide-react";
 import type { ReactNode } from "react";
 import SafeImage from "@/components/ui/SafeImage";
 
@@ -52,10 +53,12 @@ export function AppHeader({
           {actions}
           <Link
             href="/track-orders"
-            className="flex min-h-11 items-center justify-center rounded-md border border-white/30 bg-white/10 p-2.5 text-white backdrop-blur transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
+            data-customer-tour="tracking"
+            className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-md border border-white/30 bg-white/10 p-2.5 text-white backdrop-blur transition-colors hover:bg-white/20 active:bg-white/25 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30 sm:gap-2 sm:px-3"
             aria-label="تتبع طلباتي"
           >
-            تتبع طلباتي
+            <ClipboardList className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span className="sr-only sm:not-sr-only">تتبع طلباتي</span>
           </Link>
         </div>
       </div>

@@ -46,6 +46,13 @@ const MIN_PRODUCT_CATEGORIES_FOR_READINESS = 5;
 const COMPLETE_READINESS_SCORE = 70;
 const PARTIAL_READINESS_SCORE = 40;
 
+const AREA_HIERARCHY_ERRORS = {
+  parentNotFound: 'AREA_PARENT_NOT_FOUND',
+  parentMustBeMain: 'AREA_PARENT_MUST_BE_MAIN',
+  selfReference: 'AREA_PARENT_SELF_REFERENCE',
+  hasChildren: 'AREA_HAS_CHILDREN',
+} as const;
+
 type DirectoryCategorySlug = (typeof CATEGORY_DEFINITIONS)[number]['slug'];
 
 type StoreCardTenant = {
@@ -438,6 +445,10 @@ export class StoresDirectoryService {
    * Creates a directory area.
    */
   async adminCreateArea(dto: CreateDirectoryAreaDto) {
+    if (dto.parent_area_id != null) {
+      await this.requireMainAreaParent(dto.parent_area_id);
+    }
+
     return this.prisma.directoryArea.create({
       data: this.toCreateAreaData(dto),
     });
@@ -448,6 +459,22 @@ export class StoresDirectoryService {
    */
   async adminUpdateArea(id: number, dto: UpdateDirectoryAreaDto) {
     await this.ensureAreaExists(id);
+
+    if (dto.parent_area_id !== undefined && dto.parent_area_id !== null) {
+      const [, childAreaCount] = await Promise.all([
+        this.requireMainAreaParent(dto.parent_area_id, id),
+        this.prisma.directoryArea.count({
+          where: { parent_area_id: id, deleted_at: null },
+        }),
+      ]);
+
+      if (childAreaCount > 0) {
+        this.throwAreaHierarchyError(
+          AREA_HIERARCHY_ERRORS.hasChildren,
+          'Move or promote this area\'s children before assigning it to a main area',
+        );
+      }
+    }
 
     return this.prisma.directoryArea.update({
       where: { id },
@@ -471,14 +498,24 @@ export class StoresDirectoryService {
   async adminDeleteArea(id: number) {
     await this.ensureAreaExists(id);
 
-    const [profileCount, deliveryAreaCount] = await Promise.all([
+    const [profileCount, deliveryAreaCount, childAreaCount] = await Promise.all([
       this.prisma.tenantDirectoryProfile.count({
         where: { area_id: id },
       }),
       this.prisma.tenantDeliveryArea.count({
         where: { area_id: id },
       }),
+      this.prisma.directoryArea.count({
+        where: { parent_area_id: id, deleted_at: null },
+      }),
     ]);
+
+    if (childAreaCount > 0) {
+      this.throwAreaHierarchyError(
+        AREA_HIERARCHY_ERRORS.hasChildren,
+        'Move or promote this area\'s children before deleting the main area',
+      );
+    }
 
     if (profileCount > 0 || deliveryAreaCount > 0) {
       throw new BadRequestException(
@@ -705,6 +742,38 @@ export class StoresDirectoryService {
     if (!area) {
       throw new NotFoundException('Directory area not found');
     }
+  }
+
+  private async requireMainAreaParent(parentAreaId: number, areaId?: number) {
+    if (areaId === parentAreaId) {
+      this.throwAreaHierarchyError(
+        AREA_HIERARCHY_ERRORS.selfReference,
+        'An area cannot be its own main area',
+      );
+    }
+
+    const parentArea = await this.prisma.directoryArea.findFirst({
+      where: { id: parentAreaId, deleted_at: null },
+      select: { id: true, parent_area_id: true },
+    });
+
+    if (!parentArea) {
+      this.throwAreaHierarchyError(
+        AREA_HIERARCHY_ERRORS.parentNotFound,
+        'Main area not found',
+      );
+    }
+
+    if (parentArea.parent_area_id !== null) {
+      this.throwAreaHierarchyError(
+        AREA_HIERARCHY_ERRORS.parentMustBeMain,
+        'The selected parent must be a main area',
+      );
+    }
+  }
+
+  private throwAreaHierarchyError(code: string, message: string): never {
+    throw new BadRequestException({ code, message });
   }
 
   private resolveCategory(slug: string) {
@@ -1052,7 +1121,7 @@ export class StoresDirectoryService {
       name_ar: dto.name_ar.trim(),
       name_en: this.normalizeOptionalText(dto.name_en, 120),
       slug: dto.slug.trim(),
-      parent_area_id: dto.parent_area_id,
+      parent_area_id: dto.parent_area_id ?? null,
       city: this.normalizeOptionalText(dto.city, 120),
       governorate: this.normalizeOptionalText(dto.governorate, 120),
       is_active: dto.is_active ?? true,

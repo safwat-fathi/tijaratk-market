@@ -50,7 +50,7 @@ export default function AreaAutocomplete({
   areas,
   destination,
   placeholder = "ابحث عن منطقتك...",
-  inputClassName = "w-full rounded-full border border-gray-300 bg-white py-4 pl-6 pr-14 text-lg font-medium text-[#222B2E] shadow-sm placeholder-gray-400 focus:border-[#27AE60] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/20",
+  inputClassName = "w-full rounded-full border border-gray-300 bg-white py-4 pl-6 pr-14 text-lg font-medium text-[#222B2E] shadow-sm focus:border-[#27AE60] focus:outline-none focus:ring-2 focus:ring-[#27AE60]/20",
   iconClassName = "h-6 w-6 text-gray-400",
   emptyMessage = "لا توجد منطقة بهذا الاسم",
 }: Props) {

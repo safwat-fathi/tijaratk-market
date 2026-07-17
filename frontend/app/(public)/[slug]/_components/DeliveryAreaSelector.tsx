@@ -38,7 +38,7 @@ export default function DeliveryAreaSelector({
 
   return (
     <>
-      <div className="px-4 pt-4">
+      <div className="px-4 pt-4" data-customer-tour="delivery-area">
         <button
           type="button"
           onClick={() => onOpenChange(true)}
@@ -74,6 +74,10 @@ export default function DeliveryAreaSelector({
             aria-hidden="true"
           />
         </button>
+        <p className="mt-2 px-1 text-xs leading-5 text-muted-foreground">
+          اختار منطقتك الفعلية أو أقرب منطقة متاحة لعنوانك لحساب التوصيل بشكل
+          صحيح.
+        </p>
       </div>
 
       <BottomSheet

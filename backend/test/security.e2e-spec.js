@@ -413,15 +413,44 @@ describe('Security E2E (multi-tenant)', () => {
       .set('Cookie', switchedCookie)
       .expect(403);
 
+    const sourceCategory = `E2E Source ${runId}`;
+    const targetCategory = `E2E Target ${runId}`;
     const mutationRequestId = `managed-product-${runId}`;
     const createdProductResponse = await request(httpServer)
       .post(`/admin/managed-tenants/${tenantAId}/products`)
       .set('Authorization', `Bearer ${operationsAdminToken}`)
       .set('Cookie', switchedCookie)
       .set('X-Request-Id', mutationRequestId)
-      .send({ name: `Managed product ${runId}`, current_price: 18.5 })
+      .send({
+        name: `Managed product ${runId}`,
+        category: sourceCategory,
+        current_price: 18.5,
+      })
       .expect(201);
     const managedProduct = unwrapBody(createdProductResponse.body);
+
+    const unchangedSourceResponse = await request(httpServer)
+      .post(`/admin/managed-tenants/${tenantAId}/products`)
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .set('Cookie', switchedCookie)
+      .send({
+        name: `Unchanged source product ${runId}`,
+        category: sourceCategory,
+        current_price: 19.5,
+      })
+      .expect(201);
+    const unchangedSourceProduct = unwrapBody(unchangedSourceResponse.body);
+
+    await request(httpServer)
+      .post(`/admin/managed-tenants/${tenantAId}/products`)
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .set('Cookie', switchedCookie)
+      .send({
+        name: `Target category product ${runId}`,
+        category: targetCategory,
+        current_price: 20.5,
+      })
+      .expect(201);
 
     const activityResponse = await request(httpServer)
       .get(`/admin/managed-tenants/${tenantAId}/activity-logs?limit=50`)
@@ -468,6 +497,39 @@ describe('Security E2E (multi-tenant)', () => {
     );
     expect(JSON.stringify(matchingAuditItems[0].metadata)).not.toMatch(
       /password|token|cookie/i,
+    );
+
+    const categoryMoveRequestId = `managed-product-category-move-${runId}`;
+    await request(httpServer)
+      .patch(
+        `/admin/managed-tenants/${tenantAId}/products/${managedProduct.id}/details`,
+      )
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .set('Cookie', switchedCookie)
+      .set('X-Request-Id', categoryMoveRequestId)
+      .send({ category: targetCategory })
+      .expect(200);
+
+    const [movedProduct, unchangedProduct] = await Promise.all([
+      prisma.product.findUniqueOrThrow({ where: { id: managedProduct.id } }),
+      prisma.product.findUniqueOrThrow({
+        where: { id: unchangedSourceProduct.id },
+      }),
+    ]);
+    expect(movedProduct.category).toBe(targetCategory);
+    expect(unchangedProduct.category).toBe(sourceCategory);
+
+    const categoryMoveActivity = await prisma.activityLog.findFirstOrThrow({
+      where: { request_id: categoryMoveRequestId },
+    });
+    expect(categoryMoveActivity).toEqual(
+      expect.objectContaining({
+        actor_admin_id: operationsAdmin.id,
+        management_session_id: switchedSession.session.id,
+        action: 'product.updated',
+        old_values: expect.objectContaining({ category: sourceCategory }),
+        new_values: expect.objectContaining({ category: targetCategory }),
+      }),
     );
 
     await prisma.adminUser.update({
