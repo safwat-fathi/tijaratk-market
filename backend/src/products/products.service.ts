@@ -31,8 +31,7 @@ import {
   CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
   CatalogSource,
-  getAllowedCatalogCategoriesForSource,
-  isCatalogCategoryAllowedForSource,
+  findActiveCatalogCategoryNamesForSource,
   resolveCatalogSourceForTenantCategory,
 } from './catalog-source-policy';
 import { arabicNormalize } from './utils/arabic-normalize.util';
@@ -534,6 +533,10 @@ export class ProductsService {
         `Catalog item with ID ${payload.catalog_item_id} not found`,
       );
     }
+    const activeCategories = await findActiveCatalogCategoryNamesForSource(
+      this.getPrismaClient(),
+      catalogSource,
+    );
 
     const catalogItem = await this.getPrismaClient().catalogItem.findFirst({
       where: {
@@ -552,7 +555,7 @@ export class ProductsService {
     const catalogCategory = catalogItem.category?.trim();
     if (
       !catalogCategory ||
-      !isCatalogCategoryAllowedForSource(catalogSource, catalogCategory)
+      !activeCategories.includes(catalogCategory)
     ) {
       throw new BadRequestException(
         `Catalog item with ID ${payload.catalog_item_id} has invalid category`,
@@ -704,12 +707,18 @@ export class ProductsService {
     if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
       return [];
     }
+    const activeCategories = await findActiveCatalogCategoryNamesForSource(
+      this.getPrismaClient(),
+      catalogSource,
+    );
 
     const catalogItems = await this.getPrismaClient().catalogItem.findMany({
       where: {
         source: catalogSource,
         is_active: true,
         is_essential: true,
+        deleted_at: null,
+        category: { in: activeCategories },
       },
       orderBy: [
         { category: 'asc' },
@@ -768,12 +777,19 @@ export class ProductsService {
             'Essential bulk import is only supported for supermarket tenants.',
           );
         }
+        const activeCategories =
+          await findActiveCatalogCategoryNamesForSource(
+            this.getPrismaClient(),
+            catalogSource,
+          );
 
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
           where: {
             source: catalogSource,
             is_active: true,
             is_essential: true,
+            deleted_at: null,
+            category: { in: activeCategories },
           },
           orderBy: [
             { category: 'asc' },
@@ -807,13 +823,22 @@ export class ProductsService {
             'Essential bulk import is only supported for supermarket tenants.',
           );
         }
+        const activeCategories =
+          await findActiveCatalogCategoryNamesForSource(
+            this.getPrismaClient(),
+            catalogSource,
+          );
+        const selectedActiveCategories = categories.filter((category) =>
+          activeCategories.includes(category),
+        );
 
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
           where: {
             source: catalogSource,
             is_active: true,
             is_essential: true,
-            category: { in: categories },
+            deleted_at: null,
+            category: { in: selectedActiveCategories },
           },
           orderBy: [
             { category: 'asc' },
@@ -845,6 +870,16 @@ export class ProductsService {
             'Essential bulk import is only supported for supermarket tenants.',
           );
         }
+        const activeCategories =
+          await findActiveCatalogCategoryNamesForSource(
+            this.getPrismaClient(),
+            catalogSource,
+          );
+        if (!activeCategories.includes(category)) {
+          throw new BadRequestException(
+            'One or more selected catalog items are invalid for this category.',
+          );
+        }
 
         const catalogItems = await this.getPrismaClient().catalogItem.findMany({
           where: {
@@ -852,6 +887,7 @@ export class ProductsService {
             source: catalogSource,
             is_active: true,
             is_essential: true,
+            deleted_at: null,
             category,
           },
         });
@@ -2778,17 +2814,10 @@ export class ProductsService {
   private async getActiveCatalogCategoryNames(
     source: CatalogSource,
   ): Promise<string[]> {
-    const rows = await this.getPrismaClient().catalogCategory.findMany({
-      where: { source, deleted_at: null },
-      select: { name: true },
-      orderBy: { name: 'asc' },
-    });
-
-    if (rows.length > 0) {
-      return rows.map((row) => row.name);
-    }
-
-    return getAllowedCatalogCategoriesForSource(source);
+    return findActiveCatalogCategoryNamesForSource(
+      this.getPrismaClient(),
+      source,
+    );
   }
 
   private async searchWithinCatalogItems(

@@ -26,7 +26,7 @@ import { PricingMode } from 'src/common/enums/pricing-mode.enum';
 import { CreateOrderDto } from 'src/orders/dto/create-order.dto';
 import { OrdersService } from 'src/orders/orders.service';
 import {
-  getAllowedCatalogCategoriesForSource,
+  findActiveCatalogCategoryNamesForSource,
   resolveCatalogSourceForTenantCategory,
 } from 'src/products/catalog-source-policy';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -92,7 +92,10 @@ export class OrderDispatchService {
         throw new BadRequestException('Unsupported zone category');
       }
       const allowedCategories =
-        getAllowedCatalogCategoriesForSource(catalogSource);
+        await findActiveCatalogCategoryNamesForSource(
+          this.prisma,
+          catalogSource,
+        );
       if (
         (dto.items ?? []).some((item) => typeof item.product_id !== 'number')
       ) {
@@ -668,7 +671,10 @@ export class OrderDispatchService {
       operatorTenant.category,
     );
     const allowedCategories = catalogSource
-      ? getAllowedCatalogCategoriesForSource(catalogSource)
+      ? await findActiveCatalogCategoryNamesForSource(
+          this.prisma,
+          catalogSource,
+        )
       : [];
     const normalizedSearch = search?.trim().slice(0, 120);
 
@@ -1072,6 +1078,15 @@ export class OrderDispatchService {
     );
     const operatorTenantId =
       assignment.order_dispatch.zone_storefront.operator_tenant_id;
+    const catalogSource = resolveCatalogSourceForTenantCategory(
+      assignment.order_dispatch.zone_storefront.operator_tenant.category,
+    );
+    const allowedCategories = catalogSource
+      ? await findActiveCatalogCategoryNamesForSource(
+          this.prisma,
+          catalogSource,
+        )
+      : [];
     const savedItem = await this.zoneStorefrontsService.runInOperatorTenant(
       operatorTenantId,
       async (manager) => {
@@ -1081,12 +1096,6 @@ export class OrderDispatchService {
           orderItemId,
         );
         if (dto.replacement_product_id) {
-          const catalogSource = resolveCatalogSourceForTenantCategory(
-            assignment.order_dispatch.zone_storefront.operator_tenant.category,
-          );
-          const allowedCategories = catalogSource
-            ? getAllowedCatalogCategoriesForSource(catalogSource)
-            : [];
           const replacement = await manager.product.findFirst({
             where: {
               id: dto.replacement_product_id,

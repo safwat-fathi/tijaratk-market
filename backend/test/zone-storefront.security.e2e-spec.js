@@ -646,6 +646,146 @@ describe('Zone storefront security E2E', () => {
     );
   });
 
+  it('uses exact active system categories and archives retired category products', async () => {
+    const fixture = grocery;
+    const activeCategory = `تصنيف حالي ${runId}`;
+    const retiredCategory = `تصنيف محذوف ${runId}`;
+    const activeCatalogItem = await prisma.catalogItem.create({
+      data: {
+        name: `Current taxonomy essential ${runId}`,
+        category: activeCategory,
+        source: fixture.catalogSource,
+        external_id: `zone-current-taxonomy-${runId}`,
+        is_active: true,
+        is_essential: true,
+        price: 21,
+      },
+    });
+    const retiredCatalogItem = await prisma.catalogItem.create({
+      data: {
+        name: `Retired taxonomy essential ${runId}`,
+        category: retiredCategory,
+        source: fixture.catalogSource,
+        external_id: `zone-retired-taxonomy-${runId}`,
+        is_active: true,
+        is_essential: true,
+        price: 22,
+      },
+    });
+    await prisma.catalogCategory.createMany({
+      data: [
+        { source: fixture.catalogSource, name: activeCategory },
+        { source: fixture.catalogSource, name: retiredCategory },
+      ],
+    });
+
+    try {
+      await request(httpServer)
+        .post(`/admin/zones/${fixture.zone.id}/catalog/sync-essentials`)
+        .set('Authorization', `Bearer ${platformAdminToken}`)
+        .send({})
+        .expect(201);
+
+      const initiallySynced = await withTenant(
+        prisma,
+        fixture.zone.operator_tenant.id,
+        (tx) =>
+          tx.product.findMany({
+            where: {
+              tenant_id: fixture.zone.operator_tenant.id,
+              catalog_item_id: {
+                in: [activeCatalogItem.id, retiredCatalogItem.id],
+              },
+            },
+          }),
+      );
+      expect(initiallySynced).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            catalog_item_id: activeCatalogItem.id,
+            category: activeCategory,
+            status: 'active',
+          }),
+          expect.objectContaining({
+            catalog_item_id: retiredCatalogItem.id,
+            category: retiredCategory,
+            status: 'active',
+          }),
+        ]),
+      );
+
+      await prisma.catalogCategory.update({
+        where: {
+          source_name: {
+            source: fixture.catalogSource,
+            name: retiredCategory,
+          },
+        },
+        data: { deleted_at: new Date() },
+      });
+
+      const syncResponse = await request(httpServer)
+        .post(`/admin/zones/${fixture.zone.id}/catalog/sync-essentials`)
+        .set('Authorization', `Bearer ${platformAdminToken}`)
+        .send({})
+        .expect(201);
+      expect(unwrapBody(syncResponse.body).archived).toBeGreaterThanOrEqual(1);
+
+      const reconciled = await withTenant(
+        prisma,
+        fixture.zone.operator_tenant.id,
+        (tx) =>
+          tx.product.findMany({
+            where: {
+              tenant_id: fixture.zone.operator_tenant.id,
+              catalog_item_id: {
+                in: [activeCatalogItem.id, retiredCatalogItem.id],
+              },
+            },
+          }),
+      );
+      expect(reconciled).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            catalog_item_id: activeCatalogItem.id,
+            category: activeCategory,
+            status: 'active',
+          }),
+          expect.objectContaining({
+            catalog_item_id: retiredCatalogItem.id,
+            status: 'archived',
+            is_available: false,
+          }),
+        ]),
+      );
+
+      const categoriesResponse = await request(httpServer)
+        .get(`/zone-storefronts/public/${fixture.zone.slug}/categories`)
+        .expect(200);
+      const publicCategoryNames = unwrapBody(categoriesResponse.body).map(
+        (category) => category.category,
+      );
+      expect(publicCategoryNames).toContain(activeCategory);
+      expect(publicCategoryNames).not.toContain(retiredCategory);
+    } finally {
+      await prisma.catalogItem.updateMany({
+        where: { id: { in: [activeCatalogItem.id, retiredCatalogItem.id] } },
+        data: { is_active: false, is_essential: false },
+      });
+      await prisma.catalogCategory.deleteMany({
+        where: {
+          source: fixture.catalogSource,
+          name: { in: [activeCategory, retiredCategory] },
+        },
+      });
+      await request(httpServer)
+        .post(`/admin/zones/${fixture.zone.id}/catalog/sync-essentials`)
+        .set('Authorization', `Bearer ${platformAdminToken}`)
+        .send({})
+        .expect(201);
+    }
+  });
+
   it('creates checkout and dispatch atomically from trusted zone data', async () => {
     const fixture = grocery;
     const merchant = fixture.merchants[0];
