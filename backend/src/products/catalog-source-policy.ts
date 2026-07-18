@@ -1,4 +1,7 @@
-import { TenantCategory } from '../../generated/prisma/client';
+import {
+  TenantCategory,
+  type PrismaClient,
+} from '../../generated/prisma/client';
 
 export const CATALOG_SOURCE_TALABAT = 'talabat_csv';
 export const CATALOG_SOURCE_CHEFAA = 'chefaa_csv';
@@ -346,6 +349,26 @@ export function getAllowedCatalogCategoriesForSource(source: string): string[] {
   }
 
   return [];
+}
+
+type CatalogCategoryReader = Pick<PrismaClient, 'catalogCategory'>;
+
+/**
+ * Returns the exact active taxonomy configured by administrators for one
+ * catalog source. Persisted categories are authoritative; legacy constants
+ * are intentionally not used as a fallback when the active set is empty.
+ */
+export async function findActiveCatalogCategoryNamesForSource(
+  client: CatalogCategoryReader,
+  source: CatalogSource,
+): Promise<string[]> {
+  const rows = await client.catalogCategory.findMany({
+    where: { source, deleted_at: null },
+    select: { name: true },
+    orderBy: { name: 'asc' },
+  });
+
+  return rows.map((row) => row.name);
 }
 
 export function resolveCatalogSourceForImportFormat(

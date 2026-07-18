@@ -10,8 +10,7 @@ import type {
 } from '../../generated/prisma/client';
 import {
   CATALOG_SOURCE_CHEFAA,
-  CATALOG_SOURCE_TALABAT,
-  normalizeCatalogCategoryForSource,
+  findActiveCatalogCategoryNamesForSource,
   type CatalogSource,
 } from 'src/products/catalog-source-policy';
 
@@ -31,7 +30,7 @@ export type ZoneEssentialCatalogSyncResult = {
   catalog_in_sync: boolean;
 };
 
-type CatalogReader = Pick<PrismaClient, 'catalogItem'>;
+type CatalogReader = Pick<PrismaClient, 'catalogCategory' | 'catalogItem'>;
 
 /**
  * Reads every curated essential row for one catalog source. Catalog IDs are
@@ -41,12 +40,19 @@ export async function findZoneEssentialCatalogItems(
   client: CatalogReader,
   source: CatalogSource,
 ): Promise<ZoneEssentialCatalogItem[]> {
+  const activeCategories = await findActiveCatalogCategoryNamesForSource(
+    client,
+    source,
+  );
+  if (activeCategories.length === 0) return [];
+
   const rows = await client.catalogItem.findMany({
     where: {
       source,
       is_active: true,
       is_essential: true,
       deleted_at: null,
+      category: { in: activeCategories },
     },
     select: {
       id: true,
@@ -65,13 +71,7 @@ export async function findZoneEssentialCatalogItems(
 
   return rows.map((row) => {
     const name = row.name.trim();
-    const normalizedCategory = normalizeCatalogCategoryForSource(
-      source,
-      row.category,
-    );
-    const category =
-      normalizedCategory ??
-      (source === CATALOG_SOURCE_TALABAT ? 'أخرى' : null);
+    const category = row.category.trim();
 
     if (!name || !category) {
       throw new Error(

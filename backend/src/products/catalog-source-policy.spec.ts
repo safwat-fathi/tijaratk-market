@@ -1,6 +1,7 @@
 import {
   CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
+  findActiveCatalogCategoryNamesForSource,
   isCatalogImageReferenceAllowedForSource,
   normalizeCatalogCategoryForSource,
 } from './catalog-source-policy';
@@ -110,6 +111,35 @@ describe('catalog image source policy', () => {
 });
 
 describe('catalog category source policy', () => {
+  it('returns exact active persisted category names without legacy fallback', async () => {
+    const findMany = jest
+      .fn()
+      .mockResolvedValue([{ name: 'أرز ومكرونة وحبوب' }, { name: 'تمر' }]);
+
+    await expect(
+      findActiveCatalogCategoryNamesForSource(
+        { catalogCategory: { findMany } } as never,
+        CATALOG_SOURCE_TALABAT,
+      ),
+    ).resolves.toEqual(['أرز ومكرونة وحبوب', 'تمر']);
+    expect(findMany).toHaveBeenCalledWith({
+      where: { source: CATALOG_SOURCE_TALABAT, deleted_at: null },
+      select: { name: true },
+      orderBy: { name: 'asc' },
+    });
+  });
+
+  it('returns no categories when the persisted active taxonomy is empty', async () => {
+    await expect(
+      findActiveCatalogCategoryNamesForSource(
+        {
+          catalogCategory: { findMany: jest.fn().mockResolvedValue([]) },
+        } as never,
+        CATALOG_SOURCE_TALABAT,
+      ),
+    ).resolves.toEqual([]);
+  });
+
   it.each(['أرز ومكرونة وحبوب', 'ارز ومكرونة وحبوب', 'ارز ومكرونة'])(
     'normalizes the legacy grocery alias %s',
     (category) => {

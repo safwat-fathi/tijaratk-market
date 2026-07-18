@@ -22,7 +22,7 @@ import {
 import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import {
   CatalogSource,
-  getAllowedCatalogCategoriesForSource,
+  findActiveCatalogCategoryNamesForSource,
   resolveCatalogSourceForTenantCategory,
   TENANT_CATEGORIES_WITH_CATALOG_SOURCE,
 } from 'src/products/catalog-source-policy';
@@ -796,7 +796,10 @@ export class ZoneStorefrontsService {
       zone.operator_tenant.category,
     );
     const allowedCategories =
-      getAllowedCatalogCategoriesForSource(catalogSource);
+      await findActiveCatalogCategoryNamesForSource(
+        this.prisma,
+        catalogSource,
+      );
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
     const search = query.search?.trim();
@@ -864,7 +867,10 @@ export class ZoneStorefrontsService {
       zone.operator_tenant.category,
     );
     const allowedCategories =
-      getAllowedCatalogCategoriesForSource(catalogSource);
+      await findActiveCatalogCategoryNamesForSource(
+        this.prisma,
+        catalogSource,
+      );
     const rows = await this.runInOperatorTenant(
       zone.operator_tenant_id,
       (manager) =>
@@ -1030,7 +1036,10 @@ export class ZoneStorefrontsService {
       zone.operator_tenant.category,
     );
     const allowedCategories =
-      getAllowedCatalogCategoriesForSource(catalogSource);
+      await findActiveCatalogCategoryNamesForSource(
+        this.prisma,
+        catalogSource,
+      );
     const requiredProducts = MIN_SYNCHRONIZED_ZONE_PRODUCTS;
     const requiredDeliveryAreas = zone.area.child_areas.length;
     const configuredDeliveryAreas = zone.area.child_areas.filter((childArea) =>
@@ -1054,6 +1063,7 @@ export class ZoneStorefrontsService {
             is_essential: true,
             is_active: true,
             deleted_at: null,
+            category: { in: allowedCategories },
           },
         }),
         this.runInOperatorTenant(zone.operator_tenant_id, (manager) =>
