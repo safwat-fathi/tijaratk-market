@@ -162,48 +162,56 @@ export default function ProductsClientView({
           </div>
         </div>
 
-        <div className="overflow-x-auto relative">
-          {/* Bulk Actions Toolbar */}
-          {selectedIds.size > 0 && permissions.has("products.update") && (
-            <div className="absolute top-0 left-0 right-0 z-10 bg-brand-soft border-b border-brand-accent/20 px-4 py-2 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+        {/* Bulk Actions Toolbar */}
+        {selectedIds.size > 0 && permissions.has("products.update") && (
+          <div className="bg-brand-soft border-b border-brand-accent/20 px-4 py-2 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-3">
               <span className="text-sm font-medium text-brand-text">
                 تم تحديد {selectedIds.size} عنصر
               </span>
-              <div className="flex gap-2">
+              <button 
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-brand-text/70 hover:text-brand-text underline transition-colors"
+              >
+                إلغاء التحديد
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="h-8 text-xs bg-white"
+                disabled={isPending}
+                onClick={() => setIsCategoryModalOpen(true)}
+              >
+                نقل لتصنيف
+              </Button>
+              {permissions.has("products.update_availability") && (
+                <>
+                  <Button size="sm" variant="outline" className="h-8 text-xs bg-white" disabled={isPending} onClick={() => handleBulkAction({ is_available: true })}>
+                    إتاحة
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs bg-white" disabled={isPending} onClick={() => handleBulkAction({ is_available: false })}>
+                    إخفاء
+                  </Button>
+                </>
+              )}
+              {permissions.has("products.archive") && (
                 <Button 
                   size="sm" 
                   variant="outline" 
                   className="h-8 text-xs bg-white"
                   disabled={isPending}
-                  onClick={() => setIsCategoryModalOpen(true)}
+                  onClick={() => handleBulkAction({ status: currentStatus === "active" ? "archived" : "active" })}
                 >
-                  نقل لتصنيف
+                  {currentStatus === "active" ? "أرشفة" : "استعادة"}
                 </Button>
-                {permissions.has("products.update_availability") && (
-                  <>
-                    <Button size="sm" variant="outline" className="h-8 text-xs bg-white" disabled={isPending} onClick={() => handleBulkAction({ is_available: true })}>
-                      إتاحة
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-xs bg-white" disabled={isPending} onClick={() => handleBulkAction({ is_available: false })}>
-                      إخفاء
-                    </Button>
-                  </>
-                )}
-                {permissions.has("products.archive") && (
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    className="h-8 text-xs bg-white"
-                    disabled={isPending}
-                    onClick={() => handleBulkAction({ status: currentStatus === "active" ? "archived" : "active" })}
-                  >
-                    {currentStatus === "active" ? "أرشفة" : "استعادة"}
-                  </Button>
-                )}
-              </div>
+              )}
             </div>
-          )}
+          </div>
+        )}
 
+        <div className="overflow-x-auto relative">
           <table className="min-w-full divide-y divide-gray-100 text-sm">
             <thead className="bg-gray-50/50 text-right text-xs text-gray-500 font-medium">
               <tr>
