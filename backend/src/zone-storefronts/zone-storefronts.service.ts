@@ -29,6 +29,7 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateZoneStorefrontDto,
+  UpdateZoneDeliveryFeesDto,
   UpdateZoneStorefrontActivationDto,
   UpsertZoneStorefrontMerchantDto,
 } from './dto/zone-storefront.dto';
@@ -69,6 +70,9 @@ type PublicProductQuery = {
 
 type ZoneReadiness = {
   catalog_ready: boolean;
+  delivery_fees_ready: boolean;
+  required_delivery_areas: number;
+  configured_delivery_areas: number;
   active_products: number;
   essential_catalog_products: number;
   catalog_in_sync: boolean;
@@ -81,6 +85,7 @@ type ZoneReadiness = {
 const ZONE_ACTIVATION_BLOCKERS = {
   operatorNotReady: 'ZONE_OPERATOR_NOT_READY',
   catalogNotReady: 'ZONE_CATALOG_NOT_READY',
+  deliveryFeesNotReady: 'ZONE_DELIVERY_FEES_NOT_READY',
   noEligibleMerchant: 'ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT',
 } as const;
 
@@ -122,6 +127,17 @@ type AdminZoneRecord = {
     name_en: string | null;
     slug: string;
     is_active: boolean;
+    child_areas: Array<{
+      id: number;
+      name_ar: string;
+      name_en: string | null;
+      slug: string;
+      parent_area_id: number | null;
+      city: string | null;
+      governorate: string | null;
+      is_active: boolean;
+      sort_order: number;
+    }>;
   };
   operator_tenant: {
     id: number;
@@ -134,6 +150,17 @@ type AdminZoneRecord = {
       area_id: number;
       delivery_fee: Prisma.Decimal;
       is_active: boolean;
+      area: {
+        id: number;
+        name_ar: string;
+        name_en: string | null;
+        slug: string;
+        parent_area_id: number | null;
+        city: string | null;
+        governorate: string | null;
+        is_active: boolean;
+        sort_order: number;
+      };
     }>;
   };
   merchants?: Array<{
@@ -181,12 +208,23 @@ export class ZoneStorefrontsService {
     const [area, conflict] = await Promise.all([
       this.prisma.directoryArea.findFirst({
         where: { id: dto.area_id, is_active: true, deleted_at: null },
-        select: { id: true },
+        select: {
+          id: true,
+          child_areas: {
+            where: { is_active: true, deleted_at: null },
+            select: { id: true },
+          },
+        },
       }),
       this.findCreateConflict(dto.area_id, dto.category, slug),
     ]);
 
     if (!area) throw new NotFoundException('Directory area not found');
+    if (area.child_areas.length === 0) {
+      throw new BadRequestException(
+        'يجب اختيار منطقة رئيسية تحتوي على مناطق توصيل فرعية نشطة.',
+      );
+    }
     if (conflict) this.throwCreateConflict(conflict, dto.category);
 
     try {
@@ -205,13 +243,13 @@ export class ZoneStorefrontsService {
           },
         });
 
-        await manager.tenantDeliveryArea.create({
-          data: {
+        await manager.tenantDeliveryArea.createMany({
+          data: area.child_areas.map((childArea) => ({
             tenant_id: operatorTenant.id,
-            area_id: dto.area_id,
+            area_id: childArea.id,
             delivery_fee: dto.delivery_fee ?? 20,
             is_active: true,
-          },
+          })),
         });
 
         const zone = await manager.zoneStorefront.create({
@@ -225,11 +263,19 @@ export class ZoneStorefrontsService {
             is_active: false,
           },
           include: {
-            area: true,
+            area: {
+              include: {
+                child_areas: {
+                  where: { is_active: true, deleted_at: null },
+                  orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
+                },
+              },
+            },
             operator_tenant: {
               include: {
                 tenant_delivery_areas: {
                   where: { is_active: true, deleted_at: null },
+                  include: { area: true },
                 },
               },
             },
@@ -263,6 +309,9 @@ export class ZoneStorefrontsService {
 
         return this.mapAdminZone(zone, {
           catalog_ready: false,
+          delivery_fees_ready: true,
+          required_delivery_areas: area.child_areas.length,
+          configured_delivery_areas: area.child_areas.length,
           catalog_in_sync: false,
           active_eligible_merchants: 0,
           active_products: 0,
@@ -293,11 +342,19 @@ export class ZoneStorefrontsService {
   async findAllForAdmin() {
     const zones = await this.prisma.zoneStorefront.findMany({
       include: {
-        area: true,
+        area: {
+          include: {
+            child_areas: {
+              where: { is_active: true, deleted_at: null },
+              orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
+            },
+          },
+        },
         operator_tenant: {
           include: {
             tenant_delivery_areas: {
               where: { is_active: true, deleted_at: null },
+              include: { area: true },
             },
           },
         },
@@ -330,11 +387,19 @@ export class ZoneStorefrontsService {
     const zone = await this.prisma.zoneStorefront.findUnique({
       where: { id: zoneId },
       include: {
-        area: true,
+        area: {
+          include: {
+            child_areas: {
+              where: { is_active: true, deleted_at: null },
+              orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
+            },
+          },
+        },
         operator_tenant: {
           include: {
             tenant_delivery_areas: {
               where: { is_active: true, deleted_at: null },
+              include: { area: true },
             },
           },
         },
@@ -441,7 +506,9 @@ export class ZoneStorefrontsService {
             ? 'Zone operator is not ready for ordering'
             : blocker === ZONE_ACTIVATION_BLOCKERS.catalogNotReady
               ? 'Zone catalog is not ready'
-              : 'At least one eligible active merchant is required';
+              : blocker === ZONE_ACTIVATION_BLOCKERS.deliveryFeesNotReady
+                ? 'Every active child area requires a delivery fee'
+                : 'At least one eligible active merchant is required';
         throw new BadRequestException({ code: blocker, message });
       }
     }
@@ -465,6 +532,92 @@ export class ZoneStorefrontsService {
             : 'تم إيقاف واجهة المنطقة',
           oldValues: { is_active: zone.is_active },
           newValues: { is_active: dto.is_active },
+          source: ActivitySources.Admin,
+          requestId: actor.requestId,
+          ipAddress: actor.ipAddress,
+        },
+        manager,
+      );
+    });
+
+    return this.findOneForAdmin(zoneId);
+  }
+
+  /** Replaces the complete fee set for every active direct child of the zone. */
+  async updateDeliveryFees(
+    zoneId: number,
+    dto: UpdateZoneDeliveryFeesDto,
+    actor: ZoneAdminActor,
+  ) {
+    const zone = await this.requireZone(zoneId);
+    const expectedIds = zone.area.child_areas.map((area) => area.id);
+    const submittedIds = dto.delivery_areas.map((area) => area.area_id);
+    const expectedSet = new Set(expectedIds);
+    const isCompleteExactSet =
+      expectedIds.length > 0 &&
+      submittedIds.length === expectedIds.length &&
+      new Set(submittedIds).size === submittedIds.length &&
+      submittedIds.every((areaId) => expectedSet.has(areaId));
+
+    if (!isCompleteExactSet) {
+      throw new BadRequestException(
+        'يجب إرسال رسوم كل مناطق التوصيل الفرعية النشطة فقط، دون نقص أو تكرار.',
+      );
+    }
+
+    await this.runInOperatorTenant(zone.operator_tenant_id, async (manager) => {
+      const oldFees = zone.operator_tenant.tenant_delivery_areas
+        .filter((entry) => expectedSet.has(entry.area_id))
+        .map((entry) => ({
+          area_id: entry.area_id,
+          delivery_fee: Number(entry.delivery_fee),
+        }));
+
+      await manager.tenantDeliveryArea.updateMany({
+        where: { tenant_id: zone.operator_tenant_id },
+        data: { is_active: false },
+      });
+      for (const entry of dto.delivery_areas) {
+        await manager.tenantDeliveryArea.upsert({
+          where: {
+            tenant_id_area_id: {
+              tenant_id: zone.operator_tenant_id,
+              area_id: entry.area_id,
+            },
+          },
+          create: {
+            tenant_id: zone.operator_tenant_id,
+            area_id: entry.area_id,
+            delivery_fee: entry.delivery_fee,
+            is_active: true,
+          },
+          update: {
+            delivery_fee: entry.delivery_fee,
+            is_active: true,
+            deleted_at: null,
+          },
+        });
+      }
+
+      const minimumFee = Math.min(
+        ...dto.delivery_areas.map((entry) => entry.delivery_fee),
+      );
+      await manager.tenant.update({
+        where: { id: zone.operator_tenant_id },
+        data: { delivery_fee: minimumFee },
+      });
+      await this.activityLogService.create(
+        {
+          tenantId: zone.operator_tenant_id,
+          actorAdminId: actor.adminId,
+          actorAdminName: actor.adminName,
+          actorAdminRole: actor.adminRole,
+          entityType: ActivityEntityTypes.ZoneStorefront,
+          entityId: zone.id,
+          action: ActivityActions.ZoneStorefrontDeliveryFeesChanged,
+          title: 'تم تحديث رسوم مناطق التوصيل الفرعية',
+          oldValues: { delivery_areas: oldFees },
+          newValues: { delivery_areas: dto.delivery_areas },
           source: ActivitySources.Admin,
           requestId: actor.requestId,
           ipAddress: actor.ipAddress,
@@ -590,11 +743,19 @@ export class ZoneStorefrontsService {
         },
       },
       include: {
-        area: true,
+        area: {
+          include: {
+            child_areas: {
+              where: { is_active: true, deleted_at: null },
+              orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
+            },
+          },
+        },
         operator_tenant: {
           include: {
             tenant_delivery_areas: {
               where: { is_active: true, deleted_at: null },
+              include: { area: true },
             },
           },
         },
@@ -613,6 +774,7 @@ export class ZoneStorefrontsService {
       categoryCompatibleZones.map(async (zone) => {
         const readiness = await this.calculateReadiness(zone);
         return readiness.catalog_ready &&
+          readiness.delivery_fees_ready &&
           readiness.active_eligible_merchants >= 1
           ? this.mapPublicZone(zone)
           : null;
@@ -763,11 +925,19 @@ export class ZoneStorefrontsService {
     const zone = await this.prisma.zoneStorefront.findUnique({
       where: { id: zoneId },
       include: {
-        area: true,
+        area: {
+          include: {
+            child_areas: {
+              where: { is_active: true, deleted_at: null },
+              orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
+            },
+          },
+        },
         operator_tenant: {
           include: {
             tenant_delivery_areas: {
               where: { is_active: true, deleted_at: null },
+              include: { area: true },
             },
           },
         },
@@ -812,11 +982,19 @@ export class ZoneStorefrontsService {
         },
       },
       include: {
-        area: true,
+        area: {
+          include: {
+            child_areas: {
+              where: { is_active: true, deleted_at: null },
+              orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
+            },
+          },
+        },
         operator_tenant: {
           include: {
             tenant_delivery_areas: {
               where: { is_active: true, deleted_at: null },
+              include: { area: true },
             },
           },
         },
@@ -828,7 +1006,11 @@ export class ZoneStorefrontsService {
     }
 
     const readiness = await this.getReadiness(zone.id);
-    if (!readiness.catalog_ready || readiness.active_eligible_merchants < 1) {
+    if (
+      !readiness.catalog_ready ||
+      !readiness.delivery_fees_ready ||
+      readiness.active_eligible_merchants < 1
+    ) {
       throw new ForbiddenException('Zone storefront is not ready');
     }
     return zone;
@@ -850,6 +1032,20 @@ export class ZoneStorefrontsService {
     const allowedCategories =
       getAllowedCatalogCategoriesForSource(catalogSource);
     const requiredProducts = MIN_SYNCHRONIZED_ZONE_PRODUCTS;
+    const requiredDeliveryAreas = zone.area.child_areas.length;
+    const configuredDeliveryAreas = zone.area.child_areas.filter((childArea) =>
+      zone.operator_tenant.tenant_delivery_areas.some(
+        (entry) =>
+          entry.area_id === childArea.id &&
+          entry.is_active &&
+          Number(entry.delivery_fee) >= 0 &&
+          entry.area.is_active &&
+          entry.area.parent_area_id === zone.area_id,
+      ),
+    ).length;
+    const deliveryFeesReady =
+      requiredDeliveryAreas > 0 &&
+      configuredDeliveryAreas === requiredDeliveryAreas;
     const [essentialCatalogProducts, activeProducts, activeEligibleMerchants] =
       await Promise.all([
         this.prisma.catalogItem.count({
@@ -883,6 +1079,9 @@ export class ZoneStorefrontsService {
       ]);
     return {
       catalog_ready: activeProducts >= requiredProducts,
+      delivery_fees_ready: deliveryFeesReady,
+      required_delivery_areas: requiredDeliveryAreas,
+      configured_delivery_areas: configuredDeliveryAreas,
       catalog_in_sync: activeProducts === essentialCatalogProducts,
       active_products: activeProducts,
       essential_catalog_products: essentialCatalogProducts,
@@ -892,6 +1091,7 @@ export class ZoneStorefrontsService {
       activation_blockers: this.getActivationBlockers(
         zone,
         activeProducts >= requiredProducts,
+        deliveryFeesReady,
         activeEligibleMerchants,
       ),
     };
@@ -911,11 +1111,7 @@ export class ZoneStorefrontsService {
       category: zone.operator_tenant.category,
       operated_zone_storefront: { is: null },
       tenant_delivery_areas: {
-        some: {
-          area_id: zone.area_id,
-          is_active: true,
-          deleted_at: null,
-        },
+        some: this.buildZoneChildCoverageWhere(zone.area_id, true),
       },
       ...(requireMembership
         ? {
@@ -944,9 +1140,8 @@ export class ZoneStorefrontsService {
         category: true,
         operated_zone_storefront: { select: { id: true } },
         tenant_delivery_areas: {
-          where: { area_id: zone.area_id },
+          where: this.buildZoneChildCoverageWhere(zone.area_id, false),
           select: { is_active: true, deleted_at: true },
-          take: 1,
         },
       },
     });
@@ -955,7 +1150,10 @@ export class ZoneStorefrontsService {
     return new Map(
       tenantIds.map((tenantId) => {
         const tenant = tenantById.get(tenantId);
-        const deliveryArea = tenant?.tenant_delivery_areas[0];
+        const deliveryAreas = tenant?.tenant_delivery_areas ?? [];
+        const hasActiveChild = deliveryAreas.some(
+          (deliveryArea) => deliveryArea.is_active && !deliveryArea.deleted_at,
+        );
         let blocker: MerchantEligibilityBlocker | null = null;
 
         if (!tenant) blocker = MERCHANT_ELIGIBILITY_BLOCKERS.notFound;
@@ -969,9 +1167,9 @@ export class ZoneStorefrontsService {
           blocker = MERCHANT_ELIGIBILITY_BLOCKERS.categoryMismatch;
         else if (tenant.operated_zone_storefront)
           blocker = MERCHANT_ELIGIBILITY_BLOCKERS.zoneOperator;
-        else if (!deliveryArea)
+        else if (deliveryAreas.length === 0)
           blocker = MERCHANT_ELIGIBILITY_BLOCKERS.deliveryAreaMissing;
-        else if (!deliveryArea.is_active || deliveryArea.deleted_at)
+        else if (!hasActiveChild)
           blocker = MERCHANT_ELIGIBILITY_BLOCKERS.deliveryAreaInactive;
 
         return [tenantId, { eligible: blocker === null, blocker }];
@@ -992,9 +1190,25 @@ export class ZoneStorefrontsService {
     );
   }
 
+  /** Builds the authoritative direct-child coverage predicate for one zone. */
+  private buildZoneChildCoverageWhere(
+    zoneAreaId: number,
+    requireActiveCoverage: boolean,
+  ): Prisma.TenantDeliveryAreaWhereInput {
+    return {
+      ...(requireActiveCoverage ? { is_active: true, deleted_at: null } : {}),
+      area: {
+        parent_area_id: zoneAreaId,
+        is_active: true,
+        deleted_at: null,
+      },
+    };
+  }
+
   private getActivationBlockers(
     zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
     catalogReady: boolean,
+    deliveryFeesReady: boolean,
     activeEligibleMerchants: number,
   ): ZoneActivationBlocker[] {
     const blockers: ZoneActivationBlocker[] = [];
@@ -1007,6 +1221,9 @@ export class ZoneStorefrontsService {
       blockers.push(ZONE_ACTIVATION_BLOCKERS.operatorNotReady);
     }
     if (!catalogReady) blockers.push(ZONE_ACTIVATION_BLOCKERS.catalogNotReady);
+    if (!deliveryFeesReady) {
+      blockers.push(ZONE_ACTIVATION_BLOCKERS.deliveryFeesNotReady);
+    }
     if (activeEligibleMerchants < 1) {
       blockers.push(ZONE_ACTIVATION_BLOCKERS.noEligibleMerchant);
     }
@@ -1125,12 +1342,20 @@ export class ZoneStorefrontsService {
   private mapPublicZone(
     zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
   ) {
+    const deliveryAreas = this.resolveZoneDeliveryAreas(zone);
+    const deliveryFees = deliveryAreas.map((entry) => entry.delivery_fee);
+    const minimumFee = Math.min(...deliveryFees);
+    const maximumFee = Math.max(...deliveryFees);
+
     return {
       id: zone.id,
       name: zone.name,
       slug: zone.slug,
       category: zone.category,
-      delivery_fee: this.resolveZoneDeliveryFee(zone),
+      delivery_fee: minimumFee,
+      delivery_fee_min: minimumFee,
+      delivery_fee_max: maximumFee,
+      delivery_areas: deliveryAreas,
       delivery_available: zone.operator_tenant.delivery_available,
       delivery_starts_at: zone.operator_tenant.delivery_starts_at,
       delivery_ends_at: zone.operator_tenant.delivery_ends_at,
@@ -1151,6 +1376,15 @@ export class ZoneStorefrontsService {
     readiness: ZoneReadiness,
     merchantEligibility = new Map<number, MerchantEligibility>(),
   ) {
+    const deliveryAreas = this.mapZoneDeliveryAreas(zone);
+    const configuredFees = deliveryAreas
+      .map((entry) => entry.delivery_fee)
+      .filter((fee): fee is number => fee !== null);
+    const minimumFee =
+      configuredFees.length > 0 ? Math.min(...configuredFees) : null;
+    const maximumFee =
+      configuredFees.length > 0 ? Math.max(...configuredFees) : null;
+
     return {
       id: zone.id,
       name: zone.name,
@@ -1160,12 +1394,15 @@ export class ZoneStorefrontsService {
       created_at: zone.created_at,
       updated_at: zone.updated_at,
       area: zone.area,
+      delivery_areas: deliveryAreas,
+      delivery_fee_min: minimumFee,
+      delivery_fee_max: maximumFee,
       operator_tenant: {
         id: zone.operator_tenant.id,
         name: zone.operator_tenant.name,
         category: zone.operator_tenant.category,
         status: zone.operator_tenant.status,
-        delivery_fee: this.resolveZoneDeliveryFee(zone),
+        delivery_fee: minimumFee,
       },
       merchants: (zone.merchants ?? []).map((membership) => ({
         ...membership,
@@ -1178,8 +1415,21 @@ export class ZoneStorefrontsService {
     };
   }
 
-  private resolveZoneDeliveryFee(zone: {
-    area_id: number;
+  /** Maps every active direct child and its currently active operator fee. */
+  private mapZoneDeliveryAreas(zone: {
+    area: {
+      child_areas: Array<{
+        id: number;
+        name_ar: string;
+        name_en: string | null;
+        slug: string;
+        parent_area_id: number | null;
+        city: string | null;
+        governorate: string | null;
+        is_active: boolean;
+        sort_order: number;
+      }>;
+    };
     operator_tenant: {
       tenant_delivery_areas: Array<{
         area_id: number;
@@ -1188,14 +1438,48 @@ export class ZoneStorefrontsService {
       }>;
     };
   }) {
-    const deliveryArea = zone.operator_tenant.tenant_delivery_areas.find(
-      (area) => area.area_id === zone.area_id && area.is_active,
-    );
-    if (!deliveryArea) {
+    return zone.area.child_areas.map((area) => {
+      const configuredArea = zone.operator_tenant.tenant_delivery_areas.find(
+        (entry) => entry.area_id === area.id && entry.is_active,
+      );
+      return {
+        area_id: area.id,
+        delivery_fee: configuredArea
+          ? Number(configuredArea.delivery_fee)
+          : null,
+        is_active: Boolean(configuredArea),
+        area: {
+          id: area.id,
+          name_ar: area.name_ar,
+          name_en: area.name_en,
+          slug: area.slug,
+          parent_area_id: area.parent_area_id,
+          city: area.city,
+          governorate: area.governorate,
+          is_active: area.is_active,
+          sort_order: area.sort_order,
+        },
+      };
+    });
+  }
+
+  /** Returns the complete public child fee set or rejects incomplete state. */
+  private resolveZoneDeliveryAreas(
+    zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
+  ) {
+    const deliveryAreas = this.mapZoneDeliveryAreas(zone);
+    if (
+      deliveryAreas.length === 0 ||
+      deliveryAreas.some(
+        (entry) => entry.delivery_fee === null || entry.delivery_fee < 0,
+      )
+    ) {
       throw new BadRequestException(
-        'Zone storefront delivery fee is not configured',
+        'Zone storefront child delivery fees are not configured',
       );
     }
-    return deliveryArea.delivery_fee;
+    return deliveryAreas as Array<
+      (typeof deliveryAreas)[number] & { delivery_fee: number }
+    >;
   }
 }

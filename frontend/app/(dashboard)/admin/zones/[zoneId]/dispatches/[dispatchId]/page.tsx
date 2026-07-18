@@ -39,6 +39,8 @@ export default async function DispatchDetailPage({ params }: DispatchDetailPageP
         <h2 className="font-bold text-gray-900">بيانات التنفيذ</h2>
         <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <p>العميل: {dispatch.order.customer_name}</p><p>الهاتف: {dispatch.order.customer_phone}</p>
+          <p>منطقة التوصيل: {dispatch.order.delivery_area?.name_ar || "غير مسجلة"}</p>
+          <p>رسوم التوصيل: {Number(dispatch.order.delivery_fee || 0).toLocaleString("ar-EG")} ج.م</p>
           <p className="sm:col-span-2">العنوان: {dispatch.order.delivery_address}</p>
           <p>الإجمالي: {Number(dispatch.order.total || 0).toLocaleString("ar-EG")} ج.م</p>
         </div>

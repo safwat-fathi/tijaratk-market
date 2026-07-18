@@ -13,6 +13,7 @@ import { adminService } from "@/services/api/admin.service";
 import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
 import { DispatchSessionForm } from "../_components/DispatchSessionForm";
 import { SyncEssentialCatalogButton } from "../_components/SyncEssentialCatalogButton";
+import { ZoneDeliveryFeesForm } from "./_components/ZoneDeliveryFeesForm";
 import {
   ZoneActivationControl,
   ZoneMerchantControls,
@@ -69,6 +70,8 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
               {zone.readiness.active_products}/
               {zone.readiness.essential_catalog_products} منتج ·{" "}
               {zone.readiness.active_eligible_merchants} متجر مؤهل ·{" "}
+              {zone.readiness.configured_delivery_areas}/
+              {zone.readiness.required_delivery_areas} منطقة برسوم ·{" "}
               {zone.readiness.catalog_in_sync
                 ? "الكتالوج متطابق"
                 : "الكتالوج قيد المزامنة"}{" "}
@@ -86,6 +89,19 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
             </div>
           </div>
         </div>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="text-lg font-bold text-gray-900">رسوم مناطق التوصيل</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          كل منطقة فرعية نشطة لها رسم مستقل، ويجب تحديد رسوم جميع المناطق قبل
+          إتاحة الواجهة للعامة.
+        </p>
+        <ZoneDeliveryFeesForm
+          zoneId={zone.id}
+          zoneSlug={zone.slug}
+          deliveryAreas={zone.delivery_areas}
+        />
       </Card>
 
       <Card className="p-5">

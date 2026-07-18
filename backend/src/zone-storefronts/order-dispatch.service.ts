@@ -70,6 +70,7 @@ export class OrderDispatchService {
       ReturnType<ZoneStorefrontsService['requireCheckoutZone']>
     >;
     let created: Awaited<ReturnType<OrdersService['createForTenantId']>>;
+    let trustedDeliveryAreaName = '';
 
     try {
       zone = await this.zoneStorefrontsService.requireCheckoutZone(slug);
@@ -113,6 +114,26 @@ export class OrderDispatchService {
         selection_amount_egp: item.selection_amount_egp,
         unit_option_id: item.unit_option_id,
       }));
+      const requestedAreaSlug = dto.delivery_area_slug?.trim().toLowerCase();
+      const trustedDeliveryArea =
+        zone.operator_tenant.tenant_delivery_areas.find(
+          (entry) =>
+            entry.is_active &&
+            entry.area.is_active &&
+            entry.area.parent_area_id === zone.area_id &&
+            (dto.delivery_area_id === undefined ||
+              entry.area_id === dto.delivery_area_id) &&
+            (!requestedAreaSlug || entry.area.slug === requestedAreaSlug),
+        );
+      if (
+        !trustedDeliveryArea ||
+        (dto.delivery_area_id === undefined && !requestedAreaSlug)
+      ) {
+        throw new BadRequestException(
+          'اختر منطقة توصيل فرعية متاحة لهذه الواجهة.',
+        );
+      }
+      trustedDeliveryAreaName = trustedDeliveryArea.area.name_ar;
 
       const forcedDto: CreateOrderDto = {
         ...dto,
@@ -121,14 +142,16 @@ export class OrderDispatchService {
           ? OrderType.CATALOG
           : OrderType.FREE_TEXT,
         total: undefined,
-        delivery_area_id: zone.area_id,
-        delivery_area_slug: zone.area.slug,
+        delivery_area_id: trustedDeliveryArea.area_id,
+        delivery_area_slug: trustedDeliveryArea.area.slug,
         order_source: OrderSource.zone_storefront,
         source_metadata: {
           zone_storefront_id: zone.id,
           zone_slug: zone.slug,
-          area_id: zone.area_id,
-          area_slug: zone.area.slug,
+          zone_area_id: zone.area_id,
+          zone_area_slug: zone.area.slug,
+          area_id: trustedDeliveryArea.area_id,
+          area_slug: trustedDeliveryArea.area.slug,
         },
       };
 
@@ -210,7 +233,7 @@ export class OrderDispatchService {
       dispatchId: dispatch.id,
       orderNumber: String(completeOrder.id),
       zoneName: zone.name,
-      area: zone.area.name_ar,
+      area: trustedDeliveryAreaName,
       operationsPhone: zone.operations_phone,
       total: Number(completeOrder.total || 0),
     });
@@ -300,6 +323,10 @@ export class OrderDispatchService {
                 customer_name: true,
                 customer_phone: true,
                 delivery_address: true,
+                delivery_area: {
+                  select: { id: true, name_ar: true, name_en: true, slug: true },
+                },
+                delivery_fee: true,
                 total: true,
                 created_at: true,
               },
@@ -1182,6 +1209,9 @@ export class OrderDispatchService {
                 customer_name: true,
                 customer_phone: true,
                 delivery_address: true,
+                delivery_area: {
+                  select: { id: true, name_ar: true, name_en: true, slug: true },
+                },
                 delivery_time_window_snapshot: true,
                 subtotal: true,
                 delivery_fee: true,
@@ -1251,6 +1281,9 @@ export class OrderDispatchService {
                 customer_name: true,
                 customer_phone: true,
                 delivery_address: true,
+                delivery_area: {
+                  select: { id: true, name_ar: true, name_en: true, slug: true },
+                },
                 delivery_time_window_snapshot: true,
                 subtotal: true,
                 delivery_fee: true,

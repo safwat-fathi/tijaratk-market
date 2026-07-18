@@ -48,6 +48,11 @@ const baseControlClassName =
   "mt-1 min-h-11 w-full rounded-md border bg-white px-3 py-2 text-base text-gray-900 shadow-sm transition-[border-color,box-shadow] duration-200 focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60";
 
 export function CreateZoneStorefrontForm({ areas }: Props) {
+  const parentIdsWithActiveChildren = new Set(
+    areas
+      .filter((area) => area.is_active && area.parent_area_id !== null)
+      .map((area) => area.parent_area_id as number),
+  );
   const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, isPending] = useActionState(
     createZoneStorefrontAction,
@@ -188,7 +193,10 @@ export function CreateZoneStorefrontForm({ areas }: Props) {
           >
             <option value="">اختر المنطقة</option>
             {areas
-              .filter((area) => area.is_active)
+              .filter(
+                (area) =>
+                  area.is_active && parentIdsWithActiveChildren.has(area.id),
+              )
               .map((area) => (
                 <option key={area.id} value={area.id}>
                   {area.name_ar}
@@ -233,10 +241,11 @@ export function CreateZoneStorefrontForm({ areas }: Props) {
         </label>
 
         <label className="text-sm font-semibold text-gray-700">
-          رسوم التوصيل
+          الرسم الافتراضي لكل منطقة فرعية
           <input
             name="delivery_fee"
             type="number"
+            required
             min="0"
             step="0.01"
             value={values.delivery_fee}
@@ -247,6 +256,10 @@ export function CreateZoneStorefrontForm({ areas }: Props) {
             {...accessibleErrorProps("delivery_fee")}
           />
           {renderFieldError("delivery_fee")}
+          <span className="mt-1.5 block text-xs font-normal text-gray-500">
+            سيُنسخ هذا الرسم تلقائياً إلى كل منطقة توصيل فرعية ويمكن تعديله بعد
+            الإنشاء.
+          </span>
         </label>
 
         <div className="md:col-span-2">

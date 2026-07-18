@@ -29,6 +29,7 @@ export const ActivityActions = {
   ZoneStorefrontCreated: 'zone_storefront.created',
   ZoneStorefrontCatalogSynced: 'zone_storefront.catalog_synced',
   ZoneStorefrontActivationChanged: 'zone_storefront.activation_changed',
+  ZoneStorefrontDeliveryFeesChanged: 'zone_storefront.delivery_fees_changed',
   ZoneStorefrontMerchantChanged: 'zone_storefront.merchant_changed',
   OrderDispatchCreated: 'order_dispatch.created',
   OrderDispatchAssigned: 'order_dispatch.assigned',

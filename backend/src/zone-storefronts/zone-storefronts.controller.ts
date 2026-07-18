@@ -45,6 +45,7 @@ import {
   UpdateAssignedOrderReplacementDto,
   UpdateAssignedOrderStatusDto,
   UpdateDispatchQuoteLineDto,
+  UpdateZoneDeliveryFeesDto,
   UpdateZoneStorefrontActivationDto,
   UpsertZoneStorefrontMerchantDto,
 } from './dto/zone-storefront.dto';
@@ -213,6 +214,22 @@ export class AdminZoneStorefrontsController {
     @Body() dto: UpdateZoneStorefrontActivationDto,
   ) {
     return this.zones.updateActivation(
+      zoneId,
+      dto,
+      this.toAdminActor(request),
+    );
+  }
+
+  /** Replaces every active direct child's delivery fee atomically. */
+  @Patch(':zoneId/delivery-fees')
+  @ApiOperation({ summary: 'Update all zone child delivery fees' })
+  @ApiBody({ type: UpdateZoneDeliveryFeesDto })
+  updateDeliveryFees(
+    @Req() request: ManagedAdminRequest,
+    @Param('zoneId', ParseIntPipe) zoneId: number,
+    @Body() dto: UpdateZoneDeliveryFeesDto,
+  ) {
+    return this.zones.updateDeliveryFees(
       zoneId,
       dto,
       this.toAdminActor(request),

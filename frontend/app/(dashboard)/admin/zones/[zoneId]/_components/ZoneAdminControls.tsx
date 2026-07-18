@@ -24,6 +24,8 @@ const activationBlockerMessages: Record<ZoneActivationBlocker, string> = {
     "مشغل المنطقة غير جاهز. راجع حالته وإتاحة التوصيل.",
   ZONE_CATALOG_NOT_READY:
     "كتالوج المنطقة غير جاهز. نفّذ مزامنة المنتجات الأساسية أولاً.",
+  ZONE_DELIVERY_FEES_NOT_READY:
+    "حدد رسماً لكل منطقة توصيل فرعية نشطة أولاً.",
   ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT:
     "فعّل عضوية متجر تنفيذ مؤهل واحد على الأقل قبل تفعيل المنطقة.",
 };
@@ -36,9 +38,9 @@ const merchantBlockerMessages: Record<MerchantEligibilityBlocker, string> = {
   MERCHANT_CATEGORY_MISMATCH: "تصنيف المتجر لا يطابق تصنيف المنطقة.",
   MERCHANT_IS_ZONE_OPERATOR: "هذا متجر تشغيل داخلي ولا يمكنه تنفيذ الطلبات.",
   MERCHANT_DELIVERY_AREA_MISSING:
-    "منطقة التوصيل غير مضافة إلى تغطية المتجر.",
+    "لا توجد منطقة فرعية نشطة مضافة إلى تغطية المتجر.",
   MERCHANT_DELIVERY_AREA_INACTIVE:
-    "تغطية المتجر لهذه المنطقة متوقفة.",
+    "كل تغطية المتجر للمناطق الفرعية في هذه الواجهة متوقفة.",
 };
 
 const shouldLinkToMerchantAreas = (blocker: MerchantEligibilityBlocker | null) =>

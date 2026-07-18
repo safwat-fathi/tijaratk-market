@@ -58,7 +58,11 @@ export default async function DispatchQueuePage({ params, searchParams }: Dispat
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-bold text-gray-900">طلب #{dispatch.order.id} · {dispatch.order.customer_name || "عميل"}</p>
-                <p className="text-sm text-gray-500">{dispatch.order.delivery_address || "العنوان غير مسجل"} · {Number(dispatch.order.total || 0).toLocaleString("ar-EG")} ج.م</p>
+                <p className="text-sm text-gray-500">
+                  {dispatch.order.delivery_area?.name_ar || "منطقة غير مسجلة"} ·{" "}
+                  {dispatch.order.delivery_address || "العنوان غير مسجل"} ·{" "}
+                  {Number(dispatch.order.total || 0).toLocaleString("ar-EG")} ج.م
+                </p>
                 <p className="mt-1 text-xs text-gray-500">{dispatch.assignments[0]?.target_tenant?.name || "لم يُسند بعد"}</p>
               </div>
               <div className="flex items-center gap-3">

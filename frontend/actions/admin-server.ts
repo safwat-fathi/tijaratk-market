@@ -64,6 +64,8 @@ const zoneMutationMessages: Record<string, string> = {
     "مشغل المنطقة غير جاهز لاستقبال الطلبات. راجع حالة المشغل وإتاحة التوصيل.",
   ZONE_CATALOG_NOT_READY:
     "كتالوج المنطقة غير جاهز. نفّذ مزامنة المنتجات الأساسية أولاً.",
+  ZONE_DELIVERY_FEES_NOT_READY:
+    "يجب تحديد رسوم توصيل لكل منطقة فرعية نشطة قبل تفعيل الواجهة.",
   ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT:
     "يلزم وجود متجر تنفيذ واحد على الأقل يكون نشطاً ومؤهلاً داخل المنطقة.",
   MERCHANT_INACTIVE: "المتجر غير نشط حالياً. فعّل المتجر أولاً.",
@@ -75,9 +77,9 @@ const zoneMutationMessages: Record<string, string> = {
   MERCHANT_IS_ZONE_OPERATOR:
     "مشغل منطقة داخلي لا يمكن استخدامه كمتجر تنفيذ.",
   MERCHANT_DELIVERY_AREA_MISSING:
-    "المتجر لا يغطي منطقة التوصيل هذه. أضفها إلى مناطق توصيل المتجر أولاً.",
+    "المتجر لا يغطي أي منطقة فرعية نشطة داخل هذه الواجهة. أضف منطقة فرعية إلى مناطق توصيله أولاً.",
   MERCHANT_DELIVERY_AREA_INACTIVE:
-    "تغطية المتجر لهذه المنطقة متوقفة. فعّل المنطقة ضمن مناطق توصيل المتجر أولاً.",
+    "كل تغطية المتجر للمناطق الفرعية داخل هذه الواجهة متوقفة. فعّل إحداها أولاً.",
   MERCHANT_NOT_FOUND: "تعذر العثور على المتجر المطلوب.",
 };
 
@@ -101,6 +103,9 @@ const getZoneMutationMessage = (
   }
   if (normalized === "Zone catalog is not ready") {
     return zoneMutationMessages.ZONE_CATALOG_NOT_READY;
+  }
+  if (normalized === "Every active child area requires a delivery fee") {
+    return zoneMutationMessages.ZONE_DELIVERY_FEES_NOT_READY;
   }
   if (normalized === "Zone operator is not ready for ordering") {
     return zoneMutationMessages.ZONE_OPERATOR_NOT_READY;
@@ -508,6 +513,73 @@ export async function updateZoneActivationAction(
   return {
     success: true,
     message: isActive ? "تم تفعيل المنطقة بنجاح." : "تم إيقاف الطلبات الجديدة.",
+    timestamp: Date.now(),
+  };
+}
+
+const zoneDeliveryFeesSchema = z
+  .array(
+    z.object({
+      area_id: z.number().int().positive(),
+      delivery_fee: z.number().min(0),
+    }),
+  )
+  .min(1)
+  .superRefine((entries, context) => {
+    if (new Set(entries.map((entry) => entry.area_id)).size !== entries.length) {
+      context.addIssue({
+        code: "custom",
+        message: "لا يمكن تكرار منطقة التوصيل.",
+      });
+    }
+  });
+
+export async function updateZoneDeliveryFeesAction(
+  zoneId: number,
+  zoneSlug: string,
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  void _previousState;
+  const id = positiveIdSchema.parse(zoneId);
+  let rawPayload: unknown;
+  try {
+    rawPayload = JSON.parse(String(formData.get("delivery_areas") ?? ""));
+  } catch {
+    return {
+      success: false,
+      message: "تعذر قراءة رسوم مناطق التوصيل.",
+      timestamp: Date.now(),
+    };
+  }
+  const parsed = zoneDeliveryFeesSchema.safeParse(rawPayload);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message || "راجع رسوم مناطق التوصيل.",
+      timestamp: Date.now(),
+    };
+  }
+
+  const response = await adminService.updateZoneDeliveryFees(id, {
+    delivery_areas: parsed.data,
+  });
+  if (!response.success) {
+    return {
+      success: false,
+      message:
+        response.message || "تعذر حفظ رسوم مناطق التوصيل. حاول مرة أخرى.",
+      timestamp: Date.now(),
+    };
+  }
+
+  revalidatePath("/admin/zones");
+  revalidatePath(`/admin/zones/${id}`);
+  revalidatePath("/");
+  revalidatePath(`/market/${zoneSlug}`);
+  return {
+    success: true,
+    message: "تم حفظ رسوم كل مناطق التوصيل.",
     timestamp: Date.now(),
   };
 }

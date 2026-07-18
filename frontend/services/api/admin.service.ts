@@ -693,6 +693,20 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async updateZoneDeliveryFees(
+		zoneId: number,
+		payload: {
+			delivery_areas: Array<{ area_id: number; delivery_fee: number }>;
+		},
+	) {
+		return this.patch<AdminZoneStorefront>(
+			`zones/${zoneId}/delivery-fees`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
 	public async upsertZoneMerchant(
 		zoneId: number,
 		payload: { tenant_id: number; priority?: number; is_active?: boolean },

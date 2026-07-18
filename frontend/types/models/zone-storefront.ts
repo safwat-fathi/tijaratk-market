@@ -11,6 +11,9 @@ export type ZoneStorefront = {
   slug: string;
   category: "grocery" | "pharmacy";
   delivery_fee?: number | string;
+  delivery_fee_min?: number | string | null;
+  delivery_fee_max?: number | string | null;
+  delivery_areas: ZoneDeliveryArea[];
   delivery_available?: boolean;
   delivery_starts_at?: string | null;
   delivery_ends_at?: string | null;
@@ -23,9 +26,27 @@ export type ZoneStorefront = {
   };
 };
 
+export type ZoneDeliveryArea = {
+  area_id: number;
+  delivery_fee: number | string | null;
+  is_active: boolean;
+  area: {
+    id: number;
+    name_ar: string;
+    name_en?: string | null;
+    slug: string;
+    parent_area_id: number | null;
+    city?: string | null;
+    governorate?: string | null;
+    is_active: boolean;
+    sort_order: number;
+  };
+};
+
 export type ZoneActivationBlocker =
   | "ZONE_OPERATOR_NOT_READY"
   | "ZONE_CATALOG_NOT_READY"
+  | "ZONE_DELIVERY_FEES_NOT_READY"
   | "ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT";
 
 export type MerchantEligibilityBlocker =
@@ -40,6 +61,9 @@ export type MerchantEligibilityBlocker =
 
 export type ZoneReadiness = {
   catalog_ready: boolean;
+  delivery_fees_ready: boolean;
+  required_delivery_areas: number;
+  configured_delivery_areas: number;
   catalog_in_sync: boolean;
   active_products: number;
   essential_catalog_products: number;
@@ -87,6 +111,9 @@ export type AdminZoneStorefront = {
   created_at: string;
   updated_at: string;
   area: ZoneStorefront["area"];
+  delivery_areas: ZoneDeliveryArea[];
+  delivery_fee_min?: number | string | null;
+  delivery_fee_max?: number | string | null;
   operator_tenant: {
     id: number;
     name: string;
@@ -143,6 +170,7 @@ export type ZoneOrderDispatch = {
     customer_name?: string | null;
     customer_phone?: string | null;
     delivery_address?: string | null;
+    delivery_area?: ZoneStorefront["area"] | null;
     delivery_time_window_snapshot?: string | null;
     subtotal?: number | string | null;
     delivery_fee?: number | string | null;

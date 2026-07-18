@@ -39,6 +39,7 @@ export default function AssignedOrderCard({ dispatch }: AssignedOrderCardProps) 
             </span>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
+            {dispatch.order.delivery_area?.name_ar || "منطقة غير مسجلة"} ·{" "}
             {dispatch.order.delivery_address || "العنوان غير مسجل"}
           </p>
         </div>

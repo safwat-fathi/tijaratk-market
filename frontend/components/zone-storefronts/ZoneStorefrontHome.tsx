@@ -24,9 +24,14 @@ type Props = {
 const getCategoryLabel = (category: ZoneStorefront["category"]) =>
   category === "pharmacy" ? "صيدلية" : "سوبر ماركت";
 
-const getDeliveryFeeLabel = (deliveryFee?: number | string) => {
-  const fee = Number(deliveryFee ?? 0);
-  return Number.isFinite(fee) && fee > 0 ? `${fee} ج.م` : "مجاني";
+const getDeliveryFeeLabel = (zone: ZoneStorefront) => {
+  const minimum = Number(zone.delivery_fee_min ?? zone.delivery_fee ?? 0);
+  const maximum = Number(zone.delivery_fee_max ?? minimum);
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) {
+    return "غير محدد";
+  }
+  if (minimum === maximum) return minimum > 0 ? `${minimum} ج.م` : "مجاني";
+  return `${minimum} - ${maximum} ج.م`;
 };
 
 const toSearchOptions = (zones: ZoneStorefront[]): ZoneSearchOption[] =>
@@ -116,7 +121,7 @@ function ZoneCard({ zone }: { zone: ZoneStorefront }) {
       <div className="mt-6 flex items-center justify-between gap-4 border-t border-brand-border pt-4">
         <span className="flex items-center gap-2 text-sm font-semibold text-gray-700">
           <Truck className="h-4 w-4 text-brand-primary" aria-hidden="true" />
-          التوصيل {getDeliveryFeeLabel(zone.delivery_fee)}
+          التوصيل {getDeliveryFeeLabel(zone)}
         </span>
         <span className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-bold text-white transition-colors duration-200 group-hover:bg-brand-primary-hover">
           ابدأ الطلب

@@ -60,10 +60,21 @@ export async function seedZoneStorefront(prisma: PrismaClient) {
 
   const area = await prisma.directoryArea.findFirst({
     where: { slug: ZONE_SLUG, is_active: true, deleted_at: null },
+    include: {
+      child_areas: {
+        where: { is_active: true, deleted_at: null },
+        select: { id: true },
+      },
+    },
   });
   if (!area) {
     throw new Error(
       `Cannot seed zone storefront: active directory area '${ZONE_SLUG}' is missing.`,
+    );
+  }
+  if (area.child_areas.length === 0) {
+    throw new Error(
+      `Cannot seed zone storefront: directory area '${ZONE_SLUG}' has no active direct children.`,
     );
   }
 
@@ -119,7 +130,11 @@ export async function seedZoneStorefront(prisma: PrismaClient) {
         ${String(operatorTenant.id)},
         true
       )`;
-      await ensureDeliveryCoverage(tx, operatorTenant.id, area.id);
+      await ensureDeliveryCoverage(
+        tx,
+        operatorTenant.id,
+        area.child_areas.map((childArea) => childArea.id),
+      );
 
       const zoneStorefront = await ensureZoneStorefront(
         tx,
@@ -328,26 +343,31 @@ const operatorData = {
 async function ensureDeliveryCoverage(
   tx: Prisma.TransactionClient,
   tenantId: number,
-  areaId: number,
+  areaIds: number[],
 ) {
   const tenant = await tx.tenant.findUniqueOrThrow({
     where: { id: tenantId },
     select: { delivery_fee: true },
   });
-  await tx.tenantDeliveryArea.upsert({
-    where: { tenant_id_area_id: { tenant_id: tenantId, area_id: areaId } },
-    update: {
-      delivery_fee: tenant.delivery_fee,
-      is_active: true,
-      deleted_at: null,
-    },
-    create: {
-      tenant_id: tenantId,
-      area_id: areaId,
-      delivery_fee: tenant.delivery_fee,
-      is_active: true,
-    },
+  await tx.tenantDeliveryArea.updateMany({
+    where: { tenant_id: tenantId, area_id: { notIn: areaIds } },
+    data: { is_active: false },
   });
+  for (const areaId of areaIds) {
+    await tx.tenantDeliveryArea.upsert({
+      where: { tenant_id_area_id: { tenant_id: tenantId, area_id: areaId } },
+      update: {
+        is_active: true,
+        deleted_at: null,
+      },
+      create: {
+        tenant_id: tenantId,
+        area_id: areaId,
+        delivery_fee: tenant.delivery_fee,
+        is_active: true,
+      },
+    });
+  }
 }
 
 async function ensureZoneStorefront(
@@ -417,9 +437,13 @@ async function linkZoneMerchants(
         operated_zone_storefront: { is: null },
         tenant_delivery_areas: {
           some: {
-            area_id: areaId,
             is_active: true,
             deleted_at: null,
+            area: {
+              parent_area_id: areaId,
+              is_active: true,
+              deleted_at: null,
+            },
           },
         },
       },

@@ -85,6 +85,9 @@ export default async function AssignedOrderPage({
             الهاتف: {dispatch.order.customer_phone}
           </a>
           <p className="sm:col-span-2">
+            منطقة التوصيل: {dispatch.order.delivery_area?.name_ar || "غير مسجلة"}
+          </p>
+          <p className="text-sm text-gray-600">
             العنوان: {dispatch.order.delivery_address}
           </p>
           {dispatch.order.delivery_time_window_snapshot ? (

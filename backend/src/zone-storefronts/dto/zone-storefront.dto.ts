@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -11,6 +13,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { TenantCategory } from '../../../generated/prisma/client';
 import { OrderStatus } from 'src/common/enums/order-status.enum';
@@ -63,6 +66,31 @@ export class UpdateZoneStorefrontActivationDto {
   @ApiProperty()
   @IsBoolean()
   is_active: boolean;
+}
+
+/** Stores the trusted fee for one direct child of a zone storefront area. */
+export class ZoneDeliveryAreaFeeDto {
+  @ApiProperty({ example: 42 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  area_id: number;
+
+  @ApiProperty({ example: 25 })
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  delivery_fee: number;
+}
+
+/** Replaces the complete child-area fee configuration for one zone. */
+export class UpdateZoneDeliveryFeesDto {
+  @ApiProperty({ type: [ZoneDeliveryAreaFeeDto] })
+  @IsArray()
+  @ArrayUnique((entry: ZoneDeliveryAreaFeeDto) => entry.area_id)
+  @ValidateNested({ each: true })
+  @Type(() => ZoneDeliveryAreaFeeDto)
+  delivery_areas: ZoneDeliveryAreaFeeDto[];
 }
 
 /** Creates or updates a non-destructive zone merchant membership. */

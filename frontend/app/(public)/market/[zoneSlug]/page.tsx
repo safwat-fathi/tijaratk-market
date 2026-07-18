@@ -81,22 +81,17 @@ export default async function ZoneStorefrontPage({
     delivery_starts_at: zone.delivery_starts_at,
     delivery_ends_at: zone.delivery_ends_at,
     card_on_delivery_available: zone.card_on_delivery_available,
-    tenant_delivery_areas: [
-      {
-        area_id: zone.area.id,
-        delivery_fee: Number(zone.delivery_fee || 0),
-        is_active: true,
-        area: {
-          ...zone.area,
-          name_en: zone.area.name_en ?? null,
-          parent_area_id: null,
-          city: null,
-          governorate: null,
-          is_active: true,
-          sort_order: 0,
-        },
+    tenant_delivery_areas: zone.delivery_areas.map((entry) => ({
+      area_id: entry.area_id,
+      delivery_fee: Number(entry.delivery_fee),
+      is_active: entry.is_active,
+      area: {
+        ...entry.area,
+        name_en: entry.area.name_en ?? null,
+        city: entry.area.city ?? null,
+        governorate: entry.area.governorate ?? null,
       },
-    ],
+    })),
   };
 
   return (
@@ -114,7 +109,6 @@ export default async function ZoneStorefrontPage({
         <OrderForm
           tenantSlug={zone.slug}
           storefrontKind="zone"
-          areaSlug={zone.area.slug}
           isPharmacy={zone.category === "pharmacy"}
           tenantCategory={zone.category}
           deliverySettings={tenantPresentation}
