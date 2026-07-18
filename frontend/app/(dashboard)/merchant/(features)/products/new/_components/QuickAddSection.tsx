@@ -132,7 +132,6 @@ export default function QuickAddSection({
 						<input
 							type="file"
 							accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
-							capture="environment"
 							onChange={onManualImageChange}
 							className="sr-only"
 						/>

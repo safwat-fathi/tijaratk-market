@@ -127,7 +127,6 @@ export default function EditProductSheet({
             <input
               type="file"
               accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
-              capture="environment"
               onChange={onEditImageChange}
               className="sr-only"
             />
