@@ -45,7 +45,9 @@ export default async function ManagedOrderDetailsPage({
   }
 
   const order = orderResponse.data;
-  const products = productsResponse?.success ? productsResponse.data || [] : [];
+  const products = productsResponse?.success 
+    ? (Array.isArray(productsResponse.data) ? productsResponse.data : productsResponse.data?.data || []) 
+    : [];
   const activity = activityResponse?.success ? activityResponse.data?.items || [] : [];
   const canMarkItemsOutOfStock =
     order.status === "draft" || order.status === "confirmed";
