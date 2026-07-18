@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
 import { tenantsService } from "@/services/api/tenants.service";
 
 export type UpdateDeliverySettingsState = {
@@ -33,6 +34,13 @@ const deliveryConfigurationSchema = z
       ctx.addIssue({
         code: "custom",
         message: "لا يمكن تكرار منطقة التوصيل",
+        path: ["delivery_areas"],
+      });
+    }
+    if (areaIds.includes(data.primary_area_id)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "المنطقة الأساسية لا يمكن إضافتها ضمن مناطق التوصيل",
         path: ["delivery_areas"],
       });
     }
@@ -94,7 +102,7 @@ export async function updateDeliverySettingsAction(
   }
 
   const response = await tenantsService.updateMyDeliverySettings(
-    validatedFields.data,
+    normalizeDeliveryConfiguration(validatedFields.data),
   );
 
   if (!response.success) {
@@ -121,29 +129,32 @@ export async function updateDeliverySettingsAction(
 }
 
 export async function toggleStoreAvailabilityAction(
-  deliveryAvailable: boolean
+  deliveryAvailable: boolean,
 ): Promise<{ success: boolean; message?: string }> {
   const tenantRes = await tenantsService.getMyTenant();
   if (!tenantRes.success || !tenantRes.data) {
     return { success: false, message: "تعذر تحديث حالة المتجر." };
   }
 
-  const response = await tenantsService.updateMyDeliverySettings({
-    delivery_available: deliveryAvailable,
-    delivery_starts_at: tenantRes.data.delivery_starts_at || null,
-    delivery_ends_at: tenantRes.data.delivery_ends_at || null,
-    primary_area_id: tenantRes.data.directory_profile?.area_id || 0,
-    delivery_areas:
-      tenantRes.data.tenant_delivery_areas
-        ?.filter(
-          (area) =>
-            area.is_active !== false && area.area?.is_active !== false,
-        )
-        .map((area) => ({
-          area_id: area.area_id,
-          delivery_fee: Number(area.delivery_fee),
-        })) || [],
-  });
+  const primaryAreaId = tenantRes.data.directory_profile?.area_id || 0;
+  const response = await tenantsService.updateMyDeliverySettings(
+    normalizeDeliveryConfiguration({
+      delivery_available: deliveryAvailable,
+      delivery_starts_at: tenantRes.data.delivery_starts_at || null,
+      delivery_ends_at: tenantRes.data.delivery_ends_at || null,
+      primary_area_id: primaryAreaId,
+      delivery_areas:
+        tenantRes.data.tenant_delivery_areas
+          ?.filter(
+            (area) =>
+              area.is_active !== false && area.area?.is_active !== false,
+          )
+          .map((area) => ({
+            area_id: area.area_id,
+            delivery_fee: Number(area.delivery_fee),
+          })) || [],
+    }),
+  );
 
   if (!response.success) {
     return {
@@ -278,7 +289,7 @@ export async function updateStoreSettingsAction(
 
   // 2. Update delivery settings
   const deliveryRes = await tenantsService.updateMyDeliverySettings(
-    deliveryConfiguration.data,
+    normalizeDeliveryConfiguration(deliveryConfiguration.data),
   );
 
   if (!deliveryRes.success) {

@@ -3,7 +3,6 @@ export * from './order-status';
 export * from './order-cancelled';
 export * from './out-for-delivery';
 export * from './order-delivered';
-export * from './welcome-customer';
 export * from './new-order-seller';
 export * from './daily-summary';
 export * from './welcome-merchant';

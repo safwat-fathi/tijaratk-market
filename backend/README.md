@@ -74,7 +74,6 @@ WhatsApp providers:
 
 Twilio Content Template SIDs:
 
-- `TWILIO_CONTENT_SID_ORDER_RECEIVED_CUSTOMER`
 - `TWILIO_CONTENT_SID_ORDER_OUT_FOR_DELIVERY`
 - `TWILIO_CONTENT_SID_ORDER_STATUS_UPDATE_CUSTOMER`
 - `TWILIO_CONTENT_SID_NEW_ORDER_MERCHANT`
@@ -82,6 +81,9 @@ Twilio Content Template SIDs:
 - `TWILIO_CONTENT_SID_MERCHANT_REPLACEMENT_ACCEPTED`
 - `TWILIO_CONTENT_SID_ORDER_PRODUCT_REPLACEMENT`
 - `TWILIO_CONTENT_SID_MERCHANT_DAY_CLOSURE_SUMMARY`
+
+Proactive WhatsApp notifications are template-only. Missing or rejected
+Content Templates are logged and are not retried as plaintext messages.
 
 Seed data:
 

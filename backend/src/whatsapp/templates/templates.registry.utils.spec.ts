@@ -1,6 +1,5 @@
 import {
   buildContentVariables,
-  renderFallbackText,
   validateTemplatePayload,
 } from './templates.registry.utils';
 
@@ -73,21 +72,5 @@ describe('WhatsApp template registry', () => {
         } as any,
       ),
     ).toThrow('variable statusLabel exceeds 1600 characters');
-  });
-
-  it('renders the merchant fallback with the six template fields', () => {
-    const fallback = renderFallbackText('new_order_merchant', {
-      orderNumber: '42',
-      customerName: 'أحمد',
-      customerPhone: '+201001234567',
-      deliveryAddress: 'الدقي',
-      orderDetails: 'أرز: 25',
-      initialTotalEgp: 25,
-    });
-
-    expect(fallback).toContain('رقم الهاتف: +201001234567');
-    expect(fallback).toContain('العنوان: الدقي');
-    expect(fallback).toContain('تفاصيل الطلب: أرز: 25');
-    expect(fallback).toContain('الإجمالي المبدئي: 25 جنيه');
   });
 });

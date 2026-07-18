@@ -9,6 +9,7 @@ import {
 import DeliveryConfigurationEditor from "@/components/delivery/DeliveryConfigurationEditor";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
+import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
 import type {
   DeliveryConfigurationInput,
   DirectoryArea,
@@ -42,22 +43,24 @@ export function TenantAreaForm({ tenant, areas }: TenantAreaFormProps) {
     [areas],
   );
   const [configuration, setConfiguration] =
-    useState<DeliveryConfigurationInput>(() => ({
-      delivery_available: tenant.delivery_available !== false,
-      delivery_starts_at: tenant.delivery_starts_at || null,
-      delivery_ends_at: tenant.delivery_ends_at || null,
-      primary_area_id: tenant.directory_profile?.area_id || 0,
-      delivery_areas:
-        tenant.tenant_delivery_areas
-          ?.filter(
-            (area) =>
-              area.is_active !== false && area.area.is_active !== false,
-          )
-          .map((area) => ({
-            area_id: area.area_id,
-            delivery_fee: Number(area.delivery_fee),
-          })) || [],
-    }));
+    useState<DeliveryConfigurationInput>(() =>
+      normalizeDeliveryConfiguration({
+        delivery_available: tenant.delivery_available !== false,
+        delivery_starts_at: tenant.delivery_starts_at || null,
+        delivery_ends_at: tenant.delivery_ends_at || null,
+        primary_area_id: tenant.directory_profile?.area_id || 0,
+        delivery_areas:
+          tenant.tenant_delivery_areas
+            ?.filter(
+              (area) =>
+                area.is_active !== false && area.area.is_active !== false,
+            )
+            .map((area) => ({
+              area_id: area.area_id,
+              delivery_fee: Number(area.delivery_fee),
+            })) || [],
+      }),
+    );
 
   useEffect(() => {
     if (state.success) setIsOpen(false);

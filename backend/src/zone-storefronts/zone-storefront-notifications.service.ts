@@ -7,8 +7,6 @@ type ZoneOrderNotification = {
   zoneName: string;
   area: string;
   operationsPhone: string;
-  customerName: string;
-  customerPhone: string;
   total: number;
 };
 
@@ -19,33 +17,20 @@ export class ZoneStorefrontNotificationsService {
 
   constructor(private readonly whatsappService: WhatsappService) {}
 
-  /** Notifies operations and acknowledges a newly committed zone order. */
+  /** Notifies operations about a newly committed zone order. */
   async notifyNewOrder(payload: ZoneOrderNotification): Promise<void> {
-    await Promise.allSettled([
-      this.safeSend('new zone order operations', () =>
-        this.whatsappService.sendTemplatedMessage({
-          key: 'zone_order_operations',
-          to: payload.operationsPhone,
-          payload: {
-            orderNumber: payload.orderNumber,
-            zoneName: payload.zoneName,
-            area: payload.area,
-            totalEgp: payload.total,
-          },
-        }),
-      ),
-      this.safeSend('new zone order customer', () =>
-        this.whatsappService.sendTemplatedMessage({
-          key: 'order_received_customer',
-          to: payload.customerPhone,
-          payload: {
-            customerName: payload.customerName,
-            orderNumber: `#${payload.orderNumber}`,
-            totalEgp: payload.total,
-          },
-        }),
-      ),
-    ]);
+    await this.safeSend('new zone order operations', () =>
+      this.whatsappService.sendTemplatedMessage({
+        key: 'zone_order_operations',
+        to: payload.operationsPhone,
+        payload: {
+          orderNumber: payload.orderNumber,
+          zoneName: payload.zoneName,
+          area: payload.area,
+          totalEgp: payload.total,
+        },
+      }),
+    );
   }
 
   /** Notifies the selected merchant after a committed assignment attempt. */

@@ -3,6 +3,10 @@
 import { Clock3, MapPin, ReceiptText } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
+import {
+  excludePrimaryAreaFromDeliveryAreas,
+  normalizeDeliveryConfiguration,
+} from "@/lib/delivery-configuration";
 import type {
   DeliveryConfigurationInput,
   DirectoryArea,
@@ -35,24 +39,28 @@ export default function DeliveryConfigurationEditor({
   disabled = false,
 }: DeliveryConfigurationEditorProps) {
   const [bulkFee, setBulkFee] = useState("20");
+  const deliveryAreas = useMemo(
+    () =>
+      excludePrimaryAreaFromDeliveryAreas(
+        value.delivery_areas,
+        value.primary_area_id,
+      ),
+    [value.delivery_areas, value.primary_area_id],
+  );
   const selectedFees = useMemo(
     () =>
       new Map(
-        value.delivery_areas.map((area) => [
+        deliveryAreas.map((area) => [
           area.area_id,
           area.delivery_fee,
         ]),
       ),
-    [value.delivery_areas],
+    [deliveryAreas],
   );
   const eligibleAreas = useMemo(
     () =>
       areas
-        .filter(
-          (area) =>
-            area.id === value.primary_area_id ||
-            area.parent_area_id === value.primary_area_id,
-        )
+        .filter((area) => area.parent_area_id === value.primary_area_id)
         .sort(
           (left, right) =>
             left.sort_order - right.sort_order ||
@@ -70,36 +78,27 @@ export default function DeliveryConfigurationEditor({
         ),
     [areas],
   );
-  const fees = value.delivery_areas.map((area) => area.delivery_fee);
+  const fees = deliveryAreas.map((area) => area.delivery_fee);
   const minimumFee = fees.length > 0 ? Math.min(...fees) : 0;
   const maximumFee = fees.length > 0 ? Math.max(...fees) : 0;
 
   const update = (patch: Partial<DeliveryConfigurationInput>) => {
-    onChange({ ...value, ...patch });
+    onChange(normalizeDeliveryConfiguration({ ...value, ...patch }));
   };
 
   const handlePrimaryAreaChange = (primaryAreaId: number) => {
     const allowedIds = new Set(
       areas
-        .filter(
-          (area) =>
-            area.id === primaryAreaId ||
-            area.parent_area_id === primaryAreaId,
-        )
+        .filter((area) => area.parent_area_id === primaryAreaId)
         .map((area) => area.id),
     );
-    const retainedAreas = value.delivery_areas.filter((area) =>
+    const retainedAreas = deliveryAreas.filter((area) =>
       allowedIds.has(area.area_id),
     );
 
     update({
       primary_area_id: primaryAreaId,
-      delivery_areas:
-        retainedAreas.length > 0
-          ? retainedAreas
-          : primaryAreaId
-            ? [{ area_id: primaryAreaId, delivery_fee: 20 }]
-            : [],
+      delivery_areas: retainedAreas,
     });
   };
 
@@ -108,14 +107,14 @@ export default function DeliveryConfigurationEditor({
     update({
       delivery_areas:
         existingFee === undefined
-          ? [...value.delivery_areas, { area_id: areaId, delivery_fee: 20 }]
-          : value.delivery_areas.filter((area) => area.area_id !== areaId),
+          ? [...deliveryAreas, { area_id: areaId, delivery_fee: 20 }]
+          : deliveryAreas.filter((area) => area.area_id !== areaId),
     });
   };
 
   const updateAreaFee = (areaId: number, deliveryFee: number) => {
     update({
-      delivery_areas: value.delivery_areas.map((area) =>
+      delivery_areas: deliveryAreas.map((area) =>
         area.area_id === areaId
           ? { ...area, delivery_fee: deliveryFee }
           : area,
@@ -127,7 +126,7 @@ export default function DeliveryConfigurationEditor({
     const parsedFee = Number(bulkFee);
     if (!Number.isFinite(parsedFee) || parsedFee < 0) return;
     update({
-      delivery_areas: value.delivery_areas.map((area) => ({
+      delivery_areas: deliveryAreas.map((area) => ({
         ...area,
         delivery_fee: parsedFee,
       })),
@@ -153,7 +152,7 @@ export default function DeliveryConfigurationEditor({
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-brand-soft px-3 py-1 text-xs font-bold text-brand-primary">
-          {value.delivery_areas.length} منطقة
+          {deliveryAreas.length} منطقة
         </span>
       </div>
 
@@ -175,7 +174,7 @@ export default function DeliveryConfigurationEditor({
             المناطق النشطة
           </p>
           <p className="mt-1 text-lg font-black tabular-nums text-brand-text">
-            {value.delivery_areas.length}
+            {deliveryAreas.length}
           </p>
         </div>
         <div>
@@ -258,7 +257,7 @@ export default function DeliveryConfigurationEditor({
               <button
                 type="button"
                 onClick={applyBulkFee}
-                disabled={disabled || value.delivery_areas.length === 0}
+                disabled={disabled || deliveryAreas.length === 0}
                 className="min-h-11 shrink-0 rounded-lg border border-brand-primary px-4 text-sm font-bold text-brand-primary transition-colors hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
               >
                 تطبيق على الكل
@@ -338,7 +337,9 @@ export default function DeliveryConfigurationEditor({
               </div>
             ) : (
               <p className="rounded-xl border border-dashed border-brand-border bg-brand-soft/30 p-4 text-sm leading-6 text-muted-foreground">
-                اختر المنطقة الأساسية لعرض مناطق التوصيل المتاحة.
+                {value.primary_area_id
+                  ? "لا توجد مناطق توصيل فرعية متاحة ضمن المنطقة الأساسية."
+                  : "اختر المنطقة الأساسية لعرض مناطق التوصيل المتاحة."}
               </p>
             )}
           </fieldset>

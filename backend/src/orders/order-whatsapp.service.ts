@@ -8,7 +8,6 @@ import {
   Product,
   DirectoryArea,
 } from '../../generated/prisma/client';
-import { welcomeCustomer } from 'src/whatsapp/templates';
 import { OrderStatus } from 'src/common/enums/order-status.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
 
@@ -139,24 +138,6 @@ export class OrderWhatsappService {
     return value.replace(/\s+/gu, ' ').trim() || 'منتج غير محدد';
   }
 
-  async notifyCustomerConfirmed(order: OrderWithRelations): Promise<void> {
-    const customerNumber = order.customer_phone || order.customer?.phone;
-    if (!customerNumber) return;
-
-    const customerName = order.customer_name || order.customer?.name || 'عميل';
-    const total = Number(order.total || 0);
-
-    await this.whatsappService.sendTemplatedMessage({
-      key: 'order_received_customer',
-      to: customerNumber,
-      payload: {
-        customerName,
-        orderNumber: `#${order.id}`,
-        totalEgp: total,
-      },
-    });
-  }
-
   async notifyCustomerStatusUpdate(order: OrderWithRelations): Promise<void> {
     const customerNumber = order.customer_phone || order.customer?.phone;
     if (!customerNumber) return;
@@ -260,19 +241,6 @@ export class OrderWhatsappService {
         reason: reason?.trim() || 'بدون سبب',
       },
     });
-  }
-
-  async notifyWelcomeCustomer(order: OrderWithRelations): Promise<void> {
-    const customerNumber = order.customer_phone || order.customer?.phone;
-    if (!customerNumber) return;
-
-    const storeName = order.tenant?.name || 'المحل';
-
-    const message = welcomeCustomer({
-      storeName,
-    });
-
-    await this.whatsappService.sendMessage(customerNumber, message);
   }
 
   /** Resolves the accepted dispatch merchant before falling back to the order owner. */

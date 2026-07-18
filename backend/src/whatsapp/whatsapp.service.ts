@@ -9,7 +9,6 @@ import { ZodError } from 'zod';
 import {
   buildContentVariables,
   getTemplateSid,
-  renderFallbackText,
   validateTemplatePayload,
 } from './templates/templates.registry.utils';
 import {
@@ -68,6 +67,7 @@ export class WhatsappService {
     }
   }
 
+  /** Sends free-form text after the caller has verified an active session. */
   async sendMessage(to: string, body: string): Promise<void> {
     if (!this.isNotificationsEnabled()) {
       this.logDisabledNotification(
@@ -144,9 +144,7 @@ export class WhatsappService {
     });
   }
 
-  /**
-   * Sends a typed WhatsApp template and falls back to plaintext on content failures.
-   */
+  /** Sends a typed WhatsApp template without retrying as plaintext. */
   async sendTemplatedMessage<K extends TemplateKey>({
     key,
     to,
@@ -178,14 +176,12 @@ export class WhatsappService {
       throw error;
     }
 
-    const fallbackMessage = renderFallbackText(key, validatedPayload);
     const contentSid = getTemplateSid(key);
 
     if (!contentSid) {
-      this.logger.warn(
-        `Missing content SID for template ${key}; sending fallback text message.`,
+      this.logger.error(
+        `Cannot submit WhatsApp template ${key} to ${maskPhoneNumber(to)}: content SID is missing.`,
       );
-      await this.sendMessage(to, fallbackMessage);
       return;
     }
 
@@ -194,10 +190,9 @@ export class WhatsappService {
       await this.sendContentMessage(to, contentSid, contentVariables, key);
     } catch (error) {
       this.logger.error(
-        `Failed to submit WhatsApp template ${key} to ${maskPhoneNumber(to)}; sending fallback text.`,
+        `Failed to submit WhatsApp template ${key} to ${maskPhoneNumber(to)}.`,
         this.describeError(error),
       );
-      await this.sendMessage(to, fallbackMessage);
     }
   }
 

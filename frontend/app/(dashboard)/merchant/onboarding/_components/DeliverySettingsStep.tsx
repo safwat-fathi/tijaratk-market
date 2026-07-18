@@ -6,6 +6,7 @@ import DeliveryConfigurationEditor from "@/components/delivery/DeliveryConfigura
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { tenantsService } from "@/services/api/tenants.service";
 import { merchantDirectoryService } from "@/services/api/stores-directory.service";
+import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
 import type {
   DeliveryConfigurationInput,
   DirectoryArea,
@@ -23,22 +24,24 @@ export default function DeliverySettingsStep({
 }) {
   const [areas, setAreas] = useState<DirectoryArea[]>([]);
   const [configuration, setConfiguration] =
-    useState<DeliveryConfigurationInput>({
-      delivery_available: true,
-      delivery_starts_at: tenant.delivery_starts_at || null,
-      delivery_ends_at: tenant.delivery_ends_at || null,
-      primary_area_id: tenant.directory_profile?.area_id || 0,
-      delivery_areas:
-        tenant.tenant_delivery_areas
-          ?.filter(
-            (area) =>
-              area.is_active !== false && area.area?.is_active !== false,
-          )
-          .map((area) => ({
-            area_id: area.area_id,
-            delivery_fee: Number(area.delivery_fee),
-          })) || [],
-    });
+    useState<DeliveryConfigurationInput>(() =>
+      normalizeDeliveryConfiguration({
+        delivery_available: true,
+        delivery_starts_at: tenant.delivery_starts_at || null,
+        delivery_ends_at: tenant.delivery_ends_at || null,
+        primary_area_id: tenant.directory_profile?.area_id || 0,
+        delivery_areas:
+          tenant.tenant_delivery_areas
+            ?.filter(
+              (area) =>
+                area.is_active !== false && area.area?.is_active !== false,
+            )
+            .map((area) => ({
+              area_id: area.area_id,
+              delivery_fee: Number(area.delivery_fee),
+            })) || [],
+      }),
+    );
   const [areasLoading, setAreasLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,21 +65,20 @@ export default function DeliverySettingsStep({
           [];
         const activeDeliveryAreas = deliveryAreas.filter(
           (area) =>
-            area.is_active !== false && area.area?.is_active !== false,
+            area.is_active !== false &&
+            area.area?.is_active !== false &&
+            area.area_id !== primaryAreaId,
         );
-        setConfiguration((current) => ({
-          ...current,
-          primary_area_id: primaryAreaId,
-          delivery_areas:
-            activeDeliveryAreas.length > 0
-              ? activeDeliveryAreas.map((area) => ({
-                  area_id: area.area_id,
-                  delivery_fee: Number(area.delivery_fee),
-                }))
-              : primaryAreaId
-                ? [{ area_id: primaryAreaId, delivery_fee: 20 }]
-                : [],
-        }));
+        setConfiguration((current) =>
+          normalizeDeliveryConfiguration({
+            ...current,
+            primary_area_id: primaryAreaId,
+            delivery_areas: activeDeliveryAreas.map((area) => ({
+              area_id: area.area_id,
+              delivery_fee: Number(area.delivery_fee),
+            })),
+          }),
+        );
       }
       setAreasLoading(false);
     };
@@ -103,8 +105,9 @@ export default function DeliverySettingsStep({
     }
 
     setSaving(true);
-    const response =
-      await tenantsService.updateMyDeliverySettings(configuration);
+    const response = await tenantsService.updateMyDeliverySettings(
+      normalizeDeliveryConfiguration(configuration),
+    );
     setSaving(false);
 
     if (!response.success || !response.data) {

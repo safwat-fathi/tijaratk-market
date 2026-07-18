@@ -68,7 +68,11 @@ export class DeliveryConfigurationService {
     return this.prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.findUnique({
         where: { id: tenantId },
-        select: { id: true, name: true },
+        select: {
+          id: true,
+          name: true,
+          directory_profile: { select: { area_id: true } },
+        },
       });
       if (!tenant) {
         throw new NotFoundException('Tenant not found');
@@ -127,8 +131,12 @@ export class DeliveryConfigurationService {
         },
       });
 
+      const primaryAreaChanged =
+        tenant.directory_profile?.area_id !== dto.primary_area_id;
       const shouldUpdateAreas =
-        dto.delivery_available || dto.delivery_areas.length > 0;
+        dto.delivery_available ||
+        dto.delivery_areas.length > 0 ||
+        primaryAreaChanged;
       if (shouldUpdateAreas) {
         await tx.tenantDeliveryArea.updateMany({
           where: { tenant_id: tenantId },
@@ -156,6 +164,15 @@ export class DeliveryConfigurationService {
             },
           });
         }
+      } else {
+        await tx.tenantDeliveryArea.updateMany({
+          where: {
+            tenant_id: tenantId,
+            area_id: dto.primary_area_id,
+            is_active: true,
+          },
+          data: { is_active: false },
+        });
       }
 
       return tx.tenant.findUniqueOrThrow({
@@ -254,6 +271,11 @@ export class DeliveryConfigurationService {
     const areaIds = dto.delivery_areas.map((area) => area.area_id);
     if (new Set(areaIds).size !== areaIds.length) {
       throw new BadRequestException('لا يمكن تكرار منطقة التوصيل');
+    }
+    if (areaIds.includes(dto.primary_area_id)) {
+      throw new BadRequestException(
+        'المنطقة الأساسية لا يمكن إضافتها ضمن مناطق التوصيل',
+      );
     }
   }
 }

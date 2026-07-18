@@ -76,6 +76,64 @@ describe('WhatsappService submission logging', () => {
     expect(submittedLog).toContain('4567');
   });
 
+  it('does not submit plaintext when a template content SID is missing', async () => {
+    delete process.env.TWILIO_CONTENT_SID_NEW_ORDER_MERCHANT;
+    const service = createService();
+
+    await service.sendTemplatedMessage({
+      key: 'new_order_merchant',
+      to: '01001234567',
+      payload: {
+        orderNumber: '42',
+        customerName: 'أحمد',
+        customerPhone: '+201001234567',
+        deliveryAddress: 'الدقي',
+        orderDetails: 'أرز: 25',
+        initialTotalEgp: 25,
+      },
+    });
+
+    expect(createMessage).not.toHaveBeenCalled();
+    const errorLog = errorSpy.mock.calls.flat().map(String).join(' ');
+    expect(errorLog).toContain('new_order_merchant');
+    expect(errorLog).toContain('4567');
+    expect(errorLog).not.toContain('01001234567');
+    expect(errorLog).not.toContain('+201001234567');
+  });
+
+  it('does not retry a rejected template as plaintext', async () => {
+    createMessage.mockRejectedValue(
+      new Error("The 'To' number +201001234567 is invalid"),
+    );
+    const service = createService();
+
+    await service.sendTemplatedMessage({
+      key: 'new_order_merchant',
+      to: '01001234567',
+      payload: {
+        orderNumber: '42',
+        customerName: 'أحمد',
+        customerPhone: '+201001234567',
+        deliveryAddress: 'الدقي',
+        orderDetails: 'أرز: 25',
+        initialTotalEgp: 25,
+      },
+    });
+
+    expect(createMessage).toHaveBeenCalledTimes(1);
+    expect(createMessage.mock.calls[0][0]).toHaveProperty(
+      'contentSid',
+      'HXmerchant',
+    );
+    expect(createMessage.mock.calls[0][0]).not.toHaveProperty('body');
+
+    const errorLog = errorSpy.mock.calls.flat().map(String).join(' ');
+    expect(errorLog).toContain('Failed to submit WhatsApp template');
+    expect(errorLog).toContain('4567');
+    expect(errorLog).not.toContain('01001234567');
+    expect(errorLog).not.toContain('+201001234567');
+  });
+
   it('masks the recipient in synchronous provider errors', async () => {
     createMessage.mockRejectedValue(
       new Error("The 'To' number +201001234567 is invalid"),

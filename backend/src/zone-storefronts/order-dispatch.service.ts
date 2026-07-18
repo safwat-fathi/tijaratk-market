@@ -212,8 +212,6 @@ export class OrderDispatchService {
       zoneName: zone.name,
       area: zone.area.name_ar,
       operationsPhone: zone.operations_phone,
-      customerName: completeOrder.customer_name || 'عميل',
-      customerPhone: completeOrder.customer_phone || '',
       total: Number(completeOrder.total || 0),
     });
 

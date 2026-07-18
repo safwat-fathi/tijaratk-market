@@ -1,8 +1,0 @@
-export const welcomeCustomer = ({ storeName }: { storeName: string }) => `
-*🎉 تم استلام طلبك*
-
-شكراً لطلبك من *${storeName}*.
-هيوصلك كل التحديثات هنا على واتساب.
-
-من غير تطبيقات أو تسجيل.
-`;

@@ -61,20 +61,6 @@ export function buildContentVariables<K extends TemplateKey>(
   return JSON.stringify(twilioVariables);
 }
 
-/**
- * Renders fallback plaintext text for a template key.
- */
-export function renderFallbackText<K extends TemplateKey>(
-  key: K,
-  payload: TemplatePayload<K>,
-): string {
-  const fallback = templatesRegistry[key].fallbackText as (
-    data: TemplatePayload<K>,
-  ) => string;
-
-  return fallback(payload);
-}
-
 function stringifyTemplateValue(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') {

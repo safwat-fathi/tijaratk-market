@@ -519,7 +519,7 @@ export class OrdersService {
 
     const completeOrder = await this.findOne(savedOrder.id);
     await this.bumpDashboardCacheVersion(tenantId);
-    await this.notifyOrderCreated(completeOrder, isFirstOrder);
+    await this.notifyOrderCreated(completeOrder);
 
     return {
       ...completeOrder,
@@ -2526,18 +2526,9 @@ export class OrdersService {
     }
   }
 
-  private async notifyOrderCreated(
-    order: Order,
-    isFirstOrder: boolean,
-  ): Promise<void> {
+  private async notifyOrderCreated(order: Order): Promise<void> {
     try {
       await this.orderWhatsappService.notifySellerNewOrder(order);
-
-      await this.orderWhatsappService.notifyCustomerConfirmed(order);
-
-      if (isFirstOrder) {
-        await this.orderWhatsappService.notifyWelcomeCustomer(order);
-      }
     } catch (error) {
       this.logger.warn(`Failed to notify for order ${order.id}`, error);
     }

@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { loginSchema } from "@/lib/validations/auth";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
+import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
 import type {
   BulkEssentialStage,
   CatalogItemsResponse,
@@ -1090,6 +1091,13 @@ const adminDeliveryConfigurationSchema = z
         message: "لا يمكن تكرار منطقة التوصيل",
       });
     }
+    if (areaIds.includes(data.primary_area_id)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["delivery_areas"],
+        message: "المنطقة الأساسية لا يمكن إضافتها ضمن مناطق التوصيل",
+      });
+    }
     const start = data.delivery_starts_at || "";
     const end = data.delivery_ends_at || "";
     if (Boolean(start) !== Boolean(end)) {
@@ -1135,7 +1143,7 @@ export async function updateTenantAreasAction(
 
   const response = await adminService.updateTenantDeliveryConfiguration(
     tenantId,
-    parsed.data,
+    normalizeDeliveryConfiguration(parsed.data),
   );
   if (!response.success) {
     return {

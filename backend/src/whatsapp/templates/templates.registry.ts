@@ -1,12 +1,4 @@
 import { z } from 'zod';
-import { newOrderSeller } from './new-order-seller';
-import { orderStatusUpdate } from './order-status';
-import { outForDelivery } from './out-for-delivery';
-import { orderProductReplacement } from './order-product-replacement';
-import { merchantReplacementAccepted } from './merchant-replacement-accepted';
-import { merchantReplacementRejected } from './merchant-replacement-rejected';
-import { merchantDayClosureSummary } from './merchant-day-closure-summary';
-import { merchantPasswordResetOtp } from './merchant-password-reset-otp';
 
 export const templatesRegistry = {
   new_order_merchant: {
@@ -27,46 +19,6 @@ export const templatesRegistry = {
       orderDetails: z.string().trim().min(1).max(1000),
       initialTotalEgp: z.number().nonnegative(),
     }),
-    fallbackText: (data: {
-      customerName: string;
-      orderNumber: string;
-      customerPhone: string;
-      deliveryAddress: string;
-      orderDetails: string;
-      initialTotalEgp: number;
-    }) =>
-      newOrderSeller({
-        orderId: data.orderNumber,
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        deliveryAddress: data.deliveryAddress,
-        orderDetails: data.orderDetails,
-        total: data.initialTotalEgp,
-      }),
-  },
-
-  order_received_customer: {
-    contentSidEnv: 'TWILIO_CONTENT_SID_ORDER_RECEIVED_CUSTOMER',
-    variables: {
-      customerName: 1,
-      orderNumber: 2,
-      totalEgp: 3,
-    },
-    schema: z.object({
-      customerName: z.string().trim().min(1),
-      orderNumber: z.string().trim().min(1),
-      totalEgp: z.number().nonnegative(),
-    }),
-    fallbackText: (data: {
-      customerName: string;
-      orderNumber: string;
-      totalEgp: number;
-    }) =>
-      orderStatusUpdate({
-        customerName: data.customerName,
-        orderId: data.orderNumber,
-        status: `تم استلام طلبك بنجاح. إجمالي الطلب: ${data.totalEgp} جنيه`,
-      }),
   },
 
   order_out_for_delivery: {
@@ -79,11 +31,6 @@ export const templatesRegistry = {
       customerName: z.string().trim().min(1),
       orderNumber: z.string().trim().min(1),
     }),
-    fallbackText: (data: { customerName: string; orderNumber: string }) =>
-      outForDelivery({
-        customerName: data.customerName,
-        orderId: data.orderNumber,
-      }),
   },
 
   order_status_update_customer: {
@@ -98,16 +45,6 @@ export const templatesRegistry = {
       orderNumber: z.string().trim().min(1),
       statusLabel: z.string().trim().min(1),
     }),
-    fallbackText: (data: {
-      customerName: string;
-      orderNumber: string;
-      statusLabel: string;
-    }) =>
-      orderStatusUpdate({
-        customerName: data.customerName,
-        orderId: data.orderNumber,
-        status: data.statusLabel,
-      }),
   },
 
   order_product_replacement: {
@@ -126,13 +63,6 @@ export const templatesRegistry = {
       replacementProductName: z.string().trim().min(1),
       orderTotal: z.number().nonnegative(),
     }),
-    fallbackText: (data: {
-      orderNumber: string;
-      storeName: string;
-      originalProductName: string;
-      replacementProductName: string;
-      orderTotal: number;
-    }) => orderProductReplacement(data),
   },
 
   merchant_replacement_accepted: {
@@ -145,8 +75,6 @@ export const templatesRegistry = {
       orderNumber: z.string().trim().min(1),
       customerName: z.string().trim().min(1),
     }),
-    fallbackText: (data: { orderNumber: string; customerName: string }) =>
-      merchantReplacementAccepted(data),
   },
 
   merchant_replacement_rejected: {
@@ -165,13 +93,6 @@ export const templatesRegistry = {
       replacementProductName: z.string().trim().min(1),
       reason: z.string().trim().min(1),
     }),
-    fallbackText: (data: {
-      orderNumber: string;
-      customerName: string;
-      originalProductName: string;
-      replacementProductName: string;
-      reason: string;
-    }) => merchantReplacementRejected(data),
   },
 
   merchant_day_closure_summary: {
@@ -192,14 +113,6 @@ export const templatesRegistry = {
       totalSalesEgp: z.number().nonnegative(),
       totalCollectedEgp: z.number().nonnegative(),
     }),
-    fallbackText: (data: {
-      date: string;
-      totalOrders: number;
-      completedOrders: number;
-      cancelledOrders: number;
-      totalSalesEgp: number;
-      totalCollectedEgp: number;
-    }) => merchantDayClosureSummary(data),
   },
 
   merchant_password_reset_otp: {
@@ -215,8 +128,6 @@ export const templatesRegistry = {
         .regex(/^\d{6}$/),
       expiresInMinutes: z.number().int().positive(),
     }),
-    fallbackText: (data: { otp: string; expiresInMinutes: number }) =>
-      merchantPasswordResetOtp(data),
   },
 
   zone_order_operations: {
@@ -228,13 +139,6 @@ export const templatesRegistry = {
       area: z.string().trim().min(1),
       totalEgp: z.number().nonnegative(),
     }),
-    fallbackText: (data: {
-      orderNumber: string;
-      zoneName: string;
-      area: string;
-      totalEgp: number;
-    }) =>
-      `طلب منطقة جديد #${data.orderNumber}\nالواجهة: ${data.zoneName}\nالمنطقة: ${data.area}\nالإجمالي المبدئي: ${data.totalEgp} جنيه`,
   },
 
   zone_order_assigned: {
@@ -253,14 +157,6 @@ export const templatesRegistry = {
       area: z.string().trim().min(1),
       assignmentUrl: z.string().url(),
     }),
-    fallbackText: (data: {
-      merchantName: string;
-      orderNumber: string;
-      zoneName: string;
-      area: string;
-      assignmentUrl: string;
-    }) =>
-      `مرحباً ${data.merchantName}، تم إسناد الطلب #${data.orderNumber} من ${data.zoneName} (${data.area}). راجع الطلب: ${data.assignmentUrl}`,
   },
 
   zone_dispatch_rejected_operations: {
@@ -271,12 +167,6 @@ export const templatesRegistry = {
       merchantName: z.string().trim().min(1),
       reason: z.string().trim().min(1),
     }),
-    fallbackText: (data: {
-      orderNumber: string;
-      merchantName: string;
-      reason: string;
-    }) =>
-      `رفض ${data.merchantName} الطلب #${data.orderNumber}. السبب: ${data.reason}. يحتاج الطلب إلى إعادة إسناد.`,
   },
 
   zone_dispatch_reassigned_operations: {
@@ -287,12 +177,6 @@ export const templatesRegistry = {
       previousMerchantName: z.string().trim().min(1),
       newMerchantName: z.string().trim().min(1),
     }),
-    fallbackText: (data: {
-      orderNumber: string;
-      previousMerchantName: string;
-      newMerchantName: string;
-    }) =>
-      `تمت إعادة إسناد الطلب #${data.orderNumber} من ${data.previousMerchantName} إلى ${data.newMerchantName}.`,
   },
 
   zone_order_accepted_customer: {
@@ -313,15 +197,6 @@ export const templatesRegistry = {
       newTotal: z.number().nonnegative(),
       trackingUrl: z.string().url(),
     }),
-    fallbackText: (data: {
-      customerName: string;
-      orderNumber: string;
-      merchantName: string;
-      oldTotal: number;
-      newTotal: number;
-      trackingUrl: string;
-    }) =>
-      `مرحباً ${data.customerName}، أكد ${data.merchantName} طلبك #${data.orderNumber}. الإجمالي من ${data.oldTotal} إلى ${data.newTotal} جنيه. التتبع: ${data.trackingUrl}`,
   },
 } as const;
 

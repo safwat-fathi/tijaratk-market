@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { ActivityActions } from 'src/activity-log/constants/activity-actions';
 import { ActivitySources } from 'src/activity-log/constants/activity-types';
 import { OrderStatus } from 'src/common/enums/order-status.enum';
@@ -254,4 +254,32 @@ describe('OrdersService markOrderItemOutOfStock', () => {
       expect(fixture.manager.product.updateMany).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('OrdersService new-order notifications', () => {
+  it('notifies only the merchant when an order is created', async () => {
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const orderWhatsappService = {
+      notifySellerNewOrder: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new OrdersService(
+      {} as any,
+      {} as any,
+      {} as any,
+      orderWhatsappService as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await (service as any).notifyOrderCreated({ id: 42 });
+
+    expect(orderWhatsappService.notifySellerNewOrder).toHaveBeenCalledWith({
+      id: 42,
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });
