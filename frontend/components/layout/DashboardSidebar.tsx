@@ -23,6 +23,8 @@ export interface DashboardSidebarProps {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   topContent?: React.ReactNode; // Extra content at the top (e.g. Install PWA)
+  mobileTopContent?: React.ReactNode;
+  footerContent?: React.ReactNode;
   basePath?: string; // e.g. '/admin' or '/merchant' for active state logic
   activeClass?: string;
   inactiveClass?: string;
@@ -116,6 +118,8 @@ export function DashboardSidebar({
   sidebarOpen,
   setSidebarOpen,
   topContent,
+  mobileTopContent,
+  footerContent,
   basePath = "/",
   activeClass = "bg-red-50 text-red-700",
   inactiveClass = "text-gray-900 hover:bg-gray-50 hover:text-gray-900",
@@ -144,7 +148,7 @@ export function DashboardSidebar({
     return href === activeHref;
   };
 
-  const SidebarContent = () => (
+  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
     <div className="flex grow flex-col overflow-y-auto bg-white min-h-screen border-e border-gray-200">
       {title && (
         <div className="h-16 flex justify-center items-center px-6 border-b border-gray-200 shrink-0">
@@ -156,7 +160,11 @@ export function DashboardSidebar({
         </div>
       )}
       
-      {topContent && <div className="px-6 pt-4">{topContent}</div>}
+      {(mobile ? mobileTopContent ?? topContent : topContent) ? (
+        <div className="px-6 pt-4">
+          {mobile ? mobileTopContent ?? topContent : topContent}
+        </div>
+      ) : null}
 
       <nav className="p-4 space-y-1 flex-1">
         {navigation.map((item) => {
@@ -196,6 +204,8 @@ export function DashboardSidebar({
       </nav>
 
       <div className="p-4 flex flex-col gap-4 justify-center items-center border-t border-gray-200 shrink-0">
+        {footerContent ? <div className="w-full">{footerContent}</div> : null}
+
         <div className="w-full">
           <PushAwareLogoutForm scope={pushScope} logoutAction={logoutAction} />
         </div>
@@ -244,7 +254,7 @@ export function DashboardSidebar({
                   </svg>
                 </button>
               </div>
-              <SidebarContent />
+              <SidebarContent mobile />
             </div>
           </div>
         </div>

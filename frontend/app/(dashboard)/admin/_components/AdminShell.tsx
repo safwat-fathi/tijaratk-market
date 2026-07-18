@@ -8,7 +8,12 @@ import {
   type NavItem,
 } from "@/components/layout/DashboardSidebar";
 import type { AdminRole } from "@/services/api/admin.service";
-import { DashboardPwaControls } from "@/components/pwa/DashboardPwaControls";
+import { DashboardPwaInstallAction } from "@/components/pwa/DashboardPwaControls";
+import {
+  MobilePushEnableButton,
+  PushNotificationsProvider,
+  PushNotificationsSettingsCard,
+} from "@/components/pwa/PushNotificationsControl";
 import type { PushNotificationsConfig } from "@/types/services/push-notifications";
 
 type AdminShellProps = {
@@ -55,40 +60,40 @@ export const AdminShell = ({
     : operationsNavigation;
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-gray-50" dir="rtl">
-      <DashboardPwaControls
-        scope="admin"
-        appName="تجارتك للإدارة"
-        config={pushConfig}
-      />
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-4 border-b border-gray-200 bg-white px-4 py-4 pe-48 shadow-sm sm:px-6 sm:pe-48 lg:hidden">
-        <button
-          type="button"
-          className="-m-2.5 rounded-md p-2.5 text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-          onClick={() => setSidebarOpen(true)}
-        >
-          <span className="sr-only">فتح القائمة</span>
-          <span aria-hidden="true" className="text-xl">☰</span>
-        </button>
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-gray-900">لوحة تحكم الإدارة</p>
-          <p className="text-xs text-gray-500">{adminName}</p>
+    <PushNotificationsProvider scope="admin" config={pushConfig}>
+      <div className="min-h-screen overflow-x-hidden bg-gray-50" dir="rtl">
+        <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-4 border-b border-gray-200 bg-white px-4 py-4 shadow-sm sm:px-6 lg:hidden">
+          <button
+            type="button"
+            className="-m-2.5 rounded-md p-2.5 text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <span className="sr-only">فتح القائمة</span>
+            <span aria-hidden="true" className="text-xl">☰</span>
+          </button>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900">لوحة تحكم الإدارة</p>
+            <p className="text-xs text-gray-500">{adminName}</p>
+          </div>
+          <MobilePushEnableButton />
         </div>
+
+        <DashboardSidebar
+          title={role === "platform_admin" ? "مسئولو تجارتك" : "عمليات تجارتك"}
+          navigation={navigation}
+          logoutAction={adminLogoutAction}
+          pushScope="admin"
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          topContent={<DashboardPwaInstallAction appName="تجارتك للإدارة" />}
+          footerContent={<PushNotificationsSettingsCard compact />}
+          basePath="/admin"
+        />
+
+        <main className="flex min-h-screen min-w-0 w-full flex-col pb-10 pt-20 lg:py-8 lg:ps-72">
+          <div className="min-w-0 w-full flex-1 p-4 sm:p-8">{children}</div>
+        </main>
       </div>
-
-      <DashboardSidebar
-        title={role === "platform_admin" ? "مسئولو تجارتك" : "عمليات تجارتك"}
-        navigation={navigation}
-        logoutAction={adminLogoutAction}
-        pushScope="admin"
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        basePath="/admin"
-      />
-
-      <main className="flex min-h-screen min-w-0 w-full flex-col pb-10 pt-20 lg:ps-72 lg:pt-20">
-        <div className="min-w-0 w-full flex-1 p-4 sm:p-8">{children}</div>
-      </main>
-    </div>
+    </PushNotificationsProvider>
   );
 };

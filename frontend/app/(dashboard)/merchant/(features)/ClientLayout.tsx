@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { logoutAction } from "@/actions/auth-server";
 import { Logo } from "@/components/ui/Logo";
-import { DashboardPwaControls } from "@/components/pwa/DashboardPwaControls";
+import { DashboardPwaInstallAction } from "@/components/pwa/DashboardPwaControls";
+import {
+  MobilePushEnableButton,
+  PushNotificationsProvider,
+} from "@/components/pwa/PushNotificationsControl";
 import { SupportWidget } from "@/components/ui/SupportWidget";
 import { GuidedTour } from "@/components/merchant/GuidedTour";
 import type { PushNotificationsConfig } from "@/types/services/push-notifications";
@@ -195,69 +199,78 @@ export default function MerchantLayoutClient({
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <GuidedTour />
-      <DashboardPwaControls
-        scope="merchant"
-        appName={merchantAppName}
-        config={pushConfig}
-        installId="tour-pwa-install"
-      />
-      {/* Mobile sidebar placeholder/trigger */}
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-x-6 border-b border-brand-border bg-white px-4 py-4 pe-48 shadow-soft sm:px-6 sm:pe-48 lg:hidden">
-        <button
-          id="mobile-menu-trigger"
-          type="button"
-          className="-m-2.5 rounded-md p-2.5 text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 lg:hidden"
-          onClick={() => setSidebarOpen(true)}
-        >
-          <span className="sr-only">فتح القائمة</span>
-          <svg
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth="2.5"
-            stroke="currentColor"
-            aria-hidden="true"
+    <PushNotificationsProvider scope="merchant" config={pushConfig}>
+      <div className="min-h-screen bg-background">
+        <GuidedTour />
+        {/* Mobile sidebar placeholder/trigger */}
+        <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-x-4 border-b border-brand-border bg-white px-4 py-4 shadow-soft sm:px-6 lg:hidden">
+          <button
+            id="mobile-menu-trigger"
+            type="button"
+            className="-m-2.5 rounded-md p-2.5 text-brand-text transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 lg:hidden"
+            onClick={() => setSidebarOpen(true)}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-            />
-          </svg>
-        </button>
-        <div className="flex-1 text-sm font-semibold leading-6 text-brand-text">
-          لوحة التحكم
+            <span className="sr-only">فتح القائمة</span>
+            <svg
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="2.5"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+              />
+            </svg>
+          </button>
+          <div className="flex-1 text-sm font-semibold leading-6 text-brand-text">
+            لوحة التحكم
+          </div>
+          <MobilePushEnableButton />
         </div>
+
+        <DashboardSidebar
+          title={
+            <Logo
+              variant="light"
+              width={150}
+              height={40}
+              className="h-8 w-auto"
+            />
+          }
+          navigation={merchantNavigation}
+          logoutAction={logoutAction}
+          pushScope="merchant"
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          topContent={
+            <DashboardPwaInstallAction
+              appName={merchantAppName}
+              installId="tour-pwa-install"
+            />
+          }
+          mobileTopContent={
+            <DashboardPwaInstallAction
+              appName={merchantAppName}
+              installId="tour-pwa-install-mobile"
+            />
+          }
+          basePath="/merchant"
+          activeClass="bg-brand-soft text-brand-primary"
+          inactiveClass="text-brand-text hover:bg-brand-soft hover:text-brand-primary"
+        />
+
+        {/* Main content */}
+        <main className="flex w-full min-w-0 max-w-full flex-1 flex-col pb-10 pt-24 lg:py-10 lg:ps-72">
+          <div className="px-4 sm:px-6 lg:px-8 w-full min-w-0">{children}</div>
+        </main>
+
+        {/* Global Support Widget FAB */}
+        <SupportWidget />
       </div>
-
-      <DashboardSidebar
-        title={
-          <Logo
-            variant="light"
-            width={150}
-            height={40}
-            className="h-8 w-auto"
-          />
-        }
-        navigation={merchantNavigation}
-        logoutAction={logoutAction}
-        pushScope="merchant"
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        basePath="/merchant"
-        activeClass="bg-brand-soft text-brand-primary"
-        inactiveClass="text-brand-text hover:bg-brand-soft hover:text-brand-primary"
-      />
-
-      {/* Main content */}
-      <main className="flex w-full min-w-0 max-w-full flex-1 flex-col pb-10 pt-24 lg:pb-10 lg:ps-72 lg:pt-20">
-        <div className="px-4 sm:px-6 lg:px-8 w-full min-w-0">{children}</div>
-      </main>
-
-      {/* Global Support Widget FAB */}
-      <SupportWidget />
-    </div>
+    </PushNotificationsProvider>
   );
 }

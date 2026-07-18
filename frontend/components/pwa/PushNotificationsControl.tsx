@@ -2,8 +2,24 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, BellOff, Loader2, X } from "lucide-react";
-import { startTransition, useCallback, useEffect, useState } from "react";
+import {
+  Bell,
+  BellOff,
+  CheckCircle2,
+  Loader2,
+  Smartphone,
+  X,
+} from "lucide-react";
+import {
+  createContext,
+  startTransition,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   subscribePushNotificationsAction,
   unsubscribePushNotificationsAction,
@@ -17,7 +33,7 @@ import {
   type PushScope,
 } from "@/types/services/push-notifications";
 
-type NotificationState =
+export type PushNotificationState =
   | "loading"
   | "unsupported"
   | "disabled"
@@ -27,11 +43,27 @@ type NotificationState =
   | "busy"
   | "error";
 
-type PushNotificationsControlProps = {
+type PushNotificationsContextValue = {
+  state: PushNotificationState;
+  feedback: string | null;
+  enableNotifications: () => Promise<void>;
+  disableNotifications: () => Promise<void>;
+  showMobileEnablePrompt: boolean;
+};
+
+type PushNotificationsProviderProps = {
   scope: PushScope;
   config: PushNotificationsConfig;
+  children: ReactNode;
+};
+
+type PushNotificationsSettingsCardProps = {
+  compact?: boolean;
   className?: string;
 };
+
+const PushNotificationsContext =
+  createContext<PushNotificationsContextValue | null>(null);
 
 const PUSH_MESSAGE_TYPES = new Set<PushNotificationMessage["type"]>([
   "merchant.order.created",
@@ -78,6 +110,7 @@ const serializeSubscription = (
   ) {
     return null;
   }
+
   return {
     endpoint: value.endpoint,
     expirationTime: value.expirationTime ?? null,
@@ -88,14 +121,14 @@ const serializeSubscription = (
   };
 };
 
-/** Registers one scoped PWA worker and owns opt-in Web Push interactions. */
-export const PushNotificationsControl = ({
+/** Provides one scoped browser Push lifecycle for a dashboard shell. */
+export const PushNotificationsProvider = ({
   scope,
   config,
-  className,
-}: PushNotificationsControlProps) => {
+  children,
+}: PushNotificationsProviderProps) => {
   const router = useRouter();
-  const [state, setState] = useState<NotificationState>("loading");
+  const [state, setState] = useState<PushNotificationState>("loading");
   const [message, setMessage] = useState<PushNotificationMessage | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -106,7 +139,19 @@ export const PushNotificationsControl = ({
   }, [scope]);
 
   useEffect(() => {
+    if (!config.enabled || !config.publicKey) {
+      if ("serviceWorker" in navigator) {
+        void registerWorker().catch(() => undefined);
+      }
+      setState("disabled");
+      return;
+    }
+
     if (!("serviceWorker" in navigator)) {
+      setState("unsupported");
+      return;
+    }
+    if (!("PushManager" in window) || !("Notification" in window)) {
       setState("unsupported");
       return;
     }
@@ -116,30 +161,32 @@ export const PushNotificationsControl = ({
       try {
         const registration = await registerWorker();
         if (cancelled) return;
-        if (!config.enabled || !config.publicKey) {
-          setState("disabled");
-          return;
-        }
-        if (!("PushManager" in window) || !("Notification" in window)) {
-          setState("unsupported");
-          return;
-        }
-        const existing = await registration.pushManager.getSubscription();
+        const subscription = await registration.pushManager.getSubscription();
         if (cancelled) return;
-        if (existing) {
-          const payload = serializeSubscription(existing);
-          if (payload) {
-            const result = await subscribePushNotificationsAction(scope, payload);
-            if (cancelled) return;
-            setState(result.success ? "subscribed" : "error");
-            setFeedback(result.message ?? null);
-            return;
-          }
+        if (!subscription) {
+          setState(
+            Notification.permission === "denied" ? "denied" : "available",
+          );
+          return;
         }
-        setState(Notification.permission === "denied" ? "denied" : "available");
+
+        const payload = serializeSubscription(subscription);
+        if (!payload) {
+          setState("available");
+          return;
+        }
+
+        const result = await subscribePushNotificationsAction(scope, payload);
+        if (cancelled) return;
+        setState(result.success ? "subscribed" : "error");
+        setFeedback(result.message ?? null);
       } catch {
         if (!cancelled) {
-          setState("error");
+          setState(
+            "Notification" in window && Notification.permission === "denied"
+              ? "denied"
+              : "error",
+          );
           setFeedback("تعذر تجهيز إشعارات هذا الجهاز.");
         }
       }
@@ -165,7 +212,7 @@ export const PushNotificationsControl = ({
   }, [router]);
 
   const enableNotifications = useCallback(async () => {
-    if (!config.publicKey) return;
+    if (!config.publicKey || !("Notification" in window)) return;
     if (Notification.permission === "denied") {
       setState("denied");
       setFeedback(
@@ -173,6 +220,7 @@ export const PushNotificationsControl = ({
       );
       return;
     }
+
     setState("busy");
     setFeedback(null);
     try {
@@ -181,6 +229,7 @@ export const PushNotificationsControl = ({
         setState(permission === "denied" ? "denied" : "available");
         return;
       }
+
       const registration = await registerWorker();
       const subscription =
         (await registration.pushManager.getSubscription()) ||
@@ -190,9 +239,12 @@ export const PushNotificationsControl = ({
         }));
       const payload = serializeSubscription(subscription);
       if (!payload) throw new Error("Invalid browser subscription");
+
       const result = await subscribePushNotificationsAction(scope, payload);
       setState(result.success ? "subscribed" : "error");
-      setFeedback(result.message ?? null);
+      setFeedback(
+        result.success ? "تم تفعيل إشعارات الطلبات على هذا الجهاز." : result.message ?? null,
+      );
     } catch {
       setState("error");
       setFeedback("تعذر تفعيل الإشعارات. جرّب تثبيت التطبيق أولاً.");
@@ -206,49 +258,38 @@ export const PushNotificationsControl = ({
       const registration = await registerWorker();
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
-        await unsubscribePushNotificationsAction(scope, subscription.endpoint);
+        const result = await unsubscribePushNotificationsAction(
+          scope,
+          subscription.endpoint,
+        );
+        if (!result.success) {
+          throw new Error(result.message || "Unable to remove subscription");
+        }
         await subscription.unsubscribe();
       }
       setState(Notification.permission === "denied" ? "denied" : "available");
+      setFeedback("تم إيقاف إشعارات الطلبات على هذا الجهاز.");
     } catch {
       setState("error");
       setFeedback("تعذر إيقاف الإشعارات على هذا الجهاز.");
     }
   }, [registerWorker, scope]);
 
-  const isBusy = state === "loading" || state === "busy";
-  const isSubscribed = state === "subscribed";
-  const label = isSubscribed
-    ? "إيقاف الإشعارات"
-    : state === "denied"
-      ? "الإشعارات محظورة"
-      : "تفعيل الإشعارات";
+  const value = useMemo<PushNotificationsContextValue>(
+    () => ({
+      state,
+      feedback,
+      enableNotifications,
+      disableNotifications,
+      showMobileEnablePrompt:
+        config.enabled && (state === "available" || state === "error"),
+    }),
+    [config.enabled, disableNotifications, enableNotifications, feedback, state],
+  );
 
   return (
-    <>
-      {config.enabled ? (
-        <button
-          type="button"
-          onClick={isSubscribed ? disableNotifications : enableNotifications}
-          disabled={isBusy || state === "unsupported"}
-          className={cn(
-            "inline-flex min-h-11 items-center justify-center gap-2 rounded-md border bg-white px-3 text-sm font-semibold text-brand-text shadow-sm transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 disabled:cursor-not-allowed disabled:opacity-60",
-            isSubscribed && "border-brand-primary text-brand-primary",
-            className,
-          )}
-          aria-label={label}
-          title={label}
-        >
-          {isBusy ? (
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-          ) : state === "denied" ? (
-            <BellOff className="h-5 w-5" aria-hidden="true" />
-          ) : (
-            <Bell className="h-5 w-5" aria-hidden="true" />
-          )}
-          <span>{label}</span>
-        </button>
-      ) : null}
+    <PushNotificationsContext.Provider value={value}>
+      {children}
 
       {feedback ? (
         <p
@@ -269,10 +310,15 @@ export const PushNotificationsControl = ({
           dir="rtl"
         >
           <div className="flex items-start gap-3">
-            <Bell className="mt-0.5 h-5 w-5 shrink-0 text-brand-primary" aria-hidden="true" />
+            <Bell
+              className="mt-0.5 h-5 w-5 shrink-0 text-brand-primary"
+              aria-hidden="true"
+            />
             <div className="min-w-0 flex-1">
               <p className="font-bold text-brand-text">{message.title}</p>
-              <p className="mt-1 text-sm leading-6 text-gray-600">{message.body}</p>
+              <p className="mt-1 text-sm leading-6 text-gray-600">
+                {message.body}
+              </p>
               <Link
                 href={message.url}
                 onClick={() => setMessage(null)}
@@ -292,6 +338,149 @@ export const PushNotificationsControl = ({
           </div>
         </div>
       ) : null}
-    </>
+    </PushNotificationsContext.Provider>
+  );
+};
+
+/** Reads the shared scoped Push lifecycle from a dashboard provider. */
+export const usePushNotifications = (): PushNotificationsContextValue => {
+  const value = useContext(PushNotificationsContext);
+  if (!value) {
+    throw new Error(
+      "Push notification controls must be rendered inside PushNotificationsProvider",
+    );
+  }
+  return value;
+};
+
+/** Mobile-only dashboard prompt displayed until this device is subscribed. */
+export const MobilePushEnableButton = ({ className }: { className?: string }) => {
+  const { enableNotifications, showMobileEnablePrompt, state } =
+    usePushNotifications();
+
+  if (!showMobileEnablePrompt) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => void enableNotifications()}
+      disabled={state === "busy"}
+      className={cn(
+        "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-brand-primary bg-white px-3 text-sm font-bold text-brand-primary shadow-sm transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 disabled:cursor-not-allowed disabled:opacity-60 lg:hidden",
+        className,
+      )}
+    >
+      {state === "busy" ? (
+        <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+      ) : (
+        <Bell className="h-5 w-5" aria-hidden="true" />
+      )}
+      تفعيل الإشعارات
+    </button>
+  );
+};
+
+/** Always-visible device-level Push management surface for dashboard settings. */
+export const PushNotificationsSettingsCard = ({
+  compact = false,
+  className,
+}: PushNotificationsSettingsCardProps) => {
+  const { disableNotifications, enableNotifications, feedback, state } =
+    usePushNotifications();
+  const isBusy = state === "loading" || state === "busy";
+  const isSubscribed = state === "subscribed";
+
+  const status = {
+    disabled: {
+      title: "الإشعارات غير متاحة الآن",
+      description: "لم يتم تفعيل إشعارات الطلبات من إدارة المنصة بعد.",
+    },
+    unsupported: {
+      title: "هذا المتصفح لا يدعم الإشعارات",
+      description: "جرّب متصفحًا حديثًا أو ثبّت التطبيق على جهاز يدعم الإشعارات.",
+    },
+    denied: {
+      title: "الإشعارات محظورة",
+      description:
+        "فعّل الإشعارات من إعدادات الموقع في المتصفح، ثم ارجع إلى هذه الصفحة.",
+    },
+    subscribed: {
+      title: "الإشعارات مفعّلة",
+      description: "ستصل إشعارات الطلبات إلى هذا الجهاز فقط.",
+    },
+    loading: {
+      title: "جارٍ التحقق من الإشعارات",
+      description: "يتم تجهيز هذا الجهاز لاستقبال إشعارات الطلبات.",
+    },
+    busy: {
+      title: "جارٍ تحديث الإشعارات",
+      description: "انتظر لحظة حتى يكتمل التحديث على هذا الجهاز.",
+    },
+    available: {
+      title: "فعّل إشعارات الطلبات",
+      description: "استقبل تنبيهًا فوريًا عند وصول طلب جديد.",
+    },
+    error: {
+      title: "تعذر تحديث الإشعارات",
+      description: "يمكنك إعادة المحاولة من هذا الجهاز.",
+    },
+  }[state];
+
+  return (
+    <section
+      className={cn(
+        "rounded-[20px] border border-gray-100 bg-white p-4 shadow-sm",
+        !compact && "sm:p-6",
+        className,
+      )}
+      dir="rtl"
+    >
+      <div className={cn("flex gap-3", !compact && "sm:items-start")}>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand-primary">
+          {isSubscribed ? (
+            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+          ) : state === "denied" ? (
+            <BellOff className="h-5 w-5" aria-hidden="true" />
+          ) : (
+            <Smartphone className="h-5 w-5" aria-hidden="true" />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className={cn("font-bold text-brand-text", !compact && "text-lg")}>
+            إشعارات الطلبات
+          </h2>
+          <p className="mt-1 text-sm font-semibold text-gray-800">
+            {status.title}
+          </p>
+          <p className="mt-1 text-sm leading-6 text-gray-500">
+            {status.description}
+          </p>
+          {feedback ? (
+            <p className="mt-2 text-sm font-medium text-brand-primary" role="status">
+              {feedback}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {state !== "disabled" && state !== "unsupported" && state !== "denied" ? (
+        <button
+          type="button"
+          onClick={() =>
+            void (isSubscribed ? disableNotifications() : enableNotifications())
+          }
+          disabled={isBusy}
+          className={cn(
+            "mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 disabled:cursor-not-allowed disabled:opacity-60",
+            isSubscribed
+              ? "border border-red-200 bg-white text-red-700 hover:bg-red-50"
+              : "bg-brand-primary text-white hover:bg-brand-primary-hover",
+          )}
+        >
+          {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {isSubscribed ? "إيقاف الإشعارات" : "تفعيل الإشعارات"}
+        </button>
+      ) : null}
+    </section>
   );
 };

@@ -3,6 +3,7 @@ import { merchantDirectoryService } from "@/services/api/stores-directory.servic
 import SettingsForm from "./_components/SettingsForm";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
 import Link from "next/link";
+import { PushNotificationsSettingsCard } from "@/components/pwa/PushNotificationsControl";
 
 export const metadata = createNoIndexMetadata(
   "إعدادات المتجر",
@@ -18,8 +19,9 @@ export default async function SettingsPage() {
 
   if (!tenantResponse.success || !tenantResponse.data) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="mx-auto flex max-w-2xl flex-col gap-6 py-20 text-center">
         <p className="text-gray-500 mb-4">تعذر تحميل بيانات المتجر.</p>
+        <PushNotificationsSettingsCard className="text-start" />
       </div>
     );
   }
@@ -51,6 +53,8 @@ export default async function SettingsPage() {
         tenant={tenant} 
         activeAreas={areasResponse.data || []} 
       />
+
+      <PushNotificationsSettingsCard />
     </div>
   );
 }
