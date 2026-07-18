@@ -68,6 +68,17 @@ export class AdminManagedProductsController {
         },
       );
     }
+
+    if (query.page || query.limit || query.category) {
+      return this.productsService.findPaginatedTenantProductsAsAdmin(
+        tenantId,
+        query.page || 1,
+        query.limit || 20,
+        query.category,
+        query.status ?? ProductStatus.ACTIVE,
+      );
+    }
+
     return this.productsService.findAllForTenantAsAdmin(tenantId, query.status);
   }
 

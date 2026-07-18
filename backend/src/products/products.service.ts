@@ -333,6 +333,18 @@ export class ProductsService {
     );
   }
 
+  async findPaginatedTenantProductsAsAdmin(
+    tenantId: number,
+    page: number,
+    limit: number,
+    category?: string,
+    status?: ProductStatus,
+  ): Promise<TenantProductsSearchResult> {
+    return this.runAsTenantForAdmin(tenantId, () =>
+      this.findPaginated(tenantId, page, limit, category, status),
+    );
+  }
+
   async searchTenantProductsForAdmin(
     tenantId: number,
     search: string,
@@ -985,6 +997,57 @@ export class ProductsService {
         created_at: 'desc',
       },
     });
+  }
+
+  /**
+   * Returns paginated active products for the authenticated tenant.
+   */
+  async findPaginated(
+    tenantId: number,
+    page = 1,
+    limit = 20,
+    category?: string,
+    status: ProductStatus = ProductStatus.ACTIVE,
+  ): Promise<TenantProductsSearchResult> {
+    const normalizedPage = Number.isFinite(page) ? Math.max(1, page) : 1;
+    const normalizedLimit = Number.isFinite(limit)
+      ? Math.min(50, Math.max(1, limit))
+      : 20;
+    const normalizedCategory = this.normalizeOptionalCategory(category);
+
+    const where: Prisma.ProductWhereInput = {
+      tenant_id: tenantId,
+      status,
+      deleted_at: null,
+      ...(normalizedCategory ? { category: normalizedCategory } : {}),
+    };
+
+    const skip = (normalizedPage - 1) * normalizedLimit;
+
+    const [total, data] = await Promise.all([
+      this.getPrismaClient().product.count({ where }),
+      this.getPrismaClient().product.findMany({
+        where,
+        skip,
+        take: normalizedLimit,
+        orderBy: {
+          created_at: 'desc',
+        },
+      }),
+    ]);
+
+    const last_page = Math.ceil(total / normalizedLimit) || 1;
+
+    return {
+      data,
+      meta: {
+        total,
+        page: normalizedPage,
+        limit: normalizedLimit,
+        last_page,
+        has_next: normalizedPage < last_page,
+      },
+    };
   }
 
   /**

@@ -504,10 +504,14 @@ class AdminApiService extends HttpService {
 		);
 	}
 
-	public async getManagedProducts(tenantId: number, status: ProductStatus = "active") {
-		return this.get<Product[]>(
+	public async getManagedProducts(
+		tenantId: number,
+		params?: { status?: ProductStatus | string; page?: number; limit?: number; search?: string; category?: string } | ProductStatus | string,
+	) {
+		const queryParams = typeof params === "string" ? { status: params } : params || { status: "active" };
+		return this.get<Product[] | TenantProductsSearchResponse>(
 			`managed-tenants/${tenantId}/products`,
-			{ status },
+			queryParams,
 			ADMIN_AUTH_OPTIONS,
 		);
 	}
@@ -528,10 +532,18 @@ class AdminApiService extends HttpService {
 		);
 	}
 
-	public async getManagedCatalog(tenantId: number, limit = 40) {
+	public async getManagedCatalog(
+		tenantId: number,
+		params?: { page?: number; limit?: number; category?: string; search?: string } | number,
+	) {
+		const limit = typeof params === "number" ? params : params?.limit || 40;
+		const page = typeof params === "object" && params.page ? params.page : 1;
+		const category = typeof params === "object" ? params.category : undefined;
+		const search = typeof params === "object" ? params.search : undefined;
+
 		return this.get<CatalogItemsResponse>(
 			`managed-tenants/${tenantId}/catalog`,
-			{ page: 1, limit },
+			{ page, limit, category, search },
 			ADMIN_AUTH_OPTIONS,
 		);
 	}
