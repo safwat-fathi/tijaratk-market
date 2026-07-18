@@ -16,6 +16,8 @@ type OrderWithRelations = Order & {
   customer?: Customer | null;
   tenant?: Tenant | null;
   delivery_area?: DirectoryArea | null;
+  order_items?: OrderItem[];
+  items?: OrderItem[];
 };
 type OrderItemWithProduct = OrderItem & {
   pending_replacement_product?: Product | null;
@@ -23,6 +25,8 @@ type OrderItemWithProduct = OrderItem & {
 
 @Injectable()
 export class OrderWhatsappService {
+  private static readonly MAX_ORDER_DETAILS_LENGTH = 1000;
+
   constructor(
     private readonly whatsappService: WhatsappService,
     private readonly prisma: PrismaService,
@@ -43,12 +47,16 @@ export class OrderWhatsappService {
     const sellerNumber = order.tenant?.phone;
     if (!sellerNumber) return;
 
-    const customerName = order.customer?.name || 'عميل';
-    const area =
+    const customerName = order.customer_name || order.customer?.name || 'عميل';
+    const customerPhone =
+      order.customer_phone || order.customer?.phone || 'غير متاح';
+    const deliveryAddress =
+      order.delivery_address ||
       order.delivery_area?.name_ar ||
       order.delivery_area?.name_en ||
       order.customer?.address ||
       'غير محدد';
+    const orderDetails = this.buildOrderDetails(order);
     const total = Number(order.total || 0);
 
     await this.whatsappService.sendTemplatedMessage({
@@ -57,10 +65,78 @@ export class OrderWhatsappService {
       payload: {
         customerName,
         orderNumber: String(order.id),
-        area,
-        totalEgp: total,
+        customerPhone,
+        deliveryAddress,
+        orderDetails,
+        initialTotalEgp: total,
       },
     });
+  }
+
+  private buildOrderDetails(order: OrderWithRelations): string {
+    const orderItems = order.items ?? order.order_items ?? [];
+    if (orderItems.length === 0) return 'تفاصيل الأصناف غير متاحة';
+
+    const segments = orderItems.map((item) => {
+      const itemName = this.normalizeOneLineText(
+        item.name_snapshot || 'منتج غير محدد',
+      );
+      const unitPrice = this.formatUnitPrice(item.unit_price);
+      return `${itemName}: ${unitPrice}`;
+    });
+
+    return this.joinOrderDetailSegments(segments);
+  }
+
+  private formatUnitPrice(unitPrice: OrderItem['unit_price']): string {
+    if (unitPrice === null || unitPrice === undefined) {
+      return 'السعر يحدد لاحقاً';
+    }
+
+    const numericPrice = Number(unitPrice);
+    if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+      return 'السعر يحدد لاحقاً';
+    }
+
+    return numericPrice
+      .toFixed(2)
+      .replace(/\.00$/, '')
+      .replace(/(\.\d)0$/, '$1');
+  }
+
+  private joinOrderDetailSegments(segments: string[]): string {
+    const suffix = ', …';
+    let details = '';
+
+    for (const segment of segments) {
+      const candidate = details ? `${details}, ${segment}` : segment;
+      if (
+        candidate.length <= OrderWhatsappService.MAX_ORDER_DETAILS_LENGTH
+      ) {
+        details = candidate;
+        continue;
+      }
+
+      if (details) {
+        if (
+          details.length + suffix.length <=
+          OrderWhatsappService.MAX_ORDER_DETAILS_LENGTH
+        ) {
+          return `${details}${suffix}`;
+        }
+        return details;
+      }
+
+      const maxSegmentLength =
+        OrderWhatsappService.MAX_ORDER_DETAILS_LENGTH - suffix.length;
+      return `${segment.slice(0, maxSegmentLength).trimEnd()}${suffix}`;
+    }
+
+    return details || 'تفاصيل الأصناف غير متاحة';
+  }
+
+  private normalizeOneLineText(value: string): string {
+    return value.replace(/\s+/gu, ' ').trim() || 'منتج غير محدد';
   }
 
   async notifyCustomerConfirmed(order: OrderWithRelations): Promise<void> {

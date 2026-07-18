@@ -90,6 +90,7 @@ import {
   AdminRole,
 } from '../../generated/prisma/client';
 import { AdminAuditService } from 'src/admin-audit/admin-audit.service';
+import { QueryAdminOrdersDto } from './dto/query-admin-orders.dto';
 
 const ADMIN_PRODUCT_SHEET_UPLOAD_DIR = join(
   process.cwd(),
@@ -1147,25 +1148,15 @@ export class AdminController {
   @Get('orders')
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
-    summary: 'Get completed orders',
-    description: 'Retrieve a list of orders with optional filters.',
+    summary: 'Get orders',
+    description: 'Retrieve a paginated list of orders with optional filters.',
   })
   @ApiResponse({
     status: 200,
     description: 'Orders retrieved successfully',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getOrders(
-    @Query('clientName') clientName?: string,
-    @Query('totalCost') totalCost?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    return this.adminService.getOrders(
-      clientName,
-      totalCost ? Number(totalCost) : undefined,
-      page ? Number(page) : undefined,
-      limit ? Number(limit) : undefined,
-    );
+  getOrders(@Query() query: QueryAdminOrdersDto) {
+    return this.adminService.getOrders(query);
   }
 }

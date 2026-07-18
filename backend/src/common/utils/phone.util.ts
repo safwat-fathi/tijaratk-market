@@ -28,3 +28,21 @@ export const formatPhoneNumber = (phone: string): string => {
   // 6. Fallback: return as is (could be international or invalid)
   return cleaned;
 };
+
+/**
+ * Redacts a phone-like value while retaining a short suffix for correlation.
+ */
+export const maskPhoneNumber = (value: string): string => {
+  if (value.length <= 4) return '*'.repeat(value.length);
+
+  const visibleSuffix = value.slice(-4);
+  return `${'*'.repeat(value.length - 4)}${visibleSuffix}`;
+};
+
+/**
+ * Redacts phone-like substrings that an upstream provider may include in errors.
+ */
+export const maskPhoneNumbersInText = (value: string): string =>
+  value.replace(/(?:whatsapp:)?\+?\d[\d\s()-]{6,}\d/gu, (phone) =>
+    maskPhoneNumber(phone),
+  );

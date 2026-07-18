@@ -69,6 +69,8 @@ WhatsApp providers:
 - `ACCOUNT_SID`: Twilio account SID.
 - `AUTH_TOKEN`: Twilio auth token.
 - `WHATSAPP_PHONE_NUMBER`: Twilio WhatsApp sender number.
+- `WEBHOOK_PUBLIC_BASE_URL`: Optional public API origin used for Twilio webhook
+  signatures and outbound status callbacks; falls back to `APP_URL`.
 
 Twilio Content Template SIDs:
 

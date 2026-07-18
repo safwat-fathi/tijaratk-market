@@ -8,6 +8,7 @@ import {
 } from './templates.registry';
 
 const logger = new Logger('TemplatesRegistry');
+const MAX_CONTENT_VARIABLE_LENGTH = 1600;
 
 /**
  * Validates and returns a strongly typed payload for a given template key.
@@ -50,7 +51,11 @@ export function buildContentVariables<K extends TemplateKey>(
 
   for (const [fieldName, index] of Object.entries(variableMapping)) {
     const value = payloadRecord[fieldName];
-    twilioVariables[String(index)] = stringifyTemplateValue(value);
+    twilioVariables[String(index)] = normalizeTemplateValue(
+      key,
+      fieldName,
+      value,
+    );
   }
 
   return JSON.stringify(twilioVariables);
@@ -75,11 +80,33 @@ function stringifyTemplateValue(value: unknown): string {
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
-  if (value === null || value === undefined) {
-    return '';
-  }
+  if (value === null || value === undefined) return '';
 
   return JSON.stringify(value);
+}
+
+function normalizeTemplateValue(
+  key: TemplateKey,
+  fieldName: string,
+  value: unknown,
+): string {
+  const normalized = stringifyTemplateValue(value)
+    .replace(/\s+/gu, ' ')
+    .trim();
+
+  if (!normalized) {
+    throw new Error(
+      `WhatsApp template ${key} variable ${fieldName} cannot be empty`,
+    );
+  }
+
+  if (normalized.length > MAX_CONTENT_VARIABLE_LENGTH) {
+    throw new Error(
+      `WhatsApp template ${key} variable ${fieldName} exceeds ${MAX_CONTENT_VARIABLE_LENGTH} characters`,
+    );
+  }
+
+  return normalized;
 }
 
 function logValidationError(key: TemplateKey, error: ZodError): void {

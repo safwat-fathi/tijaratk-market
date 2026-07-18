@@ -195,24 +195,25 @@ export default function MarketingTracking() {
               id="marketing-consent-title"
               className="flex items-center gap-2 text-lg font-bold text-brand-text"
             >
-              <span className="text-xl">🍪</span> نحن نهتم بخصوصيتك
+              نستخدم ملفات تعريف الارتباط لتحسين تجربتك <span className="text-xl">🍪</span>
             </h2>
-            <p
+            <div
               id="marketing-consent-description"
-              className="text-sm leading-6 text-muted-foreground"
+              className="text-sm leading-6 text-muted-foreground space-y-2"
             >
-              لكي نقدم لك أفضل تجربة وعروضاً تناسب اهتماماتك، نطلب إذنك لاستخدام
-              أدوات قياس وتسويق مثل Google Analytics وMeta. تساعدنا هذه الأدوات
-              في فهم التفاعل مع المتجر وقياس أداء حملاتنا. يمكنك تغيير اختيارك في
-              أي وقت من أسفل الصفحة. اقرأ المزيد في{" "}
-              <Link
-                href="/privacy"
-                className="font-semibold text-brand-primary underline underline-offset-4"
-              >
-                سياسة الخصوصية
-              </Link>
-              .
-            </p>
+              <p>
+                نستخدم ملفات ضرورية لتشغيل الموقع، وملفات اختيارية تساعدنا على فهم طريقة استخدام الموقع، تحسين الخدمة، وقياس أداء الحملات الإعلانية.
+              </p>
+              <p>
+                يمكنك الموافقة على جميع الملفات أو الاكتفاء بالملفات الضرورية، وتغيير اختيارك لاحقًا من إعدادات الخصوصية.{" "}
+                <Link
+                  href="/privacy"
+                  className="font-semibold text-brand-primary underline underline-offset-4"
+                >
+                  إدارة التفضيلات أو معرفة المزيد عن الخصوصية
+                </Link>
+              </p>
+            </div>
           </div>
 
           <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -228,7 +229,7 @@ export default function MarketingTracking() {
               onClick={allowMarketing}
               className="min-h-11 rounded-full bg-brand-primary px-5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/30"
             >
-              السماح بالتسويق
+              موافقة على الكل
             </button>
           </div>
 

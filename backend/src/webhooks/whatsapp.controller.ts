@@ -3,6 +3,7 @@ import {
   Controller,
   ForbiddenException,
   Header,
+  HttpCode,
   Logger,
   Post,
   Req,
@@ -10,6 +11,10 @@ import {
 import { ApiConsumes } from '@nestjs/swagger';
 import { Request } from 'express';
 import twilio from 'twilio';
+import {
+  maskPhoneNumber,
+  maskPhoneNumbersInText,
+} from 'src/common/utils/phone.util';
 import { WhatsappWebhookIdempotencyService } from './whatsapp-webhook-idempotency.service';
 
 @Controller('webhooks/whatsapp')
@@ -46,6 +51,52 @@ export class WhatsAppWebhookController {
     );
 
     return '<Response></Response>';
+  }
+
+  @Post('status')
+  @HttpCode(204)
+  @ApiConsumes('application/json', 'application/x-www-form-urlencoded')
+  receiveStatus(
+    @Body() body: Record<string, unknown>,
+    @Req() req: Request,
+  ): void {
+    this.verifyTwilioSignature(req, body);
+
+    const messageSid = this.safeString(
+      body.MessageSid ?? body.SmsMessageSid ?? body.SmsSid,
+    );
+    const status = this.safeString(body.MessageStatus ?? body.SmsStatus);
+    const errorCode = this.safeString(body.ErrorCode);
+    const eventId = messageSid
+      ? `status:${messageSid}:${status ?? 'unknown'}:${errorCode ?? 'none'}`
+      : null;
+
+    if (eventId && !this.idempotencyService.markProcessing(eventId)) {
+      this.logger.debug(
+        `Duplicate WhatsApp status callback ignored: ${eventId}`,
+      );
+      return;
+    }
+
+    if (!this.isFailureStatus(status, errorCode)) return;
+
+    const recipient = this.safeString(body.To);
+    const errorMessage = this.safeString(
+      body.ErrorMessage ?? body.ChannelStatusMessage,
+    );
+
+    this.logger.error(
+      JSON.stringify({
+        event: 'whatsapp_message_failed',
+        recipient: recipient ? maskPhoneNumber(recipient) : null,
+        messageSid,
+        status,
+        errorCode,
+        errorMessage: errorMessage
+          ? maskPhoneNumbersInText(errorMessage)
+          : null,
+      }),
+    );
   }
 
   private verifyTwilioSignature(
@@ -105,5 +156,17 @@ export class WhatsAppWebhookController {
 
   private safeString(value: unknown): string | null {
     return typeof value === 'string' && value.trim() ? value.trim() : null;
+  }
+
+  private isFailureStatus(
+    status: string | null,
+    errorCode: string | null,
+  ): boolean {
+    const normalizedStatus = status?.toLowerCase();
+    return (
+      Boolean(errorCode) ||
+      normalizedStatus === 'failed' ||
+      normalizedStatus === 'undelivered'
+    );
   }
 }

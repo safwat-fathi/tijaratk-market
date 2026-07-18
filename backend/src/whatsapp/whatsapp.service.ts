@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import twilio from 'twilio';
-import { formatPhoneNumber } from 'src/common/utils/phone.util';
+import {
+  formatPhoneNumber,
+  maskPhoneNumber,
+  maskPhoneNumbersInText,
+} from 'src/common/utils/phone.util';
 import { ZodError } from 'zod';
 import {
   buildContentVariables,
@@ -17,6 +21,7 @@ import {
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
   private twilioClient: twilio.Twilio | null = null;
+  private didWarnAboutMissingStatusCallback = false;
 
   /**
    * Allows development environments to disable all WhatsApp side effects.
@@ -66,7 +71,7 @@ export class WhatsappService {
   async sendMessage(to: string, body: string): Promise<void> {
     if (!this.isNotificationsEnabled()) {
       this.logDisabledNotification(
-        `WhatsApp notifications disabled; would send text message to ${to}.`,
+        `WhatsApp notifications disabled; would send text message to ${maskPhoneNumber(to)}.`,
       );
       return;
     }
@@ -78,20 +83,24 @@ export class WhatsappService {
 
     try {
       const { client, from, to: recipient } = context;
-      this.logger.log(
-        `Sending WhatsApp message to ${this.maskPhone(recipient)} (original: ${this.maskPhone(to)}), bodyLength=${body.length}`,
-      );
-
-      await client.messages.create({
+      const statusCallback = this.resolveStatusCallbackUrl();
+      const message = await client.messages.create({
         body,
         from,
         to: recipient,
+        ...(statusCallback ? { statusCallback } : {}),
       });
-      this.logger.log(`Message sent to ${this.maskPhone(recipient)}`);
+      this.logSubmittedMessage({
+        recipient,
+        messageSid: message.sid,
+        status: message.status,
+        kind: 'text',
+      });
     } catch (error) {
-      const details =
-        error instanceof Error ? error.stack || error.message : String(error);
-      this.logger.error(`Failed to send WhatsApp message to ${to}`, details);
+      this.logger.error(
+        `Failed to submit WhatsApp text message to ${maskPhoneNumber(to)}`,
+        this.describeError(error),
+      );
     }
   }
 
@@ -102,10 +111,11 @@ export class WhatsappService {
     to: string,
     contentSid: string,
     contentVariables: string,
+    templateKey: TemplateKey,
   ): Promise<void> {
     if (!this.isNotificationsEnabled()) {
       this.logDisabledNotification(
-        `WhatsApp notifications disabled; would send content template ${contentSid} to ${to}.`,
+        `WhatsApp notifications disabled; would send content template ${templateKey} to ${maskPhoneNumber(to)}.`,
       );
       return;
     }
@@ -116,12 +126,21 @@ export class WhatsappService {
     }
 
     const { client, from, to: recipient } = context;
+    const statusCallback = this.resolveStatusCallbackUrl();
 
-    await client.messages.create({
+    const message = await client.messages.create({
       from,
       to: recipient,
       contentSid,
       contentVariables,
+      ...(statusCallback ? { statusCallback } : {}),
+    });
+    this.logSubmittedMessage({
+      recipient,
+      messageSid: message.sid,
+      status: message.status,
+      kind: 'template',
+      templateKey,
     });
   }
 
@@ -139,7 +158,7 @@ export class WhatsappService {
   }): Promise<void> {
     if (!this.isNotificationsEnabled()) {
       this.logDisabledNotification(
-        `WhatsApp notifications disabled; would send template ${key} to ${to}.`,
+        `WhatsApp notifications disabled; would send template ${key} to ${maskPhoneNumber(to)}.`,
       );
       return;
     }
@@ -172,14 +191,11 @@ export class WhatsappService {
 
     try {
       const contentVariables = buildContentVariables(key, validatedPayload);
-      await this.sendContentMessage(to, contentSid, contentVariables);
-      this.logger.log(`Template message sent using content SID for ${key}.`);
+      await this.sendContentMessage(to, contentSid, contentVariables, key);
     } catch (error) {
-      const details =
-        error instanceof Error ? error.stack || error.message : String(error);
       this.logger.error(
-        `Failed to send content template ${key}; sending fallback text.`,
-        details,
+        `Failed to submit WhatsApp template ${key} to ${maskPhoneNumber(to)}; sending fallback text.`,
+        this.describeError(error),
       );
       await this.sendMessage(to, fallbackMessage);
     }
@@ -217,8 +233,49 @@ export class WhatsappService {
     };
   }
 
-  private maskPhone(value: string): string {
-    const visibleSuffix = value.slice(-4);
-    return `${'*'.repeat(Math.max(0, value.length - 4))}${visibleSuffix}`;
+  private resolveStatusCallbackUrl(): string | undefined {
+    const publicBaseUrl =
+      process.env.WEBHOOK_PUBLIC_BASE_URL || process.env.APP_URL;
+    if (!publicBaseUrl) {
+      if (!this.didWarnAboutMissingStatusCallback) {
+        this.logger.warn(
+          'WhatsApp status callback is not configured; asynchronous failures will not be logged.',
+        );
+        this.didWarnAboutMissingStatusCallback = true;
+      }
+      return undefined;
+    }
+
+    return `${publicBaseUrl.replace(/\/$/, '')}/webhooks/whatsapp/status`;
+  }
+
+  private logSubmittedMessage({
+    recipient,
+    messageSid,
+    status,
+    kind,
+    templateKey,
+  }: {
+    recipient: string;
+    messageSid: string;
+    status: string;
+    kind: 'text' | 'template';
+    templateKey?: TemplateKey;
+  }): void {
+    this.logger.log(
+      JSON.stringify({
+        event: 'whatsapp_message_submitted',
+        recipient: maskPhoneNumber(recipient),
+        messageSid,
+        status,
+        kind,
+        ...(templateKey ? { templateKey } : {}),
+      }),
+    );
+  }
+
+  private describeError(error: unknown): string {
+    const details = error instanceof Error ? error.message : String(error);
+    return maskPhoneNumbersInText(details);
   }
 }

@@ -1,18 +1,24 @@
 export const newOrderSeller = ({
   orderId,
   customerName,
-  area,
+  customerPhone,
+  deliveryAddress,
+  orderDetails,
   total,
 }: {
   orderId: string;
   customerName: string;
-  area: string;
+  customerPhone: string;
+  deliveryAddress: string;
+  orderDetails: string;
   total: number;
 }) => `
 تم تسجيل طلب جديد على حسابك.
 
 رقم الطلب: ${orderId}
 اسم العميل: ${customerName}
-المنطقة: ${area}
-إجمالي المبلغ: ${total} جنيه
+رقم الهاتف: ${customerPhone}
+العنوان: ${deliveryAddress}
+تفاصيل الطلب: ${orderDetails}
+الإجمالي المبدئي: ${total} جنيه
 `;

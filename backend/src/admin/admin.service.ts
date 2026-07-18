@@ -62,6 +62,7 @@ import {
 import {
   enqueueZoneCatalogReconciliation,
 } from 'src/zone-storefronts/zone-catalog-reconciliation.repository';
+import { QueryAdminOrdersDto } from './dto/query-admin-orders.dto';
 
 const CATALOG_EXPORT_COLUMNS = [
   'catalog_item_id',
@@ -2302,24 +2303,89 @@ export class AdminService {
   }
 
   // Orders Management
-  async getOrders(
-    clientName?: string,
-    totalCost?: number,
-    page = 1,
-    limit = 20,
-  ) {
-    const pagination = this.getPagination(page, limit);
+  async getOrders(filters: QueryAdminOrdersDto = {}) {
+    const pagination = this.getPagination(filters.page, filters.limit);
+
+    if (
+      filters.minTotal !== undefined &&
+      filters.maxTotal !== undefined &&
+      filters.minTotal > filters.maxTotal
+    ) {
+      throw new BadRequestException(
+        'Minimum order total cannot exceed maximum order total',
+      );
+    }
+    if (filters.from && filters.to && filters.from > filters.to) {
+      throw new BadRequestException('Start date cannot be after end date');
+    }
+
     const tenants = await this.prisma.tenant.findMany({
-      where: { operated_zone_storefront: { is: null } },
+      where: {
+        operated_zone_storefront: { is: null },
+        ...(filters.storeName
+          ? {
+              name: {
+                contains: filters.storeName,
+                mode: 'insensitive',
+              },
+            }
+          : {}),
+      },
       orderBy: { created_at: 'desc' },
     });
 
     const where: Prisma.OrderWhereInput = {};
-    if (clientName) {
-      where.customer_name = { contains: clientName, mode: 'insensitive' };
+    if (filters.search) {
+      const normalizedOrderNumber = filters.search.replace(/^#/, '');
+      const parsedOrderId = Number(normalizedOrderNumber);
+      const matchesOrderId =
+        Number.isInteger(parsedOrderId) && parsedOrderId > 0;
+
+      where.OR = [
+        ...(matchesOrderId ? [{ id: parsedOrderId }] : []),
+        {
+          customer_name: {
+            contains: filters.search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          customer_phone: {
+            contains: filters.search,
+            mode: 'insensitive',
+          },
+        },
+      ];
     }
-    if (totalCost !== undefined) {
-      where.total = totalCost;
+    if (filters.clientName) {
+      where.customer_name = {
+        contains: filters.clientName,
+        mode: 'insensitive',
+      };
+    }
+    if (filters.status) {
+      where.status = filters.status;
+    }
+    if (filters.from || filters.to) {
+      where.created_at = {
+        ...(filters.from
+          ? { gte: new Date(`${filters.from}T00:00:00.000Z`) }
+          : {}),
+        ...(filters.to
+          ? { lte: new Date(`${filters.to}T23:59:59.999Z`) }
+          : {}),
+      };
+    }
+    if (
+      filters.minTotal !== undefined ||
+      filters.maxTotal !== undefined
+    ) {
+      where.total = {
+        ...(filters.minTotal !== undefined ? { gte: filters.minTotal } : {}),
+        ...(filters.maxTotal !== undefined ? { lte: filters.maxTotal } : {}),
+      };
+    } else if (filters.totalCost !== undefined) {
+      where.total = filters.totalCost;
     }
 
     const tenantResults = await Promise.all(

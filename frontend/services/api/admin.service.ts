@@ -233,6 +233,16 @@ export type AdminProductSheetUploadSummary = {
 
 export type AdminOrder = Order;
 
+export type AdminOrdersFilters = {
+	search?: string;
+	storeName?: string;
+	status?: string;
+	from?: string;
+	to?: string;
+	minTotal?: string;
+	maxTotal?: string;
+};
+
 type AdminProductPayload = {
 	name: string;
 	image_url?: string;
@@ -1173,14 +1183,14 @@ class AdminApiService extends HttpService {
 	}
 
 	public async getOrders(
-		clientName?: string,
-		totalCost?: string,
+		filters: AdminOrdersFilters = {},
 		page?: number,
 		limit?: number,
 	) {
 		const params = new URLSearchParams();
-		if (clientName) params.append("clientName", clientName);
-		if (totalCost) params.append("totalCost", totalCost);
+		Object.entries(filters).forEach(([key, value]) => {
+			if (value) params.append(key, value);
+		});
 		if (page) params.append("page", String(page));
 		if (limit) params.append("limit", String(limit));
 		const qs = params.toString() ? `?${params.toString()}` : '';

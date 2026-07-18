@@ -1,7 +1,12 @@
-import { adminService } from "@/services/api/admin.service";
+import {
+  adminService,
+  type AdminOrdersFilters,
+} from "@/services/api/admin.service";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { StatusBadge, statusLabels } from "@/components/ui/StatusBadge";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
+import { OrderStatus } from "@/types/enums";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminPagination } from "../_components/AdminPagination";
@@ -39,6 +44,38 @@ const ORDER_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("ar-EG", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+const ORDER_TOTAL_FORMATTER = new Intl.NumberFormat("ar-EG", {
+  style: "currency",
+  currency: "EGP",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const ORDER_STATUSES = Object.values(OrderStatus);
+
+function getStringParam(value: string | string[] | undefined) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function getFilterError(filters: AdminOrdersFilters) {
+  if (filters.from && filters.to && filters.from > filters.to) {
+    return "يجب أن يكون تاريخ البداية قبل تاريخ النهاية أو مساويًا له.";
+  }
+
+  const minTotal = filters.minTotal ? Number(filters.minTotal) : undefined;
+  const maxTotal = filters.maxTotal ? Number(filters.maxTotal) : undefined;
+  if (
+    minTotal !== undefined &&
+    maxTotal !== undefined &&
+    Number.isFinite(minTotal) &&
+    Number.isFinite(maxTotal) &&
+    minTotal > maxTotal
+  ) {
+    return "يجب ألا يزيد الحد الأدنى للإجمالي عن الحد الأقصى.";
+  }
+
+  return undefined;
+}
 
 function parsePositiveInteger(
   value: string | string[] | undefined,
@@ -51,14 +88,20 @@ function parsePositiveInteger(
 
 export default async function AdminOrdersPage(props: Props) {
   const searchParams = await props.searchParams;
-  const clientName =
-    typeof searchParams.clientName === "string"
-      ? searchParams.clientName
-      : undefined;
-  const totalCost =
-    typeof searchParams.totalCost === "string"
-      ? searchParams.totalCost
-      : undefined;
+  const statusParam = getStringParam(searchParams.status);
+  const filters: AdminOrdersFilters = {
+    search: getStringParam(searchParams.search),
+    storeName: getStringParam(searchParams.storeName),
+    status: ORDER_STATUSES.includes(statusParam as OrderStatus)
+      ? statusParam
+      : undefined,
+    from: getStringParam(searchParams.from),
+    to: getStringParam(searchParams.to),
+    minTotal: getStringParam(searchParams.minTotal),
+    maxTotal: getStringParam(searchParams.maxTotal),
+  };
+  const hasActiveFilters = Object.values(filters).some(Boolean);
+  const filterError = getFilterError(filters);
   const page = parsePositiveInteger(searchParams.page, 1);
   const limit = parsePositiveInteger(searchParams.limit, DEFAULT_PAGE_SIZE);
 
@@ -71,20 +114,17 @@ export default async function AdminOrdersPage(props: Props) {
   };
 
   try {
-    const response = await adminService.getOrders(
-      clientName,
-      totalCost,
-      page,
-      limit,
-    );
-    if (response.success && response.data) {
-      const payload = response.data as ApiListPayload<AdminOrder>;
-      orders = Array.isArray(payload) ? payload : payload.data || [];
-      if (!Array.isArray(payload) && payload.meta) {
-        meta = payload.meta;
+    if (!filterError) {
+      const response = await adminService.getOrders(filters, page, limit);
+      if (response.success && response.data) {
+        const payload = response.data as ApiListPayload<AdminOrder>;
+        orders = Array.isArray(payload) ? payload : payload.data || [];
+        if (!Array.isArray(payload) && payload.meta) {
+          meta = payload.meta;
+        }
+      } else if (!response.success && response.message === "Unauthorized") {
+        redirect("/admin/login");
       }
-    } else if (!response.success && response.message === "Unauthorized") {
-      redirect("/admin/login");
     }
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
@@ -93,47 +133,182 @@ export default async function AdminOrdersPage(props: Props) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-brand-text">الطلبات المكتملة</h1>
+      <div>
+        <h1 className="text-2xl font-bold text-brand-text">الطلبات</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          ابحث وفلتر جميع طلبات المتاجر من مكان واحد.
+        </p>
+      </div>
 
       <Card className="p-4 sm:p-6 overflow-hidden">
         <div className="space-y-4">
           <form
             method="GET"
             action="/admin/orders"
-            className="flex flex-col sm:flex-row gap-4 items-end"
+            className="space-y-4"
           >
-            <div className="w-full sm:w-1/3 space-y-1">
-              <label className="text-sm font-medium text-brand-text">
-                اسم العميل
-              </label>
-              <input
-                type="text"
-                name="clientName"
-                defaultValue={clientName}
-                className="w-full h-10 px-3 rounded-md border border-brand-border focus:brand-focus text-sm"
-                placeholder="ابحث باسم العميل"
-              />
-            </div>
-            <div className="w-full sm:w-1/3 space-y-1">
-              <label className="text-sm font-medium text-brand-text">
-                التكلفة الإجمالية
-              </label>
-              <input
-                type="number"
-                name="totalCost"
-                defaultValue={totalCost}
-                className="w-full h-10 px-3 rounded-md border border-brand-border focus:brand-focus text-sm"
-                placeholder="مثال: 500"
-              />
-            </div>
-            <div className="w-full sm:w-auto">
+            <fieldset className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <legend className="sr-only">فلاتر الطلبات</legend>
+
+              <div className="space-y-1 xl:col-span-2">
+                <label
+                  htmlFor="orders-search"
+                  className="text-sm font-medium text-brand-text"
+                >
+                  البحث
+                </label>
+                <input
+                  id="orders-search"
+                  type="search"
+                  name="search"
+                  defaultValue={filters.search}
+                  aria-describedby="orders-search-help"
+                  className="h-11 w-full rounded-md border border-brand-border px-3 text-sm focus:brand-focus"
+                  placeholder="رقم الطلب أو اسم العميل أو رقم الهاتف"
+                />
+                <p id="orders-search-help" className="text-xs text-gray-500">
+                  يمكنك كتابة رقم الطلب مع أو بدون علامة #.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="store-name"
+                  className="text-sm font-medium text-brand-text"
+                >
+                  المتجر
+                </label>
+                <input
+                  id="store-name"
+                  type="search"
+                  name="storeName"
+                  defaultValue={filters.storeName}
+                  className="h-11 w-full rounded-md border border-brand-border px-3 text-sm focus:brand-focus"
+                  placeholder="ابحث باسم المتجر"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="order-status"
+                  className="text-sm font-medium text-brand-text"
+                >
+                  الحالة
+                </label>
+                <select
+                  id="order-status"
+                  name="status"
+                  defaultValue={filters.status || ""}
+                  className="h-11 w-full rounded-md border border-brand-border bg-white px-3 text-sm focus:brand-focus"
+                >
+                  <option value="">كل الحالات</option>
+                  {ORDER_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {statusLabels[status]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="orders-from"
+                  className="text-sm font-medium text-brand-text"
+                >
+                  من تاريخ
+                </label>
+                <input
+                  id="orders-from"
+                  type="date"
+                  name="from"
+                  defaultValue={filters.from}
+                  max={filters.to}
+                  className="h-11 w-full rounded-md border border-brand-border px-3 text-sm focus:brand-focus"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="orders-to"
+                  className="text-sm font-medium text-brand-text"
+                >
+                  إلى تاريخ
+                </label>
+                <input
+                  id="orders-to"
+                  type="date"
+                  name="to"
+                  defaultValue={filters.to}
+                  min={filters.from}
+                  className="h-11 w-full rounded-md border border-brand-border px-3 text-sm focus:brand-focus"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="minimum-total"
+                  className="text-sm font-medium text-brand-text"
+                >
+                  الحد الأدنى للإجمالي
+                </label>
+                <input
+                  id="minimum-total"
+                  type="number"
+                  name="minTotal"
+                  min="0"
+                  step="0.01"
+                  defaultValue={filters.minTotal}
+                  className="h-11 w-full rounded-md border border-brand-border px-3 text-sm focus:brand-focus"
+                  placeholder="مثال: 100"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="maximum-total"
+                  className="text-sm font-medium text-brand-text"
+                >
+                  الحد الأقصى للإجمالي
+                </label>
+                <input
+                  id="maximum-total"
+                  type="number"
+                  name="maxTotal"
+                  min="0"
+                  step="0.01"
+                  defaultValue={filters.maxTotal}
+                  className="h-11 w-full rounded-md border border-brand-border px-3 text-sm focus:brand-focus"
+                  placeholder="مثال: 1000"
+                />
+              </div>
+            </fieldset>
+
+            {filterError ? (
+              <p role="alert" className="text-sm font-medium text-red-700">
+                {filterError}
+              </p>
+            ) : null}
+
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="submit"
                 variant="primary"
-                className="w-full bg-brand-primary hover:bg-brand-primary-hover"
+                size="sm"
+                className="w-full sm:w-auto"
               >
-                بحث
+                تطبيق الفلاتر
               </Button>
+              <Link
+                href="/admin/orders"
+                aria-disabled={!hasActiveFilters}
+                className={`inline-flex min-h-10 w-full items-center justify-center rounded-md border px-4 text-sm font-semibold transition-colors sm:w-auto ${
+                  hasActiveFilters
+                    ? "border-brand-border bg-white text-brand-text hover:bg-brand-soft"
+                    : "pointer-events-none border-gray-200 bg-gray-50 text-gray-400"
+                }`}
+              >
+                إعادة ضبط
+              </Link>
             </div>
           </form>
 
@@ -205,18 +380,13 @@ export default async function AdminOrdersPage(props: Props) {
                           </time>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                          {order.total} EGP
+                          {ORDER_TOTAL_FORMATTER.format(Number(order.total || 0))}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span
-                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              order.status === "completed"
-                                ? "bg-status-success/20 text-status-success"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {order.status}
-                          </span>
+                          <StatusBadge
+                            status={order.status || OrderStatus.DRAFT}
+                            className="px-2 py-1"
+                          />
                         </td>
                       </tr>
                     );
@@ -232,7 +402,15 @@ export default async function AdminOrdersPage(props: Props) {
             totalPages={meta.totalPages}
             total={meta.total}
             limit={meta.limit}
-            params={{ clientName, totalCost }}
+            params={{
+              search: filters.search,
+              storeName: filters.storeName,
+              status: filters.status,
+              from: filters.from,
+              to: filters.to,
+              minTotal: filters.minTotal,
+              maxTotal: filters.maxTotal,
+            }}
           />
         </div>
       </Card>

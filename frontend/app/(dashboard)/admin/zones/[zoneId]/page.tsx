@@ -62,7 +62,7 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
       </div>
 
       <Card className="p-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="font-bold text-gray-900">جاهزية الإطلاق</h2>
             <p className="text-sm text-gray-500">
@@ -75,13 +75,15 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
               · المصدر {zone.readiness.catalog_source}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <SyncEssentialCatalogButton zoneId={zone.id} />
-            <ZoneActivationControl
-              zoneId={zone.id}
-              isActive={zone.is_active}
-              blockers={zone.readiness.activation_blockers}
-            />
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <div className="flex flex-wrap gap-2">
+              <SyncEssentialCatalogButton zoneId={zone.id} />
+              <ZoneActivationControl
+                zoneId={zone.id}
+                isActive={zone.is_active}
+                blockers={zone.readiness.activation_blockers}
+              />
+            </div>
           </div>
         </div>
       </Card>

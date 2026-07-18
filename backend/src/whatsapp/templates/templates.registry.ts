@@ -14,26 +14,34 @@ export const templatesRegistry = {
     variables: {
       orderNumber: 1,
       customerName: 2,
-      area: 3,
-      totalEgp: 4,
+      customerPhone: 3,
+      deliveryAddress: 4,
+      orderDetails: 5,
+      initialTotalEgp: 6,
     },
     schema: z.object({
       customerName: z.string().trim().min(1),
       orderNumber: z.string().trim().min(1),
-      area: z.string().trim().min(1),
-      totalEgp: z.number().nonnegative(),
+      customerPhone: z.string().trim().min(1),
+      deliveryAddress: z.string().trim().min(1),
+      orderDetails: z.string().trim().min(1).max(1000),
+      initialTotalEgp: z.number().nonnegative(),
     }),
     fallbackText: (data: {
       customerName: string;
       orderNumber: string;
-      area: string;
-      totalEgp: number;
+      customerPhone: string;
+      deliveryAddress: string;
+      orderDetails: string;
+      initialTotalEgp: number;
     }) =>
       newOrderSeller({
         orderId: data.orderNumber,
         customerName: data.customerName,
-        area: data.area,
-        total: data.totalEgp,
+        customerPhone: data.customerPhone,
+        deliveryAddress: data.deliveryAddress,
+        orderDetails: data.orderDetails,
+        total: data.initialTotalEgp,
       }),
   },
 

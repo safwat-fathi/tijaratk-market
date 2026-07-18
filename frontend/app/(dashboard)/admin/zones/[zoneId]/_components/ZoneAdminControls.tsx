@@ -94,7 +94,7 @@ export function ZoneActivationControl({
   };
 
   return (
-    <div className="flex max-w-md flex-col items-end gap-2">
+    <div className="flex max-w-md flex-col items-start gap-2">
       <MutationToast toast={toast} close={() => setToast(null)} />
       <Button
         type="button"
