@@ -172,9 +172,7 @@ export class AdminManagedProductsController {
     @CurrentAdminActor() actor: AdminActorContext,
     @Body() payload: BulkUpdateProductsDto,
   ) {
-    return this.productsService.runAsTenantForAdmin(actor.tenantId, () =>
-      this.productsService.bulkUpdate(actor.tenantId, payload, actor),
-    );
+    return this.productsService.bulkUpdateForManagedAdmin(actor, payload);
   }
 
   /** Updates non-sensitive product details only. */

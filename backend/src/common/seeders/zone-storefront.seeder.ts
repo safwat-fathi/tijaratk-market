@@ -403,7 +403,7 @@ async function linkZoneMerchants(
   logger: Logger,
 ) {
   for (const tenant of tenants) {
-    await ensureDeliveryCoverage(tx, tenant.id, areaId);
+    await ensureDeliveryCoverage(tx, tenant.id, [areaId]);
     const membership = await tx.zoneStorefrontMerchant.findUnique({
       where: {
         zone_storefront_id_tenant_id: {

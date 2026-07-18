@@ -324,6 +324,16 @@ export class ProductsService {
     );
   }
 
+  /** Bulk updates explicitly tenant-scoped products with admin actor attribution. */
+  async bulkUpdateForManagedAdmin(
+    actor: ProductActivityActor & { tenantId: number },
+    payload: BulkUpdateProductsDto,
+  ): Promise<{ success: true; count: number }> {
+    return this.runAsTenantForAdmin(actor.tenantId, () =>
+      this.bulkUpdate(actor.tenantId, payload, actor),
+    );
+  }
+
   async findAllForTenantAsAdmin(
     tenantId: number,
     status?: ProductStatus,
