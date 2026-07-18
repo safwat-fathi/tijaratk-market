@@ -37,6 +37,7 @@ export async function generateMetadata({ params }: ZonePageProps): Promise<Metad
     title: `${response.data.name} | سوق تجارتك`,
     description: `اطلب احتياجاتك من ${response.data.area.name_ar} عبر واجهة تجارتك المركزية.`,
     alternates: { canonical: `/market/${response.data.slug}` },
+    manifest: `/pwa/zone-storefront/${encodeURIComponent(response.data.slug)}/manifest`,
   };
 }
 
@@ -104,7 +105,7 @@ export default async function ZoneStorefrontPage({
         contentId={`zone:${zone.id}`}
         storefrontType="zone"
       />
-      <StoreHeader tenant={tenantPresentation} />
+      <StoreHeader tenant={tenantPresentation} enableCustomerTour />
       <div className="min-w-0">
         <OrderForm
           tenantSlug={zone.slug}

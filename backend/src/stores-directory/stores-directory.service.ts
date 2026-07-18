@@ -16,6 +16,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateDirectoryEventDto } from './dto/create-directory-event.dto';
 import { UpdateDirectoryProfileDto } from './dto/update-directory-profile.dto';
 import {
+  type AdminDirectoryAreaAttention,
+  AdminDirectoryAreasQueryDto,
   CreateDirectoryAreaDto,
   UpdateDirectoryAreaDto,
 } from './dto/directory-area.dto';
@@ -432,13 +434,89 @@ export class StoresDirectoryService {
   }
 
   /**
-   * Lists directory areas for admin management.
+   * Lists directory areas for admin management, preserving the legacy array
+   * response when no management query parameters are supplied.
    */
-  async adminFindAreas() {
-    return this.prisma.directoryArea.findMany({
-      where: { deleted_at: null },
-      orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
-    });
+  async adminFindAreas(query: AdminDirectoryAreasQueryDto = {}) {
+    const hasManagementQuery = Object.values(query).some(
+      (value) => value !== undefined,
+    );
+    if (!hasManagementQuery) {
+      return this.prisma.directoryArea.findMany({
+        where: { deleted_at: null },
+        orderBy: [
+          { sort_order: 'asc' },
+          { name_ar: 'asc' },
+          { id: 'asc' },
+        ],
+      });
+    }
+
+    const page = query.page ?? 1;
+    const limit = Math.min(query.limit ?? 20, 100);
+    const where = this.buildAdminAreaWhere(query);
+    const [areas, total, mainAreas, governorateRows, cityRows] =
+      await Promise.all([
+        this.prisma.directoryArea.findMany({
+          where,
+          include: {
+            child_areas: {
+              where: { deleted_at: null },
+              select: { is_active: true },
+            },
+          },
+          orderBy: [
+            { sort_order: 'asc' },
+            { name_ar: 'asc' },
+            { id: 'asc' },
+          ],
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        this.prisma.directoryArea.count({ where }),
+        this.prisma.directoryArea.findMany({
+          where: { parent_area_id: null, deleted_at: null },
+          select: { id: true, name_ar: true, is_active: true },
+          orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }, { id: 'asc' }],
+        }),
+        this.prisma.directoryArea.findMany({
+          where: { deleted_at: null, governorate: { not: null } },
+          select: { governorate: true },
+          distinct: ['governorate'],
+          orderBy: { governorate: 'asc' },
+        }),
+        this.prisma.directoryArea.findMany({
+          where: { deleted_at: null, city: { not: null } },
+          select: { city: true, governorate: true },
+          distinct: ['city', 'governorate'],
+          orderBy: [{ governorate: 'asc' }, { city: 'asc' }],
+        }),
+      ]);
+
+    return {
+      data: areas.map(({ child_areas: childAreas, ...area }) => ({
+        ...area,
+        child_count: childAreas.length,
+        active_child_count: childAreas.filter((child) => child.is_active).length,
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+      facets: {
+        main_areas: mainAreas,
+        governorates: governorateRows.flatMap((row) =>
+          row.governorate?.trim() ? [row.governorate] : [],
+        ),
+        cities: cityRows.flatMap((row) =>
+          row.city?.trim()
+            ? [{ name: row.city, governorate: row.governorate }]
+            : [],
+        ),
+      },
+    };
   }
 
   /**
@@ -1086,6 +1164,106 @@ export class StoresDirectoryService {
   private parseHHMM(value: string) {
     const [hours = '0', minutes = '0'] = value.split(':');
     return Number(hours) * 60 + Number(minutes);
+  }
+
+  /** Builds the authoritative server-side filter for area administration. */
+  private buildAdminAreaWhere(
+    query: AdminDirectoryAreasQueryDto,
+  ): Prisma.DirectoryAreaWhereInput {
+    const filters: Prisma.DirectoryAreaWhereInput[] = [];
+    const search = query.search?.trim();
+    const governorate = query.governorate?.trim();
+    const city = query.city?.trim();
+
+    if (search) {
+      filters.push({
+        OR: [
+          { name_ar: { contains: search, mode: 'insensitive' } },
+          { name_en: { contains: search, mode: 'insensitive' } },
+          { slug: { contains: search, mode: 'insensitive' } },
+          { city: { contains: search, mode: 'insensitive' } },
+          { governorate: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (query.parentId) {
+      if (query.kind === 'main') filters.push({ id: query.parentId });
+      else if (query.kind === 'sub') {
+        filters.push({ parent_area_id: query.parentId });
+      } else {
+        filters.push({
+          OR: [{ id: query.parentId }, { parent_area_id: query.parentId }],
+        });
+      }
+    } else if (query.kind === 'main') {
+      filters.push({ parent_area_id: null });
+    } else if (query.kind === 'sub') {
+      filters.push({ parent_area_id: { not: null } });
+    }
+
+    if (query.status) {
+      filters.push({ is_active: query.status === 'active' });
+    }
+    if (governorate) {
+      filters.push({ governorate: { equals: governorate, mode: 'insensitive' } });
+    }
+    if (city) {
+      filters.push({ city: { equals: city, mode: 'insensitive' } });
+    }
+    if (query.attention) {
+      filters.push(this.buildAreaAttentionWhere(query.attention));
+    }
+
+    return {
+      deleted_at: null,
+      ...(filters.length > 0 ? { AND: filters } : {}),
+    };
+  }
+
+  /** Maps one operational attention filter to its Prisma predicate. */
+  private buildAreaAttentionWhere(
+    attention: AdminDirectoryAreaAttention,
+  ): Prisma.DirectoryAreaWhereInput {
+    const mainWithoutActiveChildren: Prisma.DirectoryAreaWhereInput = {
+      parent_area_id: null,
+      child_areas: {
+        none: { is_active: true, deleted_at: null },
+      },
+    };
+    const missingEnglish: Prisma.DirectoryAreaWhereInput = {
+      OR: [{ name_en: null }, { name_en: '' }],
+    };
+    const missingLocation: Prisma.DirectoryAreaWhereInput = {
+      OR: [
+        { city: null },
+        { city: '' },
+        { governorate: null },
+        { governorate: '' },
+      ],
+    };
+    const orphanedChild: Prisma.DirectoryAreaWhereInput = {
+      parent_area_id: { not: null },
+      OR: [
+        { parent_area: { is: { deleted_at: { not: null } } } },
+        { parent_area: { is: { is_active: false } } },
+      ],
+    };
+
+    if (attention === 'main_without_active_children') {
+      return mainWithoutActiveChildren;
+    }
+    if (attention === 'missing_english') return missingEnglish;
+    if (attention === 'missing_location') return missingLocation;
+    if (attention === 'orphaned_child') return orphanedChild;
+    return {
+      OR: [
+        mainWithoutActiveChildren,
+        missingEnglish,
+        missingLocation,
+        orphanedChild,
+      ],
+    };
   }
 
   private toAreaDto(area: {

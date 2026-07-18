@@ -51,6 +51,40 @@ export type AdminDirectoryArea = {
 	city: string | null;
 	governorate: string | null;
 	is_active: boolean;
+	child_count?: number;
+	active_child_count?: number;
+};
+
+export type AdminDirectoryAreasQuery = {
+	page: number;
+	limit: number;
+	search?: string;
+	kind?: "main" | "sub";
+	parentId?: number;
+	status?: "active" | "inactive";
+	governorate?: string;
+	city?: string;
+	attention?:
+		| "any"
+		| "main_without_active_children"
+		| "missing_english"
+		| "missing_location"
+		| "orphaned_child";
+};
+
+export type AdminDirectoryAreasResponse = {
+	data: AdminDirectoryArea[];
+	meta: {
+		page: number;
+		limit: number;
+		total: number;
+		totalPages: number;
+	};
+	facets: {
+		main_areas: Array<Pick<AdminDirectoryArea, "id" | "name_ar" | "is_active">>;
+		governorates: string[];
+		cities: Array<{ name: string; governorate: string | null }>;
+	};
 };
 
 export type AdminDirectoryAreaPayload = Pick<
@@ -818,6 +852,14 @@ class AdminApiService extends HttpService {
 
 	public async getDirectoryAreas() {
 		return this.get<AdminDirectoryArea[]>("directory/areas", undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async getDirectoryAreasForManagement(params: AdminDirectoryAreasQuery) {
+		return this.get<AdminDirectoryAreasResponse>(
+			"directory/areas",
+			params,
+			ADMIN_AUTH_OPTIONS,
+		);
 	}
 
 	public async createDirectoryArea(payload: AdminDirectoryAreaPayload) {

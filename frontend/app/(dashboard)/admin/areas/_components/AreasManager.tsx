@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
   Loader2,
@@ -26,6 +27,9 @@ import {
 
 type AreasManagerProps = {
   initialAreas: AdminDirectoryArea[];
+  mainAreas: Array<Pick<AdminDirectoryArea, "id" | "name_ar" | "is_active">>;
+  page: number;
+  hasActiveFilters: boolean;
 };
 
 type AreaKind = "main" | "sub";
@@ -33,8 +37,14 @@ type AreaKind = "main" | "sub";
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
-export default function AreasManager({ initialAreas }: AreasManagerProps) {
-  const [areas, setAreas] = useState(initialAreas);
+export default function AreasManager({
+  initialAreas,
+  mainAreas,
+  page,
+  hasActiveFilters,
+}: AreasManagerProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<AdminDirectoryArea | null>(
     null,
@@ -42,6 +52,9 @@ export default function AreasManager({ initialAreas }: AreasManagerProps) {
   const [areaKind, setAreaKind] = useState<AreaKind>("main");
   const [parentAreaId, setParentAreaId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(
+    null,
+  );
   const [error, setError] = useState("");
   const [parentError, setParentError] = useState("");
   const [feedback, setFeedback] = useState<{
@@ -52,19 +65,15 @@ export default function AreasManager({ initialAreas }: AreasManagerProps) {
   const parentSelectRef = useRef<HTMLSelectElement>(null);
 
   const areaById = useMemo(
-    () => new Map(areas.map((area) => [area.id, area])),
-    [areas],
+    () => new Map(mainAreas.map((area) => [area.id, area])),
+    [mainAreas],
   );
   const mainAreaOptions = useMemo(
-    () =>
-      areas.filter(
-        (area) =>
-          area.parent_area_id === null && area.id !== editingArea?.id,
-      ),
-    [areas, editingArea?.id],
+    () => mainAreas.filter((area) => area.id !== editingArea?.id),
+    [mainAreas, editingArea?.id],
   );
   const editingAreaHasChildren = Boolean(
-    editingArea && areas.some((area) => area.parent_area_id === editingArea.id),
+    editingArea && (editingArea.child_count ?? 0) > 0,
   );
 
   useEffect(() => {
@@ -85,6 +94,7 @@ export default function AreasManager({ initialAreas }: AreasManagerProps) {
   }, [isModalOpen, loading]);
 
   const handleOpenModal = (area?: AdminDirectoryArea) => {
+    setConfirmingDeleteId(null);
     const nextArea = area ?? null;
     setEditingArea(nextArea);
     setAreaKind(nextArea?.parent_area_id ? "sub" : "main");
@@ -137,23 +147,15 @@ export default function AreasManager({ initialAreas }: AreasManagerProps) {
 
     try {
       if (editingArea) {
-        const updatedArea = await updateDirectoryAreaAction(
-          editingArea.id,
-          payload,
-        );
-        setAreas((current) =>
-          current.map((area) =>
-            area.id === editingArea.id ? updatedArea : area,
-          ),
-        );
+        await updateDirectoryAreaAction(editingArea.id, payload);
         setFeedback({ id: Date.now(), message: "تم تحديث المنطقة بنجاح." });
       } else {
-        const createdArea = await createDirectoryAreaAction(payload);
-        setAreas((current) => [...current, createdArea]);
+        await createDirectoryAreaAction(payload);
         setFeedback({ id: Date.now(), message: "تمت إضافة المنطقة بنجاح." });
       }
       setIsModalOpen(false);
       setEditingArea(null);
+      router.refresh();
     } catch (caughtError: unknown) {
       const message = getErrorMessage(caughtError, "تعذر حفظ المنطقة.");
       setError(message);
@@ -170,13 +172,19 @@ export default function AreasManager({ initialAreas }: AreasManagerProps) {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذه المنطقة؟")) return;
     setLoading(true);
     setError("");
     try {
       await deleteDirectoryAreaAction(id);
-      setAreas((current) => current.filter((area) => area.id !== id));
       setFeedback({ id: Date.now(), message: "تم حذف المنطقة بنجاح." });
+      setConfirmingDeleteId(null);
+      if (initialAreas.length === 1 && page > 1) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("page", String(page - 1));
+        router.replace(`/admin/areas?${params.toString()}`);
+      } else {
+        router.refresh();
+      }
     } catch (caughtError: unknown) {
       setError(getErrorMessage(caughtError, "تعذر حذف المنطقة."));
     } finally {
@@ -243,7 +251,7 @@ export default function AreasManager({ initialAreas }: AreasManagerProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {areas.map((area) => {
+              {initialAreas.map((area) => {
                 const parentArea = area.parent_area_id
                   ? areaById.get(area.parent_area_id)
                   : null;
@@ -305,27 +313,55 @@ export default function AreasManager({ initialAreas }: AreasManagerProps) {
                         >
                           تعديل
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-red-200 text-red-600 hover:bg-red-50"
-                          onClick={() => handleDelete(area.id)}
-                          disabled={loading}
-                        >
-                          حذف
-                        </Button>
+                        {confirmingDeleteId === area.id ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-red-600 bg-red-600 text-white hover:bg-red-700"
+                              onClick={() => handleDelete(area.id)}
+                              disabled={loading}
+                              autoFocus
+                            >
+                              {loading ? "جارٍ الحذف..." : "تأكيد الحذف"}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setConfirmingDeleteId(null)}
+                              disabled={loading}
+                            >
+                              إلغاء
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-red-200 text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              setConfirmingDeleteId(area.id);
+                              setError("");
+                            }}
+                            disabled={loading}
+                          >
+                            حذف
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
                 );
               })}
-              {areas.length === 0 ? (
+              {initialAreas.length === 0 ? (
                 <tr>
                   <td
                     colSpan={8}
                     className="px-6 py-10 text-center text-sm text-gray-500"
                   >
-                    لا توجد مناطق. أضف أول منطقة رئيسية للبدء.
+                    {hasActiveFilters
+                      ? "لا توجد مناطق مطابقة للفلاتر الحالية."
+                      : "لا توجد مناطق. أضف أول منطقة رئيسية للبدء."}
                   </td>
                 </tr>
               ) : null}

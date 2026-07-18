@@ -24,10 +24,10 @@ type CategoryProductsViewProps = {
     selection: ProductCartSelection | null,
   ) => void;
   onProductAdded: () => void;
-  onRequestAvailability: (
+  onRequestAvailability?: (
     product: Product,
   ) => Promise<AvailabilityRequestOutcome>;
-  onRequestCustomAvailability: (
+  onRequestCustomAvailability?: (
     requestedProductName: string,
   ) => Promise<AvailabilityRequestOutcome>;
   setLoadMoreTarget: (node: HTMLDivElement | null) => void;

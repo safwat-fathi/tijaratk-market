@@ -144,7 +144,7 @@ type ProductListCardProps = {
 	) => void;
 	onApplyInlineValue: (product: Product, mode: InlineEditorMode) => void;
 	onCancelInlineValue: (product: Product, mode: InlineEditorMode) => void;
-	onOpenAvailabilitySheet: (product: Product) => void;
+	onOpenAvailabilitySheet?: (product: Product) => void;
 };
 
 const resolveSelectionMetrics = ({
@@ -521,7 +521,7 @@ type ProductSelectionControlsProps = {
 	) => void;
 	onApplyInlineValue: (product: Product, mode: InlineEditorMode) => void;
 	onCancelInlineValue: (product: Product, mode: InlineEditorMode) => void;
-	onOpenAvailabilitySheet: (product: Product) => void;
+	onOpenAvailabilitySheet?: (product: Product) => void;
 };
 
 const ProductSelectionControls = ({
@@ -552,6 +552,8 @@ const ProductSelectionControls = ({
 	onOpenAvailabilitySheet,
 }: ProductSelectionControlsProps) => {
 	if (isUnavailable) {
+		if (!onOpenAvailabilitySheet) return null;
+
 		return (
 			<button
 				type="button"
@@ -1142,11 +1144,14 @@ export default function ProductList({
 								onInlineDraftChange={handleInlineDraftChange}
 								onApplyInlineValue={handleApplyInlineValue}
 								onCancelInlineValue={handleCancelInlineValue}
-								onOpenAvailabilitySheet={(selectedProduct) =>
-									setAvailabilitySheet({
-										type: "product",
-										product: selectedProduct,
-									})
+								onOpenAvailabilitySheet={
+									onRequestAvailability
+										? (selectedProduct) =>
+												setAvailabilitySheet({
+													type: "product",
+													product: selectedProduct,
+												})
+										: undefined
 								}
 							/>
 						);

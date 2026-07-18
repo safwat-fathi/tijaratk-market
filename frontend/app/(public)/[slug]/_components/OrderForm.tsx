@@ -2043,7 +2043,11 @@ export default function OrderForm({
                     clearValidationError("order_request");
                     handleUpdateSelection(product, selection);
                   }}
-                  onRequestCustomAvailability={handleRequestCustomAvailability}
+                  onRequestCustomAvailability={
+                    storefrontKind === "tenant"
+                      ? handleRequestCustomAvailability
+                      : undefined
+                  }
                 />
               </>
             )}
@@ -2066,8 +2070,16 @@ export default function OrderForm({
                   handleUpdateSelection(product, selection);
                 }}
                 onProductAdded={handleProductAdded}
-                onRequestAvailability={handleRequestAvailability}
-                onRequestCustomAvailability={handleRequestCustomAvailability}
+                onRequestAvailability={
+                  storefrontKind === "tenant"
+                    ? handleRequestAvailability
+                    : undefined
+                }
+                onRequestCustomAvailability={
+                  storefrontKind === "tenant"
+                    ? handleRequestCustomAvailability
+                    : undefined
+                }
                 setLoadMoreTarget={setLoadMoreTarget}
               />
             )}
@@ -2083,7 +2095,11 @@ export default function OrderForm({
 								clearValidationError("order_request");
 								handleUpdateSelection(product, selection);
 							}}
-							onRequestCustomAvailability={handleRequestCustomAvailability}
+							onRequestCustomAvailability={
+								storefrontKind === "tenant"
+									? handleRequestCustomAvailability
+									: undefined
+							}
 						/>
 					</div>
 				)}

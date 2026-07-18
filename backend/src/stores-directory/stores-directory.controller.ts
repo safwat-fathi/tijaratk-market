@@ -34,6 +34,7 @@ import {
 import { CreateDirectoryEventDto } from './dto/create-directory-event.dto';
 import { UpdateDirectoryProfileDto } from './dto/update-directory-profile.dto';
 import {
+  AdminDirectoryAreasQueryDto,
   CreateDirectoryAreaDto,
   UpdateDirectoryAreaDto,
 } from './dto/directory-area.dto';
@@ -170,8 +171,8 @@ export class StoresDirectoryController {
     status: HttpStatus.OK,
     description: 'Directory areas returned successfully',
   })
-  adminFindAreas() {
-    return this.storesDirectoryService.adminFindAreas();
+  adminFindAreas(@Query() query: AdminDirectoryAreasQueryDto) {
+    return this.storesDirectoryService.adminFindAreas(query);
   }
 
   @Post('admin/directory/areas')
