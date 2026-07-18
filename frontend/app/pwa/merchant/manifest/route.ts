@@ -49,7 +49,7 @@ const buildManifest = (tenant?: Tenant) => {
     description: "تابع طلبات ومنتجات وعملاء متجرك من لوحة تجارتك.",
     id: tenant?.slug ? `/pwa/merchant/${tenant.slug}` : "/pwa/merchant",
     start_url: "/merchant?src=pwa-merchant",
-    scope: "/",
+    scope: "/merchant",
     display: "standalone",
     background_color: "#F7F8F6",
     theme_color: "#0F5A3D",

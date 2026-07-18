@@ -318,7 +318,8 @@ export async function adminLoginAction(prevState: ActionState, formData: FormDat
   redirect("/admin");
 }
 
-export async function adminLogoutAction() {
+export async function adminLogoutAction(_formData?: FormData) {
+  void _formData;
   await adminService.logout();
   await Promise.all([
     deleteCookieAction(STORAGE_KEYS.ADMIN_ACCESS_TOKEN),
@@ -1013,6 +1014,22 @@ export async function updateManagedProductStatusAction(
   );
   if (!response.success) throw new Error(response.message || "تعذر تحديث حالة المنتج");
   await revalidateManagedProductPaths(tenantId);
+}
+
+export async function bulkUpdateManagedProductsAction(
+  tenantId: number,
+  payload: { ids: number[]; is_available?: boolean; status?: "active" | "archived"; category?: string },
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const response = await adminService.bulkUpdateManagedProducts(tenantId, payload as any);
+    if (!response.success) {
+      return { success: false, message: response.message || "تعذر تنفيذ الإجراء المجمع" };
+    }
+    await revalidateManagedProductPaths(tenantId);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, message: err.message || "حدث خطأ غير متوقع" };
+  }
 }
 
 export async function updateManagedOrderStatusAction(

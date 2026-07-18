@@ -65,6 +65,7 @@ import type {
   MetaTrackingContext,
 } from 'src/meta-conversions/meta-conversions.types';
 import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
+import { PushNotificationsService } from 'src/push-notifications/push-notifications.service';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -159,6 +160,7 @@ export class OrdersService {
     private readonly activityLogService: ActivityLogService,
     private readonly metaConversionsService: MetaConversionsService,
     private readonly deliveryConfigurationService: DeliveryConfigurationService,
+    private readonly pushNotificationsService: PushNotificationsService,
     @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
@@ -489,6 +491,17 @@ export class OrdersService {
           },
           manager,
         );
+
+        if (
+          actor.source === 'storefront' &&
+          createOrderDto.order_source !== OrderSource.zone_storefront
+        ) {
+          await this.pushNotificationsService.enqueueMerchantOrder(manager, {
+            orderId: persistedOrder.id,
+            tenantId,
+            storeName: tenant?.name || 'المتجر',
+          });
+        }
 
         await options.afterPersist?.(manager, persistedOrder as Order);
 

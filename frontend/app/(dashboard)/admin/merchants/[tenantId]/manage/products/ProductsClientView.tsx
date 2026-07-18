@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -13,6 +13,7 @@ import {
   updateManagedProductDetailsAction,
   updateManagedProductPriceAction,
   updateManagedProductStatusAction,
+  bulkUpdateManagedProductsAction,
 } from "@/actions/admin-server";
 
 type ProductsClientViewProps = {
@@ -37,16 +38,23 @@ export default function ProductsClientView({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
 
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [addTab, setAddTab] = useState<"catalog" | "manual">("catalog");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [bulkCategory, setBulkCategory] = useState("");
 
   const currentStatus = searchParams.get("status") || "active";
   const productsSearch = searchParams.get("products_search") || "";
   const productsCategory = searchParams.get("products_category") || "";
 
   const updateUrlParams = (updates: Record<string, string | null>) => {
+    setSelectedIds(new Set()); // Reset selection on any query change
     const params = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(updates)) {
       if (value === null || value === "") {
@@ -68,8 +76,39 @@ export default function ProductsClientView({
     updateUrlParams({ catalog_category: e.target.value, catalog_page: "1" });
   };
 
+  const toggleSelectAll = () => {
+    if (selectedIds.size === productsData.length && productsData.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(productsData.map((p) => p.id)));
+    }
+  };
+
+  const toggleSelectProduct = (id: number) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedIds(newSet);
+  };
+
+  const handleBulkAction = async (payload: any) => {
+    if (selectedIds.size === 0) return;
+    startTransition(async () => {
+      const result = await bulkUpdateManagedProductsAction(tenantId, {
+        ids: Array.from(selectedIds),
+        ...payload,
+      });
+      if (result.success) {
+        setSelectedIds(new Set());
+        setIsCategoryModalOpen(false);
+      } else {
+        alert(result.message);
+      }
+    });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">منتجات المتجر</h1>
@@ -123,10 +162,61 @@ export default function ProductsClientView({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto relative">
+          {/* Bulk Actions Toolbar */}
+          {selectedIds.size > 0 && permissions.has("products.update") && (
+            <div className="absolute top-0 left-0 right-0 z-10 bg-brand-soft border-b border-brand-accent/20 px-4 py-2 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+              <span className="text-sm font-medium text-brand-text">
+                تم تحديد {selectedIds.size} عنصر
+              </span>
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-8 text-xs bg-white"
+                  disabled={isPending}
+                  onClick={() => setIsCategoryModalOpen(true)}
+                >
+                  نقل لتصنيف
+                </Button>
+                {permissions.has("products.update_availability") && (
+                  <>
+                    <Button size="sm" variant="outline" className="h-8 text-xs bg-white" disabled={isPending} onClick={() => handleBulkAction({ is_available: true })}>
+                      إتاحة
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs bg-white" disabled={isPending} onClick={() => handleBulkAction({ is_available: false })}>
+                      إخفاء
+                    </Button>
+                  </>
+                )}
+                {permissions.has("products.archive") && (
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-8 text-xs bg-white"
+                    disabled={isPending}
+                    onClick={() => handleBulkAction({ status: currentStatus === "active" ? "archived" : "active" })}
+                  >
+                    {currentStatus === "active" ? "أرشفة" : "استعادة"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           <table className="min-w-full divide-y divide-gray-100 text-sm">
             <thead className="bg-gray-50/50 text-right text-xs text-gray-500 font-medium">
               <tr>
+                {permissions.has("products.update") && (
+                  <th className="px-4 py-3 w-10">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-gray-300 text-brand-accent focus:ring-brand-accent/50 cursor-pointer"
+                      checked={selectedIds.size === productsData.length && productsData.length > 0}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3">المنتج</th>
                 <th className="px-4 py-3">السعر</th>
                 <th className="px-4 py-3">الإتاحة</th>
@@ -136,7 +226,17 @@ export default function ProductsClientView({
             </thead>
             <tbody className="divide-y divide-gray-50 bg-white">
               {productsData.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50/30 transition-colors">
+                <tr key={product.id} className={`transition-colors ${selectedIds.has(product.id) ? 'bg-brand-soft/30' : 'hover:bg-gray-50/30'}`}>
+                  {permissions.has("products.update") && (
+                    <td className="px-4 py-3">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300 text-brand-accent focus:ring-brand-accent/50 cursor-pointer"
+                        checked={selectedIds.has(product.id)}
+                        onChange={() => toggleSelectProduct(product.id)}
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3">
                     <p className="font-semibold text-gray-900">{product.name}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{product.category || "بدون تصنيف"}</p>
@@ -180,7 +280,7 @@ export default function ProductsClientView({
                 </tr>
               ))}
               {productsData.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-12 text-center text-gray-500 bg-gray-50/30">لا توجد منتجات تطابق بحثك.</td></tr>
+                <tr><td colSpan={permissions.has("products.update") ? 6 : 5} className="px-4 py-12 text-center text-gray-500 bg-gray-50/30">لا توجد منتجات تطابق بحثك.</td></tr>
               )}
             </tbody>
           </table>
@@ -212,6 +312,44 @@ export default function ProductsClientView({
           </div>
         )}
       </Card>
+
+      {/* Bulk Category Move Sheet */}
+      <BottomSheet
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        title="نقل لتصنيف آخر"
+      >
+        <div className="space-y-4 pt-2">
+          <p className="text-sm text-gray-600">سيتم نقل {selectedIds.size} منتجات إلى التصنيف الذي تختاره.</p>
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">التصنيف الجديد</label>
+            <input 
+              value={bulkCategory}
+              onChange={(e) => setBulkCategory(e.target.value)}
+              placeholder="اكتب اسم التصنيف"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-accent/50" 
+            />
+            <div className="flex flex-wrap gap-2 mt-2">
+              {productCategories.map(cat => (
+                <button 
+                  key={cat} 
+                  onClick={() => setBulkCategory(cat)}
+                  className="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors"
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Button 
+            className="w-full" 
+            disabled={!bulkCategory.trim() || isPending}
+            onClick={() => handleBulkAction({ category: bulkCategory })}
+          >
+            {isPending ? "جاري الحفظ..." : "نقل المنتجات"}
+          </Button>
+        </div>
+      </BottomSheet>
 
       {/* Add Product Bottom Sheet */}
       <BottomSheet

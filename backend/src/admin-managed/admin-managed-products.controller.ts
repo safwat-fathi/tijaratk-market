@@ -22,6 +22,7 @@ import { AddProductFromCatalogDto } from 'src/products/dto/add-product-from-cata
 import { CreateProductDto } from 'src/products/dto/create-product.dto';
 import { GetCatalogItemsDto } from 'src/products/dto/get-catalog-items.dto';
 import { GetTenantProductsDto } from 'src/products/dto/get-tenant-products.dto';
+import { BulkUpdateProductsDto } from 'src/products/dto/bulk-update-products.dto';
 import { ProductsService } from 'src/products/products.service';
 import { AdminActorContext } from './admin-managed.types';
 import { CurrentAdminActor } from './decorators/current-admin-actor.decorator';
@@ -158,6 +159,21 @@ export class AdminManagedProductsController {
       actor.tenantId,
       dto,
       actor,
+    );
+  }
+
+  /** Bulk updates multiple products in a single operation. */
+  @Patch('products/bulk')
+  @RequireManagedFeature('product_write')
+  @RequireManagedPermissions(ADMIN_MANAGED_PERMISSIONS.ProductsUpdate)
+  @ApiOperation({ summary: 'Bulk update managed products' })
+  @ApiBody({ type: BulkUpdateProductsDto })
+  bulkUpdate(
+    @CurrentAdminActor() actor: AdminActorContext,
+    @Body() payload: BulkUpdateProductsDto,
+  ) {
+    return this.productsService.runAsTenantForAdmin(actor.tenantId, () =>
+      this.productsService.bulkUpdate(actor.tenantId, payload, actor),
     );
   }
 

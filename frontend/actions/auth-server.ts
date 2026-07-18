@@ -148,7 +148,8 @@ export async function registerAction(
 
 }
 
-export async function logoutAction() {
+export async function logoutAction(_formData?: FormData) {
+  void _formData;
   await deleteCookieAction(STORAGE_KEYS.ACCESS_TOKEN);
   await deleteCookieAction(STORAGE_KEYS.USER);
   await authService.logout();

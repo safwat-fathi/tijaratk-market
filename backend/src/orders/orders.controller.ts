@@ -199,6 +199,11 @@ export class OrdersController {
     if (OrdersController.RESERVED_PUBLIC_ORDER_PATHS.has(tenantSlug.trim())) {
       throw new BadRequestException('Invalid tenant slug');
     }
+    if (createOrderDto.order_source === OrderSource.zone_storefront) {
+      throw new BadRequestException(
+        'Zone storefront source is reserved for the dedicated zone checkout',
+      );
+    }
 
     return this.ordersService.createForTenantSlug(
       tenantSlug,

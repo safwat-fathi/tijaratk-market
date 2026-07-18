@@ -42,6 +42,7 @@ import {
 import { ZoneStorefrontNotificationsService } from './zone-storefront-notifications.service';
 import { ZoneStorefrontsService } from './zone-storefronts.service';
 import type { MetaTrackingContext } from 'src/meta-conversions/meta-conversions.types';
+import { PushNotificationsService } from 'src/push-notifications/push-notifications.service';
 
 type MerchantRequestActor = {
   tenantId: number;
@@ -57,6 +58,7 @@ export class OrderDispatchService {
     private readonly activityLogService: ActivityLogService,
     private readonly zoneStorefrontsService: ZoneStorefrontsService,
     private readonly notifications: ZoneStorefrontNotificationsService,
+    private readonly pushNotificationsService: PushNotificationsService,
   ) {}
 
   /** Atomically creates an operator-owned draft order and pending dispatch. */
@@ -209,6 +211,16 @@ export class OrderDispatchService {
                     source: ActivitySources.Storefront,
                   },
                   transactionManager,
+                );
+                await this.pushNotificationsService.enqueueZoneOrder(
+                  transactionManager,
+                  {
+                    orderId: order.id,
+                    tenantId: zone.operator_tenant_id,
+                    storeName: zone.name,
+                    zoneId: zone.id,
+                    dispatchId: dispatch.id,
+                  },
                 );
               },
             },
@@ -455,6 +467,16 @@ export class OrderDispatchService {
           },
           manager,
         );
+
+        await this.pushNotificationsService.enqueueZoneAssignment(manager, {
+          assignmentId: assignment.id,
+          dispatchId: dispatch.id,
+          orderId: dispatch.order_id,
+          targetTenantId: merchant.id,
+          merchantName: merchant.name,
+          zoneId: zone.id,
+          zoneName: zone.name,
+        });
 
         return { dispatch, assignment, previousAssignment };
       },

@@ -3,9 +3,15 @@ import { redirect } from "next/navigation";
 import { tenantsService } from "@/services/api/tenants.service";
 import { ordersService } from "@/services/api/orders.service";
 import MerchantLayoutClient from "./ClientLayout";
+import { merchantPushNotificationsService } from "@/services/api/push-notifications.service";
 
 export const metadata: Metadata = {
   manifest: "/pwa/merchant/manifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "تجارتك للتاجر",
+  },
   robots: {
     index: false,
     follow: false,
@@ -17,11 +23,13 @@ export default async function MerchantFeaturesLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [tenantResponse, inboxSummaryResponse] = await Promise.all([
-    tenantsService.getMyTenant(),
-    ordersService.getInboxSummary(),
-  ]);
-  
+  const [tenantResponse, inboxSummaryResponse, pushConfigResponse] =
+    await Promise.all([
+      tenantsService.getMyTenant(),
+      ordersService.getInboxSummary(),
+      merchantPushNotificationsService.getConfig(),
+    ]);
+
   if (tenantResponse.success && tenantResponse.data) {
     if (!tenantResponse.data.onboarding_completed) {
       redirect("/merchant/onboarding");
@@ -42,6 +50,11 @@ export default async function MerchantFeaturesLayout({
     <MerchantLayoutClient
       merchantAppName={merchantAppName}
       newOrdersCount={newOrdersCount}
+      pushConfig={
+        pushConfigResponse.success && pushConfigResponse.data
+          ? pushConfigResponse.data
+          : { enabled: false }
+      }
     >
       {children}
     </MerchantLayoutClient>

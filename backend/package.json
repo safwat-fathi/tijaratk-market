@@ -31,7 +31,8 @@
     "prisma:generate": "prisma generate",
     "prisma:reset:dev": "NODE_ENV=development prisma migrate reset && NODE_ENV=development ts-node -r tsconfig-paths/register ./src/common/scripts/grant-permissions.ts",
     "prisma:reset:prod": "NODE_ENV=production prisma migrate reset && NODE_ENV=production ts-node -r tsconfig-paths/register ./src/common/scripts/grant-permissions.ts",
-    "prisma:studio": "NODE_ENV=development prisma studio",
+    "prisma:studio:dev": "NODE_ENV=development prisma studio",
+    "prisma:studio:prod": "NODE_ENV=production prisma studio --browser none --port 5555",
     "sentry:sourcemaps": "sentry-cli sourcemaps inject --org tijaratk --project tijaratk-backend ./dist && sentry-cli sourcemaps upload --org tijaratk --project tijaratk-backend ./dist"
   },
   "dependencies": {
@@ -70,6 +71,7 @@
     "sharp": "^0.34.5",
     "swagger-ui-express": "^5.0.1",
     "twilio": "^5.12.0",
+    "web-push": "^3.6.7",
     "ws": "^8.19.0",
     "zod": "^4.3.6"
   },
@@ -91,6 +93,7 @@
     "@types/node": "^22.10.7",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",

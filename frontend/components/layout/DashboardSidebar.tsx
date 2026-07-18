@@ -2,8 +2,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
-import { Button } from "@/components/ui/Button";
+import { PushAwareLogoutForm } from "@/components/pwa/PushAwareLogoutForm";
 import { formatArabicInteger } from "@/lib/utils/number";
+import type { PushScope } from "@/types/services/push-notifications";
 
 export interface NavItem {
   label: string;
@@ -17,7 +18,8 @@ export interface NavItem {
 export interface DashboardSidebarProps {
   title?: React.ReactNode;
   navigation: NavItem[];
-  logoutAction: string | ((formData: FormData) => void) | any;
+  logoutAction: (formData: FormData) => void | Promise<void>;
+  pushScope: PushScope;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   topContent?: React.ReactNode; // Extra content at the top (e.g. Install PWA)
@@ -110,6 +112,7 @@ export function DashboardSidebar({
   title,
   navigation,
   logoutAction,
+  pushScope,
   sidebarOpen,
   setSidebarOpen,
   topContent,
@@ -193,15 +196,9 @@ export function DashboardSidebar({
       </nav>
 
       <div className="p-4 flex flex-col gap-4 justify-center items-center border-t border-gray-200 shrink-0">
-        <form action={logoutAction} className="w-full">
-          <Button
-            type="submit"
-            variant="outline"
-            className="w-full text-red-600 border-red-200 hover:text-red-700 hover:bg-red-50"
-          >
-            تسجيل خروج
-          </Button>
-        </form>
+        <div className="w-full">
+          <PushAwareLogoutForm scope={pushScope} logoutAction={logoutAction} />
+        </div>
 
         <Logo className="rounded-lg" />
       </div>

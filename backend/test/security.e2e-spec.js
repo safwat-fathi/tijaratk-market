@@ -4,6 +4,24 @@ const request = require('supertest');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcrypt');
 
+const pushEnvironmentKeys = [
+  'PUSH_NOTIFICATIONS_ENABLED',
+  'PUSH_VAPID_PUBLIC_KEY',
+  'PUSH_VAPID_PRIVATE_KEY',
+  'PUSH_VAPID_SUBJECT',
+  'ENCRYPTION_PASSWORD',
+];
+const originalPushEnvironment = Object.fromEntries(
+  pushEnvironmentKeys.map((key) => [key, process.env[key]]),
+);
+
+process.env.PUSH_NOTIFICATIONS_ENABLED = 'true';
+process.env.PUSH_VAPID_PUBLIC_KEY = 'e2e-public-key';
+process.env.PUSH_VAPID_PRIVATE_KEY = 'e2e-private-key';
+process.env.PUSH_VAPID_SUBJECT = 'mailto:e2e@tijaratk.test';
+process.env.ENCRYPTION_PASSWORD =
+  process.env.ENCRYPTION_PASSWORD || 'e2e-push-encryption-password';
+
 const { AppModule } = require('../dist/app.module');
 const {
   validationExceptionFactory,
@@ -31,6 +49,13 @@ const { PrismaService } = require('../dist/prisma/prisma.service');
 const {
   requestLoggingMiddleware,
 } = require('../dist/common/middlewares/request-logging.middleware');
+const {
+  PushNotificationsWorker,
+} = require('../dist/push-notifications/push-notifications.worker');
+const {
+  PushNotificationsService,
+} = require('../dist/push-notifications/push-notifications.service');
+const webPush = require('web-push');
 
 const AUTH_SIGNUP_PATH = '/auth/signup';
 const AUTH_LOGIN_PATH = '/auth/login';
@@ -50,6 +75,7 @@ describe('Security E2E (multi-tenant)', () => {
   let prisma;
   let adminAuditService;
   let adminProvisioningService;
+  let pushNotificationsService;
   let httpServer;
   let tokenTenantA;
   let tokenTenantB;
@@ -69,7 +95,13 @@ describe('Security E2E (multi-tenant)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
       providers: [AdminProvisioningService],
-    }).compile();
+    })
+      .overrideProvider(PushNotificationsWorker)
+      .useValue({
+        onApplicationBootstrap: () => undefined,
+        onModuleDestroy: () => undefined,
+      })
+      .compile();
 
     app = moduleRef.createNestApplication();
 
@@ -103,6 +135,7 @@ describe('Security E2E (multi-tenant)', () => {
     prisma = app.get(PrismaService);
     adminAuditService = app.get(AdminAuditService);
     adminProvisioningService = app.get(AdminProvisioningService);
+    pushNotificationsService = app.get(PushNotificationsService);
 
     const tenantAPhone = generateEgyptPhone(1);
     const tenantBPhone = generateEgyptPhone(2);
@@ -184,20 +217,466 @@ describe('Security E2E (multi-tenant)', () => {
   });
 
   afterAll(async () => {
-    await cleanupManagedAdmins(
-      prisma,
-      [platformAdmin?.id, operationsAdmin?.id, ...provisionedAdminIds],
-      runId,
-    );
-    await cleanupTenants(prisma, [tenantAId, tenantBId]);
-
-    if (app) {
-      await app.close();
+    try {
+      if (prisma) {
+        await prisma.pushNotificationOutbox.deleteMany({
+          where: {
+            OR: [
+              {
+                tenant_id: {
+                  in: [tenantAId, tenantBId].filter(Number.isInteger),
+                },
+              },
+              { event_key: { contains: runId } },
+            ],
+          },
+        });
+        await prisma.pushSubscription.deleteMany({
+          where: {
+            OR: [
+              {
+                merchant_tenant_id: {
+                  in: [tenantAId, tenantBId].filter(Number.isInteger),
+                },
+              },
+              {
+                admin_user_id: {
+                  in: [platformAdmin?.id, operationsAdmin?.id].filter(
+                    Number.isInteger,
+                  ),
+                },
+              },
+            ],
+          },
+        });
+      }
+      await cleanupManagedAdmins(
+        prisma,
+        [platformAdmin?.id, operationsAdmin?.id, ...provisionedAdminIds],
+        runId,
+      );
+      await cleanupTenants(prisma, [tenantAId, tenantBId]);
+    } finally {
+      if (app) await app.close();
+      for (const key of pushEnvironmentKeys) {
+        const originalValue = originalPushEnvironment[key];
+        if (originalValue === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = originalValue;
+        }
+      }
     }
   });
 
   it('returns 401 when accessing protected route without token', async () => {
     await request(httpServer).get(PRODUCTS_ITEM_PATH(tenantBProductId)).expect(401);
+  });
+
+  it('isolates encrypted merchant push subscriptions by authenticated user', async () => {
+    const configResponse = await request(httpServer)
+      .get('/push-notifications/config')
+      .expect(200);
+    expect(unwrapBody(configResponse.body)).toEqual({
+      enabled: true,
+      publicKey: 'e2e-public-key',
+    });
+
+    const endpoint = `https://push.example.test/merchant-${runId}`;
+    const payload = {
+      endpoint,
+      expirationTime: null,
+      keys: { p256dh: `p256dh-${runId}-merchant`, auth: `auth-${runId}` },
+    };
+    await request(httpServer)
+      .post('/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send(payload)
+      .expect(201);
+
+    const tenantAUser = await prisma.user.findFirstOrThrow({
+      where: { tenant_id: tenantAId },
+    });
+    let stored = await prisma.pushSubscription.findFirstOrThrow({
+      where: { merchant_user_id: tenantAUser.id },
+    });
+    expect(stored.merchant_tenant_id).toBe(tenantAId);
+    expect(stored.encrypted_subscription).not.toContain(endpoint);
+    expect(stored.encrypted_subscription).not.toContain(payload.keys.p256dh);
+    expect(stored.encrypted_subscription).not.toContain(payload.keys.auth);
+
+    await request(httpServer)
+      .post('/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${tokenTenantB}`)
+      .send(payload)
+      .expect(201);
+    const tenantBUser = await prisma.user.findFirstOrThrow({
+      where: { tenant_id: tenantBId },
+    });
+    stored = await prisma.pushSubscription.findUniqueOrThrow({
+      where: { endpoint_hash: stored.endpoint_hash },
+    });
+    expect(stored.merchant_user_id).toBe(tenantBUser.id);
+    expect(stored.merchant_tenant_id).toBe(tenantBId);
+
+    await request(httpServer)
+      .delete('/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({ endpoint })
+      .expect(200);
+    expect(
+      await prisma.pushSubscription.count({
+        where: { endpoint_hash: stored.endpoint_hash },
+      }),
+    ).toBe(1);
+
+    await request(httpServer)
+      .delete('/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${tokenTenantB}`)
+      .send({ endpoint })
+      .expect(200);
+    expect(
+      await prisma.pushSubscription.count({
+        where: { endpoint_hash: stored.endpoint_hash },
+      }),
+    ).toBe(0);
+  });
+
+  it('rechecks administrator role, assignment, and permission at delivery time', async () => {
+    const platformEndpoint = `https://push.example.test/platform-${runId}`;
+    const operationsEndpoint = `https://push.example.test/operations-${runId}`;
+    const subscription = (endpoint) => ({
+      endpoint,
+      expirationTime: null,
+      keys: {
+        p256dh: `p256dh-${runId}-${endpoint.length}`,
+        auth: `auth-${runId}`,
+      },
+    });
+    await request(httpServer)
+      .post('/admin/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send(subscription(platformEndpoint))
+      .expect(201);
+    await request(httpServer)
+      .post('/admin/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .send(subscription(operationsEndpoint))
+      .expect(201);
+
+    const access = await prisma.adminTenantAccess.upsert({
+      where: {
+        admin_user_id_tenant_id: {
+          admin_user_id: operationsAdmin.id,
+          tenant_id: tenantAId,
+        },
+      },
+      create: {
+        admin_user_id: operationsAdmin.id,
+        tenant_id: tenantAId,
+        granted_by_admin_id: platformAdmin.id,
+        permissions: ['orders.read'],
+      },
+      update: {
+        is_active: true,
+        revoked_at: null,
+        expires_at: null,
+        permissions: ['orders.read'],
+      },
+    });
+
+    const event = {
+      id: 1,
+      event_key: `merchant-order:e2e-${runId}`,
+      event_type: 'merchant_order_created',
+      tenant_id: tenantAId,
+      order_id: 1,
+      dispatch_id: null,
+      assignment_id: null,
+      zone_id: null,
+      payload: { storeName: 'E2E Store', orderNumber: '1' },
+      attempt_count: 1,
+      created_at: new Date(),
+    };
+    const permitted =
+      await pushNotificationsService.resolveDeliveryTargets(event);
+    expect(
+      permitted.some((target) => target.adminRole === 'platform_admin'),
+    ).toBe(true);
+    expect(
+      permitted.some((target) => target.adminRole === 'operations_admin'),
+    ).toBe(true);
+
+    const zoneEvent = {
+      ...event,
+      event_key: `zone-order:e2e-${runId}`,
+      event_type: 'zone_order_created',
+      dispatch_id: 10,
+      zone_id: 20,
+    };
+    const missingDispatchPermission =
+      await pushNotificationsService.resolveDeliveryTargets(zoneEvent);
+    expect(
+      missingDispatchPermission.some(
+        (target) => target.adminRole === 'operations_admin',
+      ),
+    ).toBe(false);
+
+    await prisma.adminTenantAccess.update({
+      where: { id: access.id },
+      data: { permissions: ['dispatches.read'] },
+    });
+    const dispatchPermitted =
+      await pushNotificationsService.resolveDeliveryTargets(zoneEvent);
+    expect(
+      dispatchPermitted.some(
+        (target) => target.adminRole === 'operations_admin',
+      ),
+    ).toBe(true);
+
+    await prisma.adminTenantAccess.update({
+      where: { id: access.id },
+      data: { expires_at: new Date(Date.now() - 60_000) },
+    });
+    const expired =
+      await pushNotificationsService.resolveDeliveryTargets(zoneEvent);
+    expect(
+      expired.some((target) => target.adminRole === 'platform_admin'),
+    ).toBe(true);
+    expect(
+      expired.some((target) => target.adminRole === 'operations_admin'),
+    ).toBe(false);
+
+    await prisma.adminTenantAccess.update({
+      where: { id: access.id },
+      data: { is_active: false, revoked_at: new Date(), expires_at: null },
+    });
+    const revoked =
+      await pushNotificationsService.resolveDeliveryTargets(event);
+    expect(
+      revoked.some((target) => target.adminRole === 'platform_admin'),
+    ).toBe(true);
+    expect(
+      revoked.some((target) => target.adminRole === 'operations_admin'),
+    ).toBe(false);
+
+    await request(httpServer)
+      .delete('/admin/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .send({ endpoint: platformEndpoint })
+      .expect(200);
+    expect(
+      await prisma.pushSubscription.count({
+        where: { admin_user_id: platformAdmin.id },
+      }),
+    ).toBe(1);
+
+    await request(httpServer)
+      .delete('/admin/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send({ endpoint: platformEndpoint })
+      .expect(200);
+    await request(httpServer)
+      .delete('/admin/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .send({ endpoint: operationsEndpoint })
+      .expect(200);
+  });
+
+  it('enqueues only customer-created orders and deduplicates their events', async () => {
+    const tenant = await prisma.tenant.findUniqueOrThrow({
+      where: { id: tenantAId },
+      select: { slug: true },
+    });
+    const dashboardResponse = await request(httpServer)
+      .post('/orders')
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({
+        customer: { phone: generateEgyptPhone(81) },
+        free_text_payload: { text: 'Dashboard order must not notify' },
+      })
+      .expect(201);
+    const dashboardOrder = unwrapBody(dashboardResponse.body);
+    expect(
+      await prisma.pushNotificationOutbox.findUnique({
+        where: { event_key: `merchant-order:${dashboardOrder.id}` },
+      }),
+    ).toBeNull();
+
+    await request(httpServer)
+      .post(`/orders/${tenant.slug}`)
+      .send({
+        customer: { phone: generateEgyptPhone(811) },
+        free_text_payload: { text: 'Source spoof must be rejected' },
+        order_source: 'zone_storefront',
+      })
+      .expect(400);
+
+    const publicResponse = await request(httpServer)
+      .post(`/orders/${tenant.slug}`)
+      .send({
+        customer: {
+          name: 'Push E2E Customer',
+          phone: generateEgyptPhone(82),
+          address: 'Privacy-sensitive test address',
+        },
+        free_text_payload: { text: 'Privacy-sensitive order contents' },
+      })
+      .expect(201);
+    const publicOrder = unwrapBody(publicResponse.body);
+    const eventKey = `merchant-order:${publicOrder.id}`;
+    await prisma.$transaction((tx) =>
+      pushNotificationsService.enqueueMerchantOrder(tx, {
+        orderId: publicOrder.id,
+        tenantId: tenantAId,
+        storeName: `E2E Store A ${runId}`,
+      }),
+    );
+
+    const events = await prisma.pushNotificationOutbox.findMany({
+      where: { event_key: eventKey },
+    });
+    expect(events).toHaveLength(1);
+    expect(JSON.stringify(events[0].payload)).not.toContain('Customer');
+    expect(JSON.stringify(events[0].payload)).not.toContain('address');
+    expect(JSON.stringify(events[0].payload)).not.toContain('contents');
+    await prisma.pushNotificationOutbox.deleteMany({
+      where: { event_key: eventKey },
+    });
+  });
+
+  it('retries transient failures and removes invalid assignment endpoints', async () => {
+    const endpoint = `https://push.example.test/retry-${runId}`;
+    await request(httpServer)
+      .post('/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({
+        endpoint,
+        expirationTime: null,
+        keys: {
+          p256dh: `p256dh-${runId}-retry`,
+          auth: `auth-${runId}-retry`,
+        },
+      })
+      .expect(201);
+
+    const zoneTargets = await pushNotificationsService.resolveDeliveryTargets({
+      id: 1,
+      event_key: `zone-order:merchant-exclusion-${runId}`,
+      event_type: 'zone_order_created',
+      tenant_id: tenantAId,
+      order_id: 1,
+      dispatch_id: 2,
+      assignment_id: null,
+      zone_id: 3,
+      payload: { storeName: 'E2E Zone', orderNumber: '1' },
+      attempt_count: 1,
+      created_at: new Date(),
+    });
+    expect(
+      zoneTargets.some((target) => target.actor === 'merchant'),
+    ).toBe(false);
+
+    const assignmentId = Number(`${Date.now()}`.slice(-8));
+    const eventKey = `zone-assignment:${assignmentId}`;
+    await prisma.$transaction((tx) =>
+      pushNotificationsService.enqueueZoneAssignment(tx, {
+        assignmentId,
+        dispatchId: assignmentId + 1,
+        orderId: assignmentId + 2,
+        targetTenantId: tenantAId,
+        merchantName: `E2E Store A ${runId}`,
+        zoneId: assignmentId + 3,
+        zoneName: 'E2E Zone',
+      }),
+    );
+    await prisma.$transaction((tx) =>
+      pushNotificationsService.enqueueZoneAssignment(tx, {
+        assignmentId,
+        dispatchId: assignmentId + 1,
+        orderId: assignmentId + 2,
+        targetTenantId: tenantAId,
+        merchantName: `E2E Store A ${runId}`,
+        zoneId: assignmentId + 3,
+        zoneName: 'E2E Zone',
+      }),
+    );
+    expect(
+      await prisma.pushNotificationOutbox.count({
+        where: { event_key: eventKey },
+      }),
+    ).toBe(1);
+
+    const event = await prisma.pushNotificationOutbox.findUniqueOrThrow({
+      where: { event_key: eventKey },
+    });
+    const envelope = pushNotificationsService.buildEnvelope(
+      {
+        ...event,
+        attempt_count: 1,
+      },
+      {
+        subscriptionId: 1,
+        encryptedSubscription: 'not-used',
+        actor: 'merchant',
+      },
+    );
+    expect(envelope.url).toBe(
+      `/merchant/assigned-orders/${assignmentId + 1}`,
+    );
+    expect(Object.keys(envelope).sort()).toEqual(
+      [
+        'body',
+        'createdAt',
+        'eventId',
+        'tag',
+        'title',
+        'type',
+        'url',
+        'version',
+      ].sort(),
+    );
+
+    const worker = new PushNotificationsWorker(
+      prisma,
+      pushNotificationsService,
+    );
+    const sendNotification = jest.spyOn(webPush, 'sendNotification');
+    try {
+      sendNotification.mockRejectedValueOnce({ statusCode: 503 });
+      await worker.tick();
+      let storedEvent = await prisma.pushNotificationOutbox.findUniqueOrThrow({
+        where: { event_key: eventKey },
+      });
+      expect(storedEvent.status).toBe('pending');
+      expect(storedEvent.attempt_count).toBe(1);
+      expect(storedEvent.last_error_code).toBe('push_http_503');
+
+      await prisma.pushNotificationOutbox.update({
+        where: { event_key: eventKey },
+        data: { next_attempt_at: new Date(0) },
+      });
+      sendNotification.mockRejectedValueOnce({ statusCode: 410 });
+      await worker.tick();
+      storedEvent = await prisma.pushNotificationOutbox.findUniqueOrThrow({
+        where: { event_key: eventKey },
+      });
+      expect(storedEvent.status).toBe('sent');
+      expect(
+        await prisma.pushSubscription.count({
+          where: { merchant_tenant_id: tenantAId },
+        }),
+      ).toBe(0);
+    } finally {
+      sendNotification.mockRestore();
+      await prisma.pushNotificationOutbox.deleteMany({
+        where: { event_key: eventKey },
+      });
+      await request(httpServer)
+        .delete('/push-notifications/subscriptions')
+        .set('Authorization', `Bearer ${tokenTenantA}`)
+        .send({ endpoint });
+    }
   });
 
   it('rejects merchant signup without the required store address', async () => {

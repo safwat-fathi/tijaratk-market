@@ -2,18 +2,20 @@
 
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { Logo } from "@/components/ui/Logo";
 import { adminLogoutAction } from "@/actions/admin-server";
 import {
   DashboardSidebar,
   type NavItem,
 } from "@/components/layout/DashboardSidebar";
 import type { AdminRole } from "@/services/api/admin.service";
+import { DashboardPwaControls } from "@/components/pwa/DashboardPwaControls";
+import type { PushNotificationsConfig } from "@/types/services/push-notifications";
 
 type AdminShellProps = {
   adminName: string;
   role: AdminRole;
   children: ReactNode;
+  pushConfig: PushNotificationsConfig;
 };
 
 const platformNavigation: NavItem[] = [
@@ -41,7 +43,12 @@ const operationsNavigation: NavItem[] = [
   { label: "توزيع طلبات المناطق", href: "/admin/zones" },
 ];
 
-export const AdminShell = ({ adminName, role, children }: AdminShellProps) => {
+export const AdminShell = ({
+  adminName,
+  role,
+  children,
+  pushConfig,
+}: AdminShellProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigation = role === "platform_admin"
     ? platformNavigation
@@ -49,7 +56,12 @@ export const AdminShell = ({ adminName, role, children }: AdminShellProps) => {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gray-50" dir="rtl">
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-4 border-b border-gray-200 bg-white px-4 py-4 shadow-sm lg:hidden">
+      <DashboardPwaControls
+        scope="admin"
+        appName="تجارتك للإدارة"
+        config={pushConfig}
+      />
+      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-4 border-b border-gray-200 bg-white px-4 py-4 pe-48 shadow-sm sm:px-6 sm:pe-48 lg:hidden">
         <button
           type="button"
           className="-m-2.5 rounded-md p-2.5 text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
@@ -62,19 +74,19 @@ export const AdminShell = ({ adminName, role, children }: AdminShellProps) => {
           <p className="text-sm font-semibold text-gray-900">لوحة تحكم الإدارة</p>
           <p className="text-xs text-gray-500">{adminName}</p>
         </div>
-        <Logo variant="icon" width={32} height={32} className="h-8 w-8" />
       </div>
 
       <DashboardSidebar
         title={role === "platform_admin" ? "مسئولو تجارتك" : "عمليات تجارتك"}
         navigation={navigation}
         logoutAction={adminLogoutAction}
+        pushScope="admin"
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         basePath="/admin"
       />
 
-      <main className="flex min-h-screen min-w-0 w-full flex-col pb-10 pt-20 lg:py-0 lg:ps-72">
+      <main className="flex min-h-screen min-w-0 w-full flex-col pb-10 pt-20 lg:ps-72 lg:pt-20">
         <div className="min-w-0 w-full flex-1 p-4 sm:p-8">{children}</div>
       </main>
     </div>

@@ -9,6 +9,7 @@ import { TenantCancellationPolicyModule } from 'src/tenant-cancellation-policy/t
 import { ActivityLogModule } from 'src/activity-log/activity-log.module';
 import { MetaConversionsModule } from 'src/meta-conversions/meta-conversions.module';
 import { DeliveryConfigurationModule } from 'src/delivery-configuration/delivery-configuration.module';
+import { PushNotificationsModule } from 'src/push-notifications/push-notifications.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { DeliveryConfigurationModule } from 'src/delivery-configuration/delivery
     ActivityLogModule,
     MetaConversionsModule,
     DeliveryConfigurationModule,
+    PushNotificationsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderWhatsappService],

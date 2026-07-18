@@ -419,6 +419,7 @@ model Tenant {
   admin_tenant_accesses     AdminTenantAccess[]
   admin_management_sessions AdminManagementSession[]
   admin_audit_logs          AdminAuditLog[]
+  push_subscriptions        PushSubscription[]        @relation("PushSubscriptionMerchantTenant")
   operated_zone_storefront  ZoneStorefront?           @relation("ZoneStorefrontOperatorTenant")
   zone_storefront_memberships ZoneStorefrontMerchant[] @relation("ZoneStorefrontMerchantTenant")
   targeted_dispatch_assignments OrderDispatchAssignment[] @relation("OrderDispatchAssignmentTargetTenant")
@@ -591,6 +592,57 @@ model MetaConversionOutbox {
   @@map("meta_conversion_outbox")
 }
 
+/// Encrypted Web Push device registration. This control-plane table does not use tenant RLS.
+model PushSubscription {
+  id                     Int       @id(map: "PK_push_subscriptions_id") @default(autoincrement())
+  endpoint_hash          String    @unique(map: "UQ_push_subscriptions_endpoint_hash") @db.Char(64)
+  encrypted_subscription String
+  merchant_user_id       Int?
+  merchant_tenant_id     Int?
+  admin_user_id          Int?
+  expiration_time        DateTime? @db.Timestamptz(6)
+  last_seen_at           DateTime  @default(now()) @db.Timestamptz(6)
+  created_at             DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  merchant_user   User?      @relation(fields: [merchant_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_push_subscriptions_merchant_user")
+  merchant_tenant Tenant?    @relation("PushSubscriptionMerchantTenant", fields: [merchant_tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_push_subscriptions_merchant_tenant")
+  admin_user      AdminUser? @relation(fields: [admin_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_push_subscriptions_admin_user")
+
+  @@index([merchant_tenant_id, merchant_user_id], map: "IDX_push_subscriptions_merchant_actor")
+  @@index([admin_user_id], map: "IDX_push_subscriptions_admin_actor")
+  @@index([last_seen_at], map: "IDX_push_subscriptions_last_seen")
+  @@map("push_subscriptions")
+}
+
+/// Durable, privacy-minimized queue for Web Push delivery.
+model PushNotificationOutbox {
+  id              Int                          @id(map: "PK_push_notification_outbox_id") @default(autoincrement())
+  event_key       String                       @unique(map: "UQ_push_notification_outbox_event_key") @db.VarChar(160)
+  event_type      PushNotificationEventType
+  tenant_id       Int
+  order_id        Int?
+  dispatch_id     Int?
+  assignment_id   Int?
+  zone_id         Int?
+  payload         Json                         @db.JsonB
+  status          PushNotificationOutboxStatus @default(pending)
+  attempt_count   Int                          @default(0)
+  next_attempt_at DateTime                     @default(now()) @db.Timestamptz(6)
+  locked_at       DateTime?                    @db.Timestamptz(6)
+  locked_by       String?                      @db.VarChar(160)
+  last_error_code String?                      @db.VarChar(64)
+  sent_at         DateTime?                    @db.Timestamptz(6)
+  terminal_at     DateTime?                    @db.Timestamptz(6)
+  created_at      DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime                     @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([status, next_attempt_at], map: "IDX_push_notification_outbox_status_next")
+  @@index([locked_at], map: "IDX_push_notification_outbox_locked")
+  @@index([terminal_at], map: "IDX_push_notification_outbox_terminal")
+  @@map("push_notification_outbox")
+}
+
 model User {
   created_at DateTime  @default(now()) @db.Timestamp(6)
   updated_at DateTime  @default(now()) @db.Timestamp(6)
@@ -604,6 +656,7 @@ model User {
   tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_109638590074998bb72a2f2cf08")
   activity_logs ActivityLog[]
   responded_dispatch_assignments OrderDispatchAssignment[] @relation("OrderDispatchAssignmentRespondingUser")
+  push_subscriptions PushSubscription[]
 
   @@index([tenant_id], map: "IDX_109638590074998bb72a2f2cf0")
   @@map("users")
@@ -725,6 +778,23 @@ enum MetaConversionOutboxStatus {
   dead_letter
 
   @@map("meta_conversion_outbox_status_enum")
+}
+
+enum PushNotificationEventType {
+  merchant_order_created
+  zone_order_created
+  zone_assignment_created
+
+  @@map("push_notification_event_type_enum")
+}
+
+enum PushNotificationOutboxStatus {
+  pending
+  processing
+  sent
+  dead_letter
+
+  @@map("push_notification_outbox_status_enum")
 }
 
 enum ProductOrderMode {
@@ -906,6 +976,7 @@ model AdminUser {
   admin_audit_logs AdminAuditLog[]
   assigned_dispatch_assignments OrderDispatchAssignment[] @relation("OrderDispatchAssignmentAssigningAdmin")
   cancelled_dispatches OrderDispatch[] @relation("OrderDispatchCancellingAdmin")
+  push_subscriptions PushSubscription[]
 
   @@map("admin_users")
 }

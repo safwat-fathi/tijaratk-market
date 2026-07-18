@@ -22,6 +22,7 @@ import { MerchantDashboardModule } from './merchant-dashboard/merchant-dashboard
 import { ActivityLogModule } from './activity-log/activity-log.module';
 import { AdminAuditModule } from './admin-audit/admin-audit.module';
 import { ZoneStorefrontsModule } from './zone-storefronts/zone-storefronts.module';
+import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 
 const ENV = process.env.NODE_ENV;
 
@@ -59,6 +60,7 @@ const ENV = process.env.NODE_ENV;
     MerchantDashboardModule,
     ActivityLogModule,
     ZoneStorefrontsModule,
+    PushNotificationsModule,
   ],
   controllers: [HealthController],
   providers: [TenantRlsInterceptor],

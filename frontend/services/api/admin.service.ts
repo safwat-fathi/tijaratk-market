@@ -580,6 +580,18 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async bulkUpdateManagedProducts(
+		tenantId: number,
+		payload: { ids: number[]; is_available?: boolean; status?: ProductStatus; category?: string },
+	) {
+		return this.patch<{ success: boolean; count: number }>(
+			`managed-tenants/${tenantId}/products/bulk`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
 	public async getManagedOrders(tenantId: number, date?: string) {
 		return this.get<AdminOrder[]>(
 			`managed-tenants/${tenantId}/orders`,

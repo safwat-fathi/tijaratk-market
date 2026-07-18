@@ -64,6 +64,19 @@ The Meta outbox worker runs in each API process, coordinates claims with
 `FOR UPDATE SKIP LOCKED`, and delivers events after the order transaction has
 committed. Delivery failures never change an order result.
 
+Web Push notifications:
+
+- `PUSH_NOTIFICATIONS_ENABLED`: Feature switch. Deploy migrations and configuration with this set to `false` before enabling delivery.
+- `PUSH_VAPID_PUBLIC_KEY`: Stable VAPID public key exposed to subscribed browsers.
+- `PUSH_VAPID_PRIVATE_KEY`: Stable server-only VAPID private key.
+- `PUSH_VAPID_SUBJECT`: A `mailto:` or HTTPS contact URI used by push services.
+- `ENCRYPTION_PASSWORD`: Required and non-empty whenever Web Push is enabled because subscription endpoints and keys are encrypted at rest.
+
+Generate the VAPID key pair once, keep it stable across deployments, and never
+expose the private key to the frontend. The Web Push outbox worker uses
+`FOR UPDATE SKIP LOCKED`, bounded retry, and sanitized error codes; delivery
+does not change the order creation result.
+
 WhatsApp providers:
 
 - `ACCOUNT_SID`: Twilio account SID.

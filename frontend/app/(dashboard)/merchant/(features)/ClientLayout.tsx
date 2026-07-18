@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { logoutAction } from "@/actions/auth-server";
 import { Logo } from "@/components/ui/Logo";
-import InstallPwaAction from "@/components/pwa/InstallPwaAction";
+import { DashboardPwaControls } from "@/components/pwa/DashboardPwaControls";
 import { SupportWidget } from "@/components/ui/SupportWidget";
 import { GuidedTour } from "@/components/merchant/GuidedTour";
+import type { PushNotificationsConfig } from "@/types/services/push-notifications";
 
 const navigation = [
   {
@@ -176,10 +176,12 @@ export default function MerchantLayoutClient({
   children,
   merchantAppName,
   newOrdersCount,
+  pushConfig,
 }: {
   children: React.ReactNode;
   merchantAppName: string;
   newOrdersCount: number;
+  pushConfig: PushNotificationsConfig;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const merchantNavigation = navigation.map((item) =>
@@ -195,8 +197,14 @@ export default function MerchantLayoutClient({
   return (
     <div className="min-h-screen bg-background">
       <GuidedTour />
+      <DashboardPwaControls
+        scope="merchant"
+        appName={merchantAppName}
+        config={pushConfig}
+        installId="tour-pwa-install"
+      />
       {/* Mobile sidebar placeholder/trigger */}
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-x-6 border-b border-brand-border bg-white px-4 py-4 shadow-soft sm:px-6 lg:hidden">
+      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-x-6 border-b border-brand-border bg-white px-4 py-4 pe-48 shadow-soft sm:px-6 sm:pe-48 lg:hidden">
         <button
           id="mobile-menu-trigger"
           type="button"
@@ -222,23 +230,6 @@ export default function MerchantLayoutClient({
         <div className="flex-1 text-sm font-semibold leading-6 text-brand-text">
           لوحة التحكم
         </div>
-        <div className="flex items-center gap-2">
-          <InstallPwaAction
-            id="tour-pwa-install-mobile"
-            appName={merchantAppName}
-            className="border-brand-border bg-brand-soft text-brand-primary hover:bg-brand-soft/80 focus-visible:ring-brand-accent/20"
-            iconClassName="h-5 w-5"
-          />
-          <Link href="#">
-            <span className="sr-only">الملف الشخصي</span>
-            <Logo
-              variant="icon"
-              width={32}
-              height={32}
-              className="h-8 w-8 rounded-full bg-brand-soft"
-            />
-          </Link>
-        </div>
       </div>
 
       <DashboardSidebar
@@ -250,17 +241,9 @@ export default function MerchantLayoutClient({
             className="h-8 w-auto"
           />
         }
-        topContent={
-          <InstallPwaAction
-            id="tour-pwa-install-desktop"
-            appName={merchantAppName}
-            buttonText="تثبيت التطبيق"
-            className="w-full justify-start border-brand-border bg-brand-soft/60 text-brand-primary hover:bg-brand-soft focus-visible:ring-brand-accent/20"
-            iconClassName="h-5 w-5"
-          />
-        }
         navigation={merchantNavigation}
         logoutAction={logoutAction}
+        pushScope="merchant"
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         basePath="/merchant"
@@ -269,7 +252,7 @@ export default function MerchantLayoutClient({
       />
 
       {/* Main content */}
-      <main className="pt-24 pb-10 lg:py-10 lg:ps-72 w-full min-w-0 max-w-full flex-1 flex flex-col">
+      <main className="flex w-full min-w-0 max-w-full flex-1 flex-col pb-10 pt-24 lg:pb-10 lg:ps-72 lg:pt-20">
         <div className="px-4 sm:px-6 lg:px-8 w-full min-w-0">{children}</div>
       </main>
 
