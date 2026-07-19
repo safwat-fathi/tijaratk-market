@@ -159,7 +159,7 @@ export default function DeliveryDetailsSection({
                 </p>
                 {schedulingAvailable ? (
                   <p className="mt-1 text-sm font-semibold text-amber-900">
-                    يمكنك اختيار موعد توصيل مجدول من المواعيد المتاحة.
+                    تقدر تختار معاد التوصيل المناسب ليك من المواعيد المتاحة.
                   </p>
                 ) : null}
               </>

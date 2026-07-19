@@ -88,7 +88,7 @@ export default function OrderSuccessView({
 
       {scheduledDeliveryLabel ? (
         <div className="mb-4 w-full max-w-sm rounded-lg border border-amber-200 bg-amber-50 p-4 text-right">
-          <p className="text-xs font-semibold text-amber-800">موعد التوصيل المجدول</p>
+          <p className="text-xs font-semibold text-amber-800">معاد التوصيل المحدد</p>
           <p className="mt-1 font-bold text-amber-950">{scheduledDeliveryLabel}</p>
         </div>
       ) : null}

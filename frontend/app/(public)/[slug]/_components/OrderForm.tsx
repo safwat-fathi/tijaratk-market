@@ -1801,7 +1801,7 @@ export default function OrderForm({
     ) {
       setIsScheduledDeliverySelectorOpen(true);
       setToastState({
-        message: "اختر موعد التوصيل المجدول أولاً.",
+        message: "اختار معاد التوصيل الأول.",
         type: "error",
       });
       return;
@@ -2107,7 +2107,7 @@ export default function OrderForm({
                 ? "التوصيل غير متاح"
                 : storeOpen
                   ? "التوصيل خلال 30-45 دقيقة"
-                  : "اختر موعد توصيل مجدول"}
+                  : "اختار معاد التوصيل"}
             </span>
             <button
               type="button"

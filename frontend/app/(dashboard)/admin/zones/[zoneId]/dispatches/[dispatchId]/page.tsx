@@ -44,7 +44,7 @@ export default async function DispatchDetailPage({ params }: DispatchDetailPageP
           <p className="sm:col-span-2">العنوان: {dispatch.order.delivery_address}</p>
           {dispatch.order.scheduled_delivery_date ? (
             <p className="sm:col-span-2 font-semibold text-amber-800">
-              موعد التوصيل المجدول: {dispatch.order.delivery_time_window_snapshot}
+              معاد التوصيل المحدد: {dispatch.order.delivery_time_window_snapshot}
             </p>
           ) : null}
           <p>الإجمالي: {Number(dispatch.order.total || 0).toLocaleString("ar-EG")} ج.م</p>

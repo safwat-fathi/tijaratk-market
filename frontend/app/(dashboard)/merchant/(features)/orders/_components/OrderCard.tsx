@@ -166,7 +166,7 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
           {order.scheduled_delivery_date &&
           order.delivery_time_window_snapshot ? (
             <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-950">
-              موعد التوصيل المجدول: {order.delivery_time_window_snapshot}
+              معاد التوصيل المحدد: {order.delivery_time_window_snapshot}
             </div>
           ) : null}
           <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">

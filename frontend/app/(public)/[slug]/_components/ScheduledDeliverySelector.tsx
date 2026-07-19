@@ -81,8 +81,8 @@ const validateWindow = (
   constraints: ScheduleConstraints,
 ) => {
   if (!startsAt && !endsAt) return null;
-  if (!startsAt) return "اختر وقت البداية.";
-  if (!endsAt) return "اختر وقت النهاية.";
+  if (!startsAt) return "اختار وقت البداية.";
+  if (!endsAt) return "اختار وقت النهاية.";
   if (!TIME_PATTERN.test(startsAt) || !TIME_PATTERN.test(endsAt)) {
     return "اكتب وقت بداية ونهاية صالحين.";
   }
@@ -93,7 +93,7 @@ const validateWindow = (
     startsAtMinutes % constraints.step_minutes !== 0 ||
     endsAtMinutes % constraints.step_minutes !== 0
   ) {
-    return "اختر الوقت بفواصل 15 دقيقة.";
+    return "اختار الوقت بفواصل 15 دقيقة.";
   }
   if (startsAtMinutes < toMinutes(constraints.min_starts_at)) {
     return `وقت البداية لا يمكن أن يسبق ${formatTime(constraints.min_starts_at)}.`;
@@ -104,11 +104,8 @@ const validateWindow = (
   if (endsAtMinutes <= startsAtMinutes) {
     return "وقت النهاية يجب أن يكون بعد وقت البداية في نفس اليوم.";
   }
-  if (
-    endsAtMinutes - startsAtMinutes <
-    constraints.min_duration_minutes
-  ) {
-    return "نافذة التوصيل يجب ألا تقل عن ساعة.";
+  if (endsAtMinutes - startsAtMinutes < constraints.min_duration_minutes) {
+    return "وقت التوصيل يجب ألا يقل عن ساعة.";
   }
   return null;
 };
@@ -136,8 +133,7 @@ export default function ScheduledDeliverySelector({
   const validationMessageId = useId();
   const constraints = availability.schedule_constraints;
   const availableDate = constraints?.date;
-  const selectedWindow =
-    value && availableDate === value.date ? value : null;
+  const selectedWindow = value && availableDate === value.date ? value : null;
   const validationMessage = constraints
     ? validateWindow(draftStartsAt, draftEndsAt, constraints)
     : "لا توجد مواعيد متاحة حالياً.";
@@ -150,22 +146,16 @@ export default function ScheduledDeliverySelector({
       ? toMinutes(draftEndsAt) - toMinutes(draftStartsAt)
       : null;
   const isDraftValid = Boolean(
-    constraints &&
-      draftStartsAt &&
-      draftEndsAt &&
-      validationMessage === null,
+    constraints && draftStartsAt && draftEndsAt && validationMessage === null,
   );
   const latestStart = constraints
     ? fromMinutes(
-        toMinutes(constraints.max_ends_at) -
-          constraints.min_duration_minutes,
+        toMinutes(constraints.max_ends_at) - constraints.min_duration_minutes,
       )
     : undefined;
   const earliestEnd =
     constraints && draftStartsAt && TIME_PATTERN.test(draftStartsAt)
-      ? fromMinutes(
-          toMinutes(draftStartsAt) + constraints.min_duration_minutes,
-        )
+      ? fromMinutes(toMinutes(draftStartsAt) + constraints.min_duration_minutes)
       : constraints
         ? fromMinutes(
             toMinutes(constraints.min_starts_at) +
@@ -316,7 +306,7 @@ export default function ScheduledDeliverySelector({
                   المتجر مغلق حالياً
                 </span>
                 <span className="mt-1 block text-sm font-semibold text-amber-900">
-                  حدد نافذة التوصيل المناسبة لك
+                  اختار معاد التوصيل المناسب ليك
                 </span>
               </>
             )}
@@ -329,7 +319,7 @@ export default function ScheduledDeliverySelector({
         </button>
         {availableDate ? (
           <p className="mt-2 px-1 text-xs leading-5 text-muted-foreground">
-            اختر أي نافذة لا تقل عن ساعة {getRelativeDateLabel(availableDate)}،
+            اختار أي وقت لا يقل عن ساعة {getRelativeDateLabel(availableDate)}،
             ضمن ساعات العمل: {hours}.
           </p>
         ) : null}
@@ -338,7 +328,7 @@ export default function ScheduledDeliverySelector({
       <BottomSheet
         isOpen={isOpen}
         onClose={closeSheet}
-        title="حدد نافذة التوصيل"
+        title="اختار معاد التوصيل"
         footer={
           <button
             type="button"
@@ -387,9 +377,7 @@ export default function ScheduledDeliverySelector({
                   required
                   aria-invalid={Boolean(validationMessage)}
                   aria-describedby={validationMessageId}
-                  onChange={(event) =>
-                    handleStartsAtChange(event.target.value)
-                  }
+                  onChange={(event) => handleStartsAtChange(event.target.value)}
                   className="min-h-14 w-full rounded-xl border border-brand-border bg-white px-3 text-center text-base font-bold text-brand-text shadow-sm focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/20"
                 />
               </label>
@@ -428,13 +416,13 @@ export default function ScheduledDeliverySelector({
             >
               {validationMessage
                 ? validationMessage
-                : durationMinutes !== null
-                  ? `مدة نافذة التوصيل: ${formatDuration(durationMinutes)}.`
-                  : "اختر وقت البداية والنهاية بفواصل 15 دقيقة. الحد الأدنى ساعة واحدة."}
+                : draftStartsAt && draftEndsAt
+                  ? `الطلب هيوصلك ما بين ${formatTime(draftStartsAt)} و ${formatTime(draftEndsAt)}.`
+                  : "اختار وقت البداية والنهاية (فترة التوصيل تكون ساعة على الأقل)."}
             </div>
 
             <p className="text-xs leading-5 text-muted-foreground">
-              الموعد المطلوب نافذة زمنية للتوصيل، وسيؤكد المتجر الطلب معك.
+              اختار المعاد المناسب ليك، والمتجر هيأكد الطلب معاك.
             </p>
           </div>
         ) : (
