@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 import {
   startManagedStoreSessionAction,
   upsertManagedTenantAccessAction,
@@ -14,6 +15,7 @@ import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
 import { DispatchSessionForm } from "../_components/DispatchSessionForm";
 import { SyncEssentialCatalogButton } from "../_components/SyncEssentialCatalogButton";
 import { ZoneDeliveryFeesForm } from "./_components/ZoneDeliveryFeesForm";
+import { ZoneOperatingHoursForm } from "./_components/ZoneOperatingHoursForm";
 import {
   ZoneActivationControl,
   ZoneMerchantControls,
@@ -59,7 +61,14 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
           <h1 className="mt-2 text-2xl font-bold text-gray-900">{zone.name}</h1>
           <p className="text-sm text-gray-500">{zone.area.name_ar} · المشغل الداخلي #{zone.operator_tenant.id} · عمليات {zone.operations_phone}</p>
         </div>
-        <Link href={`/market/${zone.slug}`} target="_blank" className="text-sm font-semibold text-brand-primary hover:underline">فتح الواجهة العامة</Link>
+        <Link
+          href={`/market/${zone.slug}`}
+          target="_blank"
+          className="inline-flex items-center justify-center gap-2 rounded-md border border-(--brand-border) bg-white px-5 py-3 text-sm font-semibold text-(--brand-text) transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:border-(--brand-accent) hover:bg-(--brand-soft)/60 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-(--brand-accent)/20 active:scale-[0.98] sm:min-h-11"
+        >
+          <ExternalLink className="h-4 w-4" />
+          <span>فتح الواجهة العامة للمنطقة</span>
+        </Link>
       </div>
 
       <Card className="p-5">
@@ -89,6 +98,19 @@ export default async function AdminZonePage({ params }: AdminZonePageProps) {
             </div>
           </div>
         </div>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="text-lg font-bold text-gray-900">ساعات تشغيل المنطقة</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          الطلبات فورية أثناء التشغيل، وخارجها يختار العميل موعداً مجدولاً لمدة ساعة.
+        </p>
+        <ZoneOperatingHoursForm
+          zoneId={zone.id}
+          zoneSlug={zone.slug}
+          startsAt={zone.operator_tenant.delivery_starts_at}
+          endsAt={zone.operator_tenant.delivery_ends_at}
+        />
       </Card>
 
       <Card className="p-5">

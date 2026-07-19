@@ -2,11 +2,11 @@ import { Logger } from '@nestjs/common';
 import { config } from 'dotenv';
 import {
   seedSupermarketMerchant,
-  SUPERMARKET_RANKING_MERCHANTS,
+  SUPERMARKET_SEED_MERCHANTS,
 } from './seeders/supermarket-merchant.seeder';
 import {
   seedPharmacyMerchant,
-  PHARMACY_RANKING_MERCHANTS,
+  PHARMACY_SEED_MERCHANTS,
 } from './seeders/pharmacy-merchant.seeder';
 import { seedAdmin } from './seeders/admin.seeder';
 import { DirectoryStatus, PrismaClient } from '../../generated/prisma/client';
@@ -14,6 +14,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { passwordExtension } from '../prisma/password.extension';
 
 import { EGYPT_DIRECTORY_AREAS } from './seeders/directory-areas.seeder';
+import { seedZoneStorefronts } from './seeders/zone-storefronts.seeder';
 
 config({
   path: process.env.NODE_ENV ? `.env.${process.env.NODE_ENV}` : '.env',
@@ -45,6 +46,7 @@ async function bootstrap() {
     await seedSupermarketMerchant(prisma);
     await seedPharmacyMerchant(prisma);
     await seedDirectoryProfiles(prisma);
+    await seedZoneStorefronts(prisma);
 
     logger.log('Seeding completed successfully.');
   } catch (error) {
@@ -155,7 +157,7 @@ async function seedDirectoryProfiles(prisma: PrismaClient) {
     return;
   }
 
-  for (const merchant of SUPERMARKET_RANKING_MERCHANTS) {
+  for (const merchant of SUPERMARKET_SEED_MERCHANTS) {
     await seedRankingDirectoryProfile(prisma, {
       slug: merchant.slug,
       primaryArea: zayedArea,
@@ -163,18 +165,16 @@ async function seedDirectoryProfiles(prisma: PrismaClient) {
       address: 'Sheikh Zayed, Giza',
       description:
         'Order groceries and supermarket essentials through Tijaratk.',
-      missingLocation: merchant.variant === 'missing_location',
     });
   }
 
-  for (const merchant of PHARMACY_RANKING_MERCHANTS) {
+  for (const merchant of PHARMACY_SEED_MERCHANTS) {
     await seedRankingDirectoryProfile(prisma, {
       slug: merchant.slug,
       primaryArea: octoberArea,
       deliveryAreas: [octoberArea, zayedArea],
       address: '6th of October City, Giza',
       description: 'Order medicines, vitamins and cosmetics through Tijaratk.',
-      missingLocation: merchant.variant === 'missing_location',
     });
   }
 }
@@ -191,7 +191,6 @@ async function seedRankingDirectoryProfile(
     >[];
     address: string;
     description: string;
-    missingLocation: boolean;
   },
 ) {
   const logger = new Logger('DirectoryProfilesSeeder');
@@ -206,23 +205,14 @@ async function seedRankingDirectoryProfile(
     return;
   }
 
-  const profileData = input.missingLocation
-    ? {
-        area_id: null,
-        address: null,
-        latitude: null,
-        longitude: null,
-        profile_completion_score: 55,
-        missing_fields: ['missing_logo', 'missing_area'],
-      }
-    : {
-        area_id: input.primaryArea.id,
-        address: input.address,
-        latitude: input.primaryArea.latitude,
-        longitude: input.primaryArea.longitude,
-        profile_completion_score: 90,
-        missing_fields: ['missing_logo'],
-      };
+  const profileData = {
+    area_id: input.primaryArea.id,
+    address: input.address,
+    latitude: input.primaryArea.latitude,
+    longitude: input.primaryArea.longitude,
+    profile_completion_score: 90,
+    missing_fields: ['missing_logo'],
+  };
 
   await prisma.tenantDirectoryProfile.upsert({
     where: { tenant_id: tenant.id },
@@ -230,7 +220,7 @@ async function seedRankingDirectoryProfile(
       ...profileData,
       directory_status: DirectoryStatus.listed,
       display_name: tenant.name,
-      seo_title: `${tenant.name} | Directory ranking test store`,
+      seo_title: `${tenant.name} | Directory test store`,
       seo_description: input.description,
     },
     create: {
@@ -238,19 +228,10 @@ async function seedRankingDirectoryProfile(
       ...profileData,
       directory_status: DirectoryStatus.listed,
       display_name: tenant.name,
-      seo_title: `${tenant.name} | Directory ranking test store`,
+      seo_title: `${tenant.name} | Directory test store`,
       seo_description: input.description,
     },
   });
-
-  if (input.missingLocation) {
-    await prisma.tenantDeliveryArea.updateMany({
-      where: { tenant_id: tenant.id },
-      data: { is_active: false },
-    });
-    logger.log(`Seeded missing-location directory profile for ${tenant.slug}.`);
-    return;
-  }
 
   for (const area of input.deliveryAreas) {
     await prisma.tenantDeliveryArea.upsert({

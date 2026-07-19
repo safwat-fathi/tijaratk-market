@@ -74,8 +74,6 @@ export class OrderWhatsappService {
 
   private buildOrderDetails(order: OrderWithRelations): string {
     const orderItems = order.items ?? order.order_items ?? [];
-    if (orderItems.length === 0) return 'تفاصيل الأصناف غير متاحة';
-
     const segments = orderItems.map((item) => {
       const itemName = this.normalizeOneLineText(
         item.name_snapshot || 'منتج غير محدد',
@@ -83,6 +81,17 @@ export class OrderWhatsappService {
       const unitPrice = this.formatUnitPrice(item.unit_price);
       return `${itemName}: ${unitPrice}`;
     });
+
+    if (
+      order.scheduled_delivery_date &&
+      order.delivery_time_window_snapshot
+    ) {
+      segments.unshift(
+        `موعد التوصيل: ${this.normalizeOneLineText(order.delivery_time_window_snapshot)}`,
+      );
+    }
+
+    if (segments.length === 0) return 'تفاصيل الأصناف غير متاحة';
 
     return this.joinOrderDetailSegments(segments);
   }

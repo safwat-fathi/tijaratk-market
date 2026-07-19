@@ -148,6 +148,18 @@ export default async function OrderDetailsPage({
 					)}
 				</Card>
 
+				{order.scheduled_delivery_date &&
+				order.delivery_time_window_snapshot ? (
+					<Card className="border-amber-200 bg-amber-50 p-4">
+						<h2 className="text-sm font-semibold text-amber-800">
+							موعد التوصيل المجدول
+						</h2>
+						<p className="mt-1 font-bold text-amber-950">
+							{order.delivery_time_window_snapshot}
+						</p>
+					</Card>
+				) : null}
+
 				<OrderItemsReplacement
 					orderId={order.id}
 					orderStatus={order.status}

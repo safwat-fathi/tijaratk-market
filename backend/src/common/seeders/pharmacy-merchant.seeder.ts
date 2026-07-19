@@ -11,19 +11,11 @@ import {
 } from 'src/products/catalog-source-policy';
 import { pharmacyProducts } from './pharmacy-products.data';
 
-type MerchantVariant =
-  | 'complete_100_products'
-  | 'no_products'
-  | 'twenty_products'
-  | 'single_category'
-  | 'missing_location';
-
-export type RankingSeedMerchant = {
+export type StandardSeedMerchant = {
   name: string;
   phone: string;
   slug: string;
   ownerName: string;
-  variant: MerchantVariant;
 };
 
 type CatalogSeedProduct = {
@@ -35,46 +27,23 @@ type CatalogSeedProduct = {
   order_config?: Prisma.InputJsonValue;
 };
 
-export const PHARMACY_RANKING_MERCHANTS: RankingSeedMerchant[] = [
+export const PHARMACY_SEED_MERCHANTS: StandardSeedMerchant[] = [
   {
     name: 'صيدلية الشفاء',
-    phone: '+201000000002',
+    phone: '+201000000003',
     slug: 'el-shifaa-pharmacy',
     ownerName: 'أحمد محمد',
-    variant: 'complete_100_products',
   },
   {
-    name: 'صيدلية بدون منتجات',
-    phone: '+201000000021',
-    slug: 'ranking-empty-pharmacy',
+    name: 'صيدليات النور',
+    phone: '+201000000004',
+    slug: 'al-noor-pharmacy',
     ownerName: 'محمد عادل',
-    variant: 'no_products',
-  },
-  {
-    name: 'صيدلية عشرين منتج',
-    phone: '+201000000022',
-    slug: 'ranking-20-products-pharmacy',
-    ownerName: 'مصطفى حسن',
-    variant: 'twenty_products',
-  },
-  {
-    name: 'صيدلية تصنيف واحد',
-    phone: '+201000000023',
-    slug: 'ranking-single-category-pharmacy',
-    ownerName: 'عمر سامي',
-    variant: 'single_category',
-  },
-  {
-    name: 'صيدلية بدون موقع',
-    phone: '+201000000024',
-    slug: 'ranking-missing-location-pharmacy',
-    ownerName: 'إسلام نبيل',
-    variant: 'missing_location',
   },
 ] as const;
 
 /**
- * Seeds pharmacy tenants for directory ranking tests using existing DB catalog items.
+ * Seeds pharmacy tenants using existing DB catalog items.
  */
 export async function seedPharmacyMerchant(prisma: PrismaClient) {
   const logger = new Logger('PharmacyMerchantSeeder');
@@ -90,25 +59,22 @@ export async function seedPharmacyMerchant(prisma: PrismaClient) {
 
     if (catalogProducts.length === 0) {
       logger.warn(
-        'No active catalog items found. Pharmacy ranking products were not seeded.',
+        'No active catalog items found. Pharmacy products were not seeded.',
       );
     }
 
-    for (const merchant of PHARMACY_RANKING_MERCHANTS) {
+    for (const merchant of PHARMACY_SEED_MERCHANTS) {
       const tenant = await upsertTenant(tx, merchant);
 
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenant.id)}, true)`;
       await seedOwner(tx, merchant, tenant.id, ownerCredential, logger);
       await assignDefaultPlan(tx, tenant.id, tenant.slug, logger);
 
-      const products = selectProductsForVariant(
-        catalogProducts,
-        merchant.variant,
-      );
+      const products = takeDistributedProducts(catalogProducts, 100);
       await seedProducts(tx, tenant.id, products);
 
       logger.log(
-        `Seeded pharmacy ranking merchant ${tenant.slug} with ${products.length} catalog-backed products.`,
+        `Seeded pharmacy merchant ${tenant.slug} with ${products.length} catalog-backed products.`,
       );
     }
   });
@@ -116,10 +82,8 @@ export async function seedPharmacyMerchant(prisma: PrismaClient) {
 
 async function upsertTenant(
   tx: Prisma.TransactionClient,
-  merchant: RankingSeedMerchant,
+  merchant: StandardSeedMerchant,
 ) {
-  const onboardingCompleted = merchant.variant === 'complete_100_products';
-  const onboardingStep = onboardingCompleted ? 4 : 1;
   const existingTenant = await tx.tenant.findFirst({
     where: {
       OR: [{ phone: merchant.phone }, { slug: merchant.slug }],
@@ -138,8 +102,8 @@ async function upsertTenant(
         delivery_available: true,
         delivery_starts_at: '09:00',
         delivery_ends_at: '23:00',
-        onboarding_completed: onboardingCompleted,
-        onboarding_step: onboardingStep,
+        onboarding_completed: true,
+        onboarding_step: 4,
       },
     });
   }
@@ -154,15 +118,15 @@ async function upsertTenant(
       delivery_available: true,
       delivery_starts_at: '09:00',
       delivery_ends_at: '23:00',
-      onboarding_completed: onboardingCompleted,
-      onboarding_step: onboardingStep,
+      onboarding_completed: true,
+      onboarding_step: 4,
     },
   });
 }
 
 async function seedOwner(
   tx: Prisma.TransactionClient,
-  merchant: RankingSeedMerchant,
+  merchant: StandardSeedMerchant,
   tenantId: number,
   ownerCredential: string | undefined,
   logger: Logger,
@@ -250,18 +214,6 @@ async function findCatalogProducts(
   }));
 }
 
-function selectProductsForVariant(
-  catalogProducts: CatalogSeedProduct[],
-  variant: MerchantVariant,
-) {
-  if (variant === 'no_products') return [];
-  if (variant === 'twenty_products')
-    return takeDistributedProducts(catalogProducts, 20);
-  if (variant === 'single_category')
-    return takeSingleCategoryProducts(catalogProducts, 30);
-  return takeDistributedProducts(catalogProducts, 100);
-}
-
 function takeDistributedProducts(
   catalogProducts: CatalogSeedProduct[],
   count: number,
@@ -285,22 +237,6 @@ function takeDistributedProducts(
   }
 
   return selected.slice(0, count);
-}
-
-function takeSingleCategoryProducts(
-  catalogProducts: CatalogSeedProduct[],
-  count: number,
-) {
-  if (catalogProducts.length === 0) return [];
-
-  const categories = Array.from(groupByCategory(catalogProducts).values()).sort(
-    (a, b) => b.length - a.length,
-  );
-  const products = categories[0] ?? [];
-  return Array.from(
-    { length: Math.min(count, Math.max(products.length, 1)) },
-    (_, index) => products[index % products.length],
-  ).slice(0, count);
 }
 
 function groupByCategory(catalogProducts: CatalogSeedProduct[]) {
@@ -353,7 +289,7 @@ async function seedProducts(
     });
 
     const orderMode = product.order_mode ?? ProductOrderMode.QUANTITY;
-    const orderConfig = product.order_config ?? { quantity: { unit_label: 'علبة' } };
+    const orderConfig = product.order_config ?? { quantity: { unit_label: 'قطعة' } };
 
     if (existingProduct) {
       await tx.product.update({

@@ -64,6 +64,11 @@ export default async function DispatchQueuePage({ params, searchParams }: Dispat
                   {Number(dispatch.order.total || 0).toLocaleString("ar-EG")} ج.م
                 </p>
                 <p className="mt-1 text-xs text-gray-500">{dispatch.assignments[0]?.target_tenant?.name || "لم يُسند بعد"}</p>
+                {dispatch.order.scheduled_delivery_date ? (
+                  <p className="mt-1 text-sm font-semibold text-amber-800">
+                    توصيل مجدول: {dispatch.order.delivery_time_window_snapshot}
+                  </p>
+                ) : null}
               </div>
               <div className="flex items-center gap-3">
                 <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold">{statusLabels[dispatch.status]}</span>

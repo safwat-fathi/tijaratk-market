@@ -5,6 +5,7 @@ import type {
   ZonePublicProductsResponse,
   ZoneStorefront,
 } from "@/types/models/zone-storefront";
+import type { DeliveryAvailability } from "@/types/models/delivery";
 
 /** Public server-side client for central zone storefronts. */
 class ZoneStorefrontsService extends HttpService {
@@ -38,6 +39,14 @@ class ZoneStorefrontsService extends HttpService {
   public async getPublicCategories(slug: string) {
     return this.get<ZonePublicCategory[]>(
       `public/${slug}/categories`,
+      undefined,
+      { cache: "no-store" },
+    );
+  }
+
+  public async getDeliveryAvailability(slug: string) {
+    return this.get<DeliveryAvailability>(
+      `public/${slug}/delivery-availability`,
       undefined,
       { cache: "no-store" },
     );

@@ -30,6 +30,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import {
   CreateZoneStorefrontDto,
   UpdateZoneDeliveryFeesDto,
+  UpdateZoneOperatingHoursDto,
   UpdateZoneStorefrontActivationDto,
   UpsertZoneStorefrontMerchantDto,
 } from './dto/zone-storefront.dto';
@@ -39,6 +40,7 @@ import {
   syncZoneEssentialCatalog,
 } from './zone-essential-catalog-sync';
 import { enqueueZoneCatalogReconciliation } from './zone-catalog-reconciliation.repository';
+import { DeliverySchedulingService } from 'src/delivery-configuration/delivery-scheduling.service';
 
 const MIN_SYNCHRONIZED_ZONE_PRODUCTS = 1;
 
@@ -71,6 +73,7 @@ type PublicProductQuery = {
 type ZoneReadiness = {
   catalog_ready: boolean;
   delivery_fees_ready: boolean;
+  operating_hours_ready: boolean;
   required_delivery_areas: number;
   configured_delivery_areas: number;
   active_products: number;
@@ -86,6 +89,7 @@ const ZONE_ACTIVATION_BLOCKERS = {
   operatorNotReady: 'ZONE_OPERATOR_NOT_READY',
   catalogNotReady: 'ZONE_CATALOG_NOT_READY',
   deliveryFeesNotReady: 'ZONE_DELIVERY_FEES_NOT_READY',
+  operatingHoursNotReady: 'ZONE_OPERATING_HOURS_NOT_READY',
   noEligibleMerchant: 'ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT',
 } as const;
 
@@ -145,6 +149,8 @@ type AdminZoneRecord = {
     category: TenantCategory;
     status: TenantStatus;
     delivery_available?: boolean;
+    delivery_starts_at?: string | null;
+    delivery_ends_at?: string | null;
     deleted_at?: Date | null;
     tenant_delivery_areas: Array<{
       area_id: number;
@@ -187,6 +193,7 @@ export class ZoneStorefrontsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
+    private readonly deliveryScheduling: DeliverySchedulingService,
   ) {}
 
   /** Returns whether new public zone discovery and checkout are enabled. */
@@ -310,6 +317,7 @@ export class ZoneStorefrontsService {
         return this.mapAdminZone(zone, {
           catalog_ready: false,
           delivery_fees_ready: true,
+          operating_hours_ready: false,
           required_delivery_areas: area.child_areas.length,
           configured_delivery_areas: area.child_areas.length,
           catalog_in_sync: false,
@@ -318,6 +326,7 @@ export class ZoneStorefrontsService {
           essential_catalog_products: 0,
           activation_blockers: [
             ZONE_ACTIVATION_BLOCKERS.catalogNotReady,
+            ZONE_ACTIVATION_BLOCKERS.operatingHoursNotReady,
             ZONE_ACTIVATION_BLOCKERS.noEligibleMerchant,
           ],
         });
@@ -508,6 +517,8 @@ export class ZoneStorefrontsService {
               ? 'Zone catalog is not ready'
               : blocker === ZONE_ACTIVATION_BLOCKERS.deliveryFeesNotReady
                 ? 'Every active child area requires a delivery fee'
+                : blocker === ZONE_ACTIVATION_BLOCKERS.operatingHoursNotReady
+                  ? 'Zone operating hours are required'
                 : 'At least one eligible active merchant is required';
         throw new BadRequestException({ code: blocker, message });
       }
@@ -629,6 +640,67 @@ export class ZoneStorefrontsService {
     return this.findOneForAdmin(zoneId);
   }
 
+  /** Updates the operator-backed daily window used by public scheduling. */
+  async updateOperatingHours(
+    zoneId: number,
+    dto: UpdateZoneOperatingHoursDto,
+    actor: ZoneAdminActor,
+  ) {
+    const zone = await this.requireZone(zoneId);
+    const startsAt = dto.delivery_starts_at.trim();
+    const endsAt = dto.delivery_ends_at.trim();
+    const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    const toMinutes = (value: string) => {
+      const [hours, minutes] = value.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+    if (
+      !timePattern.test(startsAt) ||
+      !timePattern.test(endsAt) ||
+      toMinutes(endsAt) - toMinutes(startsAt) < 60
+    ) {
+      throw new BadRequestException(
+        'يجب أن تكون نهاية ساعات التشغيل بعد البداية بساعة واحدة على الأقل.',
+      );
+    }
+
+    await this.runInOperatorTenant(zone.operator_tenant_id, async (manager) => {
+      await manager.tenant.update({
+        where: { id: zone.operator_tenant_id },
+        data: {
+          delivery_starts_at: startsAt,
+          delivery_ends_at: endsAt,
+        },
+      });
+      await this.activityLogService.create(
+        {
+          tenantId: zone.operator_tenant_id,
+          actorAdminId: actor.adminId,
+          actorAdminName: actor.adminName,
+          actorAdminRole: actor.adminRole,
+          entityType: ActivityEntityTypes.ZoneStorefront,
+          entityId: zone.id,
+          action: ActivityActions.ZoneStorefrontOperatingHoursChanged,
+          title: 'تم تحديث ساعات تشغيل المنطقة',
+          oldValues: {
+            delivery_starts_at: zone.operator_tenant.delivery_starts_at,
+            delivery_ends_at: zone.operator_tenant.delivery_ends_at,
+          },
+          newValues: {
+            delivery_starts_at: startsAt,
+            delivery_ends_at: endsAt,
+          },
+          source: ActivitySources.Admin,
+          requestId: actor.requestId,
+          ipAddress: actor.ipAddress,
+        },
+        manager,
+      );
+    });
+
+    return this.findOneForAdmin(zoneId);
+  }
+
   /** Upserts a membership without deleting prior operational history. */
   async upsertMerchant(
     zoneId: number,
@@ -727,6 +799,12 @@ export class ZoneStorefrontsService {
     return this.mapPublicZone(zone);
   }
 
+  /** Returns time-sensitive server-authoritative ordering availability. */
+  async findDeliveryAvailability(slug: string) {
+    const zone = await this.requirePublicZone(slug);
+    return this.deliveryScheduling.getAvailability(zone.operator_tenant);
+  }
+
   /** Lists sanitized active and ready storefronts for public discovery. */
   async findPublic() {
     if (!this.isPublicOrderingEnabled()) return [];
@@ -739,6 +817,8 @@ export class ZoneStorefrontsService {
           status: TenantStatus.active,
           deleted_at: null,
           delivery_available: true,
+          delivery_starts_at: { not: null },
+          delivery_ends_at: { not: null },
           category: { in: [...TENANT_CATEGORIES_WITH_CATALOG_SOURCE] },
         },
       },
@@ -775,6 +855,7 @@ export class ZoneStorefrontsService {
         const readiness = await this.calculateReadiness(zone);
         return readiness.catalog_ready &&
           readiness.delivery_fees_ready &&
+          readiness.operating_hours_ready &&
           readiness.active_eligible_merchants >= 1
           ? this.mapPublicZone(zone)
           : null;
@@ -984,6 +1065,8 @@ export class ZoneStorefrontsService {
           status: TenantStatus.active,
           deleted_at: null,
           delivery_available: true,
+          delivery_starts_at: { not: null },
+          delivery_ends_at: { not: null },
           category: { in: [...TENANT_CATEGORIES_WITH_CATALOG_SOURCE] },
         },
       },
@@ -1015,6 +1098,7 @@ export class ZoneStorefrontsService {
     if (
       !readiness.catalog_ready ||
       !readiness.delivery_fees_ready ||
+      !readiness.operating_hours_ready ||
       readiness.active_eligible_merchants < 1
     ) {
       throw new ForbiddenException('Zone storefront is not ready');
@@ -1090,6 +1174,9 @@ export class ZoneStorefrontsService {
     return {
       catalog_ready: activeProducts >= requiredProducts,
       delivery_fees_ready: deliveryFeesReady,
+      operating_hours_ready: this.deliveryScheduling.hasValidOperatingHours(
+        zone.operator_tenant,
+      ),
       required_delivery_areas: requiredDeliveryAreas,
       configured_delivery_areas: configuredDeliveryAreas,
       catalog_in_sync: activeProducts === essentialCatalogProducts,
@@ -1102,6 +1189,7 @@ export class ZoneStorefrontsService {
         zone,
         activeProducts >= requiredProducts,
         deliveryFeesReady,
+        this.deliveryScheduling.hasValidOperatingHours(zone.operator_tenant),
         activeEligibleMerchants,
       ),
     };
@@ -1219,6 +1307,7 @@ export class ZoneStorefrontsService {
     zone: Awaited<ReturnType<ZoneStorefrontsService['requireZone']>>,
     catalogReady: boolean,
     deliveryFeesReady: boolean,
+    operatingHoursReady: boolean,
     activeEligibleMerchants: number,
   ): ZoneActivationBlocker[] {
     const blockers: ZoneActivationBlocker[] = [];
@@ -1233,6 +1322,9 @@ export class ZoneStorefrontsService {
     if (!catalogReady) blockers.push(ZONE_ACTIVATION_BLOCKERS.catalogNotReady);
     if (!deliveryFeesReady) {
       blockers.push(ZONE_ACTIVATION_BLOCKERS.deliveryFeesNotReady);
+    }
+    if (!operatingHoursReady) {
+      blockers.push(ZONE_ACTIVATION_BLOCKERS.operatingHoursNotReady);
     }
     if (activeEligibleMerchants < 1) {
       blockers.push(ZONE_ACTIVATION_BLOCKERS.noEligibleMerchant);
@@ -1413,6 +1505,8 @@ export class ZoneStorefrontsService {
         category: zone.operator_tenant.category,
         status: zone.operator_tenant.status,
         delivery_fee: minimumFee,
+        delivery_starts_at: zone.operator_tenant.delivery_starts_at,
+        delivery_ends_at: zone.operator_tenant.delivery_ends_at,
       },
       merchants: (zone.merchants ?? []).map((membership) => ({
         ...membership,

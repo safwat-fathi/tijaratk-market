@@ -48,7 +48,7 @@ export default async function ZoneStorefrontPage({
   const { zoneSlug } = await params;
   const resolvedSearchParams = await searchParams;
   const { reorder, category } = resolvedSearchParams;
-  const [zoneResponse, productsResponse, categoriesResponse, orderResponse] =
+  const [zoneResponse, productsResponse, categoriesResponse, availabilityResponse, orderResponse] =
     await Promise.all([
       zoneStorefrontsService.getPublicZone(zoneSlug),
       zoneStorefrontsService.getPublicProducts(zoneSlug, {
@@ -57,10 +57,12 @@ export default async function ZoneStorefrontPage({
         limit: 20,
       }),
       zoneStorefrontsService.getPublicCategories(zoneSlug),
+      zoneStorefrontsService.getDeliveryAvailability(zoneSlug),
       reorder ? ordersService.getOrderByPublicToken(reorder) : null,
     ]);
 
   if (!zoneResponse.success || !zoneResponse.data) notFound();
+  if (!availabilityResponse.success || !availabilityResponse.data) notFound();
   const zone = zoneResponse.data;
   const initialOrder =
     orderResponse?.success &&
@@ -113,6 +115,7 @@ export default async function ZoneStorefrontPage({
           isPharmacy={zone.category === "pharmacy"}
           tenantCategory={zone.category}
           deliverySettings={tenantPresentation}
+          deliveryAvailability={availabilityResponse.data}
           initialCategory={category}
           initialProducts={productsResponse.data?.data ?? []}
           initialProductsMeta={productsResponse.data?.meta ?? EMPTY_PRODUCTS_META}

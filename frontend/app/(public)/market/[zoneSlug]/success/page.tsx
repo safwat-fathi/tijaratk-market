@@ -48,6 +48,11 @@ export default async function ZoneOrderSuccessPage({
         customerAccessCode={customerCode}
         newOrderHref={zoneStorefront.reorder_url}
         newOrderLabel="عمل طلب جديد"
+        scheduledDeliveryLabel={
+          orderResponse.data?.scheduled_delivery_date
+            ? orderResponse.data.delivery_time_window_snapshot
+            : null
+        }
       />
     </div>
   );

@@ -29,6 +29,10 @@ import type {
 import type { Order } from "@/types/models/order";
 import type { TenantDeliverySettings } from "@/types/models/tenant";
 import type { TenantCategory } from "@/constants";
+import type {
+  DeliveryAvailability,
+  DeliverySlot,
+} from "@/types/models/delivery";
 import type { PublicCustomerProfile } from "@/services/api/customers.service";
 import {
   createOrderAction,
@@ -66,6 +70,7 @@ import DeliveryDetailsSection from "./DeliveryDetailsSection";
 import DeliveryAreaSelector from "./DeliveryAreaSelector";
 import OrderSubmitBar from "./OrderSubmitBar";
 import OrderReviewSheet from "./OrderReviewSheet";
+import ScheduledDeliverySelector from "./ScheduledDeliverySelector";
 import {
   ALL_PRODUCTS_CATEGORY,
   buildInitialCartSelections,
@@ -100,6 +105,12 @@ const SUBMIT_BAR_SELECTOR = "[data-order-submit-bar]";
 const VIEWPORT_SCROLL_MARGIN = 16;
 const CUSTOMER_PHONE_SEARCH_MIN_LENGTH = 7;
 const META_SEARCH_MAX_LENGTH = 100;
+const DELIVERY_TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+const deliveryTimeToMinutes = (value: string) => {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+};
 
 const DEFAULT_PAGINATION_STATE: PaginationState = {
   page: 1,
@@ -352,6 +363,7 @@ type OrderFormProps = {
   isPharmacy?: boolean;
   tenantCategory?: TenantCategory;
   deliverySettings: TenantDeliverySettings;
+  deliveryAvailability?: DeliveryAvailability;
   initialCategory?: string;
   initialProducts: Product[];
   initialProductsMeta: PublicProductsMeta;
@@ -374,6 +386,7 @@ export default function OrderForm({
   isPharmacy,
   tenantCategory,
   deliverySettings,
+  deliveryAvailability,
   initialCategory,
   initialProducts,
   initialProductsMeta,
@@ -447,6 +460,35 @@ export default function OrderForm({
   const [isReviewSheetOpen, setIsReviewSheetOpen] = useState(false);
   const [isDeliveryAreaSelectorOpen, setIsDeliveryAreaSelectorOpen] =
     useState(false);
+  const [isScheduledDeliverySelectorOpen, setIsScheduledDeliverySelectorOpen] =
+    useState(false);
+  const [selectedScheduledWindow, setSelectedScheduledWindow] =
+    useState<DeliverySlot | null>(null);
+  const effectiveScheduledWindow = useMemo(() => {
+    const constraints = deliveryAvailability?.schedule_constraints;
+    if (!selectedScheduledWindow || !constraints) return null;
+    if (selectedScheduledWindow.date !== constraints.date) return null;
+    if (
+      !DELIVERY_TIME_PATTERN.test(selectedScheduledWindow.starts_at) ||
+      !DELIVERY_TIME_PATTERN.test(selectedScheduledWindow.ends_at)
+    ) {
+      return null;
+    }
+    const startsAtMinutes = deliveryTimeToMinutes(
+      selectedScheduledWindow.starts_at,
+    );
+    const endsAtMinutes = deliveryTimeToMinutes(selectedScheduledWindow.ends_at);
+    if (
+      startsAtMinutes < deliveryTimeToMinutes(constraints.min_starts_at) ||
+      endsAtMinutes > deliveryTimeToMinutes(constraints.max_ends_at) ||
+      startsAtMinutes % constraints.step_minutes !== 0 ||
+      endsAtMinutes % constraints.step_minutes !== 0 ||
+      endsAtMinutes - startsAtMinutes < constraints.min_duration_minutes
+    ) {
+      return null;
+    }
+    return selectedScheduledWindow;
+  }, [deliveryAvailability?.schedule_constraints, selectedScheduledWindow]);
   const [toastState, setToastState] = useState<ToastState | null>(null);
   const [validationErrors, setValidationErrors] =
     useState<OrderFormValidationErrors>({});
@@ -513,10 +555,19 @@ export default function OrderForm({
     ? Number(selectedDeliveryArea.delivery_fee)
     : 0;
   const deliveryAvailable =
-    deliverySettings?.delivery_available !== false && deliveryAreas.length > 0;
+    deliverySettings?.delivery_available !== false &&
+    deliveryAreas.length > 0 &&
+    deliveryAvailability?.ordering_mode !== "unavailable";
   const cardOnDeliveryAvailable =
     deliverySettings.card_on_delivery_available === true;
-  const storeOpen = deliveryAvailable;
+  const storeOpen = deliveryAvailability
+    ? deliveryAvailability.state === "open"
+    : deliveryAvailable;
+  const scheduledOrderingAvailable =
+    deliveryAvailability?.ordering_mode === "scheduled";
+  const deliveryUnavailable =
+    deliveryAvailability?.ordering_mode === "unavailable" ||
+    !deliveryAvailable;
   let searchPlaceholder = "ابحث عن منتج";
   if (isPharmacy) {
     searchPlaceholder = "ابحث عن دواء أو مستحضرات تجميل";
@@ -1744,6 +1795,18 @@ export default function OrderForm({
       return;
     }
 
+    if (
+      deliveryAvailability?.ordering_mode === "scheduled" &&
+      !effectiveScheduledWindow
+    ) {
+      setIsScheduledDeliverySelectorOpen(true);
+      setToastState({
+        message: "اختر موعد التوصيل المجدول أولاً.",
+        type: "error",
+      });
+      return;
+    }
+
     hasHandledInvalidRef.current = false;
     const nextErrors = validateBeforeReview();
     const firstErrorField = getFirstValidationErrorField(nextErrors);
@@ -1788,8 +1851,10 @@ export default function OrderForm({
     metaCartContents,
     storefrontKind,
     selectedDeliveryArea,
+    effectiveScheduledWindow,
     totalItems,
     validateBeforeReview,
+    deliveryAvailability?.ordering_mode,
   ]);
 
   const handleFormSubmitCapture = useCallback(
@@ -1870,6 +1935,9 @@ export default function OrderForm({
         return;
       }
       lastProcessedStateRef.current = state;
+      if (deliveryAvailability) {
+        router.refresh();
+      }
 
       setTimeout(() => {
         closeReviewSheet(false);
@@ -1904,7 +1972,7 @@ export default function OrderForm({
         }, 0);
       }
     }
-  }, [state, isPending, closeReviewSheet, keepElementVisibleInViewport]);
+  }, [state, isPending, closeReviewSheet, deliveryAvailability, keepElementVisibleInViewport, router]);
 
   return (
     <>
@@ -1955,6 +2023,13 @@ export default function OrderForm({
         {cardOnDeliveryAvailable && cardOnDeliveryRequested && (
           <input type="hidden" name="card_on_delivery_requested" value="true" />
         )}
+        {effectiveScheduledWindow ? (
+          <input
+            type="hidden"
+            name="delivery_slot"
+            value={JSON.stringify(effectiveScheduledWindow)}
+          />
+        ) : null}
         <input
           type="hidden"
           name="unavailable_item_action"
@@ -1968,6 +2043,16 @@ export default function OrderForm({
             isOpen={isDeliveryAreaSelectorOpen}
             onOpenChange={setIsDeliveryAreaSelectorOpen}
             onSelect={setSelectedDeliveryAreaId}
+          />
+        ) : null}
+
+        {deliveryAvailability ? (
+          <ScheduledDeliverySelector
+            availability={deliveryAvailability}
+            value={effectiveScheduledWindow}
+            isOpen={isScheduledDeliverySelectorOpen}
+            onOpenChange={setIsScheduledDeliverySelectorOpen}
+            onChange={setSelectedScheduledWindow}
           />
         ) : null}
 
@@ -2004,15 +2089,25 @@ export default function OrderForm({
               className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold ${
                 storeOpen
                   ? "border-emerald-200 bg-emerald-50 text-brand-primary"
-                  : "border-status-error/20 bg-status-error/10 text-status-error"
+                  : scheduledOrderingAvailable
+                    ? "border-amber-200 bg-amber-50 text-amber-900"
+                    : "border-status-error/20 bg-status-error/10 text-status-error"
               }`}
             >
               <Store className="h-4 w-4" aria-hidden="true" />
-              {storeOpen ? "مفتوح الآن" : "مغلق حالياً"}
+              {storeOpen
+                ? "مفتوح الآن"
+                : scheduledOrderingAvailable
+                  ? "مغلق حالياً · الحجز متاح"
+                  : "التوصيل غير متاح"}
             </span>
             <span className="inline-flex min-h-10 items-center gap-2 rounded-full border border-brand-border bg-white px-3 py-2 text-sm font-semibold text-brand-text">
               <Clock3 className="h-4 w-4" aria-hidden="true" />
-              {deliveryAvailable ? "التوصيل خلال 30-45 دقيقة" : "التوصيل غير متاح"}
+              {deliveryUnavailable
+                ? "التوصيل غير متاح"
+                : storeOpen
+                  ? "التوصيل خلال 30-45 دقيقة"
+                  : "اختر موعد توصيل مجدول"}
             </span>
             <button
               type="button"
@@ -2125,6 +2220,7 @@ export default function OrderForm({
 
         <DeliveryDetailsSection
           deliverySettings={deliverySettings}
+          deliveryAvailability={deliveryAvailability}
           deliveryFee={
             selectedDeliveryArea ? selectedDeliveryFee : null
           }

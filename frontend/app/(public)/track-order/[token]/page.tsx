@@ -278,6 +278,14 @@ export default async function TrackOrder({ params }: Props) {
               </dd>
             </div>
           )}
+          {order.scheduled_delivery_date && order.delivery_time_window_snapshot ? (
+            <div className="bg-amber-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt className="text-sm font-medium text-amber-900">موعد التوصيل المجدول</dt>
+              <dd className="mt-1 text-sm font-semibold text-amber-950 sm:col-span-2 sm:mt-0">
+                {order.delivery_time_window_snapshot}
+              </dd>
+            </div>
+          ) : null}
           <div className="bg-brand-soft/50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt className="text-sm font-medium text-muted-foreground">
               الحالة

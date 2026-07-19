@@ -65,6 +65,7 @@ import type {
   MetaTrackingContext,
 } from 'src/meta-conversions/meta-conversions.types';
 import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
+import { DeliverySchedulingService } from 'src/delivery-configuration/delivery-scheduling.service';
 import { PushNotificationsService } from 'src/push-notifications/push-notifications.service';
 
 type DayCloseSummary = {
@@ -132,6 +133,13 @@ export type OrderCreationOptions = {
   skipPostCommitEffects?: boolean;
   /** Carries consented browser matching data for transactional Meta enqueueing. */
   metaTrackingContext?: MetaTrackingContext;
+  /** Trusted scheduled delivery selected by the shared scheduling service. */
+  deliverySchedule?: {
+    date: Date;
+    starts_at: string;
+    ends_at: string;
+    snapshot: string;
+  } | null;
 };
 
 export type OrderReplacementOptions = {
@@ -160,6 +168,7 @@ export class OrdersService {
     private readonly activityLogService: ActivityLogService,
     private readonly metaConversionsService: MetaConversionsService,
     private readonly deliveryConfigurationService: DeliveryConfigurationService,
+    private readonly deliverySchedulingService: DeliverySchedulingService,
     private readonly pushNotificationsService: PushNotificationsService,
     @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
@@ -207,6 +216,21 @@ export class OrdersService {
       throw new BadRequestException('التوصيل غير متاح حاليا');
     }
 
+    let deliverySchedule: ReturnType<
+      DeliverySchedulingService['validateSelection']
+    >;
+    try {
+      deliverySchedule = this.deliverySchedulingService.validateSelection(
+        tenant,
+        createOrderDto.delivery_slot,
+        new Date(),
+        { allowAlwaysOpenWithoutHours: true },
+      );
+    } catch (error) {
+      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      throw error;
+    }
+
     // Explicitly cast to any since tenant model might not have the newly added fields typed correctly if client not fully reloaded, though it should be typed now.
     const t = tenant as any;
     if (!t.onboarding_completed) {
@@ -252,7 +276,7 @@ export class OrdersService {
       createOrderDto,
       { source: 'storefront' },
       prescriptionUpload,
-      { metaTrackingContext },
+      { metaTrackingContext, deliverySchedule },
     );
   }
 
@@ -311,6 +335,18 @@ export class OrdersService {
         );
 
         const hasItems = Boolean(createOrderDto.items?.length);
+        const hasFreeTextPayload = Boolean(
+          createOrderDto.free_text_payload &&
+            Object.keys(createOrderDto.free_text_payload).length > 0,
+        );
+        const hasPrescription = Boolean(prescriptionUpload);
+
+        if (!hasItems && !hasFreeTextPayload && !hasPrescription) {
+          throw new BadRequestException(
+            'Order must contain either items, a free text payload, or a prescription image',
+          );
+        }
+
         const items = createOrderDto.items || [];
         const resolvedOrderType =
           createOrderDto.order_type ??
@@ -344,6 +380,7 @@ export class OrdersService {
         const deliveryFee = deliverySelection.deliveryFee;
 
         const deliveryTimeWindowSnapshot =
+          options.deliverySchedule?.snapshot ??
           this.resolveDeliveryTimeWindowSnapshot(tenant);
 
         let subtotal: number | undefined;
@@ -360,6 +397,9 @@ export class OrdersService {
           delivery_fee: deliveryFee,
           delivery_area_id: deliveryAreaId,
           delivery_time_window_snapshot: deliveryTimeWindowSnapshot,
+          scheduled_delivery_date: options.deliverySchedule?.date,
+          scheduled_delivery_starts_at: options.deliverySchedule?.starts_at,
+          scheduled_delivery_ends_at: options.deliverySchedule?.ends_at,
           free_text_payload: createOrderDto.free_text_payload,
           notes: createOrderDto.notes,
           card_on_delivery_requested:

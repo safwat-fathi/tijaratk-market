@@ -26,6 +26,8 @@ const activationBlockerMessages: Record<ZoneActivationBlocker, string> = {
     "كتالوج المنطقة غير جاهز. نفّذ مزامنة المنتجات الأساسية أولاً.",
   ZONE_DELIVERY_FEES_NOT_READY:
     "حدد رسماً لكل منطقة توصيل فرعية نشطة أولاً.",
+  ZONE_OPERATING_HOURS_NOT_READY:
+    "حدد ساعات تشغيل المنطقة قبل تفعيلها.",
   ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT:
     "فعّل عضوية متجر تنفيذ مؤهل واحد على الأقل قبل تفعيل المنطقة.",
 };

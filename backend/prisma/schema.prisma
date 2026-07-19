@@ -273,6 +273,9 @@ model Order {
   delivery_address              String?
   delivery_area_id              Int?
   delivery_time_window_snapshot String?     @db.VarChar(64)
+  scheduled_delivery_date       DateTime?   @db.Date
+  scheduled_delivery_starts_at  String?     @db.VarChar(5)
+  scheduled_delivery_ends_at    String?     @db.VarChar(5)
   customer_phone                String?     @db.VarChar
   customer_name                 String?     @db.VarChar
   total                         Decimal?    @db.Decimal(10, 2)
@@ -300,6 +303,7 @@ model Order {
   meta_conversion_outbox     MetaConversionOutbox?
 
   @@index([delivery_area_id], map: "IDX_orders_delivery_area_id")
+  @@index([tenant_id, scheduled_delivery_date, scheduled_delivery_starts_at], map: "IDX_orders_tenant_scheduled_delivery")
   @@index([tenant_id], map: "IDX_527dd6efd5f3402f729c6b3e82")
   @@map("orders")
 }

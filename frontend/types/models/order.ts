@@ -74,6 +74,9 @@ export interface Order {
     slug: string;
   } | null;
   delivery_time_window_snapshot?: string | null;
+  scheduled_delivery_date?: string | null;
+  scheduled_delivery_starts_at?: string | null;
+  scheduled_delivery_ends_at?: string | null;
   total?: OrderNumericValue;
   free_text_payload?: { text?: string };
   prescription_file_url?: string | null;

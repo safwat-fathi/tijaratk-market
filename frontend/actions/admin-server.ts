@@ -585,6 +585,59 @@ export async function updateZoneDeliveryFeesAction(
   };
 }
 
+const zoneOperatingHoursSchema = z
+  .object({
+    delivery_starts_at: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
+    delivery_ends_at: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
+  })
+  .refine(
+    ({ delivery_starts_at, delivery_ends_at }) => {
+      const toMinutes = (value: string) => {
+        const [hours, minutes] = value.split(":").map(Number);
+        return hours * 60 + minutes;
+      };
+      return toMinutes(delivery_ends_at) - toMinutes(delivery_starts_at) >= 60;
+    },
+    { message: "يجب أن تكون نهاية التشغيل بعد البداية بساعة على الأقل." },
+  );
+
+export async function updateZoneOperatingHoursAction(
+  zoneId: number,
+  zoneSlug: string,
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  void _previousState;
+  const id = positiveIdSchema.parse(zoneId);
+  const parsed = zoneOperatingHoursSchema.safeParse(
+    Object.fromEntries(formData.entries()),
+  );
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message || "راجع ساعات التشغيل.",
+      timestamp: Date.now(),
+    };
+  }
+  const response = await adminService.updateZoneOperatingHours(id, parsed.data);
+  if (!response.success) {
+    return {
+      success: false,
+      message: response.message || "تعذر حفظ ساعات التشغيل.",
+      timestamp: Date.now(),
+    };
+  }
+  revalidatePath("/admin/zones");
+  revalidatePath(`/admin/zones/${id}`);
+  revalidatePath("/");
+  revalidatePath(`/market/${zoneSlug}`);
+  return {
+    success: true,
+    message: "تم حفظ ساعات تشغيل المنطقة.",
+    timestamp: Date.now(),
+  };
+}
+
 export type ZoneEssentialCatalogSyncActionResult = {
   success: boolean;
   message: string;

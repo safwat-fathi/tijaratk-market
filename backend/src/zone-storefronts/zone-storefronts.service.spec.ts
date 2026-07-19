@@ -39,7 +39,11 @@ describe('ZoneStorefrontsService eligibility diagnostics', () => {
         findMany: jest.fn(),
       },
     };
-    const service = new ZoneStorefrontsService(prisma as never, {} as never);
+    const service = new ZoneStorefrontsService(
+      prisma as never,
+      {} as never,
+      {} as never,
+    );
     return { prisma, service };
   };
 

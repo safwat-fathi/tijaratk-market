@@ -42,6 +42,11 @@ export default async function DispatchDetailPage({ params }: DispatchDetailPageP
           <p>منطقة التوصيل: {dispatch.order.delivery_area?.name_ar || "غير مسجلة"}</p>
           <p>رسوم التوصيل: {Number(dispatch.order.delivery_fee || 0).toLocaleString("ar-EG")} ج.م</p>
           <p className="sm:col-span-2">العنوان: {dispatch.order.delivery_address}</p>
+          {dispatch.order.scheduled_delivery_date ? (
+            <p className="sm:col-span-2 font-semibold text-amber-800">
+              موعد التوصيل المجدول: {dispatch.order.delivery_time_window_snapshot}
+            </p>
+          ) : null}
           <p>الإجمالي: {Number(dispatch.order.total || 0).toLocaleString("ar-EG")} ج.م</p>
         </div>
         <div className="mt-4 space-y-2">

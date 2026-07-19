@@ -68,6 +68,20 @@ export class UpdateZoneStorefrontActivationDto {
   is_active: boolean;
 }
 
+/** Sets the required same-day daily operating window for a zone. */
+export class UpdateZoneOperatingHoursDto {
+  @ApiProperty({ example: '09:00' })
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/)
+  delivery_starts_at: string;
+
+  @ApiProperty({ example: '22:00' })
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/)
+  delivery_ends_at: string;
+}
+
+
 /** Stores the trusted fee for one direct child of a zone storefront area. */
 export class ZoneDeliveryAreaFeeDto {
   @ApiProperty({ example: 42 })

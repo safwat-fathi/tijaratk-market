@@ -10,6 +10,7 @@ type OrderSuccessViewProps = {
   newOrderHref?: string | null;
   newOrderLabel?: string;
   successDescription?: string;
+  scheduledDeliveryLabel?: string | null;
 };
 
 const TrackingOrdersIcon = () => (
@@ -41,6 +42,7 @@ export default function OrderSuccessView({
   newOrderHref,
   newOrderLabel = "عمل طلب جديد من نفس المتجر",
   successDescription = "سيتواصل معك صاحب المتجر للتأكيد.",
+  scheduledDeliveryLabel,
 }: OrderSuccessViewProps) {
   const [copied, setCopied] = useState(false);
   const [copiedCustomerCode, setCopiedCustomerCode] = useState(false);
@@ -83,6 +85,13 @@ export default function OrderSuccessView({
         {successDescription} <br />
         احفظ كود العميل ورابط التتبع لمتابعة طلباتك من أي جهاز.
       </p>
+
+      {scheduledDeliveryLabel ? (
+        <div className="mb-4 w-full max-w-sm rounded-lg border border-amber-200 bg-amber-50 p-4 text-right">
+          <p className="text-xs font-semibold text-amber-800">موعد التوصيل المجدول</p>
+          <p className="mt-1 font-bold text-amber-950">{scheduledDeliveryLabel}</p>
+        </div>
+      ) : null}
 
       <div className="mb-4 flex w-full max-w-sm items-start gap-2.5 rounded-lg border border-brand-border bg-brand-soft/30 p-3 text-right text-xs text-muted-foreground dark:bg-brand-soft/5">
         <svg

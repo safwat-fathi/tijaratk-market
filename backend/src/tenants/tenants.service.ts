@@ -9,6 +9,7 @@ import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
 import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
 import { getDashboardCacheVersionKey } from 'src/merchant-dashboard/merchant-dashboard.service';
 import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
+import { DeliverySchedulingService } from 'src/delivery-configuration/delivery-scheduling.service';
 
 @Injectable()
 export class TenantsService {
@@ -16,6 +17,7 @@ export class TenantsService {
     private readonly prisma: PrismaService,
     private readonly storesDirectoryService: StoresDirectoryService,
     private readonly deliveryConfigurationService: DeliveryConfigurationService,
+    private readonly deliverySchedulingService: DeliverySchedulingService,
     @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
@@ -113,6 +115,16 @@ export class TenantsService {
           ],
         },
       },
+    });
+  }
+
+  getDeliveryAvailability(tenant: {
+    delivery_available: boolean;
+    delivery_starts_at: string | null;
+    delivery_ends_at: string | null;
+  }) {
+    return this.deliverySchedulingService.getAvailability(tenant, new Date(), {
+      allowAlwaysOpenWithoutHours: true,
     });
   }
 

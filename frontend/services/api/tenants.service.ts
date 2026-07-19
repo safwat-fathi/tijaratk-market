@@ -3,6 +3,7 @@ import {
   DeliveryConfigurationInput,
   Tenant,
 } from "@/types/models/tenant";
+import type { DeliveryAvailability } from "@/types/models/delivery";
 
 const PUBLIC_STOREFRONT_REVALIDATE_SECONDS = 60;
 
@@ -25,6 +26,14 @@ class TenantsService extends HttpService {
     return this.get<Tenant>(`public/${slug}`, undefined, {
       next: { revalidate: PUBLIC_STOREFRONT_REVALIDATE_SECONDS },
     });
+  }
+
+  public async getDeliveryAvailability(slug: string) {
+    return this.get<DeliveryAvailability>(
+      `public/${slug}/delivery-availability`,
+      undefined,
+      { cache: "no-store" },
+    );
   }
 
   public async getMyTenant() {

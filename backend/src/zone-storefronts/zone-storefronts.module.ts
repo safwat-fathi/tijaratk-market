@@ -16,6 +16,7 @@ import { MetaConversionsModule } from 'src/meta-conversions/meta-conversions.mod
 import { ZoneCatalogReconciliationService } from './zone-catalog-reconciliation.service';
 import { ZoneCatalogReconciliationWorker } from './zone-catalog-reconciliation.worker';
 import { PushNotificationsModule } from 'src/push-notifications/push-notifications.module';
+import { DeliveryConfigurationModule } from 'src/delivery-configuration/delivery-configuration.module';
 
 /** Encapsulates public zones, control-plane membership, and manual dispatch. */
 @Module({
@@ -26,6 +27,7 @@ import { PushNotificationsModule } from 'src/push-notifications/push-notificatio
     AdminManagedModule,
     MetaConversionsModule,
     PushNotificationsModule,
+    DeliveryConfigurationModule,
   ],
   controllers: [
     ZoneStorefrontsController,

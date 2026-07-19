@@ -11,19 +11,11 @@ import {
 } from 'src/products/catalog-source-policy';
 import { supermarketProducts } from './supermarket-products.data';
 
-type MerchantVariant =
-  | 'complete_100_products'
-  | 'no_products'
-  | 'twenty_products'
-  | 'single_category'
-  | 'missing_location';
-
-export type RankingSeedMerchant = {
+export type StandardSeedMerchant = {
   name: string;
   phone: string;
   slug: string;
   ownerName: string;
-  variant: MerchantVariant;
 };
 
 type CatalogSeedProduct = {
@@ -35,46 +27,23 @@ type CatalogSeedProduct = {
   order_config?: Prisma.InputJsonValue;
 };
 
-export const SUPERMARKET_RANKING_MERCHANTS: RankingSeedMerchant[] = [
+export const SUPERMARKET_SEED_MERCHANTS: StandardSeedMerchant[] = [
   {
     name: 'سوبر ماركت الخير',
     phone: '+201000000001',
     slug: 'khair-supermarket',
     ownerName: 'خالد محمد',
-    variant: 'complete_100_products',
   },
   {
-    name: 'سوبر ماركت بدون منتجات',
-    phone: '+201000000011',
-    slug: 'ranking-empty-supermarket',
+    name: 'سوبر ماركت الهدى',
+    phone: '+201000000002',
+    slug: 'hoda-supermarket',
     ownerName: 'محمود فاروق',
-    variant: 'no_products',
-  },
-  {
-    name: 'سوبر ماركت عشرين منتج',
-    phone: '+201000000012',
-    slug: 'ranking-20-products-supermarket',
-    ownerName: 'سامي عادل',
-    variant: 'twenty_products',
-  },
-  {
-    name: 'سوبر ماركت تصنيف واحد',
-    phone: '+201000000013',
-    slug: 'ranking-single-category-supermarket',
-    ownerName: 'هاني يوسف',
-    variant: 'single_category',
-  },
-  {
-    name: 'سوبر ماركت بدون موقع',
-    phone: '+201000000014',
-    slug: 'ranking-missing-location-supermarket',
-    ownerName: 'كريم نبيل',
-    variant: 'missing_location',
   },
 ] as const;
 
 /**
- * Seeds supermarket tenants for directory ranking tests using existing DB catalog items.
+ * Seeds supermarket tenants using existing DB catalog items.
  */
 export async function seedSupermarketMerchant(prisma: PrismaClient) {
   const logger = new Logger('SupermarketMerchantSeeder');
@@ -88,25 +57,22 @@ export async function seedSupermarketMerchant(prisma: PrismaClient) {
 
     if (catalogProducts.length === 0) {
       logger.warn(
-        'No active catalog items found. Supermarket ranking products were not seeded.',
+        'No active catalog items found. Supermarket products were not seeded.',
       );
     }
 
-    for (const merchant of SUPERMARKET_RANKING_MERCHANTS) {
+    for (const merchant of SUPERMARKET_SEED_MERCHANTS) {
       const tenant = await upsertTenant(tx, merchant);
 
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenant.id)}, true)`;
       await seedOwner(tx, merchant, tenant.id, ownerCredential, logger);
       await assignDefaultPlan(tx, tenant.id, tenant.slug, logger);
 
-      const products = selectProductsForVariant(
-        catalogProducts,
-        merchant.variant,
-      );
+      const products = takeDistributedProducts(catalogProducts, 100);
       await seedProducts(tx, tenant.id, products);
 
       logger.log(
-        `Seeded supermarket ranking merchant ${tenant.slug} with ${products.length} catalog-backed products.`,
+        `Seeded supermarket merchant ${tenant.slug} with ${products.length} catalog-backed products.`,
       );
     }
   });
@@ -114,10 +80,8 @@ export async function seedSupermarketMerchant(prisma: PrismaClient) {
 
 async function upsertTenant(
   tx: Prisma.TransactionClient,
-  merchant: RankingSeedMerchant,
+  merchant: StandardSeedMerchant,
 ) {
-  const onboardingCompleted = merchant.variant === 'complete_100_products';
-  const onboardingStep = onboardingCompleted ? 6 : 1;
   const existingTenant = await tx.tenant.findFirst({
     where: {
       OR: [{ phone: merchant.phone }, { slug: merchant.slug }],
@@ -136,8 +100,8 @@ async function upsertTenant(
         delivery_available: true,
         delivery_starts_at: '09:00',
         delivery_ends_at: '22:00',
-        onboarding_completed: onboardingCompleted,
-        onboarding_step: onboardingStep,
+        onboarding_completed: true,
+        onboarding_step: 6,
       },
     });
   }
@@ -152,15 +116,15 @@ async function upsertTenant(
       delivery_available: true,
       delivery_starts_at: '09:00',
       delivery_ends_at: '22:00',
-      onboarding_completed: onboardingCompleted,
-      onboarding_step: onboardingStep,
+      onboarding_completed: true,
+      onboarding_step: 6,
     },
   });
 }
 
 async function seedOwner(
   tx: Prisma.TransactionClient,
-  merchant: RankingSeedMerchant,
+  merchant: StandardSeedMerchant,
   tenantId: number,
   ownerCredential: string | undefined,
   logger: Logger,
@@ -248,18 +212,6 @@ async function findCatalogProducts(
   }));
 }
 
-function selectProductsForVariant(
-  catalogProducts: CatalogSeedProduct[],
-  variant: MerchantVariant,
-) {
-  if (variant === 'no_products') return [];
-  if (variant === 'twenty_products')
-    return takeDistributedProducts(catalogProducts, 20);
-  if (variant === 'single_category')
-    return takeSingleCategoryProducts(catalogProducts, 30);
-  return takeDistributedProducts(catalogProducts, 100);
-}
-
 function takeDistributedProducts(
   catalogProducts: CatalogSeedProduct[],
   count: number,
@@ -283,22 +235,6 @@ function takeDistributedProducts(
   }
 
   return selected.slice(0, count);
-}
-
-function takeSingleCategoryProducts(
-  catalogProducts: CatalogSeedProduct[],
-  count: number,
-) {
-  if (catalogProducts.length === 0) return [];
-
-  const categories = Array.from(groupByCategory(catalogProducts).values()).sort(
-    (a, b) => b.length - a.length,
-  );
-  const products = categories[0] ?? [];
-  return Array.from(
-    { length: Math.min(count, Math.max(products.length, 1)) },
-    (_, index) => products[index % products.length],
-  ).slice(0, count);
 }
 
 function groupByCategory(catalogProducts: CatalogSeedProduct[]) {

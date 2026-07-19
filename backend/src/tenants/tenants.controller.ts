@@ -141,4 +141,17 @@ export class TenantsController {
 
     return tenant;
   }
+
+  @Get('public/:slug/delivery-availability')
+  @ApiOperation({ summary: 'Get public merchant delivery availability' })
+  async findDeliveryAvailability(@Param('slug') slug: string) {
+    const tenant = await this.tenantsService.findOneBySlug(slug);
+    if (!tenant || tenant.operated_zone_storefront) {
+      throw new NotFoundException(`Tenant with slug ${slug} not found`);
+    }
+    if (tenant.status !== TenantStatus.active) {
+      throw new ForbiddenException('هذا المتجر غير متاح حاليا');
+    }
+    return this.tenantsService.getDeliveryAvailability(tenant);
+  }
 }

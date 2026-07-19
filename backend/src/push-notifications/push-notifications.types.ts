@@ -29,6 +29,7 @@ export type PushNotificationEnvelope = {
   title: string;
   body: string;
   url: string;
+  iconUrl?: string;
   tag: string;
   createdAt: string;
 };
@@ -57,5 +58,6 @@ export type PushDeliveryTarget = {
   subscriptionId: number;
   encryptedSubscription: string;
   actor: 'merchant' | 'admin';
+  notificationIconUrl?: string;
   adminRole?: AdminRole;
 };

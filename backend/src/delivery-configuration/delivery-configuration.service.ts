@@ -252,18 +252,22 @@ export class DeliveryConfigurationService {
     const hasStart = Boolean(dto.delivery_starts_at);
     const hasEnd = Boolean(dto.delivery_ends_at);
     if (hasStart !== hasEnd) {
-      throw new BadRequestException(
-        'أدخل وقت بداية ونهاية التوصيل معاً',
-      );
+      throw new BadRequestException('أدخل وقت بداية ونهاية التوصيل معاً');
     }
-    if (
-      dto.delivery_starts_at &&
-      dto.delivery_ends_at &&
-      dto.delivery_ends_at <= dto.delivery_starts_at
-    ) {
-      throw new BadRequestException(
-        'وقت نهاية التوصيل يجب أن يكون بعد وقت البداية',
-      );
+    if (dto.delivery_starts_at && dto.delivery_ends_at) {
+      const toMinutes = (value: string) => {
+        const [hours, minutes] = value.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+      if (
+        toMinutes(dto.delivery_ends_at) -
+          toMinutes(dto.delivery_starts_at) <
+        60
+      ) {
+        throw new BadRequestException(
+          'وقت نهاية التوصيل يجب أن يكون بعد وقت البداية بساعة على الأقل',
+        );
+      }
     }
   }
 

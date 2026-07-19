@@ -365,6 +365,10 @@ const buildCreateOrderFormData = (
   if (payload.delivery_area_slug) {
     formDataPayload.append('delivery_area_slug', payload.delivery_area_slug);
   }
+  const deliverySlot = sourceFormData.get('delivery_slot');
+  if (typeof deliverySlot === 'string' && deliverySlot) {
+    formDataPayload.append('delivery_slot', deliverySlot);
+  }
   appendUnavailableItemAction(formDataPayload, payload);
   appendCardOnDeliveryRequest(formDataPayload, payload);
 

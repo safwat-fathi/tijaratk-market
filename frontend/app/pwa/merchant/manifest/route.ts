@@ -51,6 +51,7 @@ const buildManifest = (tenant?: Tenant) => {
     start_url: "/merchant?src=pwa-merchant",
     scope: "/merchant",
     display: "standalone",
+    launch_handler: { client_mode: "navigate-existing" },
     background_color: "#F7F8F6",
     theme_color: "#0F5A3D",
     dir: "rtl",

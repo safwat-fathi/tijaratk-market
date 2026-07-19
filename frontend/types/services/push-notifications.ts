@@ -29,6 +29,7 @@ export type PushNotificationMessage = {
   title: string;
   body: string;
   url: string;
+  iconUrl?: string;
   tag: string;
   createdAt: string;
 };

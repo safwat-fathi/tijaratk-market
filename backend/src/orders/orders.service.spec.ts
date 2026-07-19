@@ -114,6 +114,8 @@ describe('OrdersService markOrderItemOutOfStock', () => {
       activityLog as any,
       {} as any,
       {} as any,
+      {} as any,
+      {} as any,
       cache as any,
     );
 
@@ -267,6 +269,8 @@ describe('OrdersService new-order notifications', () => {
       {} as any,
       {} as any,
       orderWhatsappService as any,
+      {} as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

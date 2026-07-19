@@ -33,6 +33,7 @@ export interface CreateOrderRequest {
   source_metadata?: Record<string, unknown>;
   delivery_area_id?: number;
   delivery_area_slug?: string;
+  delivery_slot?: { date: string; starts_at: string; ends_at?: string };
   card_on_delivery_requested?: boolean;
   unavailable_item_action?: UnavailableItemAction;
   prescription_unavailability_action?: string;

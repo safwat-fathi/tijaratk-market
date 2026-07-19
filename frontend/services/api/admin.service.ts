@@ -753,6 +753,18 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async updateZoneOperatingHours(
+		zoneId: number,
+		payload: { delivery_starts_at: string; delivery_ends_at: string },
+	) {
+		return this.patch<AdminZoneStorefront>(
+			`zones/${zoneId}/operating-hours`,
+			payload,
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
 	public async upsertZoneMerchant(
 		zoneId: number,
 		payload: { tenant_id: number; priority?: number; is_active?: boolean },

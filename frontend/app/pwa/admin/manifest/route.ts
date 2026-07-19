@@ -15,6 +15,7 @@ export function GET() {
       start_url: "/admin",
       scope: "/admin",
       display: "standalone",
+      launch_handler: { client_mode: "navigate-existing" },
       background_color: "#F9FAFB",
       theme_color: "#0F5A3D",
       dir: "rtl",

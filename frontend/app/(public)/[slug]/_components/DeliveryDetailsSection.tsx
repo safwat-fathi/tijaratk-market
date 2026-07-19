@@ -3,9 +3,11 @@ import type { PublicCustomerProfile } from "@/services/api/customers.service";
 import { formatCurrency } from "@/lib/utils/currency";
 import { useState } from "react";
 import BottomSheet from "@/components/ui/BottomSheet";
+import type { DeliveryAvailability } from "@/types/models/delivery";
 
 type DeliveryDetailsSectionProps = {
   deliverySettings: TenantDeliverySettings;
+  deliveryAvailability?: DeliveryAvailability;
   deliveryFee: number | null;
   notes: string;
   customerName: string;
@@ -30,6 +32,7 @@ type DeliveryDetailsSectionProps = {
 
 export default function DeliveryDetailsSection({
   deliverySettings,
+  deliveryAvailability,
   deliveryFee,
   notes,
   customerName,
@@ -55,9 +58,15 @@ export default function DeliveryDetailsSection({
   const [accessCodeLookupState, setAccessCodeLookupState] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
-  const deliveryAvailable =
+  const deliveryConfigured =
     deliverySettings?.delivery_available !== false &&
     (deliverySettings.tenant_delivery_areas?.length || 0) > 0;
+  const deliveryState =
+    deliveryAvailability?.state ??
+    (deliveryConfigured ? "open" : "unavailable");
+  const deliveryAvailableNow = deliveryConfigured && deliveryState === "open";
+  const schedulingAvailable = deliveryConfigured && deliveryState === "closed";
+  const canOrderDelivery = deliveryAvailableNow || schedulingAvailable;
   const hasMultipleSavedAddresses = savedAddressOptions.length > 1;
   const hasSavedCustomerSuggestion = Boolean(suggestedCustomerProfile);
   const hasSingleSavedAddress = savedAddressOptions.length === 1;
@@ -78,10 +87,13 @@ export default function DeliveryDetailsSection({
         : "مجاني";
 
   let deliveryTimeWindow: string | null = null;
-  if (
-    deliverySettings?.delivery_starts_at &&
-    deliverySettings?.delivery_ends_at
-  ) {
+  const deliveryStartsAt = deliveryAvailability
+    ? deliveryAvailability.operating_hours.starts_at
+    : deliverySettings?.delivery_starts_at;
+  const deliveryEndsAt = deliveryAvailability
+    ? deliveryAvailability.operating_hours.ends_at
+    : deliverySettings?.delivery_ends_at;
+  if (deliveryStartsAt && deliveryEndsAt) {
     const formatTime = (time: string) => {
       const [hours, minutes] = time.split(":");
       const h = parseInt(hours, 10);
@@ -89,7 +101,7 @@ export default function DeliveryDetailsSection({
       const h12 = h % 12 || 12;
       return `${h12}:${minutes} ${period}`;
     };
-    deliveryTimeWindow = `من ${formatTime(deliverySettings?.delivery_starts_at)} إلى ${formatTime(deliverySettings?.delivery_ends_at)}`;
+    deliveryTimeWindow = `من ${formatTime(deliveryStartsAt)} إلى ${formatTime(deliveryEndsAt)}`;
   }
   const deliveryTimeWindowLabel = deliveryTimeWindow || "طوال اليوم";
 
@@ -121,19 +133,23 @@ export default function DeliveryDetailsSection({
 
       <div
         className={`mb-5 rounded-lg border p-4 ${
-          deliveryAvailable
+          deliveryAvailableNow
             ? "border-brand-primary/15 bg-brand-soft/50"
-            : "border-status-error/20 bg-status-error/10"
+            : schedulingAvailable
+              ? "border-amber-200 bg-amber-50"
+              : "border-status-error/20 bg-status-error/10"
         }`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-bold text-brand-text">
-              {deliveryAvailable
+              {deliveryAvailableNow
                 ? "التوصيل متاح حالياً"
-                : "التوصيل غير متاح حالياً"}
+                : schedulingAvailable
+                  ? "المتجر مغلق حالياً"
+                  : "التوصيل غير متاح حالياً"}
             </p>
-            {deliveryAvailable ? (
+            {canOrderDelivery ? (
               <>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   رسوم التوصيل: {deliveryFeeLabel}
@@ -141,6 +157,11 @@ export default function DeliveryDetailsSection({
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   مواعيد التوصيل: {deliveryTimeWindowLabel}
                 </p>
+                {schedulingAvailable ? (
+                  <p className="mt-1 text-sm font-semibold text-amber-900">
+                    يمكنك اختيار موعد توصيل مجدول من المواعيد المتاحة.
+                  </p>
+                ) : null}
               </>
             ) : (
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
@@ -150,12 +171,18 @@ export default function DeliveryDetailsSection({
           </div>
           <span
             className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
-              deliveryAvailable
+              deliveryAvailableNow
                 ? "bg-status-success/10 text-status-success"
+                : schedulingAvailable
+                  ? "bg-amber-100 text-amber-900"
                 : "bg-status-error/10 text-status-error"
             }`}
           >
-            {deliveryAvailable ? "متاح" : "متوقف"}
+            {deliveryAvailableNow
+              ? "متاح"
+              : schedulingAvailable
+                ? "حجز مسبق"
+                : "متوقف"}
           </span>
         </div>
       </div>

@@ -27,6 +27,9 @@ type PublicCustomerOrder = Pick<
   | 'total'
   | 'delivery_address'
   | 'delivery_time_window_snapshot'
+  | 'scheduled_delivery_date'
+  | 'scheduled_delivery_starts_at'
+  | 'scheduled_delivery_ends_at'
 > & {
   tenant?: { id: number; name: string; slug: string };
   items?: unknown[];
@@ -326,6 +329,9 @@ export class CustomersService {
         total: order.total,
         delivery_address: order.delivery_address,
         delivery_time_window_snapshot: order.delivery_time_window_snapshot,
+        scheduled_delivery_date: order.scheduled_delivery_date,
+        scheduled_delivery_starts_at: order.scheduled_delivery_starts_at,
+        scheduled_delivery_ends_at: order.scheduled_delivery_ends_at,
         tenant: zoneStorefront
           ? {
               id: zoneStorefront.id,

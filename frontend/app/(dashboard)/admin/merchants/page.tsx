@@ -24,6 +24,11 @@ import { AdminMerchantFilters } from "./_components/AdminMerchantFilters";
 
 export const dynamic = "force-dynamic";
 
+function formatHours(startsAt?: string | null, endsAt?: string | null) {
+  if (!startsAt || !endsAt) return null;
+  return `${startsAt.slice(0, 5)} - ${endsAt.slice(0, 5)}`;
+}
+
 type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
@@ -209,15 +214,16 @@ function CancellationPolicySummary({ merchant }: { merchant: AdminTenant }) {
 function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
   if (merchant.status === "pending") {
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="flex w-full gap-2">
         <form
           action={decideTenantApplicationAction.bind(
             null,
             merchant.id,
             "active",
           )}
+          className="flex-1"
         >
-          <Button type="submit" size="sm">
+          <Button type="submit" size="sm" className="w-full">
             اعتماد الطلب
           </Button>
         </form>
@@ -227,8 +233,9 @@ function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
             merchant.id,
             "rejected",
           )}
+          className="flex-1"
         >
-          <Button type="submit" variant="outline" size="sm">
+          <Button type="submit" variant="outline" size="sm" className="w-full">
             رفض الطلب
           </Button>
         </form>
@@ -239,12 +246,13 @@ function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
   return (
     <form
       action={toggleTenantStatusAction.bind(null, merchant.id, merchant.status)}
+      className="w-full"
     >
       <Button
         type="submit"
         variant={merchant.status === "active" ? "outline" : "primary"}
         size="sm"
-        className="w-full md:w-auto"
+        className="w-full"
       >
         {merchant.status === "active"
           ? "إيقاف"
@@ -370,6 +378,7 @@ export default async function AdminMerchants(props: Props) {
                 </div>
                 <p className="break-all text-sm text-gray-600">
                   {merchant.phone}
+                  {merchant.delivery_starts_at && merchant.delivery_ends_at && ` · ${formatHours(merchant.delivery_starts_at, merchant.delivery_ends_at)}`}
                 </p>
               </div>
 
@@ -428,10 +437,10 @@ export default async function AdminMerchants(props: Props) {
                   />
                 </div>
 
-                <div className="flex gap-2 items-start flex-wrap">
+                <div className="flex w-full flex-col gap-2">
                   <a
                     href={`/admin/merchants/${merchant.id}`}
-                    className="inline-flex min-h-9 items-center rounded-md bg-brand-primary px-3 text-xs font-semibold text-white"
+                    className="inline-flex w-full min-h-10 items-center justify-center rounded-md bg-brand-primary px-3 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-hover"
                   >
                     إدارة المتجر
                   </a>
@@ -521,6 +530,9 @@ export default async function AdminMerchants(props: Props) {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {merchant.phone}
+                        {merchant.delivery_starts_at && merchant.delivery_ends_at && (
+                          <div className="mt-1 text-xs">{formatHours(merchant.delivery_starts_at, merchant.delivery_ends_at)}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {merchant._count?.products || 0}
@@ -553,10 +565,10 @@ export default async function AdminMerchants(props: Props) {
                         <MerchantStatusBadge status={merchant.status} />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-start gap-2">
+                        <div className="flex flex-col gap-2">
                           <a
                             href={`/admin/merchants/${merchant.id}`}
-                            className="inline-flex min-h-9 items-center rounded-md bg-brand-primary px-3 text-xs font-semibold text-white"
+                            className="inline-flex w-full min-h-10 items-center justify-center rounded-md bg-brand-primary px-3 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-hover"
                           >
                             إدارة المتجر
                           </a>

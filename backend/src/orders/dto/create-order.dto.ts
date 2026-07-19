@@ -9,6 +9,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   Min,
   ValidateIf,
@@ -44,6 +45,29 @@ const parseItems = ({ value }: { value: unknown }) => {
   const parsed = parseJsonIfString({ value });
   return plainToInstance(CreateOrderItemDto, parsed as object);
 };
+
+const parseDeliverySlot = ({ value }: { value: unknown }) => {
+  const parsed = parseJsonIfString({ value });
+  return plainToInstance(DeliverySlotDto, parsed as object);
+};
+
+export class DeliverySlotDto {
+  @ApiProperty({ example: '2026-07-20' })
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date: string;
+
+  @ApiProperty({ example: '10:00' })
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/)
+  starts_at: string;
+
+  @ApiPropertyOptional({ example: '12:30' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/)
+  ends_at?: string;
+}
 
 export class CreateOrderItemDto {
   @ApiPropertyOptional()
@@ -178,6 +202,13 @@ export class CreateOrderDto {
   @IsString()
   @MaxLength(120)
   delivery_area_slug?: string;
+
+  @ApiPropertyOptional({ type: DeliverySlotDto })
+  @IsOptional()
+  @Transform(parseDeliverySlot)
+  @ValidateNested()
+  @Type(() => DeliverySlotDto)
+  delivery_slot?: DeliverySlotDto;
 
   @ApiPropertyOptional({
     example: true,

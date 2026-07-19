@@ -281,6 +281,9 @@ export class PushNotificationsService {
       title,
       body,
       url,
+      ...(!isAdmin && target.notificationIconUrl
+        ? { iconUrl: target.notificationIconUrl }
+        : {}),
       tag: event.event_key,
       createdAt: event.created_at.toISOString(),
     };
@@ -415,7 +418,12 @@ export class PushNotificationsService {
       },
       include: {
         merchant_user: { select: { deleted_at: true, tenant_id: true } },
-        merchant_tenant: { select: { status: true } },
+        merchant_tenant: {
+          select: {
+            status: true,
+            directory_profile: { select: { logo_url: true } },
+          },
+        },
       },
     });
 
@@ -430,6 +438,9 @@ export class PushNotificationsService {
         subscriptionId: subscription.id,
         encryptedSubscription: subscription.encrypted_subscription,
         actor: 'merchant' as const,
+        notificationIconUrl: this.normalizeNotificationIconUrl(
+          subscription.merchant_tenant?.directory_profile?.logo_url,
+        ),
       }));
   }
 
@@ -512,6 +523,31 @@ export class PushNotificationsService {
   /** Bounds names displayed on lock screens. */
   private normalizeDisplayName(value: string): string {
     return value.replace(/\s+/gu, ' ').trim().slice(0, 120) || 'المتجر';
+  }
+
+  /** Allows only bounded HTTPS or same-origin paths for notification artwork. */
+  private normalizeNotificationIconUrl(
+    value: string | null | undefined,
+  ): string | undefined {
+    const normalized = value?.trim();
+    if (!normalized || normalized.length > 2_048) return undefined;
+    if (normalized.startsWith('/') && !normalized.startsWith('//')) {
+      return normalized;
+    }
+
+    try {
+      const parsed = new URL(normalized);
+      if (
+        parsed.protocol !== 'https:' ||
+        parsed.username ||
+        parsed.password
+      ) {
+        return undefined;
+      }
+      return parsed.href;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Runtime-validates decrypted subscription material. */

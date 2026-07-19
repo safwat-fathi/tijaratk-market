@@ -47,6 +47,7 @@ export type ZoneActivationBlocker =
   | "ZONE_OPERATOR_NOT_READY"
   | "ZONE_CATALOG_NOT_READY"
   | "ZONE_DELIVERY_FEES_NOT_READY"
+  | "ZONE_OPERATING_HOURS_NOT_READY"
   | "ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT";
 
 export type MerchantEligibilityBlocker =
@@ -62,6 +63,7 @@ export type MerchantEligibilityBlocker =
 export type ZoneReadiness = {
   catalog_ready: boolean;
   delivery_fees_ready: boolean;
+  operating_hours_ready: boolean;
   required_delivery_areas: number;
   configured_delivery_areas: number;
   catalog_in_sync: boolean;
@@ -120,6 +122,8 @@ export type AdminZoneStorefront = {
     category: "grocery" | "pharmacy";
     status: string;
     delivery_fee?: number | string;
+    delivery_starts_at?: string | null;
+    delivery_ends_at?: string | null;
   };
   merchants: AdminZoneMerchantMembership[];
   readiness: ZoneReadiness;
@@ -172,6 +176,9 @@ export type ZoneOrderDispatch = {
     delivery_address?: string | null;
     delivery_area?: ZoneStorefront["area"] | null;
     delivery_time_window_snapshot?: string | null;
+    scheduled_delivery_date?: string | null;
+    scheduled_delivery_starts_at?: string | null;
+    scheduled_delivery_ends_at?: string | null;
     subtotal?: number | string | null;
     delivery_fee?: number | string | null;
     total?: number | string | null;

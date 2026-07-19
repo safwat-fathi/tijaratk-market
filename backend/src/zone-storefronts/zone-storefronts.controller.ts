@@ -46,6 +46,7 @@ import {
   UpdateAssignedOrderStatusDto,
   UpdateDispatchQuoteLineDto,
   UpdateZoneDeliveryFeesDto,
+  UpdateZoneOperatingHoursDto,
   UpdateZoneStorefrontActivationDto,
   UpsertZoneStorefrontMerchantDto,
 } from './dto/zone-storefront.dto';
@@ -84,6 +85,15 @@ export class ZoneStorefrontsController {
   @ApiResponse({ status: HttpStatus.OK, description: 'Public zone returned' })
   findPublic(@Param('slug') slug: string) {
     return this.zoneStorefrontsService.findPublicBySlug(slug);
+  }
+
+  /** Returns authoritative Cairo-time ordering mode and valid scheduled slots. */
+  @Get('public/:slug/delivery-availability')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Get zone delivery availability' })
+  findDeliveryAvailability(@Param('slug') slug: string) {
+    return this.zoneStorefrontsService.findDeliveryAvailability(slug);
   }
 
   /** Returns paginated catalog products from the operator tenant only. */
@@ -230,6 +240,22 @@ export class AdminZoneStorefrontsController {
     @Body() dto: UpdateZoneDeliveryFeesDto,
   ) {
     return this.zones.updateDeliveryFees(
+      zoneId,
+      dto,
+      this.toAdminActor(request),
+    );
+  }
+
+  /** Updates the required daily same-day operating window. */
+  @Patch(':zoneId/operating-hours')
+  @ApiOperation({ summary: 'Update zone operating hours' })
+  @ApiBody({ type: UpdateZoneOperatingHoursDto })
+  updateOperatingHours(
+    @Req() request: ManagedAdminRequest,
+    @Param('zoneId', ParseIntPipe) zoneId: number,
+    @Body() dto: UpdateZoneOperatingHoursDto,
+  ) {
+    return this.zones.updateOperatingHours(
       zoneId,
       dto,
       this.toAdminActor(request),

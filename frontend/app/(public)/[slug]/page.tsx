@@ -21,6 +21,7 @@ import { Metadata } from "next";
 import { getCustomerProfileBySlugFromCookie } from "@/lib/tracking/customer-tracking-cookie";
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import type { DeliveryAvailability } from "@/types/models/delivery";
 
 type StoreSearchParams = {
   reorder?: string;
@@ -159,13 +160,34 @@ export default async function StorePage({ params, searchParams }: Props) {
     notFound();
   }
 
-  const [{ products, meta }, categories, initialOrder, savedCustomerProfile] =
+  const [
+    { products, meta },
+    categories,
+    availabilityResponse,
+    initialOrder,
+    savedCustomerProfile,
+  ] =
     await Promise.all([
       getInitialProducts(slug, category),
       getPublicCategories(slug),
+      tenantsService.getDeliveryAvailability(slug),
       getOrder(reorder),
       getCustomerProfileBySlugFromCookie(tenant.slug),
     ]);
+  const deliveryAvailability: DeliveryAvailability =
+    availabilityResponse.success && availabilityResponse.data
+      ? availabilityResponse.data
+      : {
+          timezone: "Africa/Cairo",
+          state: "unavailable",
+          ordering_mode: "unavailable",
+          operating_hours: {
+            starts_at: tenant.delivery_starts_at ?? null,
+            ends_at: tenant.delivery_ends_at ?? null,
+          },
+          schedule_constraints: null,
+          slots: [],
+        };
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-md bg-background flex flex-col">
@@ -206,6 +228,7 @@ export default async function StorePage({ params, searchParams }: Props) {
             isPharmacy={tenant.category === "pharmacy"}
             tenantCategory={tenant.category}
             deliverySettings={tenant}
+            deliveryAvailability={deliveryAvailability}
             initialCategory={category}
             initialProducts={products}
             initialProductsMeta={meta}

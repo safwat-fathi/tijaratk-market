@@ -94,6 +94,22 @@ describe('DeliveryConfigurationService', () => {
   });
 
   describe('updateConfiguration', () => {
+    it('rejects operating windows shorter than one hour before opening a transaction', async () => {
+      const prisma = { $transaction: jest.fn() };
+      const service = new DeliveryConfigurationService(prisma as any);
+
+      await expect(
+        service.updateConfiguration(1, {
+          delivery_available: true,
+          delivery_starts_at: '09:00',
+          delivery_ends_at: '09:59',
+          primary_area_id: 3,
+          delivery_areas: [{ area_id: 4, delivery_fee: 10 }],
+        }),
+      ).rejects.toThrow('بساعة على الأقل');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
     it('rejects duplicate areas before opening a transaction', async () => {
       const prisma = { $transaction: jest.fn() };
       const service = new DeliveryConfigurationService(prisma as any);

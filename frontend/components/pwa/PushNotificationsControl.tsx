@@ -86,6 +86,8 @@ const isPushNotificationMessage = (
     typeof candidate.url === "string" &&
     candidate.url.startsWith("/") &&
     !candidate.url.startsWith("//") &&
+    (candidate.iconUrl === undefined ||
+      typeof candidate.iconUrl === "string") &&
     typeof candidate.tag === "string" &&
     typeof candidate.createdAt === "string"
   );

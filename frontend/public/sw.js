@@ -4,8 +4,10 @@ const scopePath = new URL(self.registration.scope).pathname
   .replace(/[^a-z0-9]+/gi, "-")
   .replace(/^-|-$/g, "") || "root";
 const CACHE_PREFIX = `tijaratk-${scopePath}-pwa`;
-const CACHE_NAME = `${CACHE_PREFIX}-v1`;
+const CACHE_NAME = `${CACHE_PREFIX}-v2`;
 const OFFLINE_URL = "/offline";
+const FALLBACK_NOTIFICATION_ICON = "/android-chrome-192x192.png";
+const NOTIFICATION_BADGE = "/notification-badge-96x96.png";
 const registrationScopePath = new URL(self.registration.scope).pathname.replace(
   /\/$/,
   "",
@@ -18,12 +20,52 @@ const PRECACHE_URLS = [
   "/android-chrome-192x192.png",
   "/android-chrome-512x512.png",
   "/apple-touch-icon.png",
+  NOTIFICATION_BADGE,
 ];
 const PUSH_MESSAGE_TYPES = new Set([
   "merchant.order.created",
   "admin.order.created",
   "merchant.assignment.created",
 ]);
+
+const getScopedTargetUrl = (targetPath) => {
+  if (
+    typeof targetPath !== "string" ||
+    !targetPath.startsWith("/") ||
+    targetPath.startsWith("//")
+  ) {
+    return null;
+  }
+
+  const targetUrl = new URL(targetPath, self.location.origin);
+  if (
+    targetUrl.origin !== self.location.origin ||
+    !isScopedClientPath(targetUrl.pathname)
+  ) {
+    return null;
+  }
+  return targetUrl.href;
+};
+
+const getNotificationIcon = (iconUrl) => {
+  if (typeof iconUrl !== "string") return FALLBACK_NOTIFICATION_ICON;
+  const normalized = iconUrl.trim();
+  if (!normalized || normalized.length > 2_048 || normalized.startsWith("//")) {
+    return FALLBACK_NOTIFICATION_ICON;
+  }
+
+  try {
+    const parsed = new URL(normalized, self.location.origin);
+    const isAllowedProtocol =
+      parsed.origin === self.location.origin || parsed.protocol === "https:";
+    if (!isAllowedProtocol || parsed.username || parsed.password) {
+      return FALLBACK_NOTIFICATION_ICON;
+    }
+    return parsed.href;
+  } catch {
+    return FALLBACK_NOTIFICATION_ICON;
+  }
+};
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -101,8 +143,7 @@ self.addEventListener("push", (event) => {
     typeof payload.title !== "string" ||
     typeof payload.body !== "string" ||
     typeof payload.url !== "string" ||
-    !payload.url.startsWith("/") ||
-    payload.url.startsWith("//") ||
+    !getScopedTargetUrl(payload.url) ||
     typeof payload.tag !== "string" ||
     typeof payload.createdAt !== "string"
   ) {
@@ -113,8 +154,8 @@ self.addEventListener("push", (event) => {
     Promise.all([
       self.registration.showNotification(payload.title, {
         body: payload.body,
-        icon: "/android-chrome-192x192.png",
-        badge: "/favicon-32x32.png",
+        icon: getNotificationIcon(payload.iconUrl),
+        badge: NOTIFICATION_BADGE,
         tag: payload.tag,
         renotify: true,
         dir: "rtl",
@@ -141,26 +182,44 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetPath = event.notification.data?.url;
-  if (
-    typeof targetPath !== "string" ||
-    !targetPath.startsWith("/") ||
-    targetPath.startsWith("//")
-  ) {
-    return;
-  }
-  const targetUrl = new URL(targetPath, self.location.origin).href;
+  const targetUrl = getScopedTargetUrl(event.notification.data?.url);
+  if (!targetUrl) return;
+
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then(
-      async (windows) => {
-        for (const client of windows) {
-          const clientPath = new URL(client.url).pathname;
-          if (!isScopedClientPath(clientPath)) continue;
-          if ("navigate" in client) await client.navigate(targetUrl);
-          if ("focus" in client) return client.focus();
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then(async (windows) => {
+        const exactClient = windows.find(
+          (client) =>
+            client.url === targetUrl &&
+            isScopedClientPath(new URL(client.url).pathname),
+        );
+        if (exactClient && "focus" in exactClient) {
+          return exactClient.focus();
         }
-        return clients.openWindow(targetUrl);
-      },
-    ),
+
+        try {
+          const openedClient = await clients.openWindow(targetUrl);
+          if (openedClient && "focus" in openedClient) {
+            return openedClient.focus();
+          }
+        } catch {
+          // Fall through for browsers that cannot open a PWA window here.
+        }
+
+        const scopedClient = windows.find((client) =>
+          isScopedClientPath(new URL(client.url).pathname),
+        );
+        if (!scopedClient) return undefined;
+
+        const navigatedClient =
+          "navigate" in scopedClient
+            ? await scopedClient.navigate(targetUrl)
+            : scopedClient;
+        if (navigatedClient && "focus" in navigatedClient) {
+          return navigatedClient.focus();
+        }
+        return undefined;
+      }),
   );
 });

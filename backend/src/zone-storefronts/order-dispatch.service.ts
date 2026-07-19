@@ -43,6 +43,7 @@ import { ZoneStorefrontNotificationsService } from './zone-storefront-notificati
 import { ZoneStorefrontsService } from './zone-storefronts.service';
 import type { MetaTrackingContext } from 'src/meta-conversions/meta-conversions.types';
 import { PushNotificationsService } from 'src/push-notifications/push-notifications.service';
+import { DeliverySchedulingService } from 'src/delivery-configuration/delivery-scheduling.service';
 
 type MerchantRequestActor = {
   tenantId: number;
@@ -59,6 +60,7 @@ export class OrderDispatchService {
     private readonly zoneStorefrontsService: ZoneStorefrontsService,
     private readonly notifications: ZoneStorefrontNotificationsService,
     private readonly pushNotificationsService: PushNotificationsService,
+    private readonly deliveryScheduling: DeliverySchedulingService,
   ) {}
 
   /** Atomically creates an operator-owned draft order and pending dispatch. */
@@ -73,9 +75,16 @@ export class OrderDispatchService {
     >;
     let created: Awaited<ReturnType<OrdersService['createForTenantId']>>;
     let trustedDeliveryAreaName = '';
+    let deliverySchedule: ReturnType<
+      DeliverySchedulingService['validateSelection']
+    > = null;
 
     try {
       zone = await this.zoneStorefrontsService.requireCheckoutZone(slug);
+      deliverySchedule = this.deliveryScheduling.validateSelection(
+        zone.operator_tenant,
+        dto.delivery_slot,
+      );
       if (dto.prescription_unavailability_action && !prescriptionFile) {
         throw new BadRequestException('Prescription file is required');
       }
@@ -191,6 +200,7 @@ export class OrderDispatchService {
             {
               skipPostCommitEffects: true,
               metaTrackingContext,
+              deliverySchedule,
               afterPersist: async (transactionManager, order) => {
                 const dispatch = await transactionManager.orderDispatch.create({
                   data: {
@@ -342,6 +352,10 @@ export class OrderDispatchService {
                   select: { id: true, name_ar: true, name_en: true, slug: true },
                 },
                 delivery_fee: true,
+                delivery_time_window_snapshot: true,
+                scheduled_delivery_date: true,
+                scheduled_delivery_starts_at: true,
+                scheduled_delivery_ends_at: true,
                 total: true,
                 created_at: true,
               },
@@ -1244,6 +1258,9 @@ export class OrderDispatchService {
                   select: { id: true, name_ar: true, name_en: true, slug: true },
                 },
                 delivery_time_window_snapshot: true,
+                scheduled_delivery_date: true,
+                scheduled_delivery_starts_at: true,
+                scheduled_delivery_ends_at: true,
                 subtotal: true,
                 delivery_fee: true,
                 total: true,
@@ -1316,6 +1333,9 @@ export class OrderDispatchService {
                   select: { id: true, name_ar: true, name_en: true, slug: true },
                 },
                 delivery_time_window_snapshot: true,
+                scheduled_delivery_date: true,
+                scheduled_delivery_starts_at: true,
+                scheduled_delivery_ends_at: true,
                 subtotal: true,
                 delivery_fee: true,
                 total: true,
