@@ -785,6 +785,7 @@ enum MetaConversionOutboxStatus {
 }
 
 enum PushNotificationEventType {
+  merchant_registered
   merchant_order_created
   zone_order_created
   zone_assignment_created

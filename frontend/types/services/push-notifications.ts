@@ -23,6 +23,7 @@ export type PushNotificationMessage = {
   version: 1;
   eventId: string;
   type:
+    | "admin.merchant.registered"
     | "merchant.order.created"
     | "admin.order.created"
     | "merchant.assignment.created";

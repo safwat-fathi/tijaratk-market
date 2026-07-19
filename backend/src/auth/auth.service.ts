@@ -19,6 +19,7 @@ import { SignupDto } from './dto/signup.dto';
 import { formatPhoneNumber } from 'src/common/utils/phone.util';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { WhatsappService } from 'src/whatsapp/whatsapp.service';
+import { PushNotificationsService } from 'src/push-notifications/push-notifications.service';
 
 @Injectable()
 export class AuthService {
@@ -31,6 +32,7 @@ export class AuthService {
     private tenantsService: TenantsService,
     private prisma: PrismaService,
     private whatsappService: WhatsappService,
+    private pushNotificationsService: PushNotificationsService,
   ) {}
 
   async validateUser(
@@ -151,6 +153,11 @@ export class AuthService {
         },
         tx,
       );
+
+      await this.pushNotificationsService.enqueueMerchantRegistration(tx, {
+        tenantId: tenant.id,
+        storeName,
+      });
     });
 
     return {

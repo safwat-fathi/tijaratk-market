@@ -66,6 +66,7 @@ const PushNotificationsContext =
   createContext<PushNotificationsContextValue | null>(null);
 
 const PUSH_MESSAGE_TYPES = new Set<PushNotificationMessage["type"]>([
+  "admin.merchant.registered",
   "merchant.order.created",
   "admin.order.created",
   "merchant.assignment.created",
@@ -326,7 +327,9 @@ export const PushNotificationsProvider = ({
                 onClick={() => setMessage(null)}
                 className="mt-3 inline-flex min-h-10 items-center font-semibold text-brand-primary hover:underline"
               >
-                فتح الطلب
+                {message.type === "admin.merchant.registered"
+                  ? "فتح طلب الانضمام"
+                  : "فتح الطلب"}
               </Link>
             </div>
             <button

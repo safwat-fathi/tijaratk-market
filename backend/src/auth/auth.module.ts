@@ -9,6 +9,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import CONSTANTS from 'src/common/constants';
 import { TenantsModule } from '../tenants/tenants.module';
+import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { TenantsModule } from '../tenants/tenants.module';
       },
     }),
     TenantsModule,
+    PushNotificationsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

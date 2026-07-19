@@ -9,6 +9,7 @@ export const PUSH_CLEANUP_INTERVAL_MS = 60 * 60 * 1_000;
 export const PUSH_MESSAGE_TTL_SECONDS = 24 * 60 * 60;
 
 export const PUSH_CLIENT_EVENT_TYPES = {
+  AdminMerchantRegistered: 'admin.merchant.registered',
   MerchantOrderCreated: 'merchant.order.created',
   AdminOrderCreated: 'admin.order.created',
   MerchantAssignmentCreated: 'merchant.assignment.created',

@@ -23,6 +23,7 @@ export type PushNotificationEnvelope = {
   version: 1;
   eventId: string;
   type:
+    | 'admin.merchant.registered'
     | 'merchant.order.created'
     | 'admin.order.created'
     | 'merchant.assignment.created';
@@ -36,7 +37,7 @@ export type PushNotificationEnvelope = {
 
 export type PushOutboxPayload = {
   storeName: string;
-  orderNumber: string;
+  orderNumber?: string;
   zoneName?: string;
 };
 

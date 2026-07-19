@@ -140,6 +140,21 @@ export class PushNotificationsService {
     return { subscribed: false };
   }
 
+  /** Adds one merchant registration event inside the signup transaction. */
+  async enqueueMerchantRegistration(
+    manager: Prisma.TransactionClient,
+    input: { tenantId: number; storeName: string },
+  ): Promise<void> {
+    await this.enqueue(manager, {
+      eventKey: `merchant-registration:${input.tenantId}`,
+      eventType: PushNotificationEventType.merchant_registered,
+      tenantId: input.tenantId,
+      payload: {
+        storeName: this.normalizeDisplayName(input.storeName),
+      },
+    });
+  }
+
   /** Adds one direct storefront order event inside its database transaction. */
   async enqueueMerchantOrder(
     manager: Prisma.TransactionClient,
@@ -215,6 +230,10 @@ export class PushNotificationsService {
   async resolveDeliveryTargets(
     event: ClaimedPushEvent,
   ): Promise<PushDeliveryTarget[]> {
+    if (event.event_type === PushNotificationEventType.merchant_registered) {
+      return this.resolvePlatformAdminTargets();
+    }
+
     if (event.event_type === PushNotificationEventType.zone_assignment_created) {
       return this.resolveMerchantTargets(event.tenant_id);
     }
@@ -241,8 +260,34 @@ export class PushNotificationsService {
     event: ClaimedPushEvent,
     target: PushDeliveryTarget,
   ): PushNotificationEnvelope {
-    const payload = this.parseOutboxPayload(event.payload);
+    const isMerchantRegistration =
+      event.event_type === PushNotificationEventType.merchant_registered;
+    const payload = this.parseOutboxPayload(
+      event.payload,
+      !isMerchantRegistration,
+    );
+
+    if (isMerchantRegistration) {
+      if (
+        target.actor !== 'admin' ||
+        target.adminRole !== AdminRole.platform_admin
+      ) {
+        throw new Error('Invalid push delivery target');
+      }
+      return {
+        version: 1,
+        eventId: event.event_key,
+        type: PUSH_CLIENT_EVENT_TYPES.AdminMerchantRegistered,
+        title: 'طلب انضمام تاجر جديد',
+        body: `سجّل ${payload.storeName} طلب انضمام جديدًا وينتظر المراجعة.`,
+        url: '/admin/merchants?status=pending',
+        tag: event.event_key,
+        createdAt: event.created_at.toISOString(),
+      };
+    }
+
     const orderNumber = payload.orderNumber;
+    if (!orderNumber) throw new Error('Invalid push outbox payload');
     const isAssignment =
       event.event_type === PushNotificationEventType.zone_assignment_created;
     const isAdmin = target.actor === 'admin';
@@ -496,19 +541,61 @@ export class PushNotificationsService {
     });
   }
 
+  /** Finds subscribed active platform administrators for global events. */
+  private async resolvePlatformAdminTargets(): Promise<PushDeliveryTarget[]> {
+    const now = new Date();
+    const subscriptions = await this.prisma.pushSubscription.findMany({
+      where: {
+        admin_user_id: { not: null },
+        OR: [{ expiration_time: null }, { expiration_time: { gt: now } }],
+      },
+      include: {
+        admin_user: {
+          select: {
+            is_active: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    return subscriptions.flatMap((subscription) => {
+      const admin = subscription.admin_user;
+      if (!admin?.is_active || admin.role !== AdminRole.platform_admin) {
+        return [];
+      }
+      return [
+        {
+          subscriptionId: subscription.id,
+          encryptedSubscription: subscription.encrypted_subscription,
+          actor: 'admin' as const,
+          adminRole: admin.role,
+        },
+      ];
+    });
+  }
+
   /** Parses only the minimal payload allowed in push outbox rows. */
-  private parseOutboxPayload(value: Prisma.JsonValue): PushOutboxPayload {
+  private parseOutboxPayload(
+    value: Prisma.JsonValue,
+    requireOrderNumber: boolean,
+  ): PushOutboxPayload {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error('Invalid push outbox payload');
     }
     const storeName = value.storeName;
     const orderNumber = value.orderNumber;
-    if (typeof storeName !== 'string' || typeof orderNumber !== 'string') {
+    if (
+      typeof storeName !== 'string' ||
+      (requireOrderNumber && typeof orderNumber !== 'string')
+    ) {
       throw new Error('Invalid push outbox payload');
     }
     return {
       storeName: this.normalizeDisplayName(storeName),
-      orderNumber: orderNumber.slice(0, 32),
+      ...(typeof orderNumber === 'string'
+        ? { orderNumber: orderNumber.slice(0, 32) }
+        : {}),
       ...(typeof value.zoneName === 'string'
         ? { zoneName: this.normalizeDisplayName(value.zoneName) }
         : {}),

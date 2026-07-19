@@ -23,6 +23,7 @@ const PRECACHE_URLS = [
   NOTIFICATION_BADGE,
 ];
 const PUSH_MESSAGE_TYPES = new Set([
+  "admin.merchant.registered",
   "merchant.order.created",
   "admin.order.created",
   "merchant.assignment.created",
