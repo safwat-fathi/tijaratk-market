@@ -3,7 +3,7 @@ import {
   StoresDirectoryCategoryPage,
   StoresDirectoryLanding,
 } from "@/types/models/stores-directory";
-import { TenantDirectoryProfile, DirectoryArea } from "@/types/models/tenant";
+import { TenantDirectoryProfile, DirectoryArea, MissingDeliveryAreaRequest } from "@/types/models/tenant";
 import { IParams } from "@/types/services/base";
 
 const STORES_DIRECTORY_REVALIDATE_SECONDS = 300;
@@ -58,6 +58,27 @@ class MerchantDirectoryService extends HttpService {
       authRequired: true,
       cache: "no-store",
     });
+  }
+
+  public async getMissingDeliveryAreaRequest(mainAreaId?: number) {
+    return this.get<MissingDeliveryAreaRequest | null>(
+      "missing-delivery-area-request",
+      mainAreaId ? { mainAreaId } : undefined,
+      { authRequired: true, cache: "no-store" },
+    );
+  }
+
+  public async createMissingDeliveryAreaRequest(payload: {
+    main_area_id: number;
+    requested_area_name: string;
+    note?: string;
+  }) {
+    return this.post<MissingDeliveryAreaRequest>(
+      "missing-delivery-area-request",
+      payload,
+      undefined,
+      { authRequired: true },
+    );
   }
 }
 

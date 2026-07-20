@@ -98,6 +98,20 @@ export type AdminDirectoryAreaPayload = Pick<
 	| "is_active"
 >;
 
+export type AdminMissingDeliveryAreaRequest = {
+	id: number;
+	main_area_id: number;
+	requested_area_name: string;
+	note: string | null;
+	status: "pending" | "resolved";
+	created_at: string;
+	resolved_at: string | null;
+	tenant: { id: number; name: string; slug: string; phone: string };
+	main_area: Pick<AdminDirectoryArea, "id" | "name_ar" | "name_en" | "slug">;
+	resolved_area: Pick<AdminDirectoryArea, "id" | "name_ar" | "name_en" | "slug"> | null;
+	resolved_by_admin: { id: number; name: string } | null;
+};
+
 type AdminTenantCount = {
 	orders: number;
 	customers: number;
@@ -927,6 +941,23 @@ class AdminApiService extends HttpService {
 
 	public async deleteDirectoryArea(id: number) {
 		return this.delete<{ success: boolean }>(`directory/areas/${id}`, undefined, ADMIN_AUTH_OPTIONS);
+	}
+
+	public async getMissingDeliveryAreaRequests(status?: "pending" | "resolved") {
+		return this.get<AdminMissingDeliveryAreaRequest[]>(
+			"missing-delivery-area-requests",
+			status ? { status } : undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async resolveMissingDeliveryAreaRequest(id: number, resolved_area_id: number) {
+		return this.patch<AdminMissingDeliveryAreaRequest>(
+			`missing-delivery-area-requests/${id}/resolve`,
+			{ resolved_area_id },
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
 	}
 
 	public async updateTenantStatus(id: number, status: string) {

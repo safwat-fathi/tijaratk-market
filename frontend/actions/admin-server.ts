@@ -27,6 +27,7 @@ import type {
   AdminCatalogSource,
   AdminDirectoryArea,
   AdminDirectoryAreaPayload,
+  AdminMissingDeliveryAreaRequest,
   AdminManagedPermission,
   AdminProductSheetUploadSummary,
   DeleteTenantProductsSummary,
@@ -2316,4 +2317,17 @@ export async function deleteDirectoryAreaAction(id: number): Promise<void> {
     );
   }
   revalidatePath("/admin/areas");
+}
+
+export async function resolveMissingDeliveryAreaRequestAction(
+  id: number,
+  resolvedAreaId: number,
+): Promise<AdminMissingDeliveryAreaRequest> {
+  const response = await adminService.resolveMissingDeliveryAreaRequest(id, resolvedAreaId);
+  if (!response.success || !response.data) {
+    throw new Error(response.message || "تعذر حل طلب المنطقة.");
+  }
+  revalidatePath("/admin/missing-delivery-area-requests");
+  revalidatePath("/admin/areas");
+  return response.data;
 }

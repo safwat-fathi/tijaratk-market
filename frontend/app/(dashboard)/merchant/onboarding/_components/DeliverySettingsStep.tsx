@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import DeliveryConfigurationEditor from "@/components/delivery/DeliveryConfigurationEditor";
+import MissingDeliveryAreaPanel from "@/components/delivery/MissingDeliveryAreaPanel";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { tenantsService } from "@/services/api/tenants.service";
 import { merchantDirectoryService } from "@/services/api/stores-directory.service";
-import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
+import {
+  getActiveChildAreas,
+  normalizeDeliveryConfiguration,
+  resolveMainAreaId,
+} from "@/lib/delivery-configuration";
 import type {
   DeliveryConfigurationInput,
   DirectoryArea,
+  MissingDeliveryAreaRequest,
   Tenant,
 } from "@/types/models/tenant";
 
@@ -26,7 +32,7 @@ export default function DeliverySettingsStep({
   const [configuration, setConfiguration] =
     useState<DeliveryConfigurationInput>(() =>
       normalizeDeliveryConfiguration({
-        delivery_available: true,
+        delivery_available: tenant.delivery_available !== false,
         delivery_starts_at: tenant.delivery_starts_at || null,
         delivery_ends_at: tenant.delivery_ends_at || null,
         primary_area_id: tenant.directory_profile?.area_id || 0,
@@ -45,6 +51,9 @@ export default function DeliverySettingsStep({
   const [areasLoading, setAreasLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [missingRequest, setMissingRequest] = useState<MissingDeliveryAreaRequest | null>(null);
+  const [requestedAreaName, setRequestedAreaName] = useState("");
+  const [requestNote, setRequestNote] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +67,10 @@ export default function DeliverySettingsStep({
 
       setAreas(areasResponse.data || []);
       if (profileResponse.success && profileResponse.data) {
-        const primaryAreaId = profileResponse.data.area_id || 0;
+        const primaryAreaId = resolveMainAreaId(
+          areasResponse.data || [],
+          profileResponse.data.area_id || 0,
+        );
         const deliveryAreas =
           profileResponse.data.delivery_areas ??
           profileResponse.data.tenant?.tenant_delivery_areas ??
@@ -89,9 +101,84 @@ export default function DeliverySettingsStep({
     };
   }, []);
 
+  useEffect(() => {
+    const mainAreaId = configuration.primary_area_id;
+    if (!mainAreaId) {
+      setMissingRequest(null);
+      return;
+    }
+    let cancelled = false;
+    setMissingRequest(null);
+    void merchantDirectoryService
+      .getMissingDeliveryAreaRequest(mainAreaId)
+      .then((response) => {
+        if (cancelled) return;
+        if (response.success) {
+          setMissingRequest(response.data ?? null);
+        } else {
+          setError(response.message || "تعذر تحميل حالة طلب المنطقة.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [configuration.primary_area_id]);
+
+  const primaryArea = useMemo(
+    () => areas.find((area) => area.id === configuration.primary_area_id) ?? null,
+    [areas, configuration.primary_area_id],
+  );
+  const activeChildren = useMemo(
+    () => getActiveChildAreas(areas, configuration.primary_area_id),
+    [areas, configuration.primary_area_id],
+  );
+  const needsAreaReport =
+    configuration.primary_area_id > 0 && activeChildren.length === 0;
+  const currentMissingRequest = missingRequest?.main_area_id === configuration.primary_area_id
+    ? missingRequest
+    : null;
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    if (needsAreaReport) {
+      if (!currentMissingRequest && !requestedAreaName.trim()) {
+        setError("اكتب اسم منطقتك حتى يتمكن فريق الإدارة من إضافتها.");
+        return;
+      }
+      setSaving(true);
+      try {
+        if (!currentMissingRequest) {
+          const requestResponse = await merchantDirectoryService.createMissingDeliveryAreaRequest({
+            main_area_id: configuration.primary_area_id,
+            requested_area_name: requestedAreaName.trim(),
+            note: requestNote.trim() || undefined,
+          });
+          if (!requestResponse.success || !requestResponse.data) {
+            setError(requestResponse.message || "تعذر إرسال طلب المنطقة.");
+            return;
+          }
+          setMissingRequest(requestResponse.data);
+        }
+        const response = await tenantsService.updateMyDeliverySettings({
+          ...normalizeDeliveryConfiguration(configuration),
+          delivery_available: false,
+          delivery_areas: [],
+        });
+        if (!response.success || !response.data) {
+          setError(response.message || "تعذر حفظ إعدادات التوصيل.");
+          return;
+        }
+        setTenant(response.data);
+        await onNext();
+      } catch (caughtError) {
+        console.error(caughtError);
+        setError("تعذر إرسال طلب المنطقة أو حفظ إعدادات التوصيل.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!configuration.primary_area_id) {
       setError("اختر المنطقة الأساسية أولاً.");
       return;
@@ -138,8 +225,27 @@ export default function DeliverySettingsStep({
           value={configuration}
           onChange={setConfiguration}
           disabled={saving}
+          emptyDeliveryAreasContent={
+            needsAreaReport ? (
+              <MissingDeliveryAreaPanel
+                areaName={primaryArea?.name_ar ?? "المنطقة الأساسية"}
+                request={currentMissingRequest}
+                requestedAreaName={requestedAreaName}
+                note={requestNote}
+                onRequestedAreaNameChange={setRequestedAreaName}
+                onNoteChange={setRequestNote}
+                disabled={saving}
+              />
+            ) : undefined
+          }
         />
       )}
+
+      {!areasLoading && !needsAreaReport && currentMissingRequest?.status === "resolved" ? (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
+          تمت إضافة {currentMissingRequest.resolved_area?.name_ar ?? "المنطقة المطلوبة"}. فعّل التوصيل وحدد رسومها للمتابعة.
+        </p>
+      ) : null}
 
       {error ? (
         <p
@@ -157,7 +263,7 @@ export default function DeliverySettingsStep({
           size="lg"
           className="min-h-12 w-full sm:w-auto sm:px-8"
         >
-          {saving ? "جاري الحفظ..." : "حفظ ومتابعة"}
+          {saving ? "جاري الحفظ..." : needsAreaReport ? "إرسال الطلب والمتابعة" : "حفظ ومتابعة"}
         </Button>
       </div>
     </form>

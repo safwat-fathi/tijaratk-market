@@ -427,6 +427,7 @@ model Tenant {
   operated_zone_storefront  ZoneStorefront?           @relation("ZoneStorefrontOperatorTenant")
   zone_storefront_memberships ZoneStorefrontMerchant[] @relation("ZoneStorefrontMerchantTenant")
   targeted_dispatch_assignments OrderDispatchAssignment[] @relation("OrderDispatchAssignmentTargetTenant")
+  missing_delivery_area_requests MissingDeliveryAreaRequest[]
 
   @@map("tenants")
 }
@@ -499,10 +500,34 @@ model DirectoryArea {
   customer_addresses        CustomerAddress[]
   orders                    Order[]
   zone_storefronts          ZoneStorefront[]
+  missing_delivery_area_requests_as_main MissingDeliveryAreaRequest[] @relation("MissingDeliveryAreaRequestMainArea")
+  missing_delivery_area_requests_as_resolved MissingDeliveryAreaRequest[] @relation("MissingDeliveryAreaRequestResolvedArea")
 
   @@index([parent_area_id], map: "IDX_directory_areas_parent_area_id")
   @@index([is_active, sort_order, name_ar], map: "IDX_directory_areas_active_sort_name")
   @@map("directory_areas")
+}
+
+model MissingDeliveryAreaRequest {
+  id                      Int                            @id @default(autoincrement())
+  tenant_id               Int
+  main_area_id            Int
+  requested_area_name     String                         @db.VarChar(120)
+  note                    String?                        @db.VarChar(500)
+  status                  MissingDeliveryAreaRequestStatus @default(pending)
+  resolved_area_id        Int?
+  resolved_by_admin_id    Int?
+  resolved_at             DateTime?                      @db.Timestamp(6)
+  created_at              DateTime                       @default(now()) @db.Timestamp(6)
+  updated_at              DateTime                       @default(now()) @updatedAt @db.Timestamp(6)
+  tenant                  Tenant                         @relation(fields: [tenant_id], references: [id], onDelete: Cascade, map: "FK_missing_delivery_area_requests_tenant")
+  main_area               DirectoryArea                  @relation("MissingDeliveryAreaRequestMainArea", fields: [main_area_id], references: [id], onDelete: Restrict, map: "FK_missing_delivery_area_requests_main_area")
+  resolved_area           DirectoryArea?                 @relation("MissingDeliveryAreaRequestResolvedArea", fields: [resolved_area_id], references: [id], onDelete: SetNull, map: "FK_missing_delivery_area_requests_resolved_area")
+  resolved_by_admin       AdminUser?                     @relation("MissingDeliveryAreaRequestResolvedBy", fields: [resolved_by_admin_id], references: [id], onDelete: SetNull, map: "FK_missing_delivery_area_requests_resolved_by")
+
+  @@index([status, created_at], map: "IDX_missing_delivery_area_requests_status_created")
+  @@index([tenant_id, main_area_id], map: "IDX_missing_delivery_area_requests_tenant_main")
+  @@map("missing_delivery_area_requests")
 }
 
 model TenantDirectoryProfile {
@@ -765,6 +790,13 @@ enum DirectoryStatus {
   @@map("tenant_directory_status_enum")
 }
 
+enum MissingDeliveryAreaRequestStatus {
+  pending
+  resolved
+
+  @@map("missing_delivery_area_requests_status_enum")
+}
+
 enum DirectoryEventType {
   area_page_visit
   category_page_visit
@@ -982,6 +1014,7 @@ model AdminUser {
   assigned_dispatch_assignments OrderDispatchAssignment[] @relation("OrderDispatchAssignmentAssigningAdmin")
   cancelled_dispatches OrderDispatch[] @relation("OrderDispatchCancellingAdmin")
   push_subscriptions PushSubscription[]
+  resolved_missing_delivery_area_requests MissingDeliveryAreaRequest[] @relation("MissingDeliveryAreaRequestResolvedBy")
 
   @@map("admin_users")
 }

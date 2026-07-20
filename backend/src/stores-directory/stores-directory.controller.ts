@@ -38,6 +38,11 @@ import {
   CreateDirectoryAreaDto,
   UpdateDirectoryAreaDto,
 } from './dto/directory-area.dto';
+import {
+  CreateMissingDeliveryAreaRequestDto,
+  ResolveMissingDeliveryAreaRequestDto,
+} from './dto/missing-delivery-area-request.dto';
+import { MissingDeliveryAreaRequestStatus } from '../../generated/prisma/client';
 import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
 import { UpdateDeliveryConfigurationDto } from 'src/delivery-configuration/dto/update-delivery-configuration.dto';
 
@@ -164,6 +169,23 @@ export class StoresDirectoryController {
     return this.storesDirectoryService.merchantFindAreas();
   }
 
+  @Get('merchant/missing-delivery-area-request')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  getMerchantMissingDeliveryAreaRequest(@Req() req: Request, @Query('mainAreaId') mainAreaId?: string) {
+    return this.storesDirectoryService.getMerchantMissingDeliveryAreaRequest(
+      this.getTenantIdFromRequest(req),
+      mainAreaId ? Number(mainAreaId) : undefined,
+    );
+  }
+
+  @Post('merchant/missing-delivery-area-request')
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  createMerchantMissingDeliveryAreaRequest(@Req() req: Request, @Body() dto: CreateMissingDeliveryAreaRequestDto) {
+    return this.storesDirectoryService.createMissingDeliveryAreaRequest(this.getTenantIdFromRequest(req), dto);
+  }
+
   @Get('admin/directory/areas')
   @UseGuards(AdminAuthGuard)
   @RequirePlatformAdmin()
@@ -175,6 +197,24 @@ export class StoresDirectoryController {
   })
   adminFindAreas(@Query() query: AdminDirectoryAreasQueryDto) {
     return this.storesDirectoryService.adminFindAreas(query);
+  }
+
+  @Get('admin/missing-delivery-area-requests')
+  @UseGuards(AdminAuthGuard)
+  @RequirePlatformAdmin()
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  adminFindMissingDeliveryAreaRequests(@Query('status') status?: MissingDeliveryAreaRequestStatus) {
+    return this.storesDirectoryService.adminFindMissingDeliveryAreaRequests(status);
+  }
+
+  @Patch('admin/missing-delivery-area-requests/:id/resolve')
+  @UseGuards(AdminAuthGuard)
+  @RequirePlatformAdmin()
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  adminResolveMissingDeliveryAreaRequest(@Param('id', ParseIntPipe) id: number, @Req() req: Request, @Body() dto: ResolveMissingDeliveryAreaRequestDto) {
+    const adminUserId = (req.user as { userId?: number } | undefined)?.userId;
+    if (!adminUserId) throw new UnauthorizedException('Admin context is required');
+    return this.storesDirectoryService.adminResolveMissingDeliveryAreaRequest(id, adminUserId, dto);
   }
 
   @Post('admin/directory/areas')

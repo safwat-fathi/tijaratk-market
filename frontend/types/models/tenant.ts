@@ -65,6 +65,18 @@ export interface TenantDeliveryArea {
   area?: DirectoryArea;
 }
 
+export type MissingDeliveryAreaRequest = {
+  id: number;
+  main_area_id: number;
+  requested_area_name: string;
+  note: string | null;
+  status: "pending" | "resolved";
+  created_at: string;
+  resolved_at: string | null;
+  main_area: Pick<DirectoryArea, "id" | "name_ar" | "name_en" | "slug">;
+  resolved_area: Pick<DirectoryArea, "id" | "name_ar" | "name_en" | "slug"> | null;
+};
+
 export type DeliveryAreaFeeInput = {
   area_id: number;
   delivery_fee: number;

@@ -341,7 +341,7 @@ export function AdminOrderRow({
       <>
       <tr className="align-top transition-colors hover:bg-gray-50/70">
         <td className="px-4 py-4 text-sm font-medium text-brand-text">
-          <div className="space-y-2">
+          <div className="flex items-center gap-3">
             <span>#{order.id}</span>
             {detailsButton(`order-${order.id}-details`)}
           </div>

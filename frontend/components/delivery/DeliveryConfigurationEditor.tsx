@@ -1,7 +1,7 @@
 "use client";
 
 import { Clock3, MapPin, ReceiptText } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import {
   excludePrimaryAreaFromDeliveryAreas,
@@ -26,6 +26,7 @@ type DeliveryConfigurationEditorProps = {
   onChange: (value: DeliveryConfigurationInput) => void;
   errors?: Record<string, string[]>;
   disabled?: boolean;
+  emptyDeliveryAreasContent?: ReactNode;
 };
 
 const getAreaLabel = (area: DirectoryArea) =>
@@ -37,6 +38,7 @@ export default function DeliveryConfigurationEditor({
   onChange,
   errors,
   disabled = false,
+  emptyDeliveryAreasContent,
 }: DeliveryConfigurationEditorProps) {
   const [bulkFee, setBulkFee] = useState("20");
   const deliveryAreas = useMemo(
@@ -60,7 +62,11 @@ export default function DeliveryConfigurationEditor({
   const eligibleAreas = useMemo(
     () =>
       areas
-        .filter((area) => area.parent_area_id === value.primary_area_id)
+        .filter(
+          (area) =>
+            area.is_active &&
+            area.parent_area_id === value.primary_area_id,
+        )
         .sort(
           (left, right) =>
             left.sort_order - right.sort_order ||
@@ -70,7 +76,10 @@ export default function DeliveryConfigurationEditor({
   );
   const primaryAreas = useMemo(
     () =>
-      [...areas]
+      areas
+        .filter(
+          (area) => area.is_active && area.parent_area_id === null,
+        )
         .sort(
           (left, right) =>
             left.sort_order - right.sort_order ||
@@ -226,6 +235,12 @@ export default function DeliveryConfigurationEditor({
         ) : null}
       </label>
 
+      {!value.delivery_available &&
+      value.primary_area_id &&
+      emptyDeliveryAreasContent
+        ? emptyDeliveryAreasContent
+        : null}
+
       {value.delivery_available ? (
         <>
           <div className="rounded-xl border border-brand-border bg-brand-soft/35 p-4">
@@ -336,11 +351,15 @@ export default function DeliveryConfigurationEditor({
                 })}
               </div>
             ) : (
-              <p className="rounded-xl border border-dashed border-brand-border bg-brand-soft/30 p-4 text-sm leading-6 text-muted-foreground">
-                {value.primary_area_id
-                  ? "لا توجد مناطق توصيل فرعية متاحة ضمن المنطقة الأساسية."
-                  : "اختر المنطقة الأساسية لعرض مناطق التوصيل المتاحة."}
-              </p>
+              value.primary_area_id && emptyDeliveryAreasContent ? (
+                emptyDeliveryAreasContent
+              ) : (
+                <p className="rounded-xl border border-dashed border-brand-border bg-brand-soft/30 p-4 text-sm leading-6 text-muted-foreground">
+                  {value.primary_area_id
+                    ? "لا توجد مناطق توصيل فرعية متاحة ضمن المنطقة الأساسية."
+                    : "اختر المنطقة الأساسية لعرض مناطق التوصيل المتاحة."}
+                </p>
+              )
             )}
           </fieldset>
 

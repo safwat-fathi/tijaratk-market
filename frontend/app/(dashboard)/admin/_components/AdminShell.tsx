@@ -39,6 +39,7 @@ const platformNavigation: NavItem[] = [
   },
   { label: "الطلبات", href: "/admin/orders" },
   { label: "المناطق", href: "/admin/areas" },
+  { label: "طلبات المناطق", href: "/admin/missing-delivery-area-requests" },
   { label: "واجهات المناطق", href: "/admin/zones" },
   { label: "سجل نشاط الإدارة", href: "/admin/activity" },
 ];

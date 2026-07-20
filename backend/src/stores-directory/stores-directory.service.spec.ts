@@ -228,3 +228,51 @@ describe('StoresDirectoryService area hierarchy', () => {
     expect(prisma.directoryArea.delete).not.toHaveBeenCalled();
   });
 });
+
+describe('StoresDirectoryService missing delivery area requests', () => {
+  const createService = () => {
+    const prisma = {
+      directoryArea: { findFirst: jest.fn() },
+      missingDeliveryAreaRequest: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    return { prisma, service: new StoresDirectoryService(prisma as any) };
+  };
+
+  it('returns the existing pending request instead of duplicating it', async () => {
+    const { prisma, service } = createService();
+    prisma.directoryArea.findFirst.mockResolvedValue({ id: 1, child_areas: [] });
+    prisma.missingDeliveryAreaRequest.findFirst.mockResolvedValue({ id: 4, status: 'pending' });
+
+    await expect(service.createMissingDeliveryAreaRequest(9, {
+      main_area_id: 1,
+      requested_area_name: 'الطالبية',
+    })).resolves.toEqual({ id: 4, status: 'pending' });
+    expect(prisma.missingDeliveryAreaRequest.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a report when the main area already has active children', async () => {
+    const { prisma, service } = createService();
+    prisma.directoryArea.findFirst.mockResolvedValue({ id: 1, child_areas: [{ id: 2 }] });
+
+    await expect(service.createMissingDeliveryAreaRequest(9, {
+      main_area_id: 1,
+      requested_area_name: 'الطالبية',
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('resolves only to an active child of the report main area', async () => {
+    const { prisma, service } = createService();
+    prisma.missingDeliveryAreaRequest.findUnique.mockResolvedValue({ id: 4, main_area_id: 1, status: 'pending' });
+    prisma.directoryArea.findFirst.mockResolvedValue(null);
+
+    await expect(service.adminResolveMissingDeliveryAreaRequest(4, 7, {
+      resolved_area_id: 99,
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.missingDeliveryAreaRequest.update).not.toHaveBeenCalled();
+  });
+});

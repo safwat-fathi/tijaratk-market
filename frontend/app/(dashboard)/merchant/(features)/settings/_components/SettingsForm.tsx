@@ -1,16 +1,30 @@
 "use client";
 
 import Image from "next/image";
-import { useActionState, useEffect, useState } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  type FormEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { WalletCards } from "lucide-react";
 import { updateStoreSettingsAction } from "@/actions/tenant-actions";
 import DeliveryConfigurationEditor from "@/components/delivery/DeliveryConfigurationEditor";
+import MissingDeliveryAreaPanel from "@/components/delivery/MissingDeliveryAreaPanel";
 import { INSTAPAY_PROVIDER } from "@/constants/payment-providers";
-import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
+import {
+  getActiveChildAreas,
+  normalizeDeliveryConfiguration,
+  resolveMainAreaId,
+} from "@/lib/delivery-configuration";
+import { merchantDirectoryService } from "@/services/api/stores-directory.service";
 import type {
   DeliveryConfigurationInput,
   DirectoryArea,
+  MissingDeliveryAreaRequest,
   Tenant,
 } from "@/types/models/tenant";
 
@@ -24,6 +38,14 @@ export default function SettingsForm({
   activeAreas,
 }: SettingsFormProps) {
   const router = useRouter();
+  const [isPreparingMissingArea, setIsPreparingMissingArea] = useState(false);
+  const [isProgrammaticSubmitPending, startProgrammaticSubmit] =
+    useTransition();
+  const [missingRequest, setMissingRequest] =
+    useState<MissingDeliveryAreaRequest | null>(null);
+  const [requestedAreaName, setRequestedAreaName] = useState("");
+  const [requestNote, setRequestNote] = useState("");
+  const [missingAreaError, setMissingAreaError] = useState<string | null>(null);
   const [state, formAction, isPending] = useActionState(
     updateStoreSettingsAction,
     {
@@ -38,7 +60,11 @@ export default function SettingsForm({
         delivery_available: tenant.delivery_available !== false,
         delivery_starts_at: tenant.delivery_starts_at || null,
         delivery_ends_at: tenant.delivery_ends_at || null,
-        primary_area_id: tenant.directory_profile?.area_id || 0,
+        primary_area_id:
+          resolveMainAreaId(
+            activeAreas,
+            tenant.directory_profile?.area_id || 0,
+          ),
         delivery_areas:
           tenant.tenant_delivery_areas
             ?.filter(
@@ -56,8 +82,116 @@ export default function SettingsForm({
     if (state.success) router.refresh();
   }, [router, state.success]);
 
+  useEffect(() => {
+    const mainAreaId = deliveryConfiguration.primary_area_id;
+    if (!mainAreaId) {
+      setMissingRequest(null);
+      setMissingAreaError(null);
+      return;
+    }
+    let cancelled = false;
+    setMissingRequest(null);
+    setMissingAreaError(null);
+    void merchantDirectoryService
+      .getMissingDeliveryAreaRequest(mainAreaId)
+      .then((response) => {
+        if (cancelled) return;
+        if (response.success) {
+          setMissingRequest(response.data ?? null);
+        } else {
+          setMissingAreaError(
+            response.message || "تعذر تحميل حالة طلب المنطقة.",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deliveryConfiguration.primary_area_id]);
+
+  const primaryArea = useMemo(
+    () =>
+      activeAreas.find(
+        (area) => area.id === deliveryConfiguration.primary_area_id,
+      ) ?? null,
+    [activeAreas, deliveryConfiguration.primary_area_id],
+  );
+  const activeChildren = useMemo(
+    () =>
+      getActiveChildAreas(
+        activeAreas,
+        deliveryConfiguration.primary_area_id,
+      ),
+    [activeAreas, deliveryConfiguration.primary_area_id],
+  );
+  const needsAreaReport =
+    deliveryConfiguration.primary_area_id > 0 && activeChildren.length === 0;
+  const currentMissingRequest =
+    missingRequest?.main_area_id === deliveryConfiguration.primary_area_id
+      ? missingRequest
+      : null;
+  const formPending =
+    isPending || isPreparingMissingArea || isProgrammaticSubmitPending;
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    if (!needsAreaReport) return;
+
+    event.preventDefault();
+    const form = event.currentTarget;
+    setMissingAreaError(null);
+    if (!currentMissingRequest && !requestedAreaName.trim()) {
+      setMissingAreaError(
+        "اكتب اسم منطقتك حتى يتمكن فريق الإدارة من إضافتها.",
+      );
+      return;
+    }
+
+    setIsPreparingMissingArea(true);
+    try {
+      if (!currentMissingRequest) {
+        const requestResponse =
+          await merchantDirectoryService.createMissingDeliveryAreaRequest({
+            main_area_id: deliveryConfiguration.primary_area_id,
+            requested_area_name: requestedAreaName.trim(),
+            note: requestNote.trim() || undefined,
+          });
+        if (!requestResponse.success || !requestResponse.data) {
+          setMissingAreaError(
+            requestResponse.message || "تعذر إرسال طلب المنطقة.",
+          );
+          return;
+        }
+        setMissingRequest(requestResponse.data);
+      }
+
+      const unavailableConfiguration = normalizeDeliveryConfiguration({
+        ...deliveryConfiguration,
+        delivery_available: false,
+        delivery_areas: [],
+      });
+      setDeliveryConfiguration(unavailableConfiguration);
+      const formData = new FormData(form);
+      formData.set(
+        "delivery_configuration",
+        JSON.stringify(unavailableConfiguration),
+      );
+      startProgrammaticSubmit(() => formAction(formData));
+    } catch (caughtError) {
+      console.error(caughtError);
+      setMissingAreaError(
+        "تعذر إرسال طلب المنطقة أو حفظ إعدادات التوصيل.",
+      );
+    } finally {
+      setIsPreparingMissingArea(false);
+    }
+  };
+
   return (
-    <form action={formAction} className="flex flex-col gap-6">
+    <form
+      action={formAction}
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-6"
+    >
       <input
         type="hidden"
         name="delivery_configuration"
@@ -248,8 +382,35 @@ export default function SettingsForm({
           value={deliveryConfiguration}
           onChange={setDeliveryConfiguration}
           errors={state.errors}
-          disabled={isPending}
+          disabled={formPending}
+          emptyDeliveryAreasContent={
+            needsAreaReport ? (
+              <MissingDeliveryAreaPanel
+                areaName={primaryArea?.name_ar ?? "المنطقة الأساسية"}
+                request={currentMissingRequest}
+                requestedAreaName={requestedAreaName}
+                note={requestNote}
+                onRequestedAreaNameChange={setRequestedAreaName}
+                onNoteChange={setRequestNote}
+                disabled={formPending}
+                error={missingAreaError}
+              />
+            ) : undefined
+          }
         />
+        {!needsAreaReport && currentMissingRequest ? (
+          <p
+            className={`mt-4 rounded-xl border p-4 text-sm font-medium ${
+              currentMissingRequest.status === "resolved"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            {currentMissingRequest.status === "resolved"
+              ? `تمت إضافة ${currentMissingRequest.resolved_area?.name_ar ?? "المنطقة المطلوبة"}. يمكنك تفعيل التوصيل وتحديد الرسوم.`
+              : "طلب المنطقة ما زال قيد مراجعة الإدارة."}
+          </p>
+        ) : null}
       </section>
 
       {state.message ? (
@@ -269,10 +430,14 @@ export default function SettingsForm({
       <div className="sticky bottom-4 z-10 mt-4 safe-bottom-padding">
         <button
           type="submit"
-          disabled={isPending}
+          disabled={formPending}
           className="min-h-12 w-full rounded-xl bg-brand-primary py-4 text-lg font-bold text-white shadow-lg transition-colors hover:bg-brand-primary-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
         >
-          {isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
+          {formPending
+            ? "جاري الحفظ..."
+            : needsAreaReport
+              ? "إرسال الطلب وحفظ التغييرات"
+              : "حفظ التغييرات"}
         </button>
       </div>
     </form>

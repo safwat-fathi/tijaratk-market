@@ -47,7 +47,9 @@ export default function LocationStep({
   }, []);
 
   const cities = useMemo(() => {
-    return allAreas.filter((a) => a.parent_area_id === null).sort((a, b) => a.sort_order - b.sort_order);
+    return allAreas
+      .filter((a) => a.parent_area_id === null)
+      .sort((a, b) => a.sort_order - b.sort_order);
   }, [allAreas]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,7 +61,9 @@ export default function LocationStep({
     }
     setLoading(true);
     try {
-      const payload: Parameters<typeof merchantDirectoryService.updateProfile>[0] = {
+      const payload: Parameters<
+        typeof merchantDirectoryService.updateProfile
+      >[0] = {
         area_id: Number(locationData.cityId),
       };
 
@@ -74,7 +78,10 @@ export default function LocationStep({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300"
+    >
       {error && (
         <div className="bg-red-50 text-red-800 p-4 rounded-lg text-sm mb-4">
           {error}
@@ -87,7 +94,7 @@ export default function LocationStep({
           </div>
         ) : (
           <>
-            <Field label="المدينة / المحافظة" htmlFor="city">
+            <Field label="المنطقة" htmlFor="city">
               <Select
                 id="city"
                 required
@@ -96,7 +103,9 @@ export default function LocationStep({
                   setLocationData({ ...locationData, cityId: e.target.value });
                 }}
               >
-                <option value="" disabled>اختر المدينة / المحافظة</option>
+                <option value="" disabled>
+                  اختر المنطقة
+                </option>
                 {cities.map((city) => (
                   <option key={city.id} value={city.id}>
                     {city.name_ar}
@@ -106,12 +115,14 @@ export default function LocationStep({
             </Field>
 
             <Field label="العنوان بالتفصيل" htmlFor="address">
-              <Input 
+              <Input
                 id="address"
-                required 
+                required
                 placeholder="اسم الشارع، رقم العمارة، علامة مميزة"
                 value={locationData.address}
-                onChange={(e) => setLocationData({ ...locationData, address: e.target.value })}
+                onChange={(e) =>
+                  setLocationData({ ...locationData, address: e.target.value })
+                }
               />
             </Field>
           </>
@@ -119,7 +130,12 @@ export default function LocationStep({
       </div>
 
       <div className="pt-4 border-t border-gray-100 flex justify-end">
-        <Button type="submit" disabled={loading || areasLoading} size="lg" className="w-full sm:w-auto px-8">
+        <Button
+          type="submit"
+          disabled={loading || areasLoading}
+          size="lg"
+          className="w-full sm:w-auto px-8"
+        >
           {loading ? "جاري الحفظ..." : "حفظ ومتابعة"}
         </Button>
       </div>
