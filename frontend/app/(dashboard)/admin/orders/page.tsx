@@ -1,6 +1,6 @@
 import {
   adminService,
-  type AdminOrder,
+  type AdminOrderListItem,
   type AdminOrdersFilters,
 } from "@/services/api/admin.service";
 import { Card } from "@/components/ui/Card";
@@ -94,7 +94,7 @@ export default async function AdminOrdersPage(props: Props) {
   const page = parsePositiveInteger(searchParams.page, 1);
   const limit = parsePositiveInteger(searchParams.limit, DEFAULT_PAGE_SIZE);
 
-  let orders: AdminOrder[] = [];
+  let orders: AdminOrderListItem[] = [];
   let meta: PaginationMeta = {
     page,
     limit,
@@ -106,7 +106,7 @@ export default async function AdminOrdersPage(props: Props) {
     if (!filterError) {
       const response = await adminService.getOrders(filters, page, limit);
       if (response.success && response.data) {
-        const payload = response.data as ApiListPayload<AdminOrder>;
+        const payload = response.data as ApiListPayload<AdminOrderListItem>;
         orders = Array.isArray(payload) ? payload : payload.data || [];
         if (!Array.isArray(payload) && payload.meta) {
           meta = payload.meta;
