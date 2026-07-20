@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { User, Prisma } from '../../generated/prisma/client';
+import { hashPassword } from 'src/common/utils/password.util';
 
 @Injectable()
 export class UsersService {
@@ -24,13 +25,20 @@ export class UsersService {
     tx?: Prisma.TransactionClient,
   ): Promise<User> {
     const prismaClient = tx || this.prisma;
-    return prismaClient.user.create({ data });
+    const password = await hashPassword(data.password);
+    return prismaClient.user.create({ data: { ...data, password } });
   }
 
-  async updatePassword(id: number, password: string): Promise<User> {
-    return this.prisma.user.update({
+  async updatePassword(
+    id: number,
+    password: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<User> {
+    const prismaClient = tx || this.prisma;
+    const hashedPassword = await hashPassword(password);
+    return prismaClient.user.update({
       where: { id },
-      data: { password },
+      data: { password: hashedPassword },
     });
   }
 }

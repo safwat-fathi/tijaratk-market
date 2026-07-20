@@ -22,16 +22,41 @@ import { UpsertPushSubscriptionDto } from './dto/push-subscription.dto';
 import type {
   BrowserPushSubscription,
   ClaimedPushEvent,
+  MerchantRegistrationPushOutboxPayload,
+  OrderPushOutboxPayload,
   PushDeliveryConfig,
   PushDeliveryTarget,
   PushNotificationEnvelope,
-  PushOutboxPayload,
 } from './push-notifications.types';
 import { PUSH_CLIENT_EVENT_TYPES } from './push-notifications.constants';
 
 type SubscriptionActor =
   | { type: 'merchant'; userId: number; tenantId: number }
   | { type: 'admin'; adminId: number };
+
+type PushOutboxEnqueueMetadata = {
+  eventKey: string;
+  tenantId: number;
+  orderId?: number;
+  dispatchId?: number;
+  assignmentId?: number;
+  zoneId?: number;
+};
+
+type PushOutboxEnqueueInput = PushOutboxEnqueueMetadata &
+  (
+    | {
+        eventType: typeof PushNotificationEventType.merchant_registered;
+        payload: MerchantRegistrationPushOutboxPayload;
+      }
+    | {
+        eventType:
+          | typeof PushNotificationEventType.merchant_order_created
+          | typeof PushNotificationEventType.zone_order_created
+          | typeof PushNotificationEventType.zone_assignment_created;
+        payload: OrderPushOutboxPayload;
+      }
+  );
 
 /** Owns encrypted subscriptions, transactional enqueueing, and recipient resolution. */
 @Injectable()
@@ -262,10 +287,6 @@ export class PushNotificationsService {
   ): PushNotificationEnvelope {
     const isMerchantRegistration =
       event.event_type === PushNotificationEventType.merchant_registered;
-    const payload = this.parseOutboxPayload(
-      event.payload,
-      !isMerchantRegistration,
-    );
 
     if (isMerchantRegistration) {
       if (
@@ -274,6 +295,7 @@ export class PushNotificationsService {
       ) {
         throw new Error('Invalid push delivery target');
       }
+      const payload = this.parseMerchantRegistrationPayload(event.payload);
       return {
         version: 1,
         eventId: event.event_key,
@@ -286,8 +308,8 @@ export class PushNotificationsService {
       };
     }
 
+    const payload = this.parseOrderPayload(event.payload);
     const orderNumber = payload.orderNumber;
-    if (!orderNumber) throw new Error('Invalid push outbox payload');
     const isAssignment =
       event.event_type === PushNotificationEventType.zone_assignment_created;
     const isAdmin = target.actor === 'admin';
@@ -422,16 +444,7 @@ export class PushNotificationsService {
   /** Creates one deduplicated outbox event without resetting an existing event. */
   private async enqueue(
     manager: Prisma.TransactionClient,
-    input: {
-      eventKey: string;
-      eventType: PushNotificationEventType;
-      tenantId: number;
-      orderId?: number;
-      dispatchId?: number;
-      assignmentId?: number;
-      zoneId?: number;
-      payload: PushOutboxPayload;
-    },
+    input: PushOutboxEnqueueInput,
   ): Promise<void> {
     if (!this.getDeliveryConfig(false)) return;
     await manager.pushNotificationOutbox.upsert({
@@ -547,59 +560,67 @@ export class PushNotificationsService {
     const subscriptions = await this.prisma.pushSubscription.findMany({
       where: {
         admin_user_id: { not: null },
-        OR: [{ expiration_time: null }, { expiration_time: { gt: now } }],
-      },
-      include: {
         admin_user: {
-          select: {
+          is: {
             is_active: true,
-            role: true,
+            role: AdminRole.platform_admin,
           },
         },
+        OR: [{ expiration_time: null }, { expiration_time: { gt: now } }],
+      },
+      select: {
+        id: true,
+        encrypted_subscription: true,
       },
     });
 
-    return subscriptions.flatMap((subscription) => {
-      const admin = subscription.admin_user;
-      if (!admin?.is_active || admin.role !== AdminRole.platform_admin) {
-        return [];
-      }
-      return [
-        {
-          subscriptionId: subscription.id,
-          encryptedSubscription: subscription.encrypted_subscription,
-          actor: 'admin' as const,
-          adminRole: admin.role,
-        },
-      ];
-    });
+    return subscriptions.map((subscription) => ({
+      subscriptionId: subscription.id,
+      encryptedSubscription: subscription.encrypted_subscription,
+      actor: 'admin' as const,
+      adminRole: AdminRole.platform_admin,
+    }));
   }
 
-  /** Parses only the minimal payload allowed in push outbox rows. */
-  private parseOutboxPayload(
+  /** Parses the minimal payload allowed for merchant registration events. */
+  private parseMerchantRegistrationPayload(
     value: Prisma.JsonValue,
-    requireOrderNumber: boolean,
-  ): PushOutboxPayload {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      throw new Error('Invalid push outbox payload');
-    }
-    const storeName = value.storeName;
-    const orderNumber = value.orderNumber;
-    if (
-      typeof storeName !== 'string' ||
-      (requireOrderNumber && typeof orderNumber !== 'string')
-    ) {
+  ): MerchantRegistrationPushOutboxPayload {
+    const payload = this.parseOutboxObject(value);
+    if (typeof payload.storeName !== 'string') {
       throw new Error('Invalid push outbox payload');
     }
     return {
-      storeName: this.normalizeDisplayName(storeName),
-      ...(typeof orderNumber === 'string'
-        ? { orderNumber: orderNumber.slice(0, 32) }
-        : {}),
-      ...(typeof value.zoneName === 'string'
-        ? { zoneName: this.normalizeDisplayName(value.zoneName) }
+      storeName: this.normalizeDisplayName(payload.storeName),
+    };
+  }
+
+  /** Parses the minimal payload required by order and assignment events. */
+  private parseOrderPayload(value: Prisma.JsonValue): OrderPushOutboxPayload {
+    const payload = this.parseOutboxObject(value);
+    if (
+      typeof payload.storeName !== 'string' ||
+      typeof payload.orderNumber !== 'string'
+    ) {
+      throw new Error('Invalid push outbox payload');
+    }
+    const orderNumber = payload.orderNumber.slice(0, 32);
+    if (!orderNumber) throw new Error('Invalid push outbox payload');
+    return {
+      storeName: this.normalizeDisplayName(payload.storeName),
+      orderNumber,
+      ...(typeof payload.zoneName === 'string'
+        ? { zoneName: this.normalizeDisplayName(payload.zoneName) }
         : {}),
     };
+  }
+
+  /** Narrows an outbox JSON value before event-specific validation. */
+  private parseOutboxObject(value: Prisma.JsonValue): Prisma.JsonObject {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Invalid push outbox payload');
+    }
+    return value;
   }
 
   /** Hashes a sensitive endpoint for lookup without storing it in plaintext. */

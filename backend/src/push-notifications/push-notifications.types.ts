@@ -35,9 +35,13 @@ export type PushNotificationEnvelope = {
   createdAt: string;
 };
 
-export type PushOutboxPayload = {
+export type MerchantRegistrationPushOutboxPayload = {
   storeName: string;
-  orderNumber?: string;
+};
+
+export type OrderPushOutboxPayload = {
+  storeName: string;
+  orderNumber: string;
   zoneName?: string;
 };
 

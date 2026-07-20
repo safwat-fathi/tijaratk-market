@@ -1,13 +1,24 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { passwordExtension } from './password.extension';
+import {
+  getDatabaseTargetFingerprint,
+  getRuntimeIdentity,
+} from '../common/utils/runtime-identity.util';
 
 @Injectable()
 export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  private readonly logger = new Logger(PrismaService.name);
+
   constructor() {
     const adapter = new PrismaPg({
       connectionString: process.env.DB_URL,
@@ -67,6 +78,13 @@ export class PrismaService
 
   async onModuleInit() {
     await this.$connect();
+    this.logger.log(
+      JSON.stringify({
+        event: 'database_client_ready',
+        ...getRuntimeIdentity(),
+        databaseTargetFingerprint: getDatabaseTargetFingerprint(),
+      }),
+    );
   }
 
   async onModuleDestroy() {

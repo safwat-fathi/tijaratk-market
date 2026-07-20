@@ -29,6 +29,7 @@ import { UpdatePasswordDto } from './dto/update-password.dto';
 import { AuthGuard } from '@nestjs/passport';
 
 type AuthenticatedRequest = Request & {
+  requestId?: string;
   user?: {
     userId?: number;
   };
@@ -51,10 +52,11 @@ export class AuthController {
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: 'Return JWT access token' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async login(@Body() loginDto: LoginDto) {
+  async login(@Body() loginDto: LoginDto, @Req() req: AuthenticatedRequest) {
     const user = await this.authService.validateUser(
       loginDto.phone,
       loginDto.pass,
+      req.requestId,
     );
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -77,8 +79,8 @@ export class AuthController {
     description: 'Merchant application received without issuing a token',
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
-  async signup(@Body() signupDto: SignupDto) {
-    return this.authService.signup(signupDto);
+  async signup(@Body() signupDto: SignupDto, @Req() req: AuthenticatedRequest) {
+    return this.authService.signup(signupDto, req.requestId);
   }
 
   @HttpCode(HttpStatus.OK)

@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
@@ -16,14 +17,29 @@ import {
 } from '../../generated/prisma/client';
 import { TenantsService } from '../tenants/tenants.service';
 import { SignupDto } from './dto/signup.dto';
-import { formatPhoneNumber } from 'src/common/utils/phone.util';
+import {
+  formatPhoneNumber,
+  maskPhoneNumber,
+} from 'src/common/utils/phone.util';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { WhatsappService } from 'src/whatsapp/whatsapp.service';
 import { PushNotificationsService } from 'src/push-notifications/push-notifications.service';
+import {
+  getDatabaseTargetFingerprint,
+  getRuntimeIdentity,
+} from 'src/common/utils/runtime-identity.util';
+
+type AuthenticationFailureStage =
+  | 'user_not_found'
+  | 'password_mismatch'
+  | 'tenant_status_blocked'
+  | 'signup_password_verification_failed';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly runtimeIdentity = getRuntimeIdentity();
+  private readonly databaseTargetFingerprint = getDatabaseTargetFingerprint();
   private twilioClient: twilio.Twilio | null = null;
 
   constructor(
@@ -38,6 +54,7 @@ export class AuthService {
   async validateUser(
     phone: string,
     pass: string,
+    requestId?: string,
   ): Promise<Omit<User, 'password'> | null> {
     const normalizedPhone = formatPhoneNumber(phone);
 
@@ -46,18 +63,60 @@ export class AuthService {
       include: { tenant: { select: { status: true } } },
     });
     if (!user) {
+      this.logAuthenticationFailure(
+        'user_not_found',
+        normalizedPhone,
+        requestId,
+      );
       return null;
     }
     const isMatch = await bcrypt.compare(pass, user.password);
-    if (isMatch) {
-      this.assertTenantCanLogin(user.tenant.status);
-      // Create a copy and remove password to safely satisfy strict typing
-      const result = { ...user } as Partial<User>;
-      delete result.password;
-      delete (result as Partial<User> & { tenant?: unknown }).tenant;
-      return result as Omit<User, 'password'>;
+    if (!isMatch) {
+      this.logAuthenticationFailure(
+        'password_mismatch',
+        normalizedPhone,
+        requestId,
+      );
+      return null;
     }
-    return null;
+
+    try {
+      this.assertTenantCanLogin(user.tenant.status);
+    } catch (error) {
+      this.logAuthenticationFailure(
+        'tenant_status_blocked',
+        normalizedPhone,
+        requestId,
+        user.tenant.status,
+      );
+      throw error;
+    }
+
+    // Create a copy and remove password to safely satisfy strict typing
+    const result = { ...user } as Partial<User>;
+    delete result.password;
+    delete (result as Partial<User> & { tenant?: unknown }).tenant;
+    return result as Omit<User, 'password'>;
+  }
+
+  /** Logs a non-sensitive authentication failure with worker correlation data. */
+  private logAuthenticationFailure(
+    stage: AuthenticationFailureStage,
+    phone: string,
+    requestId?: string,
+    tenantStatus?: TenantStatus,
+  ): void {
+    this.logger.warn(
+      JSON.stringify({
+        event: 'merchant_authentication_failed',
+        stage,
+        requestId: requestId || 'none',
+        maskedPhone: maskPhoneNumber(phone),
+        tenantStatus: tenantStatus || 'unknown',
+        ...this.runtimeIdentity,
+        databaseTargetFingerprint: this.databaseTargetFingerprint,
+      }),
+    );
   }
 
   private assertTenantCanLogin(status: TenantStatus): void {
@@ -106,7 +165,7 @@ export class AuthService {
     };
   }
 
-  async signup(signupDto: SignupDto) {
+  async signup(signupDto: SignupDto, requestId?: string) {
     const {
       phone: rawPhone,
       password,
@@ -143,7 +202,7 @@ export class AuthService {
         },
       });
 
-      await this.usersService.create(
+      const user = await this.usersService.create(
         {
           phone,
           password,
@@ -153,6 +212,21 @@ export class AuthService {
         },
         tx,
       );
+
+      const storedPasswordMatches = await bcrypt.compare(
+        password,
+        user.password,
+      );
+      if (!storedPasswordMatches) {
+        this.logAuthenticationFailure(
+          'signup_password_verification_failed',
+          phone,
+          requestId,
+        );
+        throw new InternalServerErrorException(
+          'Could not create merchant credentials',
+        );
+      }
 
       await this.pushNotificationsService.enqueueMerchantRegistration(tx, {
         tenantId: tenant.id,
@@ -188,11 +262,6 @@ export class AuthService {
     return this.twilioClient;
   }
 
-  private maskPhone(value: string): string {
-    const visibleSuffix = value.slice(-4);
-    return `${'*'.repeat(Math.max(0, value.length - 4))}${visibleSuffix}`;
-  }
-
   async requestPasswordReset(rawPhone: string) {
     const phone = formatPhoneNumber(rawPhone);
     const user = await this.usersService.findOneByPhone(phone);
@@ -216,13 +285,13 @@ export class AuthService {
         }
 
         const to = phone.startsWith('+') ? phone : `+${phone}`;
-        this.logger.log(`Sending Verify SMS to ${this.maskPhone(to)}`);
+        this.logger.log(`Sending Verify SMS to ${maskPhoneNumber(to)}`);
         
         await client.verify.v2
           .services(serviceSid)
           .verifications.create({ to, channel: 'sms' });
           
-        this.logger.log(`Verify SMS sent to ${this.maskPhone(to)}`);
+        this.logger.log(`Verify SMS sent to ${maskPhoneNumber(to)}`);
       }
     } catch (error) {
       this.logger.error('Failed to send Verify SMS', error);
@@ -275,10 +344,7 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired reset code');
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { password: password },
-    });
+    await this.usersService.updatePassword(user.id, password);
 
     return {
       success: true,
@@ -297,10 +363,7 @@ export class AuthService {
       throw new BadRequestException('Incorrect current password');
     }
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { password: newPass },
-    });
+    await this.usersService.updatePassword(userId, newPass);
 
     return {
       success: true,

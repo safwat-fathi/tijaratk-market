@@ -154,19 +154,36 @@ describe('Security E2E (multi-tenant)', () => {
       password,
     });
 
+    const [tenantA, tenantB] = await Promise.all([
+      prisma.tenant.findUniqueOrThrow({
+        where: { phone: tenantAPhone },
+        select: { id: true },
+      }),
+      prisma.tenant.findUniqueOrThrow({
+        where: { phone: tenantBPhone },
+        select: { id: true },
+      }),
+    ]);
+    tenantAId = tenantA.id;
+    tenantBId = tenantB.id;
+    await prisma.tenant.updateMany({
+      where: { id: { in: [tenantAId, tenantBId] } },
+      data: { status: 'active' },
+    });
+
     const tenantALogin = await loginAndGetSession(httpServer, {
       phone: tenantAPhone,
       pass: password,
     });
     tokenTenantA = tenantALogin.token;
-    tenantAId = tenantALogin.tenantId;
+    expect(tenantALogin.tenantId).toBe(tenantAId);
 
     const tenantBLogin = await loginAndGetSession(httpServer, {
       phone: tenantBPhone,
       pass: password,
     });
     tokenTenantB = tenantBLogin.token;
-    tenantBId = tenantBLogin.tenantId;
+    expect(tenantBLogin.tenantId).toBe(tenantBId);
 
     const createProductResponse = await request(httpServer)
       .post(PRODUCTS_PATH)
@@ -340,6 +357,208 @@ describe('Security E2E (multi-tenant)', () => {
         where: { endpoint_hash: stored.endpoint_hash },
       }),
     ).toBe(0);
+  });
+
+  it('queues privacy-minimized registrations for active platform admins only', async () => {
+    const platformEndpoint = `https://push.example.test/registration-platform-${runId}`;
+    const operationsEndpoint = `https://push.example.test/registration-operations-${runId}`;
+    const subscription = (endpoint) => ({
+      endpoint,
+      expirationTime: null,
+      keys: {
+        p256dh: `p256dh-${runId}-${endpoint.length}`,
+        auth: `auth-${runId}-registration`,
+      },
+    });
+    await request(httpServer)
+      .post('/admin/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${platformAdminToken}`)
+      .send(subscription(platformEndpoint))
+      .expect(201);
+    await request(httpServer)
+      .post('/admin/push-notifications/subscriptions')
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .send(subscription(operationsEndpoint))
+      .expect(201);
+
+    const [platformSubscription, operationsSubscription, registrationEvent] =
+      await Promise.all([
+        prisma.pushSubscription.findFirstOrThrow({
+          where: { admin_user_id: platformAdmin.id },
+          orderBy: { id: 'desc' },
+        }),
+        prisma.pushSubscription.findFirstOrThrow({
+          where: { admin_user_id: operationsAdmin.id },
+          orderBy: { id: 'desc' },
+        }),
+        prisma.pushNotificationOutbox.findUniqueOrThrow({
+          where: { event_key: `merchant-registration:${tenantAId}` },
+        }),
+      ]);
+
+    try {
+      expect(registrationEvent.event_type).toBe('merchant_registered');
+      expect(registrationEvent.tenant_id).toBe(tenantAId);
+      expect(registrationEvent.payload).toEqual({
+        storeName: `E2E Store A ${runId}`,
+      });
+
+      const targets = await pushNotificationsService.resolveDeliveryTargets({
+        ...registrationEvent,
+        attempt_count: 1,
+      });
+      const platformTarget = targets.find(
+        (target) => target.subscriptionId === platformSubscription.id,
+      );
+      expect(platformTarget).toEqual(
+        expect.objectContaining({
+          actor: 'admin',
+          adminRole: 'platform_admin',
+        }),
+      );
+      if (!platformTarget) {
+        throw new Error('Expected a platform administrator delivery target');
+      }
+      expect(
+        targets.some(
+          (target) => target.subscriptionId === operationsSubscription.id,
+        ),
+      ).toBe(false);
+
+      const envelope = pushNotificationsService.buildEnvelope(
+        { ...registrationEvent, attempt_count: 1 },
+        platformTarget,
+      );
+      expect(envelope).toEqual({
+        version: 1,
+        eventId: registrationEvent.event_key,
+        type: 'admin.merchant.registered',
+        title: 'طلب انضمام تاجر جديد',
+        body: `سجّل E2E Store A ${runId} طلب انضمام جديدًا وينتظر المراجعة.`,
+        url: '/admin/merchants?status=pending',
+        tag: registrationEvent.event_key,
+        createdAt: registrationEvent.created_at.toISOString(),
+      });
+
+      const longStoreName = `متجر ${'أ'.repeat(200)}`;
+      const boundedEnvelope = pushNotificationsService.buildEnvelope(
+        {
+          ...registrationEvent,
+          payload: { storeName: `  ${longStoreName}  ` },
+          attempt_count: 1,
+        },
+        platformTarget,
+      );
+      expect(boundedEnvelope.body).toBe(
+        `سجّل ${longStoreName.slice(0, 120)} طلب انضمام جديدًا وينتظر المراجعة.`,
+      );
+
+      await prisma.$transaction((tx) =>
+        pushNotificationsService.enqueueMerchantRegistration(tx, {
+          tenantId: tenantAId,
+          storeName: 'Duplicate registration must not replace payload',
+        }),
+      );
+      expect(
+        await prisma.pushNotificationOutbox.count({
+          where: { event_key: registrationEvent.event_key },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.pushNotificationOutbox.findUniqueOrThrow({
+          where: { event_key: registrationEvent.event_key },
+          select: { payload: true },
+        }),
+      ).toEqual({
+        payload: { storeName: `E2E Store A ${runId}` },
+      });
+
+      expect(() =>
+        pushNotificationsService.buildEnvelope(
+          { ...registrationEvent, attempt_count: 1 },
+          {
+            ...platformTarget,
+            adminRole: 'operations_admin',
+          },
+        ),
+      ).toThrow('Invalid push delivery target');
+      expect(() =>
+        pushNotificationsService.buildEnvelope(
+          {
+            ...registrationEvent,
+            payload: { orderNumber: '1' },
+            attempt_count: 1,
+          },
+          platformTarget,
+        ),
+      ).toThrow('Invalid push outbox payload');
+      expect(() =>
+        pushNotificationsService.buildEnvelope(
+          {
+            ...registrationEvent,
+            event_type: 'merchant_order_created',
+            payload: { storeName: 'Missing order number' },
+            attempt_count: 1,
+          },
+          platformTarget,
+        ),
+      ).toThrow('Invalid push outbox payload');
+      expect(() =>
+        pushNotificationsService.buildEnvelope(
+          {
+            ...registrationEvent,
+            event_type: 'merchant_order_created',
+            payload: { storeName: 'Empty order number', orderNumber: '' },
+            attempt_count: 1,
+          },
+          platformTarget,
+        ),
+      ).toThrow('Invalid push outbox payload');
+
+      await prisma.adminUser.update({
+        where: { id: platformAdmin.id },
+        data: { is_active: false },
+      });
+      const inactiveTargets =
+        await pushNotificationsService.resolveDeliveryTargets({
+          ...registrationEvent,
+          attempt_count: 1,
+        });
+      expect(
+        inactiveTargets.some(
+          (target) => target.subscriptionId === platformSubscription.id,
+        ),
+      ).toBe(false);
+      await prisma.adminUser.update({
+        where: { id: platformAdmin.id },
+        data: { is_active: true },
+      });
+
+      await prisma.pushSubscription.update({
+        where: { id: platformSubscription.id },
+        data: { expiration_time: new Date(Date.now() - 60_000) },
+      });
+      const expiredTargets =
+        await pushNotificationsService.resolveDeliveryTargets({
+          ...registrationEvent,
+          attempt_count: 1,
+        });
+      expect(
+        expiredTargets.some(
+          (target) => target.subscriptionId === platformSubscription.id,
+        ),
+      ).toBe(false);
+    } finally {
+      await prisma.adminUser.update({
+        where: { id: platformAdmin.id },
+        data: { is_active: true },
+      });
+      await prisma.pushSubscription.deleteMany({
+        where: {
+          id: { in: [platformSubscription.id, operationsSubscription.id] },
+        },
+      });
+    }
   });
 
   it('rechecks administrator role, assignment, and permission at delivery time', async () => {

@@ -77,6 +77,11 @@ expose the private key to the frontend. The Web Push outbox worker uses
 `FOR UPDATE SKIP LOCKED`, bounded retry, and sanitized error codes; delivery
 does not change the order creation result.
 
+When Web Push is enabled, a successful public merchant signup queues a
+privacy-minimized event in the signup transaction. Only active platform
+administrators with a current device subscription receive the registration
+alert; operations administrators are intentionally excluded.
+
 WhatsApp providers:
 
 - `ACCOUNT_SID`: Twilio account SID.

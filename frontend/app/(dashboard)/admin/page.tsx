@@ -62,7 +62,7 @@ export default async function AdminDashboard() {
         </Card>
 
         <Card className="p-6 border-t-4 border-t-amber-500">
-          <h3 className="text-sm font-medium text-gray-500">طلبات بانتظار المراجعة</h3>
+          <h3 className="text-sm font-medium text-gray-500">طلبات انضمام تجار قيد المراجعة</h3>
           <p className="mt-2 text-3xl font-bold text-gray-900">
             {formatCounter(stats.pendingApplications)}
           </p>

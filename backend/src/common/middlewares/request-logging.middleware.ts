@@ -2,10 +2,16 @@ import { Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { NextFunction, Request, Response } from 'express';
 import { AdminAuditContext } from 'src/admin-audit/admin-audit.context';
+import {
+  getDatabaseTargetFingerprint,
+  getRuntimeIdentity,
+} from '../utils/runtime-identity.util';
 
 const REQUEST_ID_HEADER = 'x-request-id';
 
 const logger = new Logger('HttpRequest');
+const runtimeIdentity = getRuntimeIdentity();
+const databaseTargetFingerprint = getDatabaseTargetFingerprint();
 
 /**
  * Adds a request correlation id and logs completion metadata.
@@ -37,6 +43,8 @@ export function requestLoggingMiddleware(
         statusCode: res.statusCode,
         durationMs: Date.now() - startedAt,
         tenantId,
+        ...runtimeIdentity,
+        databaseTargetFingerprint,
       }),
     );
   });
