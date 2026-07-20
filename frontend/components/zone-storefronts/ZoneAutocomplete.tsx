@@ -160,11 +160,6 @@ export default function ZoneAutocomplete({ options }: Props) {
                       <span className="block font-bold text-brand-text">
                         {option.name}
                       </span>
-                      {option.nameEn && (
-                        <span className="mt-0.5 block text-xs text-gray-600">
-                          {option.nameEn}
-                        </span>
-                      )}
                     </span>
                     <span className="shrink-0 rounded-full border border-brand-border bg-white px-3 py-1 text-xs font-bold text-brand-primary">
                       {getCategoryLabel(option.category)}

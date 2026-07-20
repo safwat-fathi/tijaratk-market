@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import {
   DirectoryEventType,
   DirectoryStatus,
+  MissingDeliveryAreaRequestStatus,
   Prisma,
   ProductStatus,
   TenantCategory,
@@ -21,6 +22,10 @@ import {
   CreateDirectoryAreaDto,
   UpdateDirectoryAreaDto,
 } from './dto/directory-area.dto';
+import {
+  CreateMissingDeliveryAreaRequestDto,
+  ResolveMissingDeliveryAreaRequestDto,
+} from './dto/missing-delivery-area-request.dto';
 import { rankAreaSearchResults } from './utils/area-search.util';
 
 const CATEGORY_DEFINITIONS = [
@@ -447,6 +452,122 @@ export class StoresDirectoryService {
       where: { is_active: true, deleted_at: null },
       orderBy: [{ sort_order: 'asc' }, { name_ar: 'asc' }],
     });
+  }
+
+  async createMissingDeliveryAreaRequest(
+    tenantId: number,
+    dto: CreateMissingDeliveryAreaRequestDto,
+  ) {
+    const mainArea = await this.prisma.directoryArea.findFirst({
+      where: {
+        id: dto.main_area_id,
+        parent_area_id: null,
+        is_active: true,
+        deleted_at: null,
+      },
+      select: {
+        id: true,
+        child_areas: {
+          where: { is_active: true, deleted_at: null },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+    if (!mainArea) throw new NotFoundException('المنطقة الأساسية غير متاحة');
+    if (mainArea.child_areas.length > 0) {
+      throw new BadRequestException('توجد مناطق فرعية متاحة لهذه المنطقة');
+    }
+
+    const requestedAreaName = dto.requested_area_name.trim();
+    if (!requestedAreaName) {
+      throw new BadRequestException('اسم المنطقة المطلوبة مطلوب');
+    }
+    const note = dto.note?.trim() || null;
+    const existing = await this.prisma.missingDeliveryAreaRequest.findFirst({
+      where: { tenant_id: tenantId, main_area_id: mainArea.id, status: MissingDeliveryAreaRequestStatus.pending },
+      include: this.missingDeliveryAreaRequestInclude(),
+    });
+    if (existing) return existing;
+
+    try {
+      return await this.prisma.missingDeliveryAreaRequest.create({
+        data: { tenant_id: tenantId, main_area_id: mainArea.id, requested_area_name: requestedAreaName, note },
+        include: this.missingDeliveryAreaRequestInclude(),
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+        throw error;
+      }
+      const concurrentRequest = await this.prisma.missingDeliveryAreaRequest.findFirst({
+        where: { tenant_id: tenantId, main_area_id: mainArea.id, status: MissingDeliveryAreaRequestStatus.pending },
+        include: this.missingDeliveryAreaRequestInclude(),
+      });
+      if (concurrentRequest) return concurrentRequest;
+      throw error;
+    }
+  }
+
+  async getMerchantMissingDeliveryAreaRequest(tenantId: number, mainAreaId?: number) {
+    return this.prisma.missingDeliveryAreaRequest.findFirst({
+      where: { tenant_id: tenantId, ...(mainAreaId ? { main_area_id: mainAreaId } : {}) },
+      include: this.missingDeliveryAreaRequestInclude(),
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+    });
+  }
+
+  async adminFindMissingDeliveryAreaRequests(status?: MissingDeliveryAreaRequestStatus) {
+    return this.prisma.missingDeliveryAreaRequest.findMany({
+      where: status ? { status } : undefined,
+      include: this.missingDeliveryAreaRequestInclude(),
+      orderBy: [{ status: 'asc' }, { created_at: 'desc' }],
+    });
+  }
+
+  async adminResolveMissingDeliveryAreaRequest(
+    id: number,
+    adminUserId: number,
+    dto: ResolveMissingDeliveryAreaRequestDto,
+  ) {
+    const request = await this.prisma.missingDeliveryAreaRequest.findUnique({
+      where: { id },
+      select: { id: true, main_area_id: true, status: true },
+    });
+    if (!request) throw new NotFoundException('طلب المنطقة غير موجود');
+    if (request.status === MissingDeliveryAreaRequestStatus.resolved) {
+      throw new BadRequestException('تم حل هذا الطلب بالفعل');
+    }
+    const resolvedArea = await this.prisma.directoryArea.findFirst({
+      where: {
+        id: dto.resolved_area_id,
+        parent_area_id: request.main_area_id,
+        is_active: true,
+        deleted_at: null,
+      },
+      select: { id: true },
+    });
+    if (!resolvedArea) {
+      throw new BadRequestException('اختر منطقة فرعية نشطة ضمن المنطقة الأساسية للطلب');
+    }
+    return this.prisma.missingDeliveryAreaRequest.update({
+      where: { id },
+      data: {
+        status: MissingDeliveryAreaRequestStatus.resolved,
+        resolved_area_id: resolvedArea.id,
+        resolved_by_admin_id: adminUserId,
+        resolved_at: new Date(),
+      },
+      include: this.missingDeliveryAreaRequestInclude(),
+    });
+  }
+
+  private missingDeliveryAreaRequestInclude() {
+    return {
+      tenant: { select: { id: true, name: true, slug: true, phone: true } },
+      main_area: { select: { id: true, name_ar: true, name_en: true, slug: true } },
+      resolved_area: { select: { id: true, name_ar: true, name_en: true, slug: true } },
+      resolved_by_admin: { select: { id: true, name: true } },
+    } satisfies Prisma.MissingDeliveryAreaRequestInclude;
   }
 
   /**
@@ -1193,7 +1314,6 @@ export class StoresDirectoryService {
         logoUrl: tenant.directory_profile?.logo_url ?? null,
         address: tenant.directory_profile?.address ?? null,
         areaName:
-          tenant.directory_profile?.area?.name_en ||
           tenant.directory_profile?.area?.name_ar ||
           fallbackAreaName ||
           null,

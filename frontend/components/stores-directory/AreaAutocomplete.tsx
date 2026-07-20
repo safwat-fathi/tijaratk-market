@@ -127,11 +127,6 @@ export default function AreaAutocomplete({
                     <span className="block truncate text-sm font-bold text-[#222B2E]">
                       {area.name}
                     </span>
-                    {area.nameEn && (
-                      <span className="mt-0.5 block truncate text-xs text-gray-500">
-                        {area.nameEn}
-                      </span>
-                    )}
                   </span>
                   <span className="flex-none rounded-full bg-[#F7F8F6] px-3 py-1 text-xs font-semibold text-[#0F5A3D]">
                     {area.stores} متجر
