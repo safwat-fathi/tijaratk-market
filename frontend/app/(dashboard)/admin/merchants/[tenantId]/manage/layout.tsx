@@ -2,6 +2,11 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { endManagedStoreSessionAction } from "@/actions/admin-server";
 import { Button } from "@/components/ui/Button";
+import {
+  getManagedSessionRevokePath,
+  hasManagedSectionAccess,
+  isManagedSessionFailure,
+} from "@/lib/admin-managed-access";
 import { adminService } from "@/services/api/admin.service";
 
 type LayoutProps = {
@@ -13,29 +18,37 @@ export default async function ManagedStoreLayout({ children, params }: LayoutPro
   const { tenantId: tenantIdValue } = await params;
   const tenantId = Number(tenantIdValue);
   const response = await adminService.getCurrentManagementSession();
-  const session = response.success ? response.data : null;
+  if (!response.success) {
+    if (isManagedSessionFailure(response)) {
+      redirect(getManagedSessionRevokePath(tenantId));
+    }
+    throw new Error(response.message || "تعذر التحقق من جلسة إدارة المتجر");
+  }
+  const session = response.data;
 
   if (!session || session.tenant_id !== tenantId) {
-    const target = encodeURIComponent(`/admin/merchants/${tenantId}`);
-    redirect(`/api/auth/admin/managed-session/revoke?redirect=${target}`);
+    redirect(getManagedSessionRevokePath(tenantId));
   }
 
-  const permissionSet = new Set(session.permissions);
-  const isZoneOperator = Boolean(session.tenant.operated_zone_storefront);
+  const isZoneOperator = Boolean(
+    session.tenant.operated_zone_storefront &&
+      hasManagedSectionAccess(session.permissions, "dispatches"),
+  );
   const links = [
-    permissionSet.has("products.read")
+    hasManagedSectionAccess(session.permissions, "products")
       ? { href: `/admin/merchants/${tenantId}/manage/products`, label: "المنتجات" }
       : null,
-    permissionSet.has("orders.read") && !isZoneOperator
+    hasManagedSectionAccess(session.permissions, "orders") && !isZoneOperator
       ? { href: `/admin/merchants/${tenantId}/manage/orders`, label: "الطلبات" }
       : null,
-    permissionSet.has("dispatches.read") && session.tenant.operated_zone_storefront
+    hasManagedSectionAccess(session.permissions, "dispatches") &&
+    session.tenant.operated_zone_storefront
       ? {
           href: `/admin/zones/${session.tenant.operated_zone_storefront.id}/dispatches`,
           label: "توزيع طلبات المنطقة",
         }
       : null,
-    permissionSet.has("activity_logs.read")
+    hasManagedSectionAccess(session.permissions, "activity")
       ? { href: `/admin/merchants/${tenantId}/manage/activity`, label: "سجل النشاط" }
       : null,
   ].filter((link): link is { href: string; label: string } => Boolean(link));

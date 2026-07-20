@@ -8,7 +8,10 @@ import { DISPATCH_SESSION_PERMISSION_MESSAGE } from "@/constants/admin-managed-p
 import { revalidatePath } from "next/cache";
 import { loginSchema } from "@/lib/validations/auth";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
-import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
+import {
+  getManagedStoreFallbackPath,
+  hasActiveManagedPermission,
+} from "@/lib/admin-managed-access";
 import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
 import type {
   BulkEssentialStage,
@@ -835,8 +838,9 @@ export async function startManagedStoreSessionAction(
     reason,
   });
   const token = response.data?.session_token;
-  const expiresAt = response.data?.session.expires_at;
-  if (!response.success || !token || !expiresAt) {
+  const session = response.data?.session;
+  const expiresAt = session?.expires_at;
+  if (!response.success || !token || !session || !expiresAt) {
     throw new Error(response.message || "تعذر بدء جلسة إدارة المتجر");
   }
 
@@ -847,7 +851,7 @@ export async function startManagedStoreSessionAction(
   await setCookieAction(STORAGE_KEYS.ADMIN_MANAGEMENT_SESSION, token, {
     maxAge,
   });
-  redirect(`/admin/merchants/${normalizedTenantId}/manage/products`);
+  redirect(getManagedStoreFallbackPath(session));
 }
 
 export async function endManagedStoreSessionAction(

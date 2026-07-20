@@ -162,13 +162,13 @@ export class StoresDirectoryService {
    * Returns the SEO payload for a public area page.
    */
   async getAreaPage(areaSlug: string) {
-    const area = await this.findActiveArea(areaSlug);
+    const area = await this.findActiveMainArea(areaSlug);
     const deliveryAreas = await this.findPublicDeliveryAreas({
-      areaId: area.id,
+      mainAreaId: area.id,
     });
-    const featuredTenants = deliveryAreas
-      .slice(0, 6)
-      .map((item) => item.tenant);
+    const featuredTenants = this.getUniqueTenantsFromDeliveryAreas(
+      deliveryAreas,
+    ).slice(0, 6);
     const deliveryFees = this.buildDeliveryFeeMap(deliveryAreas);
 
     return {
@@ -177,7 +177,7 @@ export class StoresDirectoryService {
       featuredStores: this.toStoreCards(
         featuredTenants,
         area.name_ar,
-        area.slug,
+        undefined,
         undefined,
         deliveryFees,
       ),
@@ -205,7 +205,7 @@ export class StoresDirectoryService {
       limit?: number;
     },
   ) {
-    const area = await this.findActiveArea(areaSlug);
+    const area = await this.findActiveMainArea(areaSlug);
     const category = this.resolveCategory(categorySlug);
     const page = Number.isFinite(options.page) ? Math.max(1, options.page!) : 1;
     const limit = Number.isFinite(options.limit)
@@ -214,9 +214,21 @@ export class StoresDirectoryService {
     const normalizedSearch = options.search?.trim();
 
     const baseWhere: Prisma.TenantDeliveryAreaWhereInput = {
-      area_id: area.id,
       is_active: true,
       deleted_at: null,
+      area: {
+        is_active: true,
+        deleted_at: null,
+        parent_area_id: area.id,
+        parent_area: {
+          is: {
+            id: area.id,
+            parent_area_id: null,
+            is_active: true,
+            deleted_at: null,
+          },
+        },
+      },
       tenant: {
         status: TenantStatus.active,
         deleted_at: null,
@@ -257,11 +269,12 @@ export class StoresDirectoryService {
       orderBy: [{ tenant: { id: 'asc' } }],
     });
 
-    const tenantIds = rows.map((row) => row.tenant.id);
+    const uniqueRows = this.getLowestFeeDeliveryAreaByTenant(rows);
+    const tenantIds = uniqueRows.map((row) => row.tenant.id);
     const productStats = await this.getProductStatsByTenantIds(tenantIds);
     const rankingDate = this.formatRankingDate(new Date());
 
-    const rankedRows = rows
+    const rankedRows = uniqueRows
       .map((row) => {
         const stats = this.getStatsForTenant(productStats, row.tenant.id);
         const readinessScore = this.calculateReadinessScore({
@@ -315,7 +328,7 @@ export class StoresDirectoryService {
     const stores = this.toStoreCards(
       paginatedRows.map((item) => item.row.tenant),
       area.name_ar,
-      area.slug,
+      undefined,
       new Map(
         paginatedRows.map((item) => [
           item.row.tenant.id,
@@ -799,9 +812,14 @@ export class StoresDirectoryService {
     };
   }
 
-  private async findActiveArea(slug: string) {
+  private async findActiveMainArea(slug: string) {
     const area = await this.prisma.directoryArea.findFirst({
-      where: { slug: slug.trim(), is_active: true, deleted_at: null },
+      where: {
+        slug: slug.trim(),
+        parent_area_id: null,
+        is_active: true,
+        deleted_at: null,
+      },
     });
 
     if (!area) {
@@ -862,13 +880,24 @@ export class StoresDirectoryService {
     return category;
   }
 
-  private async findPublicDeliveryAreas(options?: { areaId?: number }) {
+  private async findPublicDeliveryAreas(options?: { mainAreaId?: number }) {
     return this.prisma.tenantDeliveryArea.findMany({
       where: {
         is_active: true,
         deleted_at: null,
-        ...(options?.areaId ? { area_id: options.areaId } : {}),
-        area: { is_active: true, deleted_at: null },
+        area: {
+          is_active: true,
+          deleted_at: null,
+          parent_area_id: { not: null },
+          parent_area: {
+            is: {
+              ...(options?.mainAreaId ? { id: options.mainAreaId } : {}),
+              parent_area_id: null,
+              is_active: true,
+              deleted_at: null,
+            },
+          },
+        },
         tenant: {
           status: TenantStatus.active,
           deleted_at: null,
@@ -891,7 +920,7 @@ export class StoresDirectoryService {
 
   private publicDeliveryAreaInclude() {
     return {
-      area: true,
+      area: { include: { parent_area: true } },
       tenant: {
         select: {
           id: true,
@@ -954,18 +983,20 @@ export class StoresDirectoryService {
       ReturnType<StoresDirectoryService['findPublicDeliveryAreas']>
     >,
   ) {
+    const uniqueTenants = this.getUniqueTenantsFromDeliveryAreas(deliveryAreas);
+
     return CATEGORY_DEFINITIONS.map((category) => {
-      const categoryRows = deliveryAreas.filter(
-        (item) => item.tenant.category === category.tenantCategory,
+      const categoryTenants = uniqueTenants.filter(
+        (tenant) => tenant.category === category.tenantCategory,
       );
 
       return {
         slug: category.slug,
         label: category.label,
         tenantCategory: category.tenantCategory,
-        storesCount: categoryRows.length,
-        availableNowCount: categoryRows.filter((item) =>
-          this.isDeliveryAvailableNow(item.tenant),
+        storesCount: categoryTenants.length,
+        availableNowCount: categoryTenants.filter((tenant) =>
+          this.isDeliveryAvailableNow(tenant),
         ).length,
       };
     });
@@ -987,38 +1018,83 @@ export class StoresDirectoryService {
         governorate: string | null;
         storesCount: number;
         categoryCounts: Record<DirectoryCategorySlug, number>;
+        sortOrder: number;
+        tenantIds: Set<number>;
+        categoryTenantIds: Record<DirectoryCategorySlug, Set<number>>;
       }
     >();
 
     for (const deliveryArea of deliveryAreas) {
+      const mainArea = deliveryArea.area.parent_area;
+      if (!mainArea) continue;
+
       const category = CATEGORY_DEFINITIONS.find(
         (item) => item.tenantCategory === deliveryArea.tenant.category,
       );
-      const existing = areasById.get(deliveryArea.area_id);
+      const existing = areasById.get(mainArea.id);
       if (existing) {
-        existing.storesCount += 1;
-        if (category) {
+        if (!existing.tenantIds.has(deliveryArea.tenant.id)) {
+          existing.tenantIds.add(deliveryArea.tenant.id);
+          existing.storesCount += 1;
+        }
+        if (
+          category &&
+          !existing.categoryTenantIds[category.slug].has(
+            deliveryArea.tenant.id,
+          )
+        ) {
+          existing.categoryTenantIds[category.slug].add(deliveryArea.tenant.id);
           existing.categoryCounts[category.slug] += 1;
         }
         continue;
       }
 
-      areasById.set(deliveryArea.area_id, {
-        id: deliveryArea.area.id,
-        nameAr: deliveryArea.area.name_ar,
-        nameEn: deliveryArea.area.name_en,
-        slug: deliveryArea.area.slug,
-        city: deliveryArea.area.city,
-        governorate: deliveryArea.area.governorate,
+      areasById.set(mainArea.id, {
+        id: mainArea.id,
+        nameAr: mainArea.name_ar,
+        nameEn: mainArea.name_en,
+        slug: mainArea.slug,
+        city: mainArea.city,
+        governorate: mainArea.governorate,
         storesCount: 1,
         categoryCounts: {
           supermarkets: category?.slug === 'supermarkets' ? 1 : 0,
           pharmacies: category?.slug === 'pharmacies' ? 1 : 0,
         },
+        sortOrder: mainArea.sort_order,
+        tenantIds: new Set([deliveryArea.tenant.id]),
+        categoryTenantIds: {
+          supermarkets: new Set(
+            category?.slug === 'supermarkets'
+              ? [deliveryArea.tenant.id]
+              : [],
+          ),
+          pharmacies: new Set(
+            category?.slug === 'pharmacies'
+              ? [deliveryArea.tenant.id]
+              : [],
+          ),
+        },
       });
     }
 
-    return Array.from(areasById.values());
+    return Array.from(areasById.values())
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.nameAr.localeCompare(right.nameAr, 'ar') ||
+          left.id - right.id,
+      )
+      .map((areaSummary) => ({
+        id: areaSummary.id,
+        nameAr: areaSummary.nameAr,
+        nameEn: areaSummary.nameEn,
+        slug: areaSummary.slug,
+        city: areaSummary.city,
+        governorate: areaSummary.governorate,
+        storesCount: areaSummary.storesCount,
+        categoryCounts: areaSummary.categoryCounts,
+      }));
   }
 
   private toPublicAreaRows(
@@ -1026,23 +1102,61 @@ export class StoresDirectoryService {
       ReturnType<StoresDirectoryService['findPublicDeliveryAreas']>
     >,
   ) {
-    const storesCountByAreaId = new Map<number, number>();
-    const areasById = new Map<number, (typeof deliveryAreas)[number]['area']>();
+    const mainAreasById = new Map<
+      number,
+      {
+        area: NonNullable<
+          (typeof deliveryAreas)[number]['area']['parent_area']
+        >;
+        tenantIds: Set<number>;
+      }
+    >();
 
     for (const deliveryArea of deliveryAreas) {
-      storesCountByAreaId.set(
-        deliveryArea.area_id,
-        (storesCountByAreaId.get(deliveryArea.area_id) ?? 0) + 1,
-      );
-      if (!areasById.has(deliveryArea.area_id)) {
-        areasById.set(deliveryArea.area_id, deliveryArea.area);
+      const mainArea = deliveryArea.area.parent_area;
+      if (!mainArea) continue;
+
+      const existing = mainAreasById.get(mainArea.id);
+      if (existing) {
+        existing.tenantIds.add(deliveryArea.tenant.id);
+      } else {
+        mainAreasById.set(mainArea.id, {
+          area: mainArea,
+          tenantIds: new Set([deliveryArea.tenant.id]),
+        });
       }
     }
 
-    return Array.from(areasById.entries()).map(([areaId, area]) => ({
-      ...area,
-      storesCount: storesCountByAreaId.get(areaId) ?? 0,
-    }));
+    return Array.from(mainAreasById.values())
+      .sort(
+        (left, right) =>
+          left.area.sort_order - right.area.sort_order ||
+          left.area.name_ar.localeCompare(right.area.name_ar, 'ar') ||
+          left.area.id - right.area.id,
+      )
+      .map(({ area, tenantIds }) => ({
+        ...area,
+        storesCount: tenantIds.size,
+      }));
+  }
+
+  /** Keeps one public coverage row per merchant using its lowest child-area fee. */
+  private getLowestFeeDeliveryAreaByTenant<
+    T extends { tenant: { id: number }; delivery_fee: Prisma.Decimal },
+  >(deliveryAreas: T[]) {
+    const rowsByTenantId = new Map<number, T>();
+
+    for (const deliveryArea of deliveryAreas) {
+      const current = rowsByTenantId.get(deliveryArea.tenant.id);
+      if (
+        !current ||
+        Number(deliveryArea.delivery_fee) < Number(current.delivery_fee)
+      ) {
+        rowsByTenantId.set(deliveryArea.tenant.id, deliveryArea);
+      }
+    }
+
+    return Array.from(rowsByTenantId.values());
   }
 
   private toStoreCards(

@@ -2,8 +2,8 @@ export interface ServiceResponse<T = unknown> {
 	data?: T;
 	success: boolean;
 	message?: string;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	errors?: any[];
+	status?: number;
+	errors?: unknown;
 }
 
 export interface IPaginatedResponse<T> {

@@ -1,4 +1,11 @@
 import { redirect } from "next/navigation";
+import {
+  getManagedSessionRevokePath,
+  getManagedStoreFallbackPath,
+  hasManagedSectionAccess,
+  isManagedPermissionFailure,
+  isManagedSessionFailure,
+} from "@/lib/admin-managed-access";
 import { adminService } from "@/services/api/admin.service";
 import ProductsClientView from "./ProductsClientView";
 
@@ -23,13 +30,28 @@ export default async function ManagedProductsPage({
   const catalogPage = Number(resolvedSearchParams.catalog_page) || 1;
   const catalogCategory = typeof resolvedSearchParams.catalog_category === "string" ? resolvedSearchParams.catalog_category : undefined;
 
+  const sessionResponse = await adminService.getCurrentManagementSession();
+  if (!sessionResponse.success) {
+    if (isManagedSessionFailure(sessionResponse)) {
+      redirect(getManagedSessionRevokePath(tenantId));
+    }
+    throw new Error(
+      sessionResponse.message || "تعذر التحقق من جلسة إدارة المتجر",
+    );
+  }
+  const session = sessionResponse.data;
+  if (!session || session.tenant_id !== tenantId) {
+    redirect(getManagedSessionRevokePath(tenantId));
+  }
+  if (!hasManagedSectionAccess(session.permissions, "products")) {
+    redirect(getManagedStoreFallbackPath(session));
+  }
+
   const [
-    sessionResponse,
     productsResponse,
     catalogResponse,
     categoriesResponse,
   ] = await Promise.all([
-    adminService.getCurrentManagementSession(),
     adminService.getManagedProducts(tenantId, {
       status,
       page: productsPage,
@@ -45,19 +67,30 @@ export default async function ManagedProductsPage({
     adminService.getManagedProductCategories(tenantId),
   ]);
 
-  if (!sessionResponse.data || !productsResponse.success || !catalogResponse.success) {
-    redirect(`/api/auth/admin/managed-session/revoke?redirect=${encodeURIComponent(`/admin/merchants/${tenantId}`)}`);
+  const failedResponse = [
+    productsResponse,
+    catalogResponse,
+    categoriesResponse,
+  ].find((response) => !response.success);
+  if (failedResponse) {
+    if (isManagedSessionFailure(failedResponse)) {
+      redirect(getManagedSessionRevokePath(tenantId));
+    }
+    if (isManagedPermissionFailure(failedResponse)) {
+      redirect(`/admin/merchants/${tenantId}/manage`);
+    }
+    throw new Error(failedResponse.message || "تعذر تحميل منتجات المتجر");
   }
 
-  const permissions = new Set(sessionResponse.data.permissions);
-  
+  const permissions = new Set(session.permissions);
+
   const productsData = Array.isArray(productsResponse.data) ? productsResponse.data : productsResponse.data?.data || [];
   const productsMeta = !Array.isArray(productsResponse.data) ? productsResponse.data?.meta : null;
 
   const catalogData = catalogResponse.data?.data || [];
   const catalogMeta = catalogResponse.data?.meta || null;
 
-  const productCategories = categoriesResponse.success ? categoriesResponse.data || [] : [];
+  const productCategories = categoriesResponse.data || [];
 
   return (
     <ProductsClientView

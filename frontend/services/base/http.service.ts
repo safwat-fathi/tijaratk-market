@@ -19,7 +19,8 @@ export interface ServiceResponse<T = unknown> {
 	data?: T;
 	success: boolean;
 	message?: string;
-	errors?: unknown[];
+	status?: number;
+	errors?: unknown;
 }
 
 const DEFAULT_TIMEOUT = 10000;
@@ -272,8 +273,7 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 		authRequired: boolean,
 	): Promise<ServiceResponse<R>> {
 		const { message, data } = await this._parseErrorResponse(response);
-		const errors =
-			isRecord(data) && Array.isArray(data.errors) ? data.errors : undefined;
+		const errors = isRecord(data) ? data.errors : undefined;
 
 		if (response.status === 401 && authRequired) {
 			await this._handleUnauthorized();
@@ -282,6 +282,7 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 		return {
 			success: false,
 			message,
+			status: response.status,
 			data: data as R,
 			errors,
 		};
@@ -314,6 +315,7 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 
 		return {
 			success: true,
+			status: response.status,
 			data: data as R,
 		};
 	}
@@ -344,7 +346,7 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 			const response = await fetch(fullURL, requestOptions);
 
 			if (response.status === 204) {
-				return { success: true };
+				return { success: true, status: response.status };
 			}
 
 			if (!response.ok) {

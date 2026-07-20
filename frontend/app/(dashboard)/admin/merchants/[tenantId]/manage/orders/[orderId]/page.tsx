@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   updateManagedOrderItemAction,
   updateManagedOrderStatusAction,
@@ -7,6 +7,13 @@ import {
 import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import {
+  getManagedSessionRevokePath,
+  getManagedStoreFallbackPath,
+  hasManagedSectionAccess,
+  isManagedPermissionFailure,
+  isManagedSessionFailure,
+} from "@/lib/admin-managed-access";
 import { adminService } from "@/services/api/admin.service";
 import ManagedOutOfStockAction from "./ManagedOutOfStockAction";
 
@@ -20,19 +27,39 @@ export default async function ManagedOrderDetailsPage({
   const { tenantId: tenantIdValue, orderId: orderIdValue } = await params;
   const tenantId = Number(tenantIdValue);
   const orderId = Number(orderIdValue);
+  if (
+    !Number.isInteger(tenantId) ||
+    tenantId <= 0 ||
+    !Number.isInteger(orderId) ||
+    orderId <= 0
+  ) {
+    notFound();
+  }
+
   const sessionResponse = await adminService.getCurrentManagementSession();
+  if (!sessionResponse.success) {
+    if (isManagedSessionFailure(sessionResponse)) {
+      redirect(getManagedSessionRevokePath(tenantId));
+    }
+    throw new Error(
+      sessionResponse.message || "تعذر التحقق من جلسة إدارة المتجر",
+    );
+  }
   const session = sessionResponse.data;
   if (!session || session.tenant_id !== tenantId) {
-    redirect(`/api/auth/admin/managed-session/revoke?redirect=${encodeURIComponent(`/admin/merchants/${tenantId}`)}`);
+    redirect(getManagedSessionRevokePath(tenantId));
+  }
+  if (!hasManagedSectionAccess(session.permissions, "orders")) {
+    redirect(getManagedStoreFallbackPath(session));
   }
 
   const permissions = new Set(session.permissions);
   const [orderResponse, productsResponse, activityResponse] = await Promise.all([
     adminService.getManagedOrder(tenantId, orderId),
-    permissions.has("products.read")
+    hasManagedSectionAccess(session.permissions, "products")
       ? adminService.getManagedProducts(tenantId)
       : Promise.resolve(null),
-    permissions.has("activity_logs.read")
+    hasManagedSectionAccess(session.permissions, "activity")
       ? adminService.getManagedActivityLogs(tenantId, {
           entity_type: "order",
           entity_id: orderId,
@@ -40,8 +67,31 @@ export default async function ManagedOrderDetailsPage({
         })
       : Promise.resolve(null),
   ]);
+  if (!orderResponse.success) {
+    if (isManagedSessionFailure(orderResponse)) {
+      redirect(getManagedSessionRevokePath(tenantId));
+    }
+    if (isManagedPermissionFailure(orderResponse)) {
+      redirect(`/admin/merchants/${tenantId}/manage`);
+    }
+    if (orderResponse.status === 404) {
+      notFound();
+    }
+    throw new Error(orderResponse.message || "تعذر تحميل بيانات الطلب");
+  }
   if (!orderResponse.data) {
-    redirect(`/api/auth/admin/managed-session/revoke?redirect=${encodeURIComponent(`/admin/merchants/${tenantId}`)}`);
+    notFound();
+  }
+
+  for (const response of [productsResponse, activityResponse]) {
+    if (!response || response.success) continue;
+    if (isManagedSessionFailure(response)) {
+      redirect(getManagedSessionRevokePath(tenantId));
+    }
+    if (isManagedPermissionFailure(response)) {
+      redirect(`/admin/merchants/${tenantId}/manage`);
+    }
+    throw new Error(response.message || "تعذر تحميل بيانات الطلب المساندة");
   }
 
   const order = orderResponse.data;
