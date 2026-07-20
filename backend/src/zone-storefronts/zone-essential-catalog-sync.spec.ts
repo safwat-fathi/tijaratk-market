@@ -1,4 +1,7 @@
-import { CATALOG_SOURCE_TALABAT } from 'src/products/catalog-source-policy';
+import {
+  CATALOG_SOURCE_TALABAT,
+  GROCERY_CATALOG_CATEGORIES,
+} from 'src/products/catalog-source-policy';
 import { findZoneEssentialCatalogItems } from './zone-essential-catalog-sync';
 
 describe('findZoneEssentialCatalogItems', () => {
@@ -43,11 +46,12 @@ describe('findZoneEssentialCatalogItems', () => {
     );
   });
 
-  it('does not synthesize legacy categories when no system category is active', async () => {
-    const catalogItemFindMany = jest.fn();
+  it('uses the fixed source taxonomy when no categories are configured', async () => {
+    const catalogItemFindMany = jest.fn().mockResolvedValue([]);
     const client = {
       catalogCategory: {
         findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
       },
       catalogItem: { findMany: catalogItemFindMany },
     };
@@ -58,6 +62,13 @@ describe('findZoneEssentialCatalogItems', () => {
         CATALOG_SOURCE_TALABAT,
       ),
     ).resolves.toEqual([]);
-    expect(catalogItemFindMany).not.toHaveBeenCalled();
+    expect(catalogItemFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          source: CATALOG_SOURCE_TALABAT,
+          category: { in: [...GROCERY_CATALOG_CATEGORIES] },
+        }),
+      }),
+    );
   });
 });

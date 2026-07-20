@@ -21,18 +21,29 @@ export default function AdminCatalogItemCreateClient({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [category, setCategory] = useState("");
   const [toastData, setToastData] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const action = (formData: FormData) => {
     setToastData(null);
     startTransition(async () => {
-      try {
-        await adminCreateCatalogItemAction(formData);
-        setIsOpen(false);
-        setToastData({ message: "تم إضافة العنصر بنجاح", type: "success" });
-      } catch (e: any) {
-        setToastData({ message: e.message || "حدث خطأ أثناء إضافة العنصر", type: "error" });
+      if (!categoryNames.includes(category)) {
+        setToastData({
+          message: "اختر تصنيفًا متاحًا من القائمة.",
+          type: "error",
+        });
+        return;
       }
+
+      const result = await adminCreateCatalogItemAction(formData);
+      if (!result.success) {
+        setToastData({ message: result.message, type: "error" });
+        return;
+      }
+
+      setCategory("");
+      setIsOpen(false);
+      setToastData({ message: "تم إضافة العنصر بنجاح", type: "success" });
     });
   };
 
@@ -76,6 +87,9 @@ export default function AdminCatalogItemCreateClient({
               name="category"
               label="التصنيف"
               options={categoryNames}
+              value={category}
+              onValueChange={setCategory}
+              allowCustomValue={false}
               wrapperClassName="md:col-span-2"
               inputClassName="h-10 px-3 text-sm"
               placeholder="اكتب للبحث في التصنيفات"

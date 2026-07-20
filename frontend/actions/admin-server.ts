@@ -1904,6 +1904,36 @@ const ADMIN_CATALOG_ITEMS_PATH = "/admin/catalog-items";
 const ADMIN_CATEGORIES_PATH = "/admin/categories";
 const ADMIN_CATALOG_SOURCES = new Set(["talabat_csv", "chefaa_csv"]);
 
+export type AdminCatalogItemMutationResult =
+  | { success: true; data?: AdminCatalogItem }
+  | { success: false; message: string };
+
+const normalizeAdminCatalogItemErrorMessage = (
+  message: string | undefined,
+  fallback: string,
+) => {
+  const normalized = message?.trim();
+  if (!normalized) return fallback;
+
+  if (
+    /(category is not active|category is not supported|category name is required|name and category are required)/i.test(
+      normalized,
+    )
+  ) {
+    return "التصنيف المختار غير متاح لهذا الكتالوج. اختر تصنيفًا من القائمة.";
+  }
+
+  if (/image url is not allowed/i.test(normalized)) {
+    return "رابط الصورة غير مسموح لهذا الكتالوج. ارفع صورة أو استخدم رابطًا معتمدًا.";
+  }
+
+  if (/essential.*inactive|inactive.*essential/i.test(normalized)) {
+    return "لا يمكن جعل العنصر أساسيًا وغير نشط في الوقت نفسه.";
+  }
+
+  return normalized;
+};
+
 const parseNullableString = (value: FormDataEntryValue | null) => {
   if (typeof value !== "string") {
     return null;
@@ -1981,81 +2011,131 @@ const buildAdminCatalogItemFormData = (
 
 export async function adminCreateCatalogItemAction(
   formData: FormData,
-): Promise<void> {
+): Promise<AdminCatalogItemMutationResult> {
   const source = parseAdminCatalogSource(formData.get("source"));
   const name = parseNullableString(formData.get("name"));
   const category = parseNullableString(formData.get("category"));
   if (!source || !name || !category) {
-    throw new Error("المصدر واسم المنتج والتصنيف مطلوبة");
+    return { success: false, message: "المصدر واسم المنتج والتصنيف مطلوبة" };
   }
 
-  const response = await adminService.createAdminCatalogItem(
-    buildAdminCatalogItemFormData(formData, true),
-  );
+  try {
+    const response = await adminService.createAdminCatalogItem(
+      buildAdminCatalogItemFormData(formData, true),
+    );
 
-  if (!response.success) {
-    throw new Error(response.message || "تعذر إضافة عنصر الكتالوج");
+    if (!response.success) {
+      return {
+        success: false,
+        message: normalizeAdminCatalogItemErrorMessage(
+          response.message,
+          "تعذر إضافة عنصر الكتالوج",
+        ),
+      };
+    }
+
+    revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error("Admin create catalog item failed:", error);
+    return { success: false, message: "تعذر إضافة عنصر الكتالوج" };
   }
-
-  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
 }
 
 export async function adminUpdateCatalogItemAction(
   catalogItemId: number,
   formData: FormData,
-): Promise<AdminCatalogItem | undefined> {
+): Promise<AdminCatalogItemMutationResult> {
   const name = parseNullableString(formData.get("name"));
   const category = parseNullableString(formData.get("category"));
   if (!name || !category) {
-    throw new Error("اسم المنتج والتصنيف مطلوبان");
+    return { success: false, message: "اسم المنتج والتصنيف مطلوبان" };
   }
 
-  const response = await adminService.updateAdminCatalogItem(
-    catalogItemId,
-    buildAdminCatalogItemFormData(formData, false),
-  );
+  try {
+    const response = await adminService.updateAdminCatalogItem(
+      catalogItemId,
+      buildAdminCatalogItemFormData(formData, false),
+    );
 
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تحديث عنصر الكتالوج");
+    if (!response.success) {
+      return {
+        success: false,
+        message: normalizeAdminCatalogItemErrorMessage(
+          response.message,
+          "تعذر تحديث عنصر الكتالوج",
+        ),
+      };
+    }
+
+    revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error("Admin update catalog item failed:", error);
+    return { success: false, message: "تعذر تحديث عنصر الكتالوج" };
   }
-
-  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
-  return response.data;
 }
 
 export async function adminUpdateCatalogItemPayloadAction(
   catalogItemId: number,
   payload: Exclude<UpdateAdminCatalogItemPayload, FormData>,
-): Promise<AdminCatalogItem | undefined> {
+): Promise<AdminCatalogItemMutationResult> {
   const name = payload.name?.trim();
   const category = payload.category?.trim();
   if (!name || !category) {
-    throw new Error("اسم المنتج والتصنيف مطلوبان");
+    return { success: false, message: "اسم المنتج والتصنيف مطلوبان" };
   }
 
-  const response = await adminService.updateAdminCatalogItem(catalogItemId, {
-    ...payload,
-    name,
-    category,
-  });
+  try {
+    const response = await adminService.updateAdminCatalogItem(catalogItemId, {
+      ...payload,
+      name,
+      category,
+    });
 
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تحديث عنصر الكتالوج");
+    if (!response.success) {
+      return {
+        success: false,
+        message: normalizeAdminCatalogItemErrorMessage(
+          response.message,
+          "تعذر تحديث عنصر الكتالوج",
+        ),
+      };
+    }
+
+    revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error("Admin update catalog item failed:", error);
+    return { success: false, message: "تعذر تحديث عنصر الكتالوج" };
   }
-
-  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
-  return response.data;
 }
 
 export async function adminDeleteCatalogItemAction(
   catalogItemId: number,
-): Promise<void> {
-  const response = await adminService.deleteAdminCatalogItem(catalogItemId);
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تعطيل عنصر الكتالوج");
-  }
+): Promise<AdminCatalogItemMutationResult> {
+  try {
+    const response = await adminService.deleteAdminCatalogItem(catalogItemId);
+    if (!response.success) {
+      return {
+        success: false,
+        message: normalizeAdminCatalogItemErrorMessage(
+          response.message,
+          "تعذر تعطيل عنصر الكتالوج",
+        ),
+      };
+    }
 
-  revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+    revalidatePath(ADMIN_CATALOG_ITEMS_PATH);
+    return { success: true };
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error("Admin disable catalog item failed:", error);
+    return { success: false, message: "تعذر تعطيل عنصر الكتالوج" };
+  }
 }
 
 export async function adminBulkUpdateCatalogItemsAction(payload: {
@@ -2095,7 +2175,10 @@ export async function adminBulkUpdateCatalogItemsAction(payload: {
     if (!response.success) {
       return {
         success: false,
-        message: response.message || "تعذر تحديث عناصر الكتالوج المحددة",
+        message: normalizeAdminCatalogItemErrorMessage(
+          response.message,
+          "تعذر تحديث عناصر الكتالوج المحددة",
+        ),
       };
     }
 

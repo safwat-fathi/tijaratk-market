@@ -2,6 +2,8 @@ import {
   CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
   findActiveCatalogCategoryNamesForSource,
+  GROCERY_CATALOG_CATEGORIES,
+  isCatalogCategoryCompatibleWithSource,
   isCatalogImageReferenceAllowedForSource,
   normalizeCatalogCategoryForSource,
 } from './catalog-source-policy';
@@ -129,15 +131,53 @@ describe('catalog category source policy', () => {
     });
   });
 
-  it('returns no categories when the persisted active taxonomy is empty', async () => {
+  it('falls back to the fixed source taxonomy when no categories are persisted', async () => {
     await expect(
       findActiveCatalogCategoryNamesForSource(
         {
-          catalogCategory: { findMany: jest.fn().mockResolvedValue([]) },
+          catalogCategory: {
+            findMany: jest.fn().mockResolvedValue([]),
+            count: jest.fn().mockResolvedValue(0),
+          },
+        } as never,
+        CATALOG_SOURCE_TALABAT,
+      ),
+    ).resolves.toEqual([...GROCERY_CATALOG_CATEGORIES]);
+  });
+
+  it('does not restore deleted categories when configuration exists', async () => {
+    await expect(
+      findActiveCatalogCategoryNamesForSource(
+        {
+          catalogCategory: {
+            findMany: jest.fn().mockResolvedValue([]),
+            count: jest.fn().mockResolvedValue(3),
+          },
         } as never,
         CATALOG_SOURCE_TALABAT,
       ),
     ).resolves.toEqual([]);
+  });
+
+  it('allows custom categories but rejects known categories from the other source', () => {
+    expect(
+      isCatalogCategoryCompatibleWithSource(
+        CATALOG_SOURCE_TALABAT,
+        'منتجات الالبان',
+      ),
+    ).toBe(true);
+    expect(
+      isCatalogCategoryCompatibleWithSource(
+        CATALOG_SOURCE_CHEFAA,
+        'منتجات الالبان',
+      ),
+    ).toBe(false);
+    expect(
+      isCatalogCategoryCompatibleWithSource(
+        CATALOG_SOURCE_TALABAT,
+        'أدوية',
+      ),
+    ).toBe(false);
   });
 
   it.each(['أرز ومكرونة وحبوب', 'ارز ومكرونة وحبوب', 'ارز ومكرونة'])(

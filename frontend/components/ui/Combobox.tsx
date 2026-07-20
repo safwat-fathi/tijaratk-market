@@ -23,6 +23,7 @@ export interface ComboboxProps extends Omit<React.InputHTMLAttributes<HTMLInputE
   defaultValue?: string | number;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   disableFiltering?: boolean;
+  allowCustomValue?: boolean;
 }
 
 export function Combobox({
@@ -37,6 +38,7 @@ export function Combobox({
   onChange,
   name,
   disableFiltering,
+  allowCustomValue = true,
   ...props
 }: ComboboxProps) {
   const normalizedOptions = useMemo(() => {
@@ -53,7 +55,9 @@ export function Combobox({
     : undefined;
 
   const [isOpen, setIsOpen] = useState(false);
-  const [inputValue, setInputValue] = useState(initialOption ? initialOption.label : "");
+  const [inputValue, setInputValue] = useState(
+    initialOption?.label ?? (initialValue !== undefined ? String(initialValue) : ""),
+  );
   const [selectedValue, setSelectedValue] = useState(initialValue !== undefined ? String(initialValue) : "");
   const containerRef = useRef<HTMLDivElement>(null);
   const hiddenInputRef = useRef<HTMLInputElement>(null);
@@ -98,7 +102,11 @@ export function Combobox({
     setIsOpen(true);
     
     const matchingOption = normalizedOptions.find(opt => opt.label.toLowerCase() === val.toLowerCase());
-    const newVal = matchingOption ? matchingOption.value : val;
+    const newVal = matchingOption
+      ? matchingOption.value
+      : allowCustomValue
+        ? val
+        : "";
     setSelectedValue(newVal);
     
     if (onValueChange) onValueChange(newVal);

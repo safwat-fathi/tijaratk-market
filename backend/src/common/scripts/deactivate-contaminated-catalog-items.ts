@@ -6,6 +6,7 @@ import {
   CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
   getAllowedCatalogCategoriesForSource,
+  isCatalogCategoryCompatibleWithSource,
 } from 'src/products/catalog-source-policy';
 
 config({
@@ -28,7 +29,27 @@ async function main() {
   try {
     await client.query('BEGIN');
     for (const source of sources) {
-      const allowedCategories = getAllowedCatalogCategoriesForSource(source);
+      const configuredCategoriesResult = await client.query<{
+        name: string;
+        deleted_at: Date | null;
+      }>(
+        `
+          SELECT name, deleted_at
+          FROM catalog_categories
+          WHERE source = $1
+          ORDER BY name ASC
+        `,
+        [source],
+      );
+      const allowedCategories =
+        configuredCategoriesResult.rows.length > 0
+          ? configuredCategoriesResult.rows
+              .filter(({ deleted_at }) => deleted_at === null)
+              .map(({ name }) => name)
+              .filter((name) =>
+                isCatalogCategoryCompatibleWithSource(source, name),
+              )
+          : getAllowedCatalogCategoriesForSource(source);
       const result = await client.query(
         `
           UPDATE catalog_items

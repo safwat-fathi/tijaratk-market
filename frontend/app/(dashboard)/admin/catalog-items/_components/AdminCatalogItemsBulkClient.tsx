@@ -54,20 +54,14 @@ export default function AdminCatalogItemsBulkClient({
   const [toastData, setToastData] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [editingItem, setEditingItem] = useState<AdminCatalogItem | null>(null);
+  const [editCategory, setEditCategory] = useState("");
   const [editIsActive, setEditIsActive] = useState(false);
   const [editIsEssential, setEditIsEssential] = useState(false);
   const [isBulkSheetOpen, setIsBulkSheetOpen] = useState(false);
 
   useEffect(() => {
-    setCurrentItems((prevItems) => {
-      const incomingIds = items.map((i) => i.id).join(",");
-      const currentIds = prevItems.map((i) => i.id).join(",");
-      if (incomingIds !== currentIds) {
-        setSelectedIds([]);
-        return items;
-      }
-      return prevItems;
-    });
+    setCurrentItems(items);
+    setSelectedIds([]);
   }, [items]);
 
   const visibleIds = useMemo(
@@ -92,6 +86,7 @@ export default function AdminCatalogItemsBulkClient({
 
   const openEditItem = (item: AdminCatalogItem) => {
     setEditingItem(item);
+    setEditCategory(item.category);
     setEditIsActive(item.is_active);
     setEditIsEssential(item.is_essential);
   };
@@ -102,6 +97,13 @@ export default function AdminCatalogItemsBulkClient({
     is_essential?: boolean;
   }) => {
     setToastData(null);
+    if (payload.category && !categoryNames.includes(payload.category)) {
+      setToastData({
+        message: "اختر تصنيفًا متاحًا من القائمة.",
+        type: "error",
+      });
+      return;
+    }
     startTransition(async () => {
       try {
         const response = await adminBulkUpdateCatalogItemsAction({
@@ -244,8 +246,9 @@ export default function AdminCatalogItemsBulkClient({
               name="bulk_category"
               label="تغيير التصنيف"
               options={categoryNames}
-              defaultValue={bulkCategory}
+              value={bulkCategory}
               onValueChange={setBulkCategory}
+              allowCustomValue={false}
               wrapperClassName="w-full"
               inputClassName="h-10 px-3 text-sm"
               placeholder="اختر التصنيف"
@@ -315,53 +318,67 @@ export default function AdminCatalogItemsBulkClient({
           <div className="space-y-4 pb-2">
             <form
               action={async (formData) => {
-                try {
-                  const file = formData.get("file");
-                  let updatedItem;
-                  if (file instanceof File && file.size > 0) {
-                    formData.set("is_active", String(editIsActive));
-                    formData.set("is_essential", String(editIsEssential));
-                    updatedItem = await adminUpdateCatalogItemAction(
-                      editingItem.id,
-                      formData,
-                    );
-                  } else {
-                    const priceValue = formData.get("price");
-                    const sortValue = formData.get("essential_sort_order");
-                    updatedItem = await adminUpdateCatalogItemPayloadAction(
-                      editingItem.id,
-                      {
-                        name: String(formData.get("name") || ""),
-                        category: String(formData.get("category") || ""),
-                        price:
-                          typeof priceValue === "string" && priceValue.trim()
-                            ? Number(priceValue)
-                            : null,
-                        currency: String(formData.get("currency") || ""),
-                        image_url: String(formData.get("image_url") || ""),
-                        external_id: String(formData.get("external_id") || ""),
-                        is_active: editIsActive,
-                        is_essential: editIsEssential,
-                        essential_sort_order:
-                          typeof sortValue === "string" && sortValue.trim()
-                            ? Number(sortValue)
-                            : null,
-                      },
-                    );
-                  }
-                  if (updatedItem) {
-                    setCurrentItems((prev) =>
-                      prev.map((item) =>
-                        item.id === updatedItem.id ? updatedItem : item,
-                      ),
-                    );
-                  }
-                  setEditingItem(null);
-                  setToastData({ message: "تم تعديل العنصر بنجاح", type: "success" });
-                  router.refresh();
-                } catch (e: any) {
-                  setToastData({ message: e.message || "حدث خطأ أثناء التعديل", type: "error" });
+                if (!categoryNames.includes(editCategory)) {
+                  setToastData({
+                    message: "اختر تصنيفًا متاحًا من القائمة قبل الحفظ.",
+                    type: "error",
+                  });
+                  return;
                 }
+
+                const file = formData.get("file");
+                let result;
+                if (file instanceof File && file.size > 0) {
+                  formData.set("is_active", String(editIsActive));
+                  formData.set("is_essential", String(editIsEssential));
+                  result = await adminUpdateCatalogItemAction(
+                    editingItem.id,
+                    formData,
+                  );
+                } else {
+                  const priceValue = formData.get("price");
+                  const sortValue = formData.get("essential_sort_order");
+                  result = await adminUpdateCatalogItemPayloadAction(
+                    editingItem.id,
+                    {
+                      name: String(formData.get("name") || ""),
+                      category: String(formData.get("category") || ""),
+                      price:
+                        typeof priceValue === "string" && priceValue.trim()
+                          ? Number(priceValue)
+                          : null,
+                      currency: String(formData.get("currency") || ""),
+                      image_url: String(formData.get("image_url") || ""),
+                      external_id: String(formData.get("external_id") || ""),
+                      is_active: editIsActive,
+                      is_essential: editIsEssential,
+                      essential_sort_order:
+                        typeof sortValue === "string" && sortValue.trim()
+                          ? Number(sortValue)
+                          : null,
+                    },
+                  );
+                }
+
+                if (!result.success) {
+                  setToastData({ message: result.message, type: "error" });
+                  return;
+                }
+
+                const updatedItem = result.data;
+                if (updatedItem) {
+                  setCurrentItems((prev) =>
+                    prev.map((item) =>
+                      item.id === updatedItem.id ? updatedItem : item,
+                    ),
+                  );
+                }
+                setEditingItem(null);
+                setToastData({
+                  message: "تم تعديل العنصر بنجاح",
+                  type: "success",
+                });
+                router.refresh();
               }}
               encType="multipart/form-data"
               className="grid gap-4 md:grid-cols-2"
@@ -376,15 +393,24 @@ export default function AdminCatalogItemsBulkClient({
                 />
               </label>
               <Combobox
+                key={editingItem.id}
                 name="category"
                 label="التصنيف"
                 options={categoryNames}
-                defaultValue={editingItem.category}
+                value={editCategory}
+                onValueChange={setEditCategory}
+                allowCustomValue={false}
                 wrapperClassName="md:col-span-2"
                 inputClassName="h-10 px-3 text-sm"
                 placeholder="التصنيف"
                 required
               />
+              {!categoryNames.includes(editingItem.category) ? (
+                <p className="md:col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  التصنيف المحفوظ حاليًا هو «{editingItem.category}»، لكنه لم يعد
+                  متاحًا. اختر تصنيفًا نشطًا قبل الحفظ.
+                </p>
+              ) : null}
               <label className="space-y-1">
                 <span className="text-sm font-medium text-brand-text">السعر</span>
                 <input
@@ -479,14 +505,20 @@ export default function AdminCatalogItemsBulkClient({
 
             <form
               action={async () => {
-                try {
-                  await adminDeleteCatalogItemAction(editingItem.id);
-                  setEditingItem(null);
-                  setToastData({ message: "تم إلغاء تفعيل العنصر بنجاح", type: "success" });
-                  router.refresh();
-                } catch (e: any) {
-                  setToastData({ message: e.message || "حدث خطأ أثناء إلغاء تفعيل العنصر", type: "error" });
+                const result = await adminDeleteCatalogItemAction(
+                  editingItem.id,
+                );
+                if (!result.success) {
+                  setToastData({ message: result.message, type: "error" });
+                  return;
                 }
+
+                setEditingItem(null);
+                setToastData({
+                  message: "تم إلغاء تفعيل العنصر بنجاح",
+                  type: "success",
+                });
+                router.refresh();
               }}
               className="mt-2 pt-4 border-t border-brand-border"
             >

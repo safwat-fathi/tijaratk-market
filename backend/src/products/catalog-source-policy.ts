@@ -232,6 +232,34 @@ export function isCatalogCategoryAllowedForSource(
   return false;
 }
 
+/**
+ * Allows source-scoped custom category names while rejecting known taxonomy
+ * values (and aliases) that belong exclusively to the other catalog source.
+ */
+export function isCatalogCategoryCompatibleWithSource(
+  source: string,
+  category: string,
+): boolean {
+  const normalizedCategory = normalizeCatalogCategory(category);
+  if (!normalizedCategory) return false;
+
+  if (source === CATALOG_SOURCE_CHEFAA) {
+    return (
+      !GROCERY_CATALOG_CATEGORY_SET.has(normalizedCategory) ||
+      PHARMACY_CATALOG_CATEGORY_SET.has(normalizedCategory)
+    );
+  }
+
+  if (source === CATALOG_SOURCE_TALABAT) {
+    return (
+      !PHARMACY_CATALOG_CATEGORY_SET.has(normalizedCategory) ||
+      GROCERY_CATALOG_CATEGORY_SET.has(normalizedCategory)
+    );
+  }
+
+  return false;
+}
+
 const parseConfiguredCatalogImageHost = (
   appUrl?: string | null,
 ): string | null => {
@@ -356,7 +384,7 @@ type CatalogCategoryReader = Pick<PrismaClient, 'catalogCategory'>;
 /**
  * Returns the exact active taxonomy configured by administrators for one
  * catalog source. Persisted categories are authoritative; legacy constants
- * are intentionally not used as a fallback when the active set is empty.
+ * are used only while a source has no persisted category configuration.
  */
 export async function findActiveCatalogCategoryNamesForSource(
   client: CatalogCategoryReader,
@@ -368,7 +396,16 @@ export async function findActiveCatalogCategoryNamesForSource(
     orderBy: { name: 'asc' },
   });
 
-  return rows.map((row) => row.name);
+  if (rows.length > 0) {
+    return rows
+      .map((row) => row.name)
+      .filter((name) => isCatalogCategoryCompatibleWithSource(source, name));
+  }
+
+  const persistedCount = await client.catalogCategory.count({
+    where: { source },
+  });
+  return persistedCount > 0 ? [] : getAllowedCatalogCategoriesForSource(source);
 }
 
 export function resolveCatalogSourceForImportFormat(

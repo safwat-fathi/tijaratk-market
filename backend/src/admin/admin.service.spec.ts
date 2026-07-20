@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 
 describe('AdminService getOrders', () => {
@@ -170,6 +171,187 @@ describe('AdminService getOrders', () => {
     );
     expect(secondTx.order.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ tenant_id: 20 }) }),
+    );
+  });
+});
+
+describe('AdminService catalog item categories', () => {
+  const customCategory = 'منتجات الالبان';
+
+  const createService = ({
+    activeCategories = [customCategory],
+    existingItem,
+  }: {
+    activeCategories?: string[];
+    existingItem?: Record<string, unknown>;
+  } = {}) => {
+    const transactionClient = {
+      catalogItem: {
+        create: jest.fn(
+          async ({ data }: { data: Record<string, unknown> }) => ({
+            id: 91,
+            ...data,
+          }),
+        ),
+        update: jest.fn(
+          async ({ data }: { data: Record<string, unknown> }) => ({
+            id: 91,
+            source: 'talabat_csv',
+            image_url: null,
+            ...data,
+          }),
+        ),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      $executeRaw: jest.fn().mockResolvedValue(1),
+    };
+    const prisma = {
+      catalogCategory: {
+        findMany: jest.fn().mockResolvedValue(
+          activeCategories.map((name, index) => ({
+            id: index + 1,
+            name,
+            image_url: null,
+          })),
+        ),
+        count: jest.fn().mockResolvedValue(activeCategories.length),
+      },
+      catalogItem: {
+        findFirst: jest.fn().mockResolvedValue(
+          existingItem ?? {
+            id: 91,
+            name: 'جبنة شيدر',
+            category: 'ألبان و بيض',
+            source: 'talabat_csv',
+            image_url: null,
+            is_active: true,
+            is_essential: false,
+          },
+        ),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 91, source: 'talabat_csv' }]),
+      },
+      $transaction: jest.fn(
+        async (
+          callback: (client: typeof transactionClient) => Promise<unknown>,
+        ) => callback(transactionClient),
+      ),
+    };
+    const service = new AdminService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {
+        processProductThumbnail: jest.fn(),
+        deleteManagedProductImage: jest.fn(),
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    return { service, prisma, transactionClient };
+  };
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('stores the exact active category selected by the admin', async () => {
+    const { service, transactionClient } = createService();
+
+    await service.createAdminCatalogItem({
+      source: 'talabat_csv',
+      name: 'جبنة شيدر',
+      category: customCategory,
+    });
+
+    expect(transactionClient.catalogItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ category: customCategory }),
+      }),
+    );
+  });
+
+  it('updates and bulk-updates with the exact active category name', async () => {
+    const { service, transactionClient } = createService();
+
+    await service.updateAdminCatalogItem(91, { category: customCategory });
+    await service.bulkUpdateAdminCatalogItems({
+      ids: [91],
+      category: customCategory,
+    });
+
+    expect(transactionClient.catalogItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ category: customCategory }),
+      }),
+    );
+    expect(transactionClient.catalogItem.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ category: customCategory }),
+      }),
+    );
+  });
+
+  it('allows a legacy invalid image URL to remain unchanged during category repair', async () => {
+    const legacyImageUrl = 'https://www.google.com/search?q=product+image';
+    const { service, transactionClient } = createService({
+      existingItem: {
+        id: 91,
+        name: 'جبنة شيدر',
+        category: 'ألبان و بيض',
+        source: 'talabat_csv',
+        image_url: legacyImageUrl,
+        is_active: true,
+        is_essential: false,
+      },
+    });
+
+    await service.updateAdminCatalogItem(91, {
+      category: customCategory,
+      image_url: legacyImageUrl,
+    });
+
+    expect(transactionClient.catalogItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ category: customCategory }),
+      }),
+    );
+    expect(
+      transactionClient.catalogItem.update.mock.calls[0]?.[0]?.data,
+    ).not.toHaveProperty('image_url');
+  });
+
+  it('rejects a category absent from a configured source taxonomy', async () => {
+    const { service, transactionClient } = createService({
+      activeCategories: ['مخبوزات'],
+    });
+
+    await expect(
+      service.createAdminCatalogItem({
+        source: 'talabat_csv',
+        name: 'جبنة شيدر',
+        category: customCategory,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(transactionClient.catalogItem.create).not.toHaveBeenCalled();
+  });
+
+  it('uses the legacy fixed taxonomy only when no categories are configured', async () => {
+    const { service, transactionClient } = createService({
+      activeCategories: [],
+    });
+
+    await service.createAdminCatalogItem({
+      source: 'talabat_csv',
+      name: 'جبنة شيدر',
+      category: 'ألبان و بيض',
+    });
+
+    expect(transactionClient.catalogItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ category: 'ألبان و بيض' }),
+      }),
     );
   });
 });

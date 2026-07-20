@@ -31,8 +31,10 @@ import {
   CATALOG_SOURCE_CHEFAA,
   CATALOG_SOURCE_TALABAT,
   CatalogSource,
+  findActiveCatalogCategoryNamesForSource,
   getAllowedCatalogCategoriesForSource,
   isCatalogCategoryAllowedForSource,
+  isCatalogCategoryCompatibleWithSource,
   isCatalogImageReferenceAllowedForSource,
   normalizeCatalogCategoryForSource,
   resolveCatalogSourceForTenantCategory,
@@ -731,12 +733,16 @@ export class AdminService {
     essentialStatus: 'all' | 'essential' | 'non_essential' = 'all',
   ) {
     this.ensureSupportedCatalogSource(source);
+    const activeCategories = await findActiveCatalogCategoryNamesForSource(
+      this.prisma,
+      source,
+    );
 
     const items = await this.prisma.catalogItem.findMany({
       where: {
         source,
         is_active: true,
-        category: { in: getAllowedCatalogCategoriesForSource(source) },
+        category: { in: activeCategories },
         ...(essentialStatus === 'essential'
           ? { is_essential: true }
           : essentialStatus === 'non_essential'
@@ -889,6 +895,9 @@ export class AdminService {
     const source = dto.source;
     this.ensureSupportedCatalogSource(source);
     const name = this.normalizeCategoryName(dto.name);
+    if (!isCatalogCategoryCompatibleWithSource(source, name)) {
+      throw new BadRequestException('Category is not supported for source');
+    }
 
     const existing = await this.prisma.catalogCategory.findUnique({
       where: { source_name: { source, name } },
@@ -929,6 +938,9 @@ export class AdminService {
   ) {
     const category = await this.findCatalogCategory(id);
     const newName = this.normalizeCategoryName(dto.name);
+    if (!isCatalogCategoryCompatibleWithSource(category.source, newName)) {
+      throw new BadRequestException('Category is not supported for source');
+    }
     const shouldClearImage = dto.clear_image === true && !file?.path;
 
     if (newName !== category.name) {
@@ -1281,8 +1293,8 @@ export class AdminService {
     this.rejectContradictoryEssentialState(dto.is_active, dto.is_essential);
 
     const name = dto.name?.trim();
-    const category = normalizeCatalogCategoryForSource(source, dto.category);
-    if (!name || !category) {
+    const category = this.normalizeCategoryName(dto.category);
+    if (!name) {
       throw new BadRequestException('Name and category are required');
     }
     await this.ensureActiveCatalogCategory(source, category);
@@ -1342,13 +1354,7 @@ export class AdminService {
       data.name = name;
     }
     if (dto.category !== undefined) {
-      const category = normalizeCatalogCategoryForSource(
-        item.source,
-        dto.category,
-      );
-      if (!category) {
-        throw new BadRequestException('Category is not supported for source');
-      }
+      const category = this.normalizeCategoryName(dto.category);
       await this.ensureActiveCatalogCategory(item.source, category);
       data.category = category;
     }
@@ -1362,18 +1368,20 @@ export class AdminService {
       );
     } else if (dto.image_url !== undefined) {
       const requestedImageUrl = this.normalizeNullableString(dto.image_url);
-      if (
-        requestedImageUrl &&
-        !isCatalogImageReferenceAllowedForSource(
-          item.source,
-          requestedImageUrl,
-        )
-      ) {
-        throw new BadRequestException(
-          'Image URL is not allowed for this catalog source',
-        );
+      if (requestedImageUrl !== item.image_url) {
+        if (
+          requestedImageUrl &&
+          !isCatalogImageReferenceAllowedForSource(
+            item.source,
+            requestedImageUrl,
+          )
+        ) {
+          throw new BadRequestException(
+            'Image URL is not allowed for this catalog source',
+          );
+        }
+        data.image_url = requestedImageUrl;
       }
-      data.image_url = requestedImageUrl;
     }
     if (dto.external_id !== undefined) {
       data.external_id = this.normalizeNullableString(dto.external_id);
@@ -1439,19 +1447,7 @@ export class AdminService {
 
     const data: Prisma.CatalogItemUpdateManyMutationInput = {};
     if (hasCategory) {
-      const requestedCategory = dto.category?.trim();
-      const normalizedCategories = new Set(
-        items.map((item) =>
-          normalizeCatalogCategoryForSource(item.source, requestedCategory),
-        ),
-      );
-      const [category] = normalizedCategories;
-      if (!category) throw new BadRequestException('Category is required');
-      if (normalizedCategories.size !== 1) {
-        throw new BadRequestException(
-          'Category is not supported for all selected catalog sources',
-        );
-      }
+      const category = this.normalizeCategoryName(dto.category);
 
       const sources = Array.from(new Set(items.map((item) => item.source)));
       for (const source of sources) {
@@ -2155,8 +2151,15 @@ export class AdminService {
     });
 
     if (categories.length > 0) {
-      return categories;
+      return categories.filter(({ name }) =>
+        isCatalogCategoryCompatibleWithSource(source, name),
+      );
     }
+
+    const persistedCount = await this.prisma.catalogCategory.count({
+      where: { source },
+    });
+    if (persistedCount > 0) return [];
 
     return getAllowedCatalogCategoriesForSource(source).map((name, index) => ({
       id: -1 - index,
@@ -2199,20 +2202,10 @@ export class AdminService {
   private async ensureActiveCatalogCategory(source: string, category: string) {
     this.ensureSupportedCatalogSource(source);
     const normalizedCategory = this.normalizeCategoryName(category);
+    const activeCategories = await this.getActiveCatalogCategoryRows(source);
 
-    const persisted = await this.prisma.catalogCategory.findFirst({
-      where: {
-        source,
-        name: normalizedCategory,
-        deleted_at: null,
-      },
-      select: { id: true },
-    });
-
-    if (persisted) return;
-
-    if (!isCatalogCategoryAllowedForSource(source, normalizedCategory)) {
-      throw new BadRequestException('Category is not supported for source');
+    if (!activeCategories.some(({ name }) => name === normalizedCategory)) {
+      throw new BadRequestException('Category is not active for source');
     }
   }
 
