@@ -14,6 +14,7 @@ type BrowserFamily = "ios" | "android" | "desktop" | "unknown";
 
 type InstallPwaActionProps = {
   appName: string;
+  shareUrl?: string;
   className?: string;
   iconClassName?: string;
   buttonText?: string;
@@ -45,6 +46,7 @@ const isStandaloneDisplay = () =>
 
 export default function InstallPwaAction({
   appName,
+  shareUrl,
   className,
   iconClassName,
   buttonText,
@@ -141,8 +143,13 @@ export default function InstallPwaAction({
     setInstallPrompt(null);
   }, [installPrompt]);
 
+  const getShareUrl = useCallback(
+    () => new URL(shareUrl || window.location.href, window.location.origin).href,
+    [shareUrl],
+  );
+
   const handleCopyLink = useCallback(async () => {
-    const currentUrl = window.location.href;
+    const currentUrl = getShareUrl();
 
     try {
       await navigator.clipboard.writeText(currentUrl);
@@ -152,7 +159,7 @@ export default function InstallPwaAction({
     } catch {
       window.prompt("انسخ الرابط", currentUrl);
     }
-  }, []);
+  }, [getShareUrl]);
 
   const handleNativeShare = useCallback(async () => {
     if (!navigator.share) {
@@ -163,12 +170,12 @@ export default function InstallPwaAction({
     try {
       await navigator.share({
         title: appName,
-        url: window.location.href,
+        url: getShareUrl(),
       });
     } catch {
       // User cancelled the share sheet.
     }
-  }, [appName, handleCopyLink]);
+  }, [appName, getShareUrl, handleCopyLink]);
 
   if (isStandalone) {
     return null;

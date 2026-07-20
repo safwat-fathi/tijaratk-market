@@ -22,6 +22,7 @@ import { getCustomerProfileBySlugFromCookie } from "@/lib/tracking/customer-trac
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import type { DeliveryAvailability } from "@/types/models/delivery";
+import { SITE_URL } from "@/lib/marketing-seo";
 
 type StoreSearchParams = {
   reorder?: string;
@@ -127,7 +128,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title,
       description,
       type: "website",
-      url: `https://tijaratk.com/${slug}`,
+      url: `${SITE_URL}/${encodeURIComponent(slug)}`,
       siteName: "تجارتك",
       images: [
         {

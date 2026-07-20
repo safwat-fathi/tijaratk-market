@@ -8,6 +8,10 @@ export type ImageRemotePattern = {
 const STATIC_REMOTE_IMAGE_PATTERNS: ImageRemotePattern[] = [
   {
     protocol: "https",
+    hostname: "www.tijaratk.com",
+  },
+  {
+    protocol: "https",
     hostname: "tijaratk.com",
   },
   {

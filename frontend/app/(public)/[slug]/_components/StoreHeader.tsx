@@ -46,6 +46,7 @@ export default function StoreHeader({
 					{enableCustomerTour ? <CustomerStorefrontOnboarding /> : null}
 					<InstallPwaAction
 						appName={tenant.name}
+						shareUrl={`/open/store/${encodeURIComponent(tenant.slug)}`}
 						id="customer-storefront-pwa-install"
 					/>
 				</>

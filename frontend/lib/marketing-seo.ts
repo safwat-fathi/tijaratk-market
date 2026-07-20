@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const SITE_URL = "https://tijaratk.com";
+export const SITE_URL = "https://www.tijaratk.com";
 
 export const BRAND_NAME = "Tijaratk";
 export const BRAND_ARABIC_NAME = "تجارتك";

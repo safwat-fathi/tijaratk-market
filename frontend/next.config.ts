@@ -6,6 +6,16 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "tijaratk.com" }],
+        destination: "https://www.tijaratk.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
   turbopack: {
     root: path.join(__dirname, ".."),
   },

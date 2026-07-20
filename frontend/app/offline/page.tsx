@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Static privacy-safe fallback shown when a dashboard navigation is offline. */
+/** Static privacy-safe fallback shown when an application navigation is offline. */
 export default function OfflinePage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4" dir="rtl">
@@ -15,7 +15,7 @@ export default function OfflinePage() {
         <Logo width={160} height={48} className="mx-auto h-12 w-auto" />
         <h1 className="mt-6 text-2xl font-bold text-brand-text">لا يوجد اتصال بالإنترنت</h1>
         <p className="mt-3 leading-7 text-gray-600">
-          أعد الاتصال ثم حاول فتح لوحة التحكم مرة أخرى. لا يتم حفظ بيانات الطلبات على هذا الجهاز.
+          أعد الاتصال ثم حاول فتح التطبيق مرة أخرى. لا يتم حفظ بيانات الطلبات على هذا الجهاز.
         </p>
         <Link
           href="/"
