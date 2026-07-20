@@ -70,7 +70,7 @@ describe('DeliverySchedulingService', () => {
     });
   });
 
-  it('requires a same-day window of at least one hour', () => {
+  it('requires a window of at least one hour, allowing cross-day', () => {
     expect(
       service.hasValidOperatingHours({
         delivery_starts_at: '09:00',
@@ -88,7 +88,7 @@ describe('DeliverySchedulingService', () => {
         delivery_starts_at: '22:00',
         delivery_ends_at: '09:00',
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('allows immediate orders at opening and rejects a scheduled slot', () => {

@@ -64,14 +64,28 @@ const deliveryConfigurationSchema = z
       start &&
       end &&
       (!deliveryTimePattern.test(start) ||
-        !deliveryTimePattern.test(end) ||
-        end <= start)
+        !deliveryTimePattern.test(end))
     ) {
       ctx.addIssue({
         code: "custom",
-        message: "تأكد أن وقت النهاية بعد وقت البداية",
+        message: "تأكد من كتابة الوقت بصيغة صحيحة",
         path: ["delivery_configuration"],
       });
+    } else if (start && end) {
+      const [startHours, startMinutes] = start.split(":").map(Number);
+      const [endHours, endMinutes] = end.split(":").map(Number);
+      const startMins = startHours * 60 + startMinutes;
+      let endMins = endHours * 60 + endMinutes;
+      if (endMins <= startMins) {
+        endMins += 24 * 60;
+      }
+      if (endMins - startMins < 60) {
+        ctx.addIssue({
+          code: "custom",
+          message: "يجب أن تكون مدة التشغيل ساعة على الأقل",
+          path: ["delivery_configuration"],
+        });
+      }
     }
   });
 

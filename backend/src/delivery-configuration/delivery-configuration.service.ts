@@ -259,13 +259,14 @@ export class DeliveryConfigurationService {
         const [hours, minutes] = value.split(':').map(Number);
         return hours * 60 + minutes;
       };
-      if (
-        toMinutes(dto.delivery_ends_at) -
-          toMinutes(dto.delivery_starts_at) <
-        60
-      ) {
+      const startMins = toMinutes(dto.delivery_starts_at);
+      let endMins = toMinutes(dto.delivery_ends_at);
+      if (endMins <= startMins) {
+        endMins += 24 * 60;
+      }
+      if (endMins - startMins < 60) {
         throw new BadRequestException(
-          'وقت نهاية التوصيل يجب أن يكون بعد وقت البداية بساعة على الأقل',
+          'يجب أن تكون مدة التوصيل ساعة على الأقل',
         );
       }
     }

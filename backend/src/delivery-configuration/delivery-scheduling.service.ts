@@ -64,9 +64,12 @@ export class DeliverySchedulingService {
     ) {
       return false;
     }
-    return (
-      this.toMinutes(endsAt) - this.toMinutes(startsAt) >= MIN_WINDOW_MINUTES
-    );
+    const startMins = this.toMinutes(startsAt);
+    let endMins = this.toMinutes(endsAt);
+    if (endMins <= startMins) {
+      endMins += 24 * 60;
+    }
+    return endMins - startMins >= MIN_WINDOW_MINUTES;
   }
 
   getAvailability(
@@ -104,9 +107,17 @@ export class DeliverySchedulingService {
     const { startsAt, endsAt } = this.requireOperatingHours(hours);
     const cairo = this.getCairoParts(now);
     const opensAt = this.toMinutes(startsAt);
-    const closesAt = this.toMinutes(endsAt);
+    let closesAt = this.toMinutes(endsAt);
+    if (closesAt <= opensAt) {
+      closesAt += 24 * 60;
+    }
     const currentMinutes = cairo.hour * 60 + cairo.minute;
-    const isOpen = currentMinutes >= opensAt && currentMinutes < closesAt;
+    let isOpen = false;
+    if (closesAt > 24 * 60) {
+      isOpen = currentMinutes >= opensAt || currentMinutes < (closesAt - 24 * 60);
+    } else {
+      isOpen = currentMinutes >= opensAt && currentMinutes < closesAt;
+    }
     const scheduledDateOffset = currentMinutes < opensAt ? 0 : 1;
     const scheduledDate = this.addDays(cairo.dateKey, scheduledDateOffset);
 
@@ -171,21 +182,29 @@ export class DeliverySchedulingService {
       throw new BadRequestException('اكتب وقت بداية ونهاية صالحين.');
     }
 
-    const startsAtMinutes = this.toMinutes(startsAt);
+    let startsAtMinutes = this.toMinutes(startsAt);
+    const constraintStartsAt = this.toMinutes(constraints.min_starts_at);
+    let constraintEndsAt = this.toMinutes(constraints.max_ends_at);
+    if (constraintEndsAt <= constraintStartsAt) {
+      constraintEndsAt += 24 * 60;
+    }
+    if (startsAtMinutes < constraintStartsAt && constraintEndsAt > 24 * 60) {
+      startsAtMinutes += 24 * 60;
+    }
+
     const endsAt =
       requestedEndsAt ??
       this.fromMinutes(startsAtMinutes + constraints.min_duration_minutes);
-    const endsAtMinutes = this.toMinutes(endsAt);
+    let endsAtMinutes = this.toMinutes(endsAt);
+    if (endsAtMinutes <= startsAtMinutes) {
+      endsAtMinutes += 24 * 60;
+    }
+
     if (
       startsAtMinutes % constraints.step_minutes !== 0 ||
       endsAtMinutes % constraints.step_minutes !== 0
     ) {
       throw new BadRequestException('يجب اختيار الوقت بفواصل 15 دقيقة.');
-    }
-    if (endsAtMinutes <= startsAtMinutes) {
-      throw new BadRequestException(
-        'وقت النهاية يجب أن يكون بعد وقت البداية في نفس اليوم.',
-      );
     }
     if (endsAtMinutes - startsAtMinutes < constraints.min_duration_minutes) {
       throw new BadRequestException(
@@ -193,8 +212,8 @@ export class DeliverySchedulingService {
       );
     }
     if (
-      startsAtMinutes < this.toMinutes(constraints.min_starts_at) ||
-      endsAtMinutes > this.toMinutes(constraints.max_ends_at)
+      startsAtMinutes < constraintStartsAt ||
+      endsAtMinutes > constraintEndsAt
     ) {
       throw new BadRequestException(
         'موعد التوصيل يجب أن يكون بالكامل داخل ساعات عمل المتجر.',
@@ -281,8 +300,9 @@ export class DeliverySchedulingService {
   }
 
   private fromMinutes(value: number) {
-    const hour = Math.floor(value / 60);
-    const minute = value % 60;
+    const normalizedValue = value % (24 * 60);
+    const hour = Math.floor(normalizedValue / 60);
+    const minute = normalizedValue % 60;
     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   }
 

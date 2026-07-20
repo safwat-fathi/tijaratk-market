@@ -106,7 +106,7 @@ describe('DeliveryConfigurationService', () => {
           primary_area_id: 3,
           delivery_areas: [{ area_id: 4, delivery_fee: 10 }],
         }),
-      ).rejects.toThrow('بساعة على الأقل');
+      ).rejects.toThrow('ساعة على الأقل');
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 

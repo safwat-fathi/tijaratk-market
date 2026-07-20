@@ -599,9 +599,14 @@ const zoneOperatingHoursSchema = z
         const [hours, minutes] = value.split(":").map(Number);
         return hours * 60 + minutes;
       };
-      return toMinutes(delivery_ends_at) - toMinutes(delivery_starts_at) >= 60;
+      const startMins = toMinutes(delivery_starts_at);
+      let endMins = toMinutes(delivery_ends_at);
+      if (endMins <= startMins) {
+        endMins += 24 * 60;
+      }
+      return endMins - startMins >= 60;
     },
-    { message: "يجب أن تكون نهاية التشغيل بعد البداية بساعة على الأقل." },
+    { message: "يجب أن تكون مدة التشغيل ساعة على الأقل." },
   );
 
 export async function updateZoneOperatingHoursAction(
@@ -1256,14 +1261,28 @@ const adminDeliveryConfigurationSchema = z
       start &&
       end &&
       (!ADMIN_DELIVERY_TIME_PATTERN.test(start) ||
-        !ADMIN_DELIVERY_TIME_PATTERN.test(end) ||
-        end <= start)
+        !ADMIN_DELIVERY_TIME_PATTERN.test(end))
     ) {
       ctx.addIssue({
         code: "custom",
         path: ["delivery_configuration"],
-        message: "تأكد أن وقت النهاية بعد وقت البداية",
+        message: "تأكد من كتابة الوقت بصيغة صحيحة",
       });
+    } else if (start && end) {
+      const [startHours, startMinutes] = start.split(":").map(Number);
+      const [endHours, endMinutes] = end.split(":").map(Number);
+      const startMins = startHours * 60 + startMinutes;
+      let endMins = endHours * 60 + endMinutes;
+      if (endMins <= startMins) {
+        endMins += 24 * 60;
+      }
+      if (endMins - startMins < 60) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["delivery_configuration"],
+          message: "يجب أن تكون مدة التشغيل ساعة على الأقل",
+        });
+      }
     }
   });
 
