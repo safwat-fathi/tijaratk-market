@@ -110,7 +110,7 @@ export class StoresDirectoryService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Returns active areas, category counts, and featured stores for the directory landing.
+   * Returns active main areas, category counts, and featured stores for the directory landing.
    */
   async getStoresLanding() {
     const deliveryAreas = await this.findPublicDeliveryAreas();
@@ -144,7 +144,7 @@ export class StoresDirectoryService {
   }
 
   /**
-   * Returns active areas for autocomplete and directory navigation.
+   * Returns active public main areas for autocomplete and directory navigation.
    */
   async findAreas(search?: string) {
     const normalizedSearch = search?.trim();
@@ -159,13 +159,16 @@ export class StoresDirectoryService {
   }
 
   /**
-   * Returns the SEO payload for a public area page.
+   * Returns the SEO payload for a public main-area page.
    */
   async getAreaPage(areaSlug: string) {
     const area = await this.findActiveMainArea(areaSlug);
     const deliveryAreas = await this.findPublicDeliveryAreas({
       mainAreaId: area.id,
     });
+    if (deliveryAreas.length === 0) {
+      throw new NotFoundException('Directory area not found');
+    }
     const featuredTenants = this.getUniqueTenantsFromDeliveryAreas(
       deliveryAreas,
     ).slice(0, 6);
@@ -193,7 +196,7 @@ export class StoresDirectoryService {
   }
 
   /**
-   * Returns paginated public store cards by delivery area and category.
+   * Returns paginated public store cards by main area and category.
    */
   async getCategoryPage(
     areaSlug: string,
@@ -812,6 +815,7 @@ export class StoresDirectoryService {
     };
   }
 
+  /** Resolves an active public main area and rejects child-area slugs. */
   private async findActiveMainArea(slug: string) {
     const area = await this.prisma.directoryArea.findFirst({
       where: {
@@ -880,6 +884,7 @@ export class StoresDirectoryService {
     return category;
   }
 
+  /** Returns eligible child delivery coverage with its public main parent. */
   private async findPublicDeliveryAreas(options?: { mainAreaId?: number }) {
     return this.prisma.tenantDeliveryArea.findMany({
       where: {
@@ -1043,7 +1048,9 @@ export class StoresDirectoryService {
             deliveryArea.tenant.id,
           )
         ) {
-          existing.categoryTenantIds[category.slug].add(deliveryArea.tenant.id);
+          existing.categoryTenantIds[category.slug].add(
+            deliveryArea.tenant.id,
+          );
           existing.categoryCounts[category.slug] += 1;
         }
         continue;

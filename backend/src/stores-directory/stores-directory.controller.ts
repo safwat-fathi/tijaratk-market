@@ -63,21 +63,23 @@ export class StoresDirectoryController {
   }
 
   @Get('stores/areas')
-  @ApiOperation({ summary: 'Search active directory areas' })
+  @ApiOperation({ summary: 'Search active public main directory areas' })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Directory areas returned successfully',
+    description: 'Public main directory areas returned successfully',
   })
   findAreas(@Query() query: DirectoryAreasQueryDto) {
     return this.storesDirectoryService.findAreas(query.search);
   }
 
   @Get('stores/areas/:areaSlug')
-  @ApiOperation({ summary: 'Get public stores directory area page payload' })
+  @ApiOperation({
+    summary: 'Get public stores directory main-area page payload',
+  })
   @ApiParam({ name: 'areaSlug', example: 'sheikh-zayed' })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Directory area page payload returned successfully',
+    description: 'Main-area page payload returned successfully',
   })
   getAreaPage(@Param('areaSlug') areaSlug: string) {
     return this.storesDirectoryService.getAreaPage(areaSlug);
@@ -85,13 +87,13 @@ export class StoresDirectoryController {
 
   @Get('stores/areas/:areaSlug/categories/:categorySlug')
   @ApiOperation({
-    summary: 'Get public stores directory category page payload',
+    summary: 'Get public stores directory main-area category page payload',
   })
   @ApiParam({ name: 'areaSlug', example: 'sheikh-zayed' })
   @ApiParam({ name: 'categorySlug', example: 'supermarkets' })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Directory category page payload returned successfully',
+    description: 'Main-area category page payload returned successfully',
   })
   getCategoryPage(
     @Param('areaSlug') areaSlug: string,
