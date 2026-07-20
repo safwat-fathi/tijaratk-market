@@ -265,7 +265,48 @@ export type AdminProductSheetUploadSummary = {
 	}>;
 };
 
-export type AdminOrder = Order;
+export type AdminOrder = Pick<
+	Order,
+	| "id"
+	| "tenant_id"
+	| "customer_id"
+	| "created_at"
+	| "order_type"
+	| "status"
+	| "pricing_mode"
+	| "subtotal"
+	| "delivery_fee"
+	| "total"
+	| "free_text_payload"
+	| "notes"
+	| "card_on_delivery_requested"
+> & {
+	tenant?: Order["tenant"];
+	customer_name?: string | null;
+	customer_phone?: string | null;
+	delivery_address?: string | null;
+	customer: {
+		name?: string | null;
+		phone?: string | null;
+		access_code?: string | null;
+	};
+	items: Array<
+		Pick<
+			Order["items"][number],
+			| "id"
+			| "order_id"
+			| "name_snapshot"
+			| "quantity"
+			| "unit_price"
+			| "total_price"
+			| "notes"
+			| "is_out_of_stock"
+			| "replacement_decision_status"
+			| "replaced_by_product"
+			| "pending_replacement_product"
+		>
+	>;
+};
 
 export type AdminOrdersFilters = {
 	search?: string;

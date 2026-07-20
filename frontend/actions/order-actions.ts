@@ -399,6 +399,10 @@ const persistCreatedOrderTrackingArtifacts = async ({
     typeof createdOrder?.public_token === 'string'
       ? createdOrder.public_token.trim()
       : '';
+  const customerAccessCode =
+    typeof createdOrder?.customer_access_code === 'string'
+      ? createdOrder.customer_access_code.trim()
+      : undefined;
 
   if (publicToken) {
     try {
@@ -418,6 +422,7 @@ const persistCreatedOrderTrackingArtifacts = async ({
           address: customerData.delivery_address,
           notes: customerData.notes,
         },
+        customerAccessCode,
       });
     } catch (cookieError) {
       console.error('Failed to persist order tracking cookie:', cookieError);
@@ -434,6 +439,7 @@ const persistCreatedOrderTrackingArtifacts = async ({
         address: customerData.delivery_address,
         notes: customerData.notes,
       },
+      customerAccessCode,
     });
   } catch (cookieError) {
     console.error('Failed to persist customer profile tracking cookie:', cookieError);

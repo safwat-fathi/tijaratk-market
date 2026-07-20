@@ -11,7 +11,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatCurrency } from "@/lib/utils/currency";
 import { OrderStatus } from "@/types/enums";
 import type { Order } from "@/types/models/order";
-import type { TrackedOrderCookieItem } from "@/lib/tracking/customer-tracking-cookie";
+import type { TrackedOrderCookieItem, SavedAccessCodeCookieItem } from "@/lib/tracking/customer-tracking-cookie";
 
 const STATUS_META: Record<
   OrderStatus,
@@ -60,27 +60,33 @@ interface CustomerAccessOrdersLookupProps {
   initialTrackedItems: TrackedOrderCookieItem[];
   initialOrdersByToken: Record<string, Order>;
   hasError?: boolean;
+  initialSavedCodes?: SavedAccessCodeCookieItem[];
 }
 
 export default function CustomerAccessOrdersLookup({
   initialTrackedItems = [],
   initialOrdersByToken = {},
   hasError = false,
+  initialSavedCodes = [],
 }: CustomerAccessOrdersLookupProps) {
-  const [code, setCode] = useState("");
-  const [phone, setPhone] = useState("");
+  const defaultSaved = initialSavedCodes[0];
+  const [code, setCode] = useState(defaultSaved?.code || "");
+  const [phone, setPhone] = useState(defaultSaved?.phone || "");
   const [lookupOrders, setLookupOrders] = useState<Order[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLookup = async () => {
-    const trimmedCode = code.trim();
-    const trimmedPhone = phone.trim();
+  const handleLookup = async (overrideCode?: string, overridePhone?: string) => {
+    const trimmedCode = (overrideCode ?? code).trim();
+    const trimmedPhone = (overridePhone ?? phone).trim();
     if (!trimmedCode || !trimmedPhone) {
       setMessage("اكتب كود العميل ورقم الهاتف");
       setLookupOrders([]);
       return;
     }
+
+    if (overrideCode !== undefined) setCode(trimmedCode);
+    if (overridePhone !== undefined) setPhone(trimmedPhone);
 
     setIsLoading(true);
     setMessage(null);
@@ -182,8 +188,20 @@ export default function CustomerAccessOrdersLookup({
   };
 
   return (
-    <Card className="mt-6 p-5">
-      <div>
+    <>
+      {initialSavedCodes.length > 0 && (
+        <div className="mt-6 rounded-lg border border-brand-accent/30 bg-brand-soft/20 px-4 py-3">
+          <p className="text-sm font-semibold text-brand-text">
+            تم العثور على كود العميل: <span className="text-brand-accent font-black tracking-widest">{initialSavedCodes[0].code}</span>
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            تم ملء بياناتك تلقائياً لتسهيل البحث.
+          </p>
+        </div>
+      )}
+
+      <Card className="mt-6 p-5">
+        <div>
         <h2 className="text-lg font-black text-brand-text">تتبع بكود العميل</h2>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
           اكتب كود العميل ورقم الهاتف لعرض طلباتك من أي جهاز.
@@ -211,12 +229,31 @@ export default function CustomerAccessOrdersLookup({
         <button
           type="button"
           disabled={isLoading}
-          onClick={handleLookup}
+          onClick={() => handleLookup()}
           className="min-h-11 rounded-md bg-brand-primary px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
         >
           {isLoading ? "جار التحميل" : "عرض الطلبات"}
         </button>
       </div>
+
+      {initialSavedCodes.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {initialSavedCodes.map((saved) => (
+            <button
+              key={saved.phone}
+              type="button"
+              onClick={() => handleLookup(saved.code, saved.phone)}
+              className={`rounded border px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                code === saved.code && phone === saved.phone
+                  ? "border-brand-accent bg-brand-soft/50 text-brand-text"
+                  : "border-brand-border bg-white text-muted-foreground hover:bg-brand-soft/20 hover:border-brand-accent/50"
+              }`}
+            >
+              حساب: <span dir="ltr">{saved.phone}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {message && (
         <p className="mt-3 rounded-md border border-brand-border bg-brand-soft/40 px-3 py-2 text-sm font-medium text-muted-foreground">
@@ -321,5 +358,6 @@ export default function CustomerAccessOrdersLookup({
         </div>
       )}
     </Card>
+    </>
   );
 }

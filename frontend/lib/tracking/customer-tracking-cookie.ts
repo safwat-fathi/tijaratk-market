@@ -8,6 +8,12 @@ const MAX_CUSTOMER_PROFILE_ITEMS = 8;
 const MAX_TRACKING_COOKIE_VALUE_BYTES = 3200;
 const TRACKING_COOKIE_TTL_DAYS = 90;
 
+export type SavedAccessCodeCookieItem = {
+	code: string;
+	phone: string;
+	last_used_at: string;
+};
+
 export type TrackedOrderCookieItem = {
 	token: string;
 	slug: string;
@@ -33,6 +39,7 @@ type TrackedOrdersCookiePayload = {
 	v: number;
 	items: TrackedOrderCookieItem[];
 	customer_profiles_by_slug: Record<string, CustomerProfileCookieItem>;
+	access_codes?: SavedAccessCodeCookieItem[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -102,6 +109,40 @@ function normalizeOptionalText(value: unknown): string | undefined {
 
 	const normalized = value.trim();
 	return normalized.length > 0 ? normalized : undefined;
+}
+
+function isValidSavedAccessCodeCookieItem(value: unknown): value is SavedAccessCodeCookieItem {
+	if (!isRecord(value)) return false;
+	const code = value.code;
+	const phone = value.phone;
+	const lastUsedAt = value.last_used_at;
+	return (
+		typeof code === "string" && code.trim().length > 0 &&
+		typeof phone === "string" && phone.trim().length > 0 &&
+		typeof lastUsedAt === "string" && lastUsedAt.trim().length > 0
+	);
+}
+
+function normalizeSavedAccessCodes(items?: unknown[]): SavedAccessCodeCookieItem[] {
+	if (!Array.isArray(items)) return [];
+	const deduped = new Map<string, SavedAccessCodeCookieItem>();
+	for (const raw of items) {
+		if (!isValidSavedAccessCodeCookieItem(raw)) continue;
+		const code = raw.code.trim();
+		const phone = raw.phone.trim();
+		const lastUsedAt = raw.last_used_at.trim();
+		const existing = deduped.get(phone);
+		if (!existing || Date.parse(existing.last_used_at) < Date.parse(lastUsedAt)) {
+			deduped.set(phone, { code, phone, last_used_at: lastUsedAt });
+		}
+	}
+	return Array.from(deduped.values())
+		.sort((a, b) => {
+			const timeA = Date.parse(a.last_used_at);
+			const timeB = Date.parse(b.last_used_at);
+			return (Number.isNaN(timeB) ? 0 : timeB) - (Number.isNaN(timeA) ? 0 : timeA);
+		})
+		.slice(0, 5);
 }
 
 function isValidCustomerProfileCookieItem(
@@ -192,6 +233,7 @@ function normalizeTrackedOrdersCookiePayload(
 		customer_profiles_by_slug: limitCustomerProfilesBySlug(
 			payload.customer_profiles_by_slug,
 		),
+		access_codes: normalizeSavedAccessCodes(payload.access_codes),
 	};
 
 	while (
@@ -225,14 +267,15 @@ function normalizeTrackedOrdersCookiePayload(
 function parseTrackedOrdersCookie(
 	rawCookie?: string,
 ): TrackedOrdersCookiePayload {
+	const defaultPayload: TrackedOrdersCookiePayload = { v: COOKIE_VERSION, items: [], customer_profiles_by_slug: {}, access_codes: [] };
 	if (!rawCookie) {
-		return { v: COOKIE_VERSION, items: [], customer_profiles_by_slug: {} };
+		return defaultPayload;
 	}
 
 	try {
 		const parsed = JSON.parse(rawCookie) as unknown;
 		if (!isRecord(parsed)) {
-			return { v: COOKIE_VERSION, items: [], customer_profiles_by_slug: {} };
+			return defaultPayload;
 		}
 
 		const items = Array.isArray(parsed.items)
@@ -241,6 +284,7 @@ function parseTrackedOrdersCookie(
 		const customerProfilesBySlug = normalizeCustomerProfilesBySlug(
 			parsed.customer_profiles_by_slug,
 		);
+		const accessCodes = normalizeSavedAccessCodes(parsed.access_codes as unknown[]);
 
 		return {
 			v: COOKIE_VERSION,
@@ -248,9 +292,10 @@ function parseTrackedOrdersCookie(
 			customer_profiles_by_slug: limitCustomerProfilesBySlug(
 				customerProfilesBySlug,
 			),
+			access_codes: accessCodes,
 		};
 	} catch {
-		return { v: COOKIE_VERSION, items: [], customer_profiles_by_slug: {} };
+		return defaultPayload;
 	}
 }
 
@@ -304,6 +349,7 @@ export async function appendTrackedOrderToCookie(
 		v: COOKIE_VERSION,
 		items: nextItems,
 		customer_profiles_by_slug: payload.customer_profiles_by_slug,
+		access_codes: payload.access_codes,
 	});
 
 	return nextItems;
@@ -313,10 +359,12 @@ export async function persistCreatedOrderCustomerTracking({
 	trackedOrder,
 	slug,
 	profile,
+	customerAccessCode,
 }: {
 	trackedOrder?: TrackedOrderCookieItem;
 	slug: string;
 	profile: CustomerProfileCookieInput;
+	customerAccessCode?: string;
 }): Promise<TrackedOrderCookieItem[]> {
 	const normalizedSlug = normalizeSlugKey(slug);
 	const normalizedPhone = profile.phone.trim();
@@ -339,13 +387,28 @@ export async function persistCreatedOrderCustomerTracking({
 		});
 	}
 
+	const nextAccessCodes = [...(payload.access_codes || [])];
+	if (customerAccessCode && normalizedPhone) {
+		nextAccessCodes.push({
+			code: customerAccessCode.trim(),
+			phone: normalizedPhone,
+			last_used_at: new Date().toISOString(),
+		});
+	}
+
 	await writeTrackedOrdersCookie({
 		v: COOKIE_VERSION,
 		items: nextItems,
 		customer_profiles_by_slug: Object.fromEntries(nextProfilesMap),
+		access_codes: normalizeSavedAccessCodes(nextAccessCodes),
 	});
 
 	return nextItems;
+}
+
+export async function getSavedAccessCodesFromCookie(): Promise<SavedAccessCodeCookieItem[]> {
+	const payload = await readTrackedOrdersCookiePayload();
+	return payload.access_codes || [];
 }
 
 export async function getCustomerProfileBySlugFromCookie(
@@ -392,6 +455,7 @@ export async function upsertCustomerProfileBySlugInCookie(
 		customer_profiles_by_slug: limitCustomerProfilesBySlug(
 			Object.fromEntries(nextProfilesMap),
 		),
+		access_codes: payload.access_codes,
 	});
 }
 
@@ -405,6 +469,7 @@ export async function removeTrackedOrderFromCookie(
 		v: COOKIE_VERSION,
 		items: nextItems,
 		customer_profiles_by_slug: payload.customer_profiles_by_slug,
+		access_codes: payload.access_codes,
 	});
 
 	return nextItems;

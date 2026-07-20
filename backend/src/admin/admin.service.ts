@@ -2398,8 +2398,58 @@ export class AdminService {
           const [data, total] = await Promise.all([
             tx.order.findMany({
               where: tenantWhere,
-              include: {
-                tenant: true,
+              select: {
+                id: true,
+                tenant_id: true,
+                customer_id: true,
+                customer_name: true,
+                customer_phone: true,
+                created_at: true,
+                order_type: true,
+                status: true,
+                pricing_mode: true,
+                subtotal: true,
+                delivery_fee: true,
+                delivery_address: true,
+                total: true,
+                free_text_payload: true,
+                notes: true,
+                card_on_delivery_requested: true,
+                tenant: {
+                  select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                  },
+                },
+                customer: {
+                  select: {
+                    name: true,
+                    phone: true,
+                    global_customer: {
+                      select: { access_code: true },
+                    },
+                  },
+                },
+                order_items: {
+                  select: {
+                    id: true,
+                    order_id: true,
+                    name_snapshot: true,
+                    quantity: true,
+                    unit_price: true,
+                    total_price: true,
+                    notes: true,
+                    is_out_of_stock: true,
+                    replacement_decision_status: true,
+                    replaced_by_product: {
+                      select: { id: true, name: true },
+                    },
+                    pending_replacement_product: {
+                      select: { id: true, name: true },
+                    },
+                  },
+                },
               },
               orderBy: { created_at: 'desc' },
               take: pagination.prefetch,
@@ -2417,8 +2467,19 @@ export class AdminService {
       .flatMap((result) => result.data)
       .sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
 
+    const adminOrders = items.map(({ order_items, customer, ...order }) => ({
+      ...order,
+      customer_phone: order.customer_phone || customer.phone,
+      customer: {
+        name: order.customer_name || customer.name,
+        phone: order.customer_phone || customer.phone,
+        access_code: customer.global_customer?.access_code ?? null,
+      },
+      items: order_items,
+    }));
+
     return this.paginateItems(
-      items,
+      adminOrders,
       total,
       pagination.page,
       pagination.limit,

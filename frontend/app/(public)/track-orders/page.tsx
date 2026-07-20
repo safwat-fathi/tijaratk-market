@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import {
 	listTrackedOrdersFromCookie,
+	getSavedAccessCodesFromCookie,
 } from "@/lib/tracking/customer-tracking-cookie";
 import { ordersService } from "@/services/api/orders.service";
 import { Card } from "@/components/ui/Card";
@@ -41,6 +42,7 @@ async function getTrackedOrders() {
 
 export default async function TrackOrdersPage() {
 	const { trackedItems, ordersByToken, hasError } = await getTrackedOrders();
+	const savedCodes = await getSavedAccessCodesFromCookie();
 
 	return (
 		<div className="mx-auto w-full max-w-3xl px-4 py-8">
@@ -76,6 +78,7 @@ export default async function TrackOrdersPage() {
 				initialTrackedItems={trackedItems}
 				initialOrdersByToken={ordersByToken}
 				hasError={hasError}
+				initialSavedCodes={savedCodes}
 			/>
 		</div>
 	);

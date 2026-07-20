@@ -1,33 +1,22 @@
 import {
   adminService,
+  type AdminOrder,
   type AdminOrdersFilters,
 } from "@/services/api/admin.service";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { StatusBadge, statusLabels } from "@/components/ui/StatusBadge";
+import { statusLabels } from "@/components/ui/StatusBadge";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { OrderStatus } from "@/types/enums";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminPagination } from "../_components/AdminPagination";
+import { AdminOrderRow } from "./_components/AdminOrderRow";
 
 export const dynamic = "force-dynamic";
 
 type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-};
-
-type AdminOrder = {
-  id: number;
-  tenant_id?: number;
-  tenant?: {
-    id: number;
-    name?: string | null;
-  } | null;
-  customer_name?: string | null;
-  created_at: string | Date;
-  total?: number | string | null;
-  status?: string | null;
 };
 
 type PaginationMeta = {
@@ -312,7 +301,7 @@ export default async function AdminOrdersPage(props: Props) {
             </div>
           </form>
 
-          <div className="overflow-x-auto mt-6">
+          <div className="mt-6 hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-brand-border">
               <thead className="bg-brand-soft">
                 <tr>
@@ -352,48 +341,47 @@ export default async function AdminOrdersPage(props: Props) {
                     const tenantName =
                       order.tenant?.name ||
                       (tenantId ? `متجر #${tenantId}` : "-");
-                    const createdAt = new Date(order.created_at);
-
                     return (
-                      <tr key={order.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-text">
-                          #{order.id}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                          {order.customer_name || "-"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                          {tenantId ? (
-                            <Link
-                              href={`/admin/merchants/${tenantId}`}
-                              className="text-brand-primary hover:underline"
-                            >
-                              {tenantName}
-                            </Link>
-                          ) : (
-                            tenantName
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                          <time dateTime={createdAt.toISOString()}>
-                            {ORDER_DATE_TIME_FORMATTER.format(createdAt)}
-                          </time>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                          {ORDER_TOTAL_FORMATTER.format(Number(order.total || 0))}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <StatusBadge
-                            status={order.status || OrderStatus.DRAFT}
-                            className="px-2 py-1"
-                          />
-                        </td>
-                      </tr>
+                      <AdminOrderRow
+                        key={order.id}
+                        order={order}
+                        tenantId={tenantId}
+                        tenantName={tenantName}
+                        formattedDate={ORDER_DATE_TIME_FORMATTER.format(new Date(order.created_at))}
+                        formattedTotal={ORDER_TOTAL_FORMATTER.format(Number(order.total || 0))}
+                        layout="desktop"
+                      />
                     );
                   })
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="mt-6 space-y-3 md:hidden">
+            {orders.length === 0 ? (
+              <div className="rounded-xl border border-brand-border bg-white px-6 py-10 text-center text-sm text-gray-500">
+                لا توجد طلبات
+              </div>
+            ) : (
+              orders.map((order) => {
+                const tenantId = order.tenant?.id ?? order.tenant_id;
+                const tenantName =
+                  order.tenant?.name || (tenantId ? `متجر #${tenantId}` : "-");
+
+                return (
+                  <AdminOrderRow
+                    key={order.id}
+                    order={order}
+                    tenantId={tenantId}
+                    tenantName={tenantName}
+                    formattedDate={ORDER_DATE_TIME_FORMATTER.format(new Date(order.created_at))}
+                    formattedTotal={ORDER_TOTAL_FORMATTER.format(Number(order.total || 0))}
+                    layout="mobile"
+                  />
+                );
+              })
+            )}
           </div>
 
           <AdminPagination
