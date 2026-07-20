@@ -87,23 +87,42 @@ const validateWindow = (
     return "اكتب وقت بداية ونهاية صالحين.";
   }
 
-  const startsAtMinutes = toMinutes(startsAt);
-  const endsAtMinutes = toMinutes(endsAt);
+  let startsAtMinutes = toMinutes(startsAt);
+  let endsAtMinutes = toMinutes(endsAt);
+  const constraintStartsAt = toMinutes(constraints.min_starts_at);
+  let constraintEndsAt = toMinutes(constraints.max_ends_at);
+
+  if (constraintEndsAt <= constraintStartsAt) {
+    constraintEndsAt += 24 * 60;
+  }
+
+  if (startsAtMinutes < constraintStartsAt && constraintEndsAt > 24 * 60) {
+    startsAtMinutes += 24 * 60;
+  }
+
+  if (endsAtMinutes < constraintStartsAt && constraintEndsAt > 24 * 60) {
+    endsAtMinutes += 24 * 60;
+  }
+
+  if (endsAtMinutes <= startsAtMinutes) {
+    endsAtMinutes += 24 * 60;
+  }
+
   if (
     startsAtMinutes % constraints.step_minutes !== 0 ||
     endsAtMinutes % constraints.step_minutes !== 0
   ) {
     return "اختار الوقت بفواصل 15 دقيقة.";
   }
-  if (startsAtMinutes < toMinutes(constraints.min_starts_at)) {
-    return `وقت البداية لا يمكن أن يسبق ${formatTime(constraints.min_starts_at)}.`;
+
+  if (
+    startsAtMinutes < constraintStartsAt ||
+    startsAtMinutes > constraintEndsAt - constraints.min_duration_minutes ||
+    endsAtMinutes > constraintEndsAt
+  ) {
+    return "وقت التوصيل خارج أوقات العمل المتاحة.";
   }
-  if (endsAtMinutes > toMinutes(constraints.max_ends_at)) {
-    return `وقت النهاية لا يمكن أن يتجاوز ${formatTime(constraints.max_ends_at)}.`;
-  }
-  if (endsAtMinutes <= startsAtMinutes) {
-    return "وقت النهاية يجب أن يكون بعد وقت البداية في نفس اليوم.";
-  }
+
   if (endsAtMinutes - startsAtMinutes < constraints.min_duration_minutes) {
     return "وقت التوصيل يجب ألا يقل عن ساعة.";
   }
@@ -137,29 +156,46 @@ export default function ScheduledDeliverySelector({
   const validationMessage = constraints
     ? validateWindow(draftStartsAt, draftEndsAt, constraints)
     : "لا توجد مواعيد متاحة حالياً.";
+  const getNormalizedDuration = (start: string, end: string) => {
+    let s = toMinutes(start);
+    let e = toMinutes(end);
+    if (e <= s) e += 24 * 60;
+    return e - s;
+  };
+
   const durationMinutes =
     draftStartsAt &&
     draftEndsAt &&
     TIME_PATTERN.test(draftStartsAt) &&
-    TIME_PATTERN.test(draftEndsAt) &&
-    toMinutes(draftEndsAt) > toMinutes(draftStartsAt)
-      ? toMinutes(draftEndsAt) - toMinutes(draftStartsAt)
+    TIME_PATTERN.test(draftEndsAt)
+      ? getNormalizedDuration(draftStartsAt, draftEndsAt)
       : null;
   const isDraftValid = Boolean(
     constraints && draftStartsAt && draftEndsAt && validationMessage === null,
   );
+
   const latestStart = constraints
     ? fromMinutes(
-        toMinutes(constraints.max_ends_at) - constraints.min_duration_minutes,
+        ((toMinutes(constraints.max_ends_at) <= toMinutes(constraints.min_starts_at)
+          ? toMinutes(constraints.max_ends_at) + 24 * 60
+          : toMinutes(constraints.max_ends_at)) -
+          constraints.min_duration_minutes +
+          24 * 60) %
+          (24 * 60),
       )
     : undefined;
+
   const earliestEnd =
     constraints && draftStartsAt && TIME_PATTERN.test(draftStartsAt)
-      ? fromMinutes(toMinutes(draftStartsAt) + constraints.min_duration_minutes)
+      ? fromMinutes(
+          (toMinutes(draftStartsAt) + constraints.min_duration_minutes) %
+            (24 * 60),
+        )
       : constraints
         ? fromMinutes(
-            toMinutes(constraints.min_starts_at) +
-              constraints.min_duration_minutes,
+            (toMinutes(constraints.min_starts_at) +
+              constraints.min_duration_minutes) %
+              (24 * 60),
           )
         : undefined;
   const hours =
@@ -191,11 +227,13 @@ export default function ScheduledDeliverySelector({
   const handleStartsAtChange = (startsAt: string) => {
     setDraftStartsAt(startsAt);
     if (!draftEndsAt) return;
+    if (!startsAt || !TIME_PATTERN.test(startsAt)) {
+      setDraftEndsAt("");
+      return;
+    }
     if (
-      !startsAt ||
-      !TIME_PATTERN.test(startsAt) ||
-      toMinutes(draftEndsAt) - toMinutes(startsAt) <
-        (constraints?.min_duration_minutes ?? 60)
+      getNormalizedDuration(startsAt, draftEndsAt) <
+      (constraints?.min_duration_minutes ?? 60)
     ) {
       setDraftEndsAt("");
     }

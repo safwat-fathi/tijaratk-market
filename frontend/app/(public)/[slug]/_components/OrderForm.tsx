@@ -474,13 +474,30 @@ export default function OrderForm({
     ) {
       return null;
     }
-    const startsAtMinutes = deliveryTimeToMinutes(
+    let startsAtMinutes = deliveryTimeToMinutes(
       selectedScheduledWindow.starts_at,
     );
-    const endsAtMinutes = deliveryTimeToMinutes(selectedScheduledWindow.ends_at);
+    let endsAtMinutes = deliveryTimeToMinutes(selectedScheduledWindow.ends_at);
+    const constraintStartsAt = deliveryTimeToMinutes(constraints.min_starts_at);
+    let constraintEndsAt = deliveryTimeToMinutes(constraints.max_ends_at);
+
+    if (constraintEndsAt <= constraintStartsAt) {
+      constraintEndsAt += 24 * 60;
+    }
+    if (startsAtMinutes < constraintStartsAt && constraintEndsAt > 24 * 60) {
+      startsAtMinutes += 24 * 60;
+    }
+    if (endsAtMinutes < constraintStartsAt && constraintEndsAt > 24 * 60) {
+      endsAtMinutes += 24 * 60;
+    }
+    if (endsAtMinutes <= startsAtMinutes) {
+      endsAtMinutes += 24 * 60;
+    }
+
     if (
-      startsAtMinutes < deliveryTimeToMinutes(constraints.min_starts_at) ||
-      endsAtMinutes > deliveryTimeToMinutes(constraints.max_ends_at) ||
+      startsAtMinutes < constraintStartsAt ||
+      startsAtMinutes > constraintEndsAt - constraints.min_duration_minutes ||
+      endsAtMinutes > constraintEndsAt ||
       startsAtMinutes % constraints.step_minutes !== 0 ||
       endsAtMinutes % constraints.step_minutes !== 0 ||
       endsAtMinutes - startsAtMinutes < constraints.min_duration_minutes
