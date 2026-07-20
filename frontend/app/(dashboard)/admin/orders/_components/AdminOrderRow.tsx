@@ -13,11 +13,11 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import type { AdminOrder } from "@/services/api/admin.service";
+import type { AdminOrderListItem } from "@/services/api/admin.service";
 import { OrderStatus, OrderType, PricingMode } from "@/types/enums";
 
 type Props = {
-  order: AdminOrder;
+  order: AdminOrderListItem;
   tenantId?: number;
   tenantName: string;
   formattedDate: string;
@@ -123,7 +123,13 @@ function SecretValue({
   );
 }
 
-function OrderDetails({ order, idPrefix }: { order: AdminOrder; idPrefix: string }) {
+function OrderDetails({
+  order,
+  idPrefix,
+}: {
+  order: AdminOrderListItem;
+  idPrefix: string;
+}) {
   const orderTypeLabel =
     order.order_type === OrderType.FREE_TEXT ? "طلب نصي" : "طلب من الكتالوج";
   const pricingLabel =

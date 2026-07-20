@@ -265,7 +265,9 @@ export type AdminProductSheetUploadSummary = {
 	}>;
 };
 
-export type AdminOrder = Pick<
+export type AdminOrder = Order;
+
+export type AdminOrderListItem = Pick<
 	Order,
 	| "id"
 	| "tenant_id"
@@ -1327,7 +1329,7 @@ class AdminApiService extends HttpService {
 		if (page) params.append("page", String(page));
 		if (limit) params.append("limit", String(limit));
 		const qs = params.toString() ? `?${params.toString()}` : '';
-		return this.get<AdminPaginatedResponse<AdminOrder>>(`orders${qs}`, undefined, ADMIN_AUTH_OPTIONS);
+		return this.get<AdminPaginatedResponse<AdminOrderListItem>>(`orders${qs}`, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
 	private buildQueryString(params?: {
