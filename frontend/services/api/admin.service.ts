@@ -981,7 +981,7 @@ class AdminApiService extends HttpService {
 			delivery_available: boolean;
 			delivery_starts_at?: string | null;
 			delivery_ends_at?: string | null;
-			primary_area_id: number;
+			main_area_ids: number[];
 			delivery_areas: Array<{ area_id: number; delivery_fee: number }>;
 		},
 	) {

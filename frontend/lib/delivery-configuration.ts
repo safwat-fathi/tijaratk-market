@@ -4,35 +4,49 @@ import type {
   DirectoryArea,
 } from "@/types/models/tenant";
 
-export const excludePrimaryAreaFromDeliveryAreas = (
+export const extractMainAreaIds = (
+  tenantDeliveryAreas: Array<{ area_id: number; area?: { parent_area_id: number | null } }>,
+) => {
+  const deliveryAreaIds = new Set(tenantDeliveryAreas.map((a) => a.area_id));
+  return tenantDeliveryAreas
+    .filter((a) => {
+      const parentId = a.area?.parent_area_id;
+      return parentId === null || parentId === undefined || !deliveryAreaIds.has(parentId);
+    })
+    .map((a) => a.area_id);
+};
+
+export const excludeMainAreasFromDeliveryAreas = (
   deliveryAreas: DeliveryAreaFeeInput[],
-  primaryAreaId: number,
+  mainAreaIds: number[],
 ) =>
   deliveryAreas.filter(
-    (deliveryArea) => deliveryArea.area_id !== primaryAreaId,
+    (deliveryArea) => !mainAreaIds.includes(deliveryArea.area_id),
   );
 
 export const normalizeDeliveryConfiguration = (
   configuration: DeliveryConfigurationInput,
 ): DeliveryConfigurationInput => ({
   ...configuration,
-  delivery_areas: excludePrimaryAreaFromDeliveryAreas(
+  delivery_areas: excludeMainAreasFromDeliveryAreas(
     configuration.delivery_areas,
-    configuration.primary_area_id,
+    configuration.main_area_ids,
   ),
 });
 
 export const getActiveChildAreas = (
   areas: DirectoryArea[],
-  primaryAreaId: number,
+  mainAreaIds: number[],
 ) =>
   areas.filter(
     (area) =>
-      area.is_active && area.parent_area_id === primaryAreaId,
+      area.is_active &&
+      area.parent_area_id !== null &&
+      mainAreaIds.includes(area.parent_area_id),
   );
 
 export const resolveMainAreaId = (
-  areas: DirectoryArea[],
+  areas: { id: number; is_active: boolean; parent_area_id: number | null }[],
   areaId: number,
 ) => {
   const selectedArea = areas.find((area) => area.id === areaId);

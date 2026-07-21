@@ -80,7 +80,7 @@ export class DeliveryConfigurationService {
 
       const areaIds = Array.from(
         new Set([
-          dto.primary_area_id,
+          ...dto.main_area_ids,
           ...dto.delivery_areas.map((area) => area.area_id),
         ]),
       );
@@ -103,8 +103,8 @@ export class DeliveryConfigurationService {
 
       const invalidArea = areas.find(
         (area) =>
-          area.id !== dto.primary_area_id &&
-          area.parent_area_id !== dto.primary_area_id,
+          !dto.main_area_ids.includes(area.id) &&
+          (area.parent_area_id === null || !dto.main_area_ids.includes(area.parent_area_id)),
       );
       if (invalidArea) {
         throw new BadRequestException(
@@ -112,13 +112,15 @@ export class DeliveryConfigurationService {
         );
       }
 
+      const primaryAreaId = dto.main_area_ids[0];
+
       await tx.tenantDirectoryProfile.upsert({
         where: { tenant_id: tenantId },
-        update: { area_id: dto.primary_area_id },
+        update: { area_id: primaryAreaId },
         create: {
           tenant_id: tenantId,
           display_name: tenant.name,
-          area_id: dto.primary_area_id,
+          area_id: primaryAreaId,
         },
       });
 
@@ -132,7 +134,7 @@ export class DeliveryConfigurationService {
       });
 
       const primaryAreaChanged =
-        tenant.directory_profile?.area_id !== dto.primary_area_id;
+        tenant.directory_profile?.area_id !== primaryAreaId;
       const shouldUpdateAreas =
         dto.delivery_available ||
         dto.delivery_areas.length > 0 ||
@@ -142,6 +144,27 @@ export class DeliveryConfigurationService {
           where: { tenant_id: tenantId },
           data: { is_active: false },
         });
+
+        for (const mainAreaId of dto.main_area_ids) {
+          await tx.tenantDeliveryArea.upsert({
+            where: {
+              tenant_id_area_id: {
+                tenant_id: tenantId,
+                area_id: mainAreaId,
+              },
+            },
+            update: {
+              is_active: true,
+              deleted_at: null,
+            },
+            create: {
+              tenant_id: tenantId,
+              area_id: mainAreaId,
+              delivery_fee: 0,
+              is_active: true,
+            },
+          });
+        }
 
         for (const deliveryArea of dto.delivery_areas) {
           await tx.tenantDeliveryArea.upsert({
@@ -168,7 +191,7 @@ export class DeliveryConfigurationService {
         await tx.tenantDeliveryArea.updateMany({
           where: {
             tenant_id: tenantId,
-            area_id: dto.primary_area_id,
+            area_id: { in: dto.main_area_ids },
             is_active: true,
           },
           data: { is_active: false },
@@ -277,9 +300,10 @@ export class DeliveryConfigurationService {
     if (new Set(areaIds).size !== areaIds.length) {
       throw new BadRequestException('لا يمكن تكرار منطقة التوصيل');
     }
-    if (areaIds.includes(dto.primary_area_id)) {
+    const hasOverlap = areaIds.some((id) => dto.main_area_ids.includes(id));
+    if (hasOverlap) {
       throw new BadRequestException(
-        'المنطقة الأساسية لا يمكن إضافتها ضمن مناطق التوصيل',
+        'المناطق الأساسية لا يمكن إضافتها ضمن مناطق التوصيل',
       );
     }
   }

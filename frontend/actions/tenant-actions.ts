@@ -18,7 +18,7 @@ const deliveryConfigurationSchema = z
     delivery_available: z.boolean(),
     delivery_starts_at: z.string().nullable().optional(),
     delivery_ends_at: z.string().nullable().optional(),
-    primary_area_id: z.coerce.number().int().min(1, "اختر المنطقة الأساسية"),
+    main_area_ids: z.array(z.coerce.number().int().positive()).min(1, "اختر منطقة أساسية واحدة على الأقل"),
     delivery_areas: z.array(
       z.object({
         area_id: z.coerce.number().int().min(1),
@@ -37,10 +37,11 @@ const deliveryConfigurationSchema = z
         path: ["delivery_areas"],
       });
     }
-    if (areaIds.includes(data.primary_area_id)) {
+    const overlaps = areaIds.filter((id) => data.main_area_ids.includes(id));
+    if (overlaps.length > 0) {
       ctx.addIssue({
         code: "custom",
-        message: "المنطقة الأساسية لا يمكن إضافتها ضمن مناطق التوصيل",
+        message: "المناطق الأساسية لا يمكن إضافتها ضمن مناطق التوصيل",
         path: ["delivery_areas"],
       });
     }
@@ -150,13 +151,25 @@ export async function toggleStoreAvailabilityAction(
     return { success: false, message: "تعذر تحديث حالة المتجر." };
   }
 
-  const primaryAreaId = tenantRes.data.directory_profile?.area_id || 0;
+  const mainAreaIds = tenantRes.data.tenant_delivery_areas
+    ?.filter(
+      (area) =>
+        area.is_active !== false &&
+        area.area?.is_active !== false &&
+        area.area?.parent_area_id === null,
+    )
+    .map((area) => area.area_id) || [];
+  
+  if (mainAreaIds.length === 0 && tenantRes.data.directory_profile?.area_id) {
+    mainAreaIds.push(tenantRes.data.directory_profile.area_id);
+  }
+
   const response = await tenantsService.updateMyDeliverySettings(
     normalizeDeliveryConfiguration({
       delivery_available: deliveryAvailable,
       delivery_starts_at: tenantRes.data.delivery_starts_at || null,
       delivery_ends_at: tenantRes.data.delivery_ends_at || null,
-      primary_area_id: primaryAreaId,
+      main_area_ids: mainAreaIds.length > 0 ? mainAreaIds : [0],
       delivery_areas:
         tenantRes.data.tenant_delivery_areas
           ?.filter(

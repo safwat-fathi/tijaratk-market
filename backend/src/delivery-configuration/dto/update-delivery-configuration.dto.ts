@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayNotEmpty,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -48,11 +49,14 @@ export class UpdateDeliveryConfigurationDto {
   })
   delivery_ends_at?: string | null;
 
-  @ApiProperty({ example: 4 })
+  @ApiProperty({ example: [4, 5] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  primary_area_id: number;
+  main_area_ids: number[];
 
   @ApiProperty({ type: [DeliveryAreaFeeDto] })
   @IsArray()

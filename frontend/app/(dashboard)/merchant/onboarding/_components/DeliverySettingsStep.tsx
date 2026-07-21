@@ -8,6 +8,7 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { tenantsService } from "@/services/api/tenants.service";
 import { merchantDirectoryService } from "@/services/api/stores-directory.service";
 import {
+  extractMainAreaIds,
   getActiveChildAreas,
   normalizeDeliveryConfiguration,
   resolveMainAreaId,
@@ -35,7 +36,9 @@ export default function DeliverySettingsStep({
         delivery_available: tenant.delivery_available !== false,
         delivery_starts_at: tenant.delivery_starts_at || null,
         delivery_ends_at: tenant.delivery_ends_at || null,
-        primary_area_id: tenant.directory_profile?.area_id || 0,
+        main_area_ids: [tenant.directory_profile?.area_id].filter(
+          (id): id is number => typeof id === "number" && id > 0
+        ),
         delivery_areas:
           tenant.tenant_delivery_areas
             ?.filter(
@@ -67,24 +70,28 @@ export default function DeliverySettingsStep({
 
       setAreas(areasResponse.data || []);
       if (profileResponse.success && profileResponse.data) {
-        const primaryAreaId = resolveMainAreaId(
-          areasResponse.data || [],
-          profileResponse.data.area_id || 0,
-        );
         const deliveryAreas =
           profileResponse.data.delivery_areas ??
           profileResponse.data.tenant?.tenant_delivery_areas ??
           [];
+        
+        const mainAreaIds = extractMainAreaIds(deliveryAreas);
+          
+        if (mainAreaIds.length === 0 && profileResponse.data.area_id) {
+          const resolvedId = resolveMainAreaId(areasResponse.data || [], profileResponse.data.area_id);
+          if (resolvedId) mainAreaIds.push(resolvedId);
+        }
+
         const activeDeliveryAreas = deliveryAreas.filter(
           (area) =>
             area.is_active !== false &&
             area.area?.is_active !== false &&
-            area.area_id !== primaryAreaId,
+            !mainAreaIds.includes(area.area_id),
         );
         setConfiguration((current) =>
           normalizeDeliveryConfiguration({
             ...current,
-            primary_area_id: primaryAreaId,
+            main_area_ids: mainAreaIds,
             delivery_areas: activeDeliveryAreas.map((area) => ({
               area_id: area.area_id,
               delivery_fee: Number(area.delivery_fee),
@@ -102,7 +109,9 @@ export default function DeliverySettingsStep({
   }, []);
 
   useEffect(() => {
-    const mainAreaId = configuration.primary_area_id;
+    // Missing area request logic is tied to the primary directory profile area,
+    // which is the first ID in main_area_ids.
+    const mainAreaId = configuration.main_area_ids[0];
     if (!mainAreaId) {
       setMissingRequest(null);
       return;
@@ -122,19 +131,22 @@ export default function DeliverySettingsStep({
     return () => {
       cancelled = true;
     };
-  }, [configuration.primary_area_id]);
+  }, [configuration.main_area_ids]);
 
-  const primaryArea = useMemo(
-    () => areas.find((area) => area.id === configuration.primary_area_id) ?? null,
-    [areas, configuration.primary_area_id],
-  );
   const activeChildren = useMemo(
-    () => getActiveChildAreas(areas, configuration.primary_area_id),
-    [areas, configuration.primary_area_id],
+    () => getActiveChildAreas(areas, configuration.main_area_ids),
+    [areas, configuration.main_area_ids],
   );
-  const needsAreaReport =
-    configuration.primary_area_id > 0 && activeChildren.length === 0;
-  const currentMissingRequest = missingRequest?.main_area_id === configuration.primary_area_id
+  
+  const mainAreaId = configuration.main_area_ids[0] || 0;
+  
+  const primaryArea = useMemo(
+    () => areas.find((area) => area.id === mainAreaId) ?? null,
+    [areas, mainAreaId],
+  );
+
+  const needsAreaReport = mainAreaId > 0 && activeChildren.length === 0;
+  const currentMissingRequest = missingRequest?.main_area_id === mainAreaId
     ? missingRequest
     : null;
 
@@ -150,7 +162,7 @@ export default function DeliverySettingsStep({
       try {
         if (!currentMissingRequest) {
           const requestResponse = await merchantDirectoryService.createMissingDeliveryAreaRequest({
-            main_area_id: configuration.primary_area_id,
+            main_area_id: mainAreaId,
             requested_area_name: requestedAreaName.trim(),
             note: requestNote.trim() || undefined,
           });
@@ -179,7 +191,7 @@ export default function DeliverySettingsStep({
       }
       return;
     }
-    if (!configuration.primary_area_id) {
+    if (configuration.main_area_ids.length === 0) {
       setError("اختر المنطقة الأساسية أولاً.");
       return;
     }

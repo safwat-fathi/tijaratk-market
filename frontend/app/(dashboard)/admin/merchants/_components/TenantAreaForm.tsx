@@ -9,7 +9,11 @@ import {
 import DeliveryConfigurationEditor from "@/components/delivery/DeliveryConfigurationEditor";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
+import {
+  extractMainAreaIds,
+  normalizeDeliveryConfiguration,
+  resolveMainAreaId,
+} from "@/lib/delivery-configuration";
 import type {
   DeliveryConfigurationInput,
   DirectoryArea,
@@ -48,7 +52,9 @@ export function TenantAreaForm({ tenant, areas }: TenantAreaFormProps) {
         delivery_available: tenant.delivery_available !== false,
         delivery_starts_at: tenant.delivery_starts_at || null,
         delivery_ends_at: tenant.delivery_ends_at || null,
-        primary_area_id: tenant.directory_profile?.area_id || 0,
+        main_area_ids: [tenant.directory_profile?.area_id].filter(
+          (id): id is number => typeof id === "number" && id > 0
+        ),
         delivery_areas:
           tenant.tenant_delivery_areas
             ?.filter(
@@ -61,6 +67,39 @@ export function TenantAreaForm({ tenant, areas }: TenantAreaFormProps) {
             })) || [],
       }),
     );
+
+  // Derive main areas on initial load similar to settings form
+  useEffect(() => {
+    setConfiguration((current) => {
+      const deliveryAreas =
+        tenant.tenant_delivery_areas?.filter(
+          (area) => area.is_active !== false && area.area?.is_active !== false
+        ) || [];
+
+      const mainAreaIds = extractMainAreaIds(deliveryAreas as any);
+
+      if (mainAreaIds.length === 0 && tenant.directory_profile?.area_id) {
+        const resolvedId = resolveMainAreaId(
+          areas,
+          tenant.directory_profile.area_id
+        );
+        if (resolvedId) mainAreaIds.push(resolvedId);
+      }
+
+      const activeDeliveryAreas = deliveryAreas.filter(
+        (area) => !mainAreaIds.includes(area.area_id)
+      );
+
+      return normalizeDeliveryConfiguration({
+        ...current,
+        main_area_ids: mainAreaIds,
+        delivery_areas: activeDeliveryAreas.map((area) => ({
+          area_id: area.area_id,
+          delivery_fee: Number(area.delivery_fee),
+        })),
+      });
+    });
+  }, [tenant, areas]);
 
   useEffect(() => {
     if (state.success) setIsOpen(false);

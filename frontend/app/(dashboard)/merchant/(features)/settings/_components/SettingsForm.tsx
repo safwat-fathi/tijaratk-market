@@ -16,6 +16,7 @@ import DeliveryConfigurationEditor from "@/components/delivery/DeliveryConfigura
 import MissingDeliveryAreaPanel from "@/components/delivery/MissingDeliveryAreaPanel";
 import { INSTAPAY_PROVIDER } from "@/constants/payment-providers";
 import {
+  extractMainAreaIds,
   getActiveChildAreas,
   normalizeDeliveryConfiguration,
   resolveMainAreaId,
@@ -60,11 +61,9 @@ export default function SettingsForm({
         delivery_available: tenant.delivery_available !== false,
         delivery_starts_at: tenant.delivery_starts_at || null,
         delivery_ends_at: tenant.delivery_ends_at || null,
-        primary_area_id:
-          resolveMainAreaId(
-            activeAreas,
-            tenant.directory_profile?.area_id || 0,
-          ),
+        main_area_ids: [tenant.directory_profile?.area_id].filter(
+          (id): id is number => typeof id === "number" && id > 0
+        ),
         delivery_areas:
           tenant.tenant_delivery_areas
             ?.filter(
@@ -78,12 +77,45 @@ export default function SettingsForm({
       }),
     );
 
+  // Since activeAreas are static and we need the main areas extracted
+  useEffect(() => {
+    setDeliveryConfiguration((current) => {
+      const deliveryAreas =
+        tenant.tenant_delivery_areas?.filter(
+          (area) => area.is_active !== false && area.area?.is_active !== false
+        ) || [];
+
+      const mainAreaIds = extractMainAreaIds(deliveryAreas);
+
+      if (mainAreaIds.length === 0 && tenant.directory_profile?.area_id) {
+        const resolvedId = resolveMainAreaId(
+          activeAreas,
+          tenant.directory_profile.area_id
+        );
+        if (resolvedId) mainAreaIds.push(resolvedId);
+      }
+
+      const activeDeliveryAreas = deliveryAreas.filter(
+        (area) => !mainAreaIds.includes(area.area_id)
+      );
+
+      return normalizeDeliveryConfiguration({
+        ...current,
+        main_area_ids: mainAreaIds,
+        delivery_areas: activeDeliveryAreas.map((area) => ({
+          area_id: area.area_id,
+          delivery_fee: Number(area.delivery_fee),
+        })),
+      });
+    });
+  }, [tenant, activeAreas]);
+
   useEffect(() => {
     if (state.success) router.refresh();
   }, [router, state.success]);
 
   useEffect(() => {
-    const mainAreaId = deliveryConfiguration.primary_area_id;
+    const mainAreaId = deliveryConfiguration.main_area_ids[0];
     if (!mainAreaId) {
       setMissingRequest(null);
       setMissingAreaError(null);
@@ -107,27 +139,29 @@ export default function SettingsForm({
     return () => {
       cancelled = true;
     };
-  }, [deliveryConfiguration.primary_area_id]);
+  }, [deliveryConfiguration.main_area_ids]);
 
+  const mainAreaId = deliveryConfiguration.main_area_ids[0] || 0;
+  
   const primaryArea = useMemo(
     () =>
       activeAreas.find(
-        (area) => area.id === deliveryConfiguration.primary_area_id,
+        (area) => area.id === mainAreaId,
       ) ?? null,
-    [activeAreas, deliveryConfiguration.primary_area_id],
+    [activeAreas, mainAreaId],
   );
   const activeChildren = useMemo(
     () =>
       getActiveChildAreas(
         activeAreas,
-        deliveryConfiguration.primary_area_id,
+        deliveryConfiguration.main_area_ids,
       ),
-    [activeAreas, deliveryConfiguration.primary_area_id],
+    [activeAreas, deliveryConfiguration.main_area_ids],
   );
   const needsAreaReport =
-    deliveryConfiguration.primary_area_id > 0 && activeChildren.length === 0;
+    mainAreaId > 0 && activeChildren.length === 0;
   const currentMissingRequest =
-    missingRequest?.main_area_id === deliveryConfiguration.primary_area_id
+    missingRequest?.main_area_id === mainAreaId
       ? missingRequest
       : null;
   const formPending =
@@ -151,7 +185,7 @@ export default function SettingsForm({
       if (!currentMissingRequest) {
         const requestResponse =
           await merchantDirectoryService.createMissingDeliveryAreaRequest({
-            main_area_id: deliveryConfiguration.primary_area_id,
+            main_area_id: mainAreaId,
             requested_area_name: requestedAreaName.trim(),
             note: requestNote.trim() || undefined,
           });

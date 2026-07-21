@@ -3,8 +3,9 @@
 import { Clock3, MapPin, ReceiptText } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
+import { SelectableChip } from "@/components/ui/SelectableChip";
 import {
-  excludePrimaryAreaFromDeliveryAreas,
+  excludeMainAreasFromDeliveryAreas,
   normalizeDeliveryConfiguration,
 } from "@/lib/delivery-configuration";
 import type {
@@ -43,11 +44,11 @@ export default function DeliveryConfigurationEditor({
   const [bulkFee, setBulkFee] = useState("20");
   const deliveryAreas = useMemo(
     () =>
-      excludePrimaryAreaFromDeliveryAreas(
+      excludeMainAreasFromDeliveryAreas(
         value.delivery_areas,
-        value.primary_area_id,
+        value.main_area_ids,
       ),
-    [value.delivery_areas, value.primary_area_id],
+    [value.delivery_areas, value.main_area_ids],
   );
   const selectedFees = useMemo(
     () =>
@@ -65,14 +66,15 @@ export default function DeliveryConfigurationEditor({
         .filter(
           (area) =>
             area.is_active &&
-            area.parent_area_id === value.primary_area_id,
+            area.parent_area_id !== null &&
+            value.main_area_ids.includes(area.parent_area_id),
         )
         .sort(
           (left, right) =>
             left.sort_order - right.sort_order ||
             left.name_ar.localeCompare(right.name_ar, "ar"),
         ),
-    [areas, value.primary_area_id],
+    [areas, value.main_area_ids],
   );
   const primaryAreas = useMemo(
     () =>
@@ -95,10 +97,18 @@ export default function DeliveryConfigurationEditor({
     onChange(normalizeDeliveryConfiguration({ ...value, ...patch }));
   };
 
-  const handlePrimaryAreaChange = (primaryAreaId: number) => {
+  const toggleMainArea = (mainAreaId: number) => {
+    let nextMainAreaIds = value.main_area_ids;
+    if (nextMainAreaIds.includes(mainAreaId)) {
+      if (nextMainAreaIds.length === 1) return;
+      nextMainAreaIds = nextMainAreaIds.filter((id) => id !== mainAreaId);
+    } else {
+      nextMainAreaIds = [...nextMainAreaIds, mainAreaId];
+    }
+
     const allowedIds = new Set(
       areas
-        .filter((area) => area.parent_area_id === primaryAreaId)
+        .filter((area) => area.parent_area_id !== null && nextMainAreaIds.includes(area.parent_area_id))
         .map((area) => area.id),
     );
     const retainedAreas = deliveryAreas.filter((area) =>
@@ -106,7 +116,7 @@ export default function DeliveryConfigurationEditor({
     );
 
     update({
-      primary_area_id: primaryAreaId,
+      main_area_ids: nextMainAreaIds,
       delivery_areas: retainedAreas,
     });
   };
@@ -200,43 +210,36 @@ export default function DeliveryConfigurationEditor({
         </div>
       </div>
 
-      <label className="block space-y-2 text-sm font-semibold text-brand-text">
-        <span className="flex items-center gap-2">
+      <div className="space-y-2">
+        <span className="flex items-center gap-2 text-sm font-semibold text-brand-text">
           <MapPin className="h-5 w-5 text-brand-primary" aria-hidden="true" />
-          المنطقة الأساسية
+          المناطق الأساسية
         </span>
-        <select
-          value={value.primary_area_id || ""}
-          onChange={(event) =>
-            handlePrimaryAreaChange(Number(event.target.value) || 0)
-          }
-          disabled={disabled}
-          aria-invalid={Boolean(errors?.primary_area_id)}
-          aria-describedby={
-            errors?.primary_area_id ? "primary-area-error" : undefined
-          }
-          className="min-h-12 w-full rounded-xl border border-brand-border bg-white px-4 text-base focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <option value="">اختر المنطقة الأساسية</option>
+        <div className="flex flex-wrap gap-2">
           {primaryAreas.map((area) => (
-            <option key={area.id} value={area.id}>
+            <SelectableChip
+              key={area.id}
+              isSelected={value.main_area_ids.includes(area.id)}
+              onClick={() => toggleMainArea(area.id)}
+              disabled={disabled}
+              className={disabled ? "cursor-not-allowed opacity-50" : ""}
+            >
               {getAreaLabel(area)}
-            </option>
+            </SelectableChip>
           ))}
-        </select>
-        {errors?.primary_area_id ? (
+        </div>
+        {errors?.main_area_ids ? (
           <span
-            id="primary-area-error"
             role="alert"
             className="block text-sm font-semibold text-status-error"
           >
-            {errors.primary_area_id[0]}
+            {errors.main_area_ids[0]}
           </span>
         ) : null}
-      </label>
+      </div>
 
       {!value.delivery_available &&
-      value.primary_area_id &&
+      value.main_area_ids.length > 0 &&
       emptyDeliveryAreasContent
         ? emptyDeliveryAreasContent
         : null}
@@ -351,13 +354,13 @@ export default function DeliveryConfigurationEditor({
                 })}
               </div>
             ) : (
-              value.primary_area_id && emptyDeliveryAreasContent ? (
+              value.main_area_ids.length > 0 && emptyDeliveryAreasContent ? (
                 emptyDeliveryAreasContent
               ) : (
                 <p className="rounded-xl border border-dashed border-brand-border bg-brand-soft/30 p-4 text-sm leading-6 text-muted-foreground">
-                  {value.primary_area_id
-                    ? "لا توجد مناطق توصيل فرعية متاحة ضمن المنطقة الأساسية."
-                    : "اختر المنطقة الأساسية لعرض مناطق التوصيل المتاحة."}
+                  {value.main_area_ids.length > 0
+                    ? "لا توجد مناطق توصيل فرعية متاحة ضمن المناطق الأساسية المحددة."
+                    : "اختر منطقة أساسية واحدة على الأقل لعرض مناطق التوصيل المتاحة."}
                 </p>
               )
             )}

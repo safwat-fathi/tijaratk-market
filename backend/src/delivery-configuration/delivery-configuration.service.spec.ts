@@ -103,7 +103,7 @@ describe('DeliveryConfigurationService', () => {
           delivery_available: true,
           delivery_starts_at: '09:00',
           delivery_ends_at: '09:59',
-          primary_area_id: 3,
+          main_area_ids: [3],
           delivery_areas: [{ area_id: 4, delivery_fee: 10 }],
         }),
       ).rejects.toThrow('ساعة على الأقل');
@@ -117,7 +117,7 @@ describe('DeliveryConfigurationService', () => {
       await expect(
         service.updateConfiguration(1, {
           delivery_available: true,
-          primary_area_id: 3,
+          main_area_ids: [3],
           delivery_areas: [
             { area_id: 3, delivery_fee: 10 },
             { area_id: 3, delivery_fee: 15 },
@@ -157,7 +157,7 @@ describe('DeliveryConfigurationService', () => {
       await expect(
         service.updateConfiguration(1, {
           delivery_available: true,
-          primary_area_id: 3,
+          main_area_ids: [3],
           delivery_areas: [{ area_id: 8, delivery_fee: 10 }],
         }),
       ).rejects.toThrow('داخل المنطقة الأساسية');
@@ -202,7 +202,7 @@ describe('DeliveryConfigurationService', () => {
       await expect(
         service.updateConfiguration(1, {
           delivery_available: false,
-          primary_area_id: 3,
+          main_area_ids: [3],
           delivery_areas: [],
         }),
       ).resolves.toEqual(savedConfiguration);
@@ -263,7 +263,7 @@ describe('DeliveryConfigurationService', () => {
           delivery_available: true,
           delivery_starts_at: '10:00',
           delivery_ends_at: '22:00',
-          primary_area_id: 3,
+          main_area_ids: [3],
           delivery_areas: [
             { area_id: 3, delivery_fee: 0 },
             { area_id: 4, delivery_fee: 25 },

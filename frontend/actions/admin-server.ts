@@ -1219,7 +1219,7 @@ const adminDeliveryConfigurationSchema = z
     delivery_available: z.boolean(),
     delivery_starts_at: z.string().nullable().optional(),
     delivery_ends_at: z.string().nullable().optional(),
-    primary_area_id: z.coerce.number().int().positive(),
+    main_area_ids: z.array(z.coerce.number().int().positive()).min(1),
     delivery_areas: z.array(
       z.object({
         area_id: z.coerce.number().int().positive(),
@@ -1243,11 +1243,12 @@ const adminDeliveryConfigurationSchema = z
         message: "لا يمكن تكرار منطقة التوصيل",
       });
     }
-    if (areaIds.includes(data.primary_area_id)) {
+    const overlaps = areaIds.filter((id) => data.main_area_ids.includes(id));
+    if (overlaps.length > 0) {
       ctx.addIssue({
         code: "custom",
         path: ["delivery_areas"],
-        message: "المنطقة الأساسية لا يمكن إضافتها ضمن مناطق التوصيل",
+        message: "المناطق الأساسية لا يمكن إضافتها ضمن مناطق التوصيل",
       });
     }
     const start = data.delivery_starts_at || "";
