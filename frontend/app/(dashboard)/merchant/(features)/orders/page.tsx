@@ -58,19 +58,10 @@ export default async function OrdersPage({
 }) {
 	const { date, tab } = await searchParams;
 
-	// Use today's date in Cairo timezone if date is not provided
-	const effectiveDate =
-		date ||
-		new Date(
-			new Date().toLocaleString("en-US", { timeZone: "Africa/Cairo" }),
-		)
-			.toISOString()
-			.split("T")[0];
-
 	const [orders, assignedResponse, summaryResponse] = await Promise.all([
-		getOrders(effectiveDate),
+		getOrders(date),
 		assignedOrdersService.getAssignedOrders(),
-		ordersService.getInboxSummary(effectiveDate),
+		ordersService.getInboxSummary(date),
 	]);
 	const assignedOrders = assignedResponse.data?.filter(Boolean) ?? [];
 	const inboxSummary =

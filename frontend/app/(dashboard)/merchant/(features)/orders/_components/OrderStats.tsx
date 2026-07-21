@@ -31,7 +31,7 @@ export default function OrderStats({
 
   // Helper to format label
   const getLabel = () => {
-    if (!selectedDate) return "اليوم";
+    if (!selectedDate) return "الكل";
 
     const date = new Date(selectedDate);
     const today = new Date();
@@ -52,13 +52,20 @@ export default function OrderStats({
     return `/merchant/orders${queryString ? `?${queryString}` : ""}`;
   };
 
-  const handleSelect = (option: "today" | "yesterday" | "older") => {
-    if (option === "today") {
+  const handleSelect = (option: "all" | "today" | "yesterday" | "older") => {
+    if (option === "all") {
       router.push(buildOrdersUrl());
+      setIsOpen(false);
+    } else if (option === "today") {
+      const t = new Date();
+      t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+      const tStr = t.toISOString().split("T")[0];
+      router.push(buildOrdersUrl(tStr));
       setIsOpen(false);
     } else if (option === "yesterday") {
       const y = new Date();
       y.setDate(y.getDate() - 1);
+      y.setMinutes(y.getMinutes() - y.getTimezoneOffset());
       const yStr = y.toISOString().split("T")[0];
       router.push(buildOrdersUrl(yStr));
       setIsOpen(false);
@@ -153,12 +160,27 @@ export default function OrderStats({
             <div className="space-y-1">
               <button
                 type="button"
+                onClick={() => handleSelect("all")}
+                className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-brand-soft active:bg-brand-soft/80"
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    !selectedDate || getLabel() === "الكل"
+                      ? "bg-brand-primary"
+                      : "border border-brand-border bg-transparent"
+                  }`}
+                />
+                <span className="font-medium text-brand-text">الكل</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleSelect("today")}
                 className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-brand-soft active:bg-brand-soft/80"
               >
                 <span
                   className={`h-2 w-2 rounded-full ${
-                    !selectedDate || getLabel() === "اليوم"
+                    selectedDate && getLabel() === "اليوم"
                       ? "bg-brand-primary"
                       : "border border-brand-border bg-transparent"
                   }`}
@@ -188,7 +210,7 @@ export default function OrderStats({
               >
                 <span
                   className={`h-2 w-2 rounded-full ${
-                    getLabel() !== "اليوم" && getLabel() !== "أمس"
+                    selectedDate && getLabel() !== "اليوم" && getLabel() !== "أمس"
                       ? "bg-brand-primary"
                       : "border border-brand-border bg-transparent"
                   }`}
