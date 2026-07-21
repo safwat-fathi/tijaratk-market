@@ -18,7 +18,7 @@ import { formatUnavailableItemAction } from "@/lib/orders/unavailable-item-actio
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
-  return date.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+  return date.toLocaleString('ar-EG', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 
 interface OrderCardProps {

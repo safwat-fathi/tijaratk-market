@@ -59,21 +59,7 @@
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
 
-      <intent-filter android:autoVerify="true">
-        <action android:name="android.intent.action.VIEW" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
-
-        <data android:scheme="https" />
-        <data android:host="www.tijaratk.com" />
-        <data android:path="/" />
-        <data android:path="/stores" />
-        <data android:pathPrefix="/stores/" />
-        <data android:path="/market" />
-        <data android:pathPrefix="/market/" />
-        <data android:pathPrefix="/track-order" />
-        <data android:pathPrefix="/open/store/" />
-      </intent-filter>
+      <!-- Flavor-specific intent filters are added through manifest merging -->
     </activity>
 
     <provider

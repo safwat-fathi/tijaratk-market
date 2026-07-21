@@ -30,6 +30,10 @@ android {
       dimension = "audience"
       applicationId = "com.tijaratk.customer"
     }
+    create("merchant") {
+      dimension = "audience"
+      applicationId = "com.tijaratk.merchant"
+    }
   }
 
   signingConfigs {

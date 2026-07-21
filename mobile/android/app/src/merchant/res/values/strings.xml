@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">تجارتك للتاجر</string>
+  <string name="launch_url" translatable="false">https://www.tijaratk.com/merchant</string>
+  <string name="file_provider_authority" translatable="false">com.tijaratk.merchant.fileprovider</string>
+  <string name="asset_statements" translatable="false">[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"web","site":"https://www.tijaratk.com"}}]</string>
+</resources>

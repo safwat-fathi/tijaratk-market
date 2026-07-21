@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="brand_primary">#0F5A3D</color>
+  <color name="brand_primary_dark">#093A28</color>
+  <color name="brand_accent">#27AE60</color>
+  <color name="twa_background">#F7F8F6</color>
+</resources>
