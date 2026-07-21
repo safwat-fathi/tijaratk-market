@@ -677,20 +677,22 @@ export class ProductsService {
     }
 
     if (actor && result.count > 0) {
-      await this.activityLogService.create({
-        tenantId,
-        ...this.toActivityActorFields(actor),
-        entityType: ActivityEntityTypes.Product,
-        action: ActivityActions.ProductBulkCreated,
-        title: 'تم إضافة منتجات أساسية',
-        description: `تم إضافة ${result.count} منتج من المنتجات الأساسية`,
-        metadata: {
-          created_count: result.count,
-          all_essential_items: dto.all_essential_items === true,
-          selected_catalog_item_count: dto.catalog_item_ids?.length ?? 0,
-          selected_category_count: dto.categories?.length ?? 0,
-        },
-        source: this.resolveProductActivitySource(actor),
+      await this.runAsTenantForAdmin(tenantId, async () => {
+        await this.activityLogService.create({
+          tenantId,
+          ...this.toActivityActorFields(actor),
+          entityType: ActivityEntityTypes.Product,
+          action: ActivityActions.ProductBulkCreated,
+          title: 'تم إضافة منتجات أساسية',
+          description: `تم إضافة ${result.count} منتج من المنتجات الأساسية`,
+          metadata: {
+            created_count: result.count,
+            all_essential_items: dto.all_essential_items === true,
+            selected_catalog_item_count: dto.catalog_item_ids?.length ?? 0,
+            selected_category_count: dto.categories?.length ?? 0,
+          },
+          source: this.resolveProductActivitySource(actor),
+        });
       });
     }
 
@@ -704,7 +706,7 @@ export class ProductsService {
     tenantId: number,
   ): Promise<BulkEssentialStage[]> {
     const catalogSource = await this.resolveTenantCatalogSource(tenantId);
-    if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+    if (!catalogSource || (catalogSource !== CATALOG_SOURCE_TALABAT && catalogSource !== CATALOG_SOURCE_CHEFAA)) {
       return [];
     }
     const activeCategories = await findActiveCatalogCategoryNamesForSource(
@@ -772,9 +774,9 @@ export class ProductsService {
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
       return DbTenantContext.run({ tenantId, manager: tx }, async () => {
         const catalogSource = await this.resolveTenantCatalogSource(tenantId);
-        if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+        if (!catalogSource || (catalogSource !== CATALOG_SOURCE_TALABAT && catalogSource !== CATALOG_SOURCE_CHEFAA)) {
           throw new BadRequestException(
-            'Essential bulk import is only supported for supermarket tenants.',
+            'Essential bulk import is only supported for supermarket and pharmacy tenants.',
           );
         }
         const activeCategories =
@@ -818,9 +820,9 @@ export class ProductsService {
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
       return DbTenantContext.run({ tenantId, manager: tx }, async () => {
         const catalogSource = await this.resolveTenantCatalogSource(tenantId);
-        if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+        if (!catalogSource || (catalogSource !== CATALOG_SOURCE_TALABAT && catalogSource !== CATALOG_SOURCE_CHEFAA)) {
           throw new BadRequestException(
-            'Essential bulk import is only supported for supermarket tenants.',
+            'Essential bulk import is only supported for supermarket and pharmacy tenants.',
           );
         }
         const activeCategories =
@@ -865,9 +867,9 @@ export class ProductsService {
       await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
       return DbTenantContext.run({ tenantId, manager: tx }, async () => {
         const catalogSource = await this.resolveTenantCatalogSource(tenantId);
-        if (!catalogSource || catalogSource !== CATALOG_SOURCE_TALABAT) {
+        if (!catalogSource || (catalogSource !== CATALOG_SOURCE_TALABAT && catalogSource !== CATALOG_SOURCE_CHEFAA)) {
           throw new BadRequestException(
-            'Essential bulk import is only supported for supermarket tenants.',
+            'Essential bulk import is only supported for supermarket and pharmacy tenants.',
           );
         }
         const activeCategories =

@@ -995,7 +995,7 @@ class AdminApiService extends HttpService {
 
 	public async getTenantBulkEssentialStages(tenantId: number) {
 		return this.get<BulkEssentialStage[]>(
-			`tenants/${tenantId}/bulk-essentials/stages`,
+			`managed-tenants/${tenantId}/bulk-essentials/stages`,
 			undefined,
 			ADMIN_AUTH_OPTIONS
 		);
@@ -1009,7 +1009,7 @@ class AdminApiService extends HttpService {
 			| { categories: string[] },
 	) {
 		return this.post<{ count: number }>(
-			`tenants/${tenantId}/bulk-essentials`,
+			`managed-tenants/${tenantId}/bulk-essentials`,
 			payload,
 			undefined,
 			ADMIN_AUTH_OPTIONS

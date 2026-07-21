@@ -51,6 +51,7 @@ export default async function ManagedProductsPage({
     productsResponse,
     catalogResponse,
     categoriesResponse,
+    tenantResponse,
   ] = await Promise.all([
     adminService.getManagedProducts(tenantId, {
       status,
@@ -65,12 +66,14 @@ export default async function ManagedProductsPage({
       category: catalogCategory,
     }),
     adminService.getManagedProductCategories(tenantId),
+    adminService.getManagedMerchantContext(tenantId),
   ]);
 
   const failedResponse = [
     productsResponse,
     catalogResponse,
     categoriesResponse,
+    tenantResponse,
   ].find((response) => !response.success);
   if (failedResponse) {
     if (isManagedSessionFailure(failedResponse)) {
@@ -91,6 +94,7 @@ export default async function ManagedProductsPage({
   const catalogMeta = catalogResponse.data?.meta || null;
 
   const productCategories = categoriesResponse.data || [];
+  const tenant = tenantResponse.data?.tenant;
 
   return (
     <ProductsClientView
@@ -101,6 +105,8 @@ export default async function ManagedProductsPage({
       catalogData={catalogData}
       catalogMeta={catalogMeta}
       productCategories={productCategories}
+      tenantName={tenant?.name || session.tenant.name}
+      category={tenant?.category || "grocery"}
     />
   );
 }

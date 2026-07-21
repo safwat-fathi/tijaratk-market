@@ -23,6 +23,7 @@ import { CreateProductDto } from 'src/products/dto/create-product.dto';
 import { GetCatalogItemsDto } from 'src/products/dto/get-catalog-items.dto';
 import { GetTenantProductsDto } from 'src/products/dto/get-tenant-products.dto';
 import { BulkUpdateProductsDto } from 'src/products/dto/bulk-update-products.dto';
+import { AddBulkEssentialItemsDto } from 'src/products/dto/add-bulk-essential.dto';
 import { ProductsService } from 'src/products/products.service';
 import { AdminActorContext } from './admin-managed.types';
 import { CurrentAdminActor } from './decorators/current-admin-actor.decorator';
@@ -160,6 +161,27 @@ export class AdminManagedProductsController {
       dto,
       actor,
     );
+  }
+
+  @Get('bulk-essentials/stages')
+  @RequireManagedPermissions(ADMIN_MANAGED_PERMISSIONS.ProductsRead)
+  @ApiOperation({ summary: 'Get managed tenant essential bulk import stages' })
+  findTenantBulkEssentialStages(
+    @CurrentAdminActor() actor: AdminActorContext,
+  ) {
+    return this.productsService.findBulkEssentialStages(actor.tenantId);
+  }
+
+  @Post('bulk-essentials')
+  @RequireManagedFeature('product_write')
+  @RequireManagedPermissions(ADMIN_MANAGED_PERMISSIONS.ProductsCreate)
+  @ApiOperation({ summary: 'Bulk add essential products for a managed tenant' })
+  @ApiBody({ type: AddBulkEssentialItemsDto })
+  bulkAddEssentials(
+    @CurrentAdminActor() actor: AdminActorContext,
+    @Body() dto: AddBulkEssentialItemsDto,
+  ) {
+    return this.productsService.bulkAddEssentials(actor.tenantId, dto, actor);
   }
 
   /** Bulk updates multiple products in a single operation. */

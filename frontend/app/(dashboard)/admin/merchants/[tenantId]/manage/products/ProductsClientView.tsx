@@ -15,6 +15,7 @@ import {
   updateManagedProductStatusAction,
   bulkUpdateManagedProductsAction,
 } from "@/actions/admin-server";
+import { AdminBulkEssentialsButton } from "../../../_components/AdminBulkEssentialsButton";
 
 type ProductsClientViewProps = {
   tenantId: number;
@@ -24,6 +25,8 @@ type ProductsClientViewProps = {
   catalogData: CatalogItem[];
   catalogMeta: any;
   productCategories: string[];
+  tenantName: string;
+  category: string;
 };
 
 export default function ProductsClientView({
@@ -34,6 +37,8 @@ export default function ProductsClientView({
   catalogData,
   catalogMeta,
   productCategories,
+  tenantName,
+  category,
 }: ProductsClientViewProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -114,11 +119,18 @@ export default function ProductsClientView({
           <h1 className="text-2xl font-bold text-gray-900">منتجات المتجر</h1>
           <p className="text-sm text-gray-500">البيانات المعروضة مقيدة بالمتجر النشط في الجلسة.</p>
         </div>
-        {permissions.has("products.create") && (
-          <Button onClick={() => setIsAddProductOpen(true)} className="shadow-sm">
-            إضافة منتج
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {permissions.has("products.create") && (
+            <Button onClick={() => setIsAddProductOpen(true)} className="shadow-sm">
+              إضافة منتج
+            </Button>
+          )}
+          <AdminBulkEssentialsButton
+            tenantId={tenantId}
+            tenantName={tenantName}
+            category={category}
+          />
+        </div>
       </div>
 
       <Card className="overflow-hidden border-gray-200/60 shadow-sm backdrop-blur-sm bg-white/80">

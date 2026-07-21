@@ -23,6 +23,7 @@ type BulkEssentialWizardProps = {
   onSkip?: () => void;
   onCategoryAdded?: (count: number) => void;
   addEssentialItemsAction?: AddEssentialItemsAction;
+  storeTypeLabel?: string;
 };
 
 type ResultState = {
@@ -42,6 +43,7 @@ export default function BulkEssentialWizard({
   onSkip,
   onCategoryAdded,
   addEssentialItemsAction = bulkAddEssentialItemsAction,
+  storeTypeLabel = "السوبر ماركت",
 }: BulkEssentialWizardProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [result, setResult] = useState<ResultState | null>(null);
@@ -132,7 +134,7 @@ export default function BulkEssentialWizard({
             إضافة كل المنتجات الأساسية
           </h3>
           <p className="mx-auto max-w-sm text-sm leading-6 text-gray-600">
-            سيتم إضافة كل المنتجات المحددة كأساسية من كتالوج السوبر ماركت دفعة
+            سيتم إضافة كل المنتجات المحددة كأساسية من كتالوج {storeTypeLabel} دفعة
             واحدة، مع تجاهل المنتجات الموجودة بالفعل في المتجر.
           </p>
         </div>

@@ -357,7 +357,7 @@ export class AdminController {
   @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
   @ApiOperation({
     summary: 'Bulk add essential products for a merchant',
-    description: 'Populate a supermarket tenant with essential catalog items.',
+    description: 'Populate a supermarket or pharmacy tenant with essential catalog items.',
   })
   @ApiParam({
     name: 'id',
@@ -366,7 +366,7 @@ export class AdminController {
   })
   @ApiBody({ type: AddBulkEssentialItemsDto })
   @ApiResponse({ status: 201, description: 'Products added successfully' })
-  @ApiResponse({ status: 400, description: 'Tenant is not a supermarket' })
+  @ApiResponse({ status: 400, description: 'Tenant is not a supermarket or pharmacy' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   bulkAddEssentials(
     @Param('id', ParseIntPipe) id: number,
@@ -386,7 +386,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get staged essential bulk import candidates for a merchant',
     description:
-      'Return staged essential catalog categories and selected candidates for a supermarket tenant.',
+      'Return staged essential catalog categories and selected candidates for a supermarket or pharmacy tenant.',
   })
   @ApiParam({
     name: 'id',

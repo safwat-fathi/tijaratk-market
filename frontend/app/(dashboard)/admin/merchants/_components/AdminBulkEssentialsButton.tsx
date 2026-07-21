@@ -26,9 +26,11 @@ export function AdminBulkEssentialsButton({
     [tenantId],
   );
 
-  if (category !== "grocery") {
+  if (category !== "grocery" && category !== "pharmacy") {
     return null;
   }
+
+  const storeTypeLabel = category === "pharmacy" ? "الصيدلية" : "السوبر ماركت";
 
   return (
     <>
@@ -59,6 +61,7 @@ export function AdminBulkEssentialsButton({
         onClose={() => setIsOpen(false)}
         onSuccess={() => router.refresh()}
         addEssentialItemsAction={addEssentialItems}
+        storeTypeLabel={storeTypeLabel}
       />
     </>
   );
