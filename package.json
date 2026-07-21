@@ -1,5 +1,6 @@
 {
   "name": "tijaratk-root",
+  "version": "0.8.1",
   "private": true,
   "scripts": {
     "prepare": "husky"
