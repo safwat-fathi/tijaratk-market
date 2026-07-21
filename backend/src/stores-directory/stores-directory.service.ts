@@ -227,15 +227,23 @@ export class StoresDirectoryService {
       area: {
         is_active: true,
         deleted_at: null,
-        parent_area_id: area.id,
-        parent_area: {
-          is: {
+        OR: [
+          {
+            parent_area_id: area.id,
+            parent_area: {
+              is: {
+                id: area.id,
+                parent_area_id: null,
+                is_active: true,
+                deleted_at: null,
+              },
+            },
+          },
+          {
             id: area.id,
             parent_area_id: null,
-            is_active: true,
-            deleted_at: null,
           },
-        },
+        ],
       },
       tenant: {
         status: TenantStatus.active,
@@ -1014,15 +1022,23 @@ export class StoresDirectoryService {
         area: {
           is_active: true,
           deleted_at: null,
-          parent_area_id: { not: null },
-          parent_area: {
-            is: {
+          OR: [
+            {
+              parent_area_id: { not: null },
+              parent_area: {
+                is: {
+                  ...(options?.mainAreaId ? { id: options.mainAreaId } : {}),
+                  parent_area_id: null,
+                  is_active: true,
+                  deleted_at: null,
+                },
+              },
+            },
+            {
               ...(options?.mainAreaId ? { id: options.mainAreaId } : {}),
               parent_area_id: null,
-              is_active: true,
-              deleted_at: null,
             },
-          },
+          ],
         },
         tenant: {
           status: TenantStatus.active,
@@ -1151,7 +1167,10 @@ export class StoresDirectoryService {
     >();
 
     for (const deliveryArea of deliveryAreas) {
-      const mainArea = deliveryArea.area.parent_area;
+      const mainArea =
+        deliveryArea.area.parent_area_id === null
+          ? deliveryArea.area
+          : deliveryArea.area.parent_area;
       if (!mainArea) continue;
 
       const category = CATEGORY_DEFINITIONS.find(
@@ -1241,7 +1260,10 @@ export class StoresDirectoryService {
     >();
 
     for (const deliveryArea of deliveryAreas) {
-      const mainArea = deliveryArea.area.parent_area;
+      const mainArea =
+        deliveryArea.area.parent_area_id === null
+          ? deliveryArea.area
+          : deliveryArea.area.parent_area;
       if (!mainArea) continue;
 
       const existing = mainAreasById.get(mainArea.id);

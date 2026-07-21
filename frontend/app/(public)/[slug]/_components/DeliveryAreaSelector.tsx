@@ -1,8 +1,9 @@
 "use client";
 
 import { Check, ChevronDown, MapPin, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BottomSheet from "@/components/ui/BottomSheet";
+import { extractMainAreaIds } from "@/lib/delivery-configuration";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { TenantDeliveryArea } from "@/types/models/tenant";
 
@@ -22,19 +23,46 @@ export default function DeliveryAreaSelector({
   onSelect,
 }: DeliveryAreaSelectorProps) {
   const [search, setSearch] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
+  
   const selectedArea = areas.find((area) => area.area_id === selectedAreaId);
-  const filteredAreas = useMemo(() => {
-    const normalized = search.trim().toLocaleLowerCase("ar");
-    if (!normalized) return areas;
-    return areas.filter((deliveryArea) => {
-      const area = deliveryArea.area;
-      return [area?.name_ar, area?.name_en, area?.city, area?.governorate]
+  const searchNormalized = search.trim().toLocaleLowerCase("ar");
+
+  const groups = useMemo(() => {
+    const mainAreaIds = extractMainAreaIds(areas as any);
+    const mainAreas = areas.filter(a => mainAreaIds.includes(a.area_id));
+    const subAreas = areas.filter(a => !mainAreaIds.includes(a.area_id));
+
+    return mainAreas.map(mainArea => {
+      const children = subAreas.filter(a => a.area?.parent_area_id === mainArea.area_id);
+      return { mainArea, children };
+    }).filter(group => group.children.length > 0);
+  }, [areas]);
+
+  const filteredGroups = useMemo(() => {
+    if (!searchNormalized) return groups;
+    return groups.map(group => {
+      const mainMatch = [group.mainArea.area?.name_ar, group.mainArea.area?.name_en]
         .filter(Boolean)
-        .some((value) =>
-          String(value).toLocaleLowerCase("ar").includes(normalized),
-        );
-    });
-  }, [areas, search]);
+        .some(v => String(v).toLocaleLowerCase("ar").includes(searchNormalized));
+      
+      if (mainMatch) return group;
+
+      const children = group.children.filter(child => {
+        return [child.area?.name_ar, child.area?.name_en, child.area?.city, child.area?.governorate]
+          .filter(Boolean)
+          .some(v => String(v).toLocaleLowerCase("ar").includes(searchNormalized));
+      });
+      
+      return { ...group, children };
+    }).filter(g => g.children.length > 0);
+  }, [groups, searchNormalized]);
+
+  useEffect(() => {
+    if (searchNormalized) {
+      setExpandedGroups(new Set(filteredGroups.map(g => g.mainArea.area_id)));
+    }
+  }, [searchNormalized, filteredGroups]);
 
   return (
     <>
@@ -103,64 +131,83 @@ export default function DeliveryAreaSelector({
             </label>
           ) : null}
 
-          <div
-            className="space-y-3"
-            role="radiogroup"
-            aria-label="مناطق التوصيل المتاحة"
-          >
-            {filteredAreas.map((deliveryArea) => {
-              const isSelected =
-                deliveryArea.area_id === selectedAreaId;
+          <div className="space-y-3" role="radiogroup" aria-label="مناطق التوصيل المتاحة">
+            {filteredGroups.map((group) => {
+              const mainId = group.mainArea.area_id;
+              const isExpanded = expandedGroups.has(mainId);
               return (
-                <button
-                  key={deliveryArea.area_id}
-                  type="button"
-                  onClick={() => {
-                    onSelect(deliveryArea.area_id);
-                    onOpenChange(false);
-                  }}
-                  role="radio"
-                  aria-checked={isSelected}
-                  className={`flex min-h-16 w-full items-center gap-3 rounded-xl border p-4 text-right transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 ${
-                    isSelected
-                      ? "border-brand-primary bg-brand-soft/65"
-                      : "border-brand-border bg-white hover:border-brand-accent"
-                  }`}
-                >
-                  <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                      isSelected
-                        ? "bg-brand-primary text-white"
-                        : "bg-brand-soft text-brand-primary"
-                    }`}
+                <div key={mainId} className="rounded-xl border border-brand-border bg-white overflow-hidden transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = new Set(expandedGroups);
+                      if (next.has(mainId)) {
+                        next.delete(mainId);
+                      } else {
+                        next.add(mainId);
+                      }
+                      setExpandedGroups(next);
+                    }}
+                    className="flex min-h-14 w-full items-center justify-between bg-brand-soft/20 px-4 py-3 text-right hover:bg-brand-soft/40 transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+                    aria-expanded={isExpanded}
                   >
-                    {isSelected ? (
-                      <Check className="h-5 w-5" aria-hidden="true" />
-                    ) : (
-                      <MapPin className="h-5 w-5" aria-hidden="true" />
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-brand-text">
-                      {deliveryArea.area?.name_ar}
+                    <span className="font-bold text-brand-text">
+                      {group.mainArea.area?.name_ar}
                     </span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {[deliveryArea.area?.city, deliveryArea.area?.governorate]
-                        .filter(Boolean)
-                        .join(" - ")}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-sm font-black tabular-nums text-brand-primary">
-                    {Number(deliveryArea.delivery_fee) > 0
-                      ? formatCurrency(Number(deliveryArea.delivery_fee))
-                      : "مجاني"}
-                  </span>
-                </button>
+                    <ChevronDown
+                      className={`h-5 w-5 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                  
+                  {isExpanded && (
+                    <div className="flex flex-col border-t border-brand-border divide-y divide-brand-border/50 bg-white">
+                      {group.children.map((deliveryArea) => {
+                        const isSelected = deliveryArea.area_id === selectedAreaId;
+                        return (
+                          <button
+                            key={deliveryArea.area_id}
+                            type="button"
+                            onClick={() => {
+                              onSelect(deliveryArea.area_id);
+                              onOpenChange(false);
+                            }}
+                            role="radio"
+                            aria-checked={isSelected}
+                            className={`flex min-h-16 w-full items-center gap-3 px-4 py-3 text-right transition-colors hover:bg-brand-soft/20 focus-visible:outline-none focus-visible:bg-brand-soft/20 ${
+                              isSelected ? "bg-brand-soft/30" : ""
+                            }`}
+                          >
+                            <span
+                              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
+                                isSelected
+                                  ? "border-brand-primary bg-brand-primary text-white"
+                                  : "border-brand-border bg-white text-transparent"
+                              }`}
+                            >
+                              {isSelected && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-semibold text-brand-text">
+                                {deliveryArea.area?.name_ar}
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-sm font-black tabular-nums text-brand-primary">
+                              {Number(deliveryArea.delivery_fee) > 0
+                                ? formatCurrency(Number(deliveryArea.delivery_fee))
+                                : "مجاني"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
 
-          {filteredAreas.length === 0 ? (
+          {filteredGroups.length === 0 ? (
             <p className="rounded-xl border border-dashed border-brand-border p-5 text-center text-sm text-muted-foreground">
               لا توجد منطقة مطابقة للبحث.
             </p>
