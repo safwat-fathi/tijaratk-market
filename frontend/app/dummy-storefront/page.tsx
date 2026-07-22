@@ -14,7 +14,7 @@ export default function DummyStorefront() {
     <div className="flex min-h-screen flex-col bg-[#f7faf5]" dir="rtl">
       <AppHeader
         title="صيدلية الشفاء"
-        innerClassName="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8"
+        innerClassName="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 py-3 sm:px-6 lg:px-8"
       />
       <main className="flex-1 pb-32 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 pt-4">
         <style dangerouslySetInnerHTML={{__html: `

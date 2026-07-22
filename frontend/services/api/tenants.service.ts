@@ -3,7 +3,10 @@ import {
   DeliveryConfigurationInput,
   Tenant,
 } from "@/types/models/tenant";
-import type { DeliveryAvailability } from "@/types/models/delivery";
+import type {
+  DeliveryAvailability,
+  StorefrontOrderAvailability,
+} from "@/types/models/delivery";
 
 const PUBLIC_STOREFRONT_REVALIDATE_SECONDS = 60;
 
@@ -31,6 +34,14 @@ class TenantsService extends HttpService {
   public async getDeliveryAvailability(slug: string) {
     return this.get<DeliveryAvailability>(
       `public/${slug}/delivery-availability`,
+      undefined,
+      { cache: "no-store" },
+    );
+  }
+
+  public async getStorefrontOrderAvailability(slug: string) {
+    return this.get<StorefrontOrderAvailability>(
+      `public/${slug}/order-availability`,
       undefined,
       { cache: "no-store" },
     );

@@ -25,6 +25,7 @@ import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-se
 import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
 import { UpdateTenantOnboardingDto } from './dto/update-tenant-onboarding.dto';
 import { TenantStatus } from '../../generated/prisma/client';
+import { StorefrontOrderAvailabilityDto } from './dto/storefront-order-availability.dto';
 
 @ApiTags('Tenants')
 @Controller('tenants')
@@ -140,6 +141,29 @@ export class TenantsController {
     }
 
     return tenant;
+  }
+
+  @Get('public/:slug/order-availability')
+  @ApiOperation({ summary: 'Get public merchant order availability' })
+  @ApiResponse({
+    status: 200,
+    description: 'Current storefront order availability returned successfully',
+    type: StorefrontOrderAvailabilityDto,
+  })
+  @ApiResponse({ status: 403, description: 'Tenant is not publicly available' })
+  @ApiResponse({ status: 404, description: 'Tenant not found' })
+  async findOrderAvailability(
+    @Param('slug') slug: string,
+  ): Promise<StorefrontOrderAvailabilityDto> {
+    const tenant = await this.tenantsService.findOneBySlug(slug);
+    if (!tenant || tenant.operated_zone_storefront) {
+      throw new NotFoundException(`Tenant with slug ${slug} not found`);
+    }
+    if (tenant.status !== TenantStatus.active) {
+      throw new ForbiddenException('هذا المتجر غير متاح حاليا');
+    }
+
+    return this.tenantsService.getStorefrontOrderAvailability(tenant);
   }
 
   @Get('public/:slug/delivery-availability')

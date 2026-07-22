@@ -1,4 +1,8 @@
+import type { Metadata } from "next";
 import { PublicFooter } from "@/components/layout/PublicFooter";
+import { CUSTOMER_PWA_METADATA } from "@/lib/customer-pwa";
+
+export const metadata: Metadata = CUSTOMER_PWA_METADATA;
 
 export default function PublicLayout({
   children,

@@ -12,6 +12,7 @@ interface CategoryProductsTabProps {
 		categoryKey: string,
 		node: HTMLElement | null,
 	) => void;
+	updateUrl?: boolean;
 }
 
 export default function CategoryProductsTab({
@@ -19,6 +20,7 @@ export default function CategoryProductsTab({
 	activeCategory,
 	onCategoryChange,
 	setCategoryPillRef,
+	updateUrl = true,
 }: CategoryProductsTabProps) {
 	return (
 		<ScrollableTabList className="mb-4">
@@ -31,7 +33,13 @@ export default function CategoryProductsTab({
 						variant="pill"
 						isActive={isActive}
 						draggable={false}
-						href={category.key === ALL_PRODUCTS_CATEGORY ? "?" : `?category=${encodeURIComponent(category.key)}`}
+						href={
+							updateUrl
+								? category.key === ALL_PRODUCTS_CATEGORY
+									? "?"
+									: `?category=${encodeURIComponent(category.key)}`
+								: undefined
+						}
 						prefetch={true}
 						onClick={() => {
 							// Allow onCategoryChange to handle the URL if needed

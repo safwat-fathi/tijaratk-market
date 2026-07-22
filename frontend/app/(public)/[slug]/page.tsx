@@ -2,7 +2,8 @@ import StoreHeader, {
   resolveTenantCategoryMeta,
 } from "./_components/StoreHeader";
 
-import OrderForm from "./_components/OrderForm";
+import StorefrontCatalog from "./_components/StorefrontCatalog";
+import HeaderCartButton from "./_components/HeaderCartButton";
 
 import { tenantsService } from "@/services/api/tenants.service";
 import { productsService } from "@/services/api/products.service";
@@ -18,11 +19,13 @@ import {
 import { Order } from "@/types/models/order";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
-import { getCustomerProfileBySlugFromCookie } from "@/lib/tracking/customer-tracking-cookie";
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
-import type { DeliveryAvailability } from "@/types/models/delivery";
 import { SITE_URL } from "@/lib/marketing-seo";
+import { getStorefrontCartDraftAction } from "@/actions/storefront-cart-actions";
+import { OrderSource } from "@/types/enums";
+import { createUnavailableStorefrontOrderState } from "@/lib/storefront-order-availability";
+import { CUSTOMER_PWA } from "@/lib/customer-pwa";
 
 type StoreSearchParams = {
   reorder?: string;
@@ -116,7 +119,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     alternates: {
       canonical: `/${slug}`,
     },
-    manifest: `/pwa/storefront/${encodeURIComponent(slug)}/manifest`,
+    manifest: CUSTOMER_PWA.manifestPath,
     keywords: [
       tenant.name,
       categoryLabel,
@@ -155,6 +158,15 @@ export default async function StorePage({ params, searchParams }: Props) {
   const resolvedSearchParams = await searchParams;
   const { reorder, category, areaSlug, categorySlug, src } =
     resolvedSearchParams;
+  const landingSource = src === "directory" || src === "qr" ? src : null;
+  const sourceMetadata = landingSource
+    ? {
+        landingSource,
+        ...(areaSlug ? { areaSlug } : {}),
+        ...(categorySlug ? { categorySlug } : {}),
+        landedAt: new Date().toISOString(),
+      }
+    : undefined;
 
   const tenant = await getTenant(slug);
   if (!tenant || !tenant.id) {
@@ -164,31 +176,23 @@ export default async function StorePage({ params, searchParams }: Props) {
   const [
     { products, meta },
     categories,
-    availabilityResponse,
     initialOrder,
-    savedCustomerProfile,
+    initialDraft,
+    orderAvailabilityResponse,
   ] =
     await Promise.all([
       getInitialProducts(slug, category),
       getPublicCategories(slug),
-      tenantsService.getDeliveryAvailability(slug),
       getOrder(reorder),
-      getCustomerProfileBySlugFromCookie(tenant.slug),
+      getStorefrontCartDraftAction(tenant.slug),
+      tenantsService.getStorefrontOrderAvailability(tenant.slug),
     ]);
-  const deliveryAvailability: DeliveryAvailability =
-    availabilityResponse.success && availabilityResponse.data
-      ? availabilityResponse.data
-      : {
-          timezone: "Africa/Cairo",
-          state: "unavailable",
-          ordering_mode: "unavailable",
-          operating_hours: {
-            starts_at: tenant.delivery_starts_at ?? null,
-            ends_at: tenant.delivery_ends_at ?? null,
-          },
-          schedule_constraints: null,
-          slots: [],
-        };
+  const reorderOrder =
+    initialOrder?.tenant_id === tenant.id ? initialOrder : null;
+  const orderAvailability =
+    orderAvailabilityResponse.success && orderAvailabilityResponse.data
+      ? orderAvailabilityResponse.data
+      : createUnavailableStorefrontOrderState();
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-md bg-background flex flex-col">
@@ -203,50 +207,47 @@ export default async function StorePage({ params, searchParams }: Props) {
       <StoreHeader
         tenant={tenant}
         enableCustomerTour={tenant.onboarding_completed}
+        cartAction={
+          <HeaderCartButton
+            tenantSlug={tenant.slug}
+            initialCount={initialDraft?.items.length ?? 0}
+          />
+        }
       />
-      
-      {!tenant.onboarding_completed ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
-          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center">
-            <span className="text-4xl">🚧</span>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900">المتجر قيد التجهيز</h2>
-          <p className="text-gray-500 max-w-xs">
-            هذا المتجر يقوم حالياً بإعداد قائمة المنتجات وسيتم افتتاحه قريباً للطلبات!
+      <div className="min-w-0">
+        <StorefrontCatalog
+          tenantSlug={tenant.slug}
+          initialProducts={products}
+          initialMeta={meta}
+          categories={categories}
+          initialDraft={initialDraft}
+          reorderOrder={reorderOrder}
+          initialCategory={category}
+          orderSource={
+            landingSource === "directory"
+              ? OrderSource.DIRECTORY
+              : OrderSource.STOREFRONT
+          }
+          sourceMetadata={sourceMetadata}
+          orderAvailability={orderAvailability}
+        />
+        <div className="mt-4 border-t border-gray-100 p-4 text-center text-xs text-gray-500">
+          <p>
+            هذا المتجر مدعوم تقنياً بواسطة منصة{" "}
+            <a
+              href="/"
+              className="font-bold text-brand-primary hover:underline"
+            >
+              تجارتك
+            </a>
+            .
+          </p>
+          <p className="mt-1">
+            التاجر ({tenant.name}) هو المسؤول عن توفر المنتجات، جودتها، التسعير،
+            وسياسة الإرجاع.
           </p>
         </div>
-      ) : (
-        <div className="min-w-0">
-          <OrderForm
-            tenantSlug={tenant.slug}
-            areaSlug={areaSlug}
-            landingAttribution={{
-              source: src,
-              areaSlug,
-              categorySlug,
-              landedAt: new Date().toISOString(),
-            }}
-            isPharmacy={tenant.category === "pharmacy"}
-            tenantCategory={tenant.category}
-            deliverySettings={tenant}
-            deliveryAvailability={deliveryAvailability}
-            initialCategory={category}
-            initialProducts={products}
-            initialProductsMeta={meta}
-            initialCategories={categories}
-            initialOrder={initialOrder}
-            savedCustomerProfile={savedCustomerProfile}
-          />
-          <div className="p-4 text-center text-xs text-gray-500 mt-4 border-t border-gray-100">
-            <p>
-              هذا المتجر مدعوم تقنياً بواسطة منصة <a href="/" className="text-brand-primary font-bold hover:underline">تجارتك</a>. 
-            </p>
-            <p className="mt-1">
-              التاجر ({tenant.name}) هو المسؤول عن توفر المنتجات، جودتها، التسعير، وسياسة الإرجاع.
-            </p>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

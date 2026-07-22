@@ -8,6 +8,7 @@ import SafeImage from "@/components/ui/SafeImage";
 import { createPublicMetadata, SITE_URL } from "@/lib/marketing-seo";
 import { storesDirectoryService } from "@/services/api/stores-directory.service";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
+import { CUSTOMER_PWA, CUSTOMER_PWA_METADATA } from "@/lib/customer-pwa";
 import {
   StoresDirectoryCategoryPage,
   StoresDirectoryStoreCard,
@@ -149,7 +150,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: page.seo.description,
       path: page.seo.canonicalUrl || `/stores/${areaSlug}/${categorySlug}`,
     }),
-    manifest: "/pwa/stores-directory/manifest",
+    ...CUSTOMER_PWA_METADATA,
   };
 }
 
@@ -247,8 +248,8 @@ export default async function StoresCategoryPage({
 
       <AppHeader
         title="دليل المتاجر"
-        innerClassName="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8"
-        actions={<InstallPwaAction appName="دليل تجارتك" />}
+        innerClassName="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 py-3 sm:px-6 lg:px-8"
+        actions={<InstallPwaAction appName={CUSTOMER_PWA.name} />}
       />
 
       <main className="flex-1">

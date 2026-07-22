@@ -12,6 +12,7 @@ export type AreaAutocompleteOption = {
   name: string;
   nameEn?: string | null;
   slug: string;
+  destinationSlug?: string;
   stores: number;
 };
 
@@ -38,7 +39,7 @@ const getAreaHref = (
   destination: Props["destination"],
 ) => {
   if (destination.type === "landing") {
-    return `/?area=${encodeURIComponent(area.slug)}`;
+    return `/?area=${encodeURIComponent(area.destinationSlug || area.slug)}`;
   }
 
   return `/stores/${encodeURIComponent(area.slug)}/${encodeURIComponent(

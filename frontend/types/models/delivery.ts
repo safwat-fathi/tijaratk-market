@@ -21,3 +21,19 @@ export type DeliveryAvailability = {
   } | null;
   slots: DeliverySlot[];
 };
+
+export const STOREFRONT_ORDER_UNAVAILABLE_REASONS = {
+  SETUP_INCOMPLETE: "setup_incomplete",
+  INSUFFICIENT_PRODUCTS: "insufficient_products",
+  DELIVERY_UNAVAILABLE: "delivery_unavailable",
+} as const;
+
+export type StorefrontOrderUnavailableReason =
+  (typeof STOREFRONT_ORDER_UNAVAILABLE_REASONS)[keyof typeof STOREFRONT_ORDER_UNAVAILABLE_REASONS];
+
+export type StorefrontOrderAvailability = {
+  accepting_orders: boolean;
+  reason: StorefrontOrderUnavailableReason | null;
+  message: string | null;
+  delivery_availability: DeliveryAvailability;
+};

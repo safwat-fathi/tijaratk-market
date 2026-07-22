@@ -120,7 +120,7 @@ export function ProductsGuidedTour() {
         overlayColor: "rgba(0, 0, 0, 0.6)",
         zIndex: 10000,
         showProgress: true,
-        buttons: ["back", "skip", "primary"],
+        buttons: ["back", "primary"],
       }}
       styles={{
         tooltipContainer: {

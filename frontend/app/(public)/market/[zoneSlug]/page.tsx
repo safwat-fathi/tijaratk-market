@@ -10,6 +10,7 @@ import type { Tenant } from "@/types/models/tenant";
 import type { PublicProductsMeta } from "@/types/models/product";
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import { CUSTOMER_PWA } from "@/lib/customer-pwa";
 
 type ZoneSearchParams = {
   reorder?: string;
@@ -37,7 +38,7 @@ export async function generateMetadata({ params }: ZonePageProps): Promise<Metad
     title: `${response.data.name} | سوق تجارتك`,
     description: `اطلب احتياجاتك من ${response.data.area.name_ar} عبر واجهة تجارتك المركزية.`,
     alternates: { canonical: `/market/${response.data.slug}` },
-    manifest: `/pwa/zone-storefront/${encodeURIComponent(response.data.slug)}/manifest`,
+    manifest: CUSTOMER_PWA.manifestPath,
   };
 }
 

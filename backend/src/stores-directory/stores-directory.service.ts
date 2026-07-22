@@ -127,6 +127,7 @@ export class StoresDirectoryService {
 
     return {
       areas: this.toPublicAreaSummaries(deliveryAreas),
+      searchAreas: this.toPublicAreaSearchOptions(deliveryAreas),
       categories: CATEGORY_DEFINITIONS.map((category) => ({
         slug: category.slug,
         label: category.label,
@@ -1241,6 +1242,65 @@ export class StoresDirectoryService {
         governorate: areaSummary.governorate,
         storesCount: areaSummary.storesCount,
         categoryCounts: areaSummary.categoryCounts,
+      }));
+  }
+
+  /** Builds searchable delivery-area rows that route through their public main area. */
+  private toPublicAreaSearchOptions(
+    deliveryAreas: Awaited<
+      ReturnType<StoresDirectoryService['findPublicDeliveryAreas']>
+    >,
+  ) {
+    const areasById = new Map<
+      number,
+      {
+        id: number;
+        nameAr: string;
+        nameEn: string | null;
+        slug: string;
+        destinationSlug: string;
+        sortOrder: number;
+        tenantIds: Set<number>;
+      }
+    >();
+
+    for (const deliveryArea of deliveryAreas) {
+      const area = deliveryArea.area;
+      const destinationArea =
+        area.parent_area_id === null ? area : area.parent_area;
+      if (!destinationArea) continue;
+
+      const existing = areasById.get(area.id);
+      if (existing) {
+        existing.tenantIds.add(deliveryArea.tenant.id);
+        continue;
+      }
+
+      areasById.set(area.id, {
+        id: area.id,
+        nameAr: area.name_ar,
+        nameEn: area.name_en,
+        slug: area.slug,
+        destinationSlug: destinationArea.slug,
+        sortOrder: area.sort_order,
+        tenantIds: new Set([deliveryArea.tenant.id]),
+      });
+    }
+
+    return Array.from(areasById.values())
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.nameAr.localeCompare(right.nameAr, 'ar') ||
+          left.id - right.id,
+      )
+      .map((area) => ({
+        id: area.id,
+        nameAr: area.nameAr,
+        nameEn: area.nameEn,
+        slug: area.slug,
+        destinationSlug: area.destinationSlug,
+        storesCount: area.tenantIds.size,
       }));
   }
 

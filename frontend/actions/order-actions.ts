@@ -385,7 +385,7 @@ const buildCreateOrderFormData = (
   return formDataPayload;
 };
 
-const persistCreatedOrderTrackingArtifacts = async ({
+export const persistCreatedOrderTrackingArtifacts = async ({
   tenantSlug,
   responseData,
   customerData,

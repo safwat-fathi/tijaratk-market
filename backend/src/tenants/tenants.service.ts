@@ -9,7 +9,29 @@ import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
 import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
 import { getDashboardCacheVersionKey } from 'src/merchant-dashboard/merchant-dashboard.service';
 import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
-import { DeliverySchedulingService } from 'src/delivery-configuration/delivery-scheduling.service';
+import {
+  type DeliveryAvailability,
+  DeliverySchedulingService,
+} from 'src/delivery-configuration/delivery-scheduling.service';
+import {
+  ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
+  buildProductOrderReadiness,
+} from 'src/products/order-readiness-policy';
+import {
+  StorefrontOrderAvailabilityDto,
+  type StorefrontOrderUnavailableReason,
+} from './dto/storefront-order-availability.dto';
+
+const STOREFRONT_UNAVAILABLE_MESSAGES: Record<
+  StorefrontOrderUnavailableReason,
+  string
+> = {
+  setup_incomplete:
+    'هذا المتجر ما زال قيد التجهيز ولا يستقبل الطلبات حالياً.',
+  insufficient_products:
+    'هذا المتجر يجهّز قائمة المنتجات ولا يستقبل الطلبات حالياً.',
+  delivery_unavailable: 'التوصيل غير متاح من هذا المتجر حالياً.',
+};
 
 @Injectable()
 export class TenantsService {
@@ -126,6 +148,84 @@ export class TenantsService {
     return this.deliverySchedulingService.getAvailability(tenant, new Date(), {
       allowAlwaysOpenWithoutHours: true,
     });
+  }
+
+  /** Resolves the authoritative public ordering state for one merchant storefront. */
+  async getStorefrontOrderAvailability(
+    tenant: Pick<
+      Tenant,
+      | 'id'
+      | 'category'
+      | 'onboarding_completed'
+      | 'delivery_available'
+      | 'delivery_starts_at'
+      | 'delivery_ends_at'
+    >,
+  ): Promise<StorefrontOrderAvailabilityDto> {
+    const [activeProductsCount, activeDeliveryAreasCount] = await Promise.all([
+      this.prisma.product.count({
+        where: {
+          tenant_id: tenant.id,
+          ...ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
+        },
+      }),
+      this.prisma.tenantDeliveryArea.count({
+        where: {
+          tenant_id: tenant.id,
+          is_active: true,
+          deleted_at: null,
+          area: { is_active: true, deleted_at: null },
+        },
+      }),
+    ]);
+    const productReadiness = buildProductOrderReadiness(
+      activeProductsCount,
+      tenant.category,
+    );
+    const deliveryAvailability = this.resolvePublicDeliveryAvailability(tenant);
+
+    let reason: StorefrontOrderUnavailableReason | null = null;
+    if (!tenant.onboarding_completed) {
+      reason = 'setup_incomplete';
+    } else if (productReadiness.status !== 'ready_for_orders') {
+      reason = 'insufficient_products';
+    } else if (
+      activeDeliveryAreasCount === 0 ||
+      deliveryAvailability.ordering_mode === 'unavailable'
+    ) {
+      reason = 'delivery_unavailable';
+    }
+
+    return {
+      accepting_orders: reason === null,
+      reason,
+      message: reason ? STOREFRONT_UNAVAILABLE_MESSAGES[reason] : null,
+      delivery_availability: deliveryAvailability,
+    };
+  }
+
+  /** Converts invalid or disabled delivery configuration into a fail-closed public state. */
+  private resolvePublicDeliveryAvailability(
+    tenant: Pick<
+      Tenant,
+      'delivery_available' | 'delivery_starts_at' | 'delivery_ends_at'
+    >,
+  ): DeliveryAvailability {
+    try {
+      return this.getDeliveryAvailability(tenant);
+    } catch {
+      return {
+        timezone: 'Africa/Cairo',
+        state: 'unavailable',
+        ordering_mode: 'unavailable',
+        operating_hours: {
+          starts_at: tenant.delivery_starts_at,
+          ends_at: tenant.delivery_ends_at,
+        },
+        schedule_constraints: null,
+        slots: [],
+      };
+    }
   }
 
   async findOneById(id: number) {

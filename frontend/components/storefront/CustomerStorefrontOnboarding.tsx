@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { CircleHelp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { EventData, Step } from "react-joyride";
+import { cn } from "@/lib/utils";
 
 const Joyride = dynamic(
   () => import("react-joyride").then((module) => module.Joyride),
@@ -133,7 +134,7 @@ const persistTourCompletion = () => {
   }
 };
 
-export default function CustomerStorefrontOnboarding() {
+export default function CustomerStorefrontOnboarding({ buttonText }: { buttonText?: string } = {}) {
   const [steps, setSteps] = useState<Step[]>([]);
   const [run, setRun] = useState(false);
   const [shouldRenderTour, setShouldRenderTour] = useState(false);
@@ -171,11 +172,15 @@ export default function CustomerStorefrontOnboarding() {
       <button
         type="button"
         onClick={startTour}
-        className="inline-flex min-h-11 w-11 cursor-pointer touch-manipulation items-center justify-center rounded-md border border-white/30 bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20 active:bg-white/25 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
+        className={cn(
+          "inline-flex min-h-11 cursor-pointer touch-manipulation items-center justify-center rounded-md border border-white/30 bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20 active:bg-white/25 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30",
+          buttonText ? "gap-2 px-3 text-sm font-semibold shrink-0" : "w-11 shrink-0"
+        )}
         aria-label="إعادة الجولة التعريفية للمتجر"
         title="مساعدة وجولة تعريفية"
       >
-        <CircleHelp className="h-5 w-5" aria-hidden="true" />
+        <CircleHelp className="h-5 w-5 shrink-0" aria-hidden="true" />
+        {buttonText && <span>{buttonText}</span>}
       </button>
 
       {shouldRenderTour && steps.length > 0 ? (
@@ -198,7 +203,7 @@ export default function CustomerStorefrontOnboarding() {
             arrowColor: "#ffffff",
             backgroundColor: "#ffffff",
             blockTargetInteraction: true,
-            buttons: ["back", "skip", "primary"],
+            buttons: ["back", "primary"],
             overlayClickAction: false,
             overlayColor: "rgba(0, 0, 0, 0.62)",
             primaryColor: "#0F5A3D",

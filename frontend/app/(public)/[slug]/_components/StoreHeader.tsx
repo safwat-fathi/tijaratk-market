@@ -1,8 +1,12 @@
+import { House } from "lucide-react";
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { TENANT_CATEGORIES, type TenantCategory } from "@/constants";
-import { Tenant } from "@/types/models/tenant";
 import { AppHeader } from "@/components/layout/AppHeader";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
 import CustomerStorefrontOnboarding from "@/components/storefront/CustomerStorefrontOnboarding";
+import { CUSTOMER_PWA } from "@/lib/customer-pwa";
+import type { Tenant } from "@/types/models/tenant";
 
 type TenantCategoryMeta =
 	(typeof TENANT_CATEGORIES)[keyof typeof TENANT_CATEGORIES];
@@ -29,11 +33,13 @@ export const resolveTenantCategoryMeta = (
 type StoreHeaderProps = {
 	tenant: Tenant;
 	enableCustomerTour?: boolean;
+	cartAction?: ReactNode;
 };
 
 export default function StoreHeader({
 	tenant,
 	enableCustomerTour = false,
+	cartAction,
 }: StoreHeaderProps) {
 	const categoryMeta = resolveTenantCategoryMeta(tenant.category);
 
@@ -41,13 +47,26 @@ export default function StoreHeader({
 		<AppHeader
 			title={tenant.name}
 			subtitle={categoryMeta.labels.ar}
+			innerClassName="flex flex-col items-start gap-3 px-4 py-3"
+			titleActions={cartAction}
+			navigation={
+				<Link
+					href="/"
+					className="inline-flex min-h-11 touch-manipulation items-center gap-2 rounded-md border border-white/30 bg-white/10 px-3 py-2.5 text-sm font-bold text-white backdrop-blur transition-colors hover:bg-white/20 active:bg-white/25 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
+					aria-label="العودة إلى الصفحة الرئيسية"
+				>
+					<House className="h-5 w-5 shrink-0" aria-hidden="true" />
+					<span>العودة للرئيسية</span>
+				</Link>
+			}
 			actions={
 				<>
-					{enableCustomerTour ? <CustomerStorefrontOnboarding /> : null}
+					{enableCustomerTour ? <CustomerStorefrontOnboarding buttonText="مساعدة" /> : null}
 					<InstallPwaAction
-						appName={tenant.name}
+						appName={CUSTOMER_PWA.name}
 						shareUrl={`/open/store/${encodeURIComponent(tenant.slug)}`}
 						id="customer-storefront-pwa-install"
+						buttonText="تثبيت التطبيق"
 					/>
 				</>
 			}

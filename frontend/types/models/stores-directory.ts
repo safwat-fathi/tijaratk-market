@@ -17,6 +17,15 @@ export type StoresDirectoryCategory = {
   storesCount: number;
 };
 
+export type StoresDirectorySearchArea = {
+  id: number;
+  nameAr: string;
+  nameEn: string | null;
+  slug: string;
+  destinationSlug: string;
+  storesCount: number;
+};
+
 export type StoresDirectoryStoreCard = {
   id: number;
   name: string;
@@ -46,6 +55,7 @@ export type StoresDirectorySeo = {
 
 export type StoresDirectoryLanding = {
   areas: StoresDirectoryArea[];
+  searchAreas?: StoresDirectorySearchArea[];
   categories: StoresDirectoryCategory[];
   featuredStores: StoresDirectoryStoreCard[];
   seo: StoresDirectorySeo;

@@ -72,6 +72,7 @@ async function bootstrap() {
       'Authorization',
       'X-Tenant-Id',
       'X-Request-Id',
+      'X-Storefront-Cart-Token',
     ],
   });
 

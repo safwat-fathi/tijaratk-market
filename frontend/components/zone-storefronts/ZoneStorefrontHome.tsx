@@ -10,6 +10,7 @@ import {
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
+import { CUSTOMER_PWA } from "@/lib/customer-pwa";
 import JsonLd from "@/components/seo/JsonLd";
 import ZoneAutocomplete, {
   type ZoneSearchOption,
@@ -152,8 +153,8 @@ export default function ZoneStorefrontHome({ zones }: Props) {
       <AppHeader
         title="تجارتك"
         subtitle="طلبات منطقتك في مكان واحد"
-        innerClassName="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8"
-        actions={<InstallPwaAction appName="تجارتك" />}
+        innerClassName="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 py-3 sm:px-6 lg:px-8"
+        titleActions={<InstallPwaAction appName={CUSTOMER_PWA.name} buttonText="تثبيت التطبيق" />}
       />
 
       <main className="flex-1">

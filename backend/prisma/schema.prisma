@@ -301,11 +301,66 @@ model Order {
   cancellation_policy_events TenantCancellationPolicyEvent[]
   order_dispatch             OrderDispatch?
   meta_conversion_outbox     MetaConversionOutbox?
+  storefront_cart_draft      StorefrontCartDraft? @relation("StorefrontCartDraftCompletedOrder")
 
   @@index([delivery_area_id], map: "IDX_orders_delivery_area_id")
   @@index([tenant_id, scheduled_delivery_date, scheduled_delivery_starts_at], map: "IDX_orders_tenant_scheduled_delivery")
   @@index([tenant_id], map: "IDX_527dd6efd5f3402f729c6b3e82")
   @@map("orders")
+}
+
+/// Anonymous, tenant-scoped storefront cart persisted behind an opaque cookie token.
+/// This model is protected by tenant RLS and stores no checkout customer fields;
+/// prescription references are temporary and removed with abandoned drafts.
+model StorefrontCartDraft {
+  id                                  Int       @id @default(autoincrement())
+  token                               String    @unique @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(64)
+  tenant_id                           Int
+  delivery_area_id                    Int?
+  free_text_payload                   String?
+  unavailable_item_action             String    @default("suggest_replacement") @db.VarChar(64)
+  order_source                        OrderSource @default(storefront)
+  source_metadata                     Json?     @db.JsonB
+  prescription_file_path              String?
+  prescription_original_filename      String?   @db.VarChar(255)
+  prescription_mime_type              String?   @db.VarChar(120)
+  prescription_unavailability_action  String?   @db.VarChar(64)
+  checkout_started_at                 DateTime? @db.Timestamptz(6)
+  completed_order_id                  Int?      @unique
+  expires_at                          DateTime  @default(dbgenerated("CURRENT_TIMESTAMP + INTERVAL '24 hours'")) @db.Timestamptz(6)
+  created_at                          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at                          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  tenant          Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_storefront_cart_drafts_tenant")
+  delivery_area   DirectoryArea? @relation(fields: [delivery_area_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_storefront_cart_drafts_delivery_area")
+  completed_order Order?         @relation("StorefrontCartDraftCompletedOrder", fields: [completed_order_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_storefront_cart_drafts_completed_order")
+  items           StorefrontCartDraftItem[]
+
+  @@index([tenant_id, expires_at], map: "IDX_storefront_cart_drafts_tenant_expires")
+  @@index([expires_at], map: "IDX_storefront_cart_drafts_expires")
+  @@map("storefront_cart_drafts")
+}
+
+/// One validated merchant-product selection inside an anonymous storefront cart.
+model StorefrontCartDraftItem {
+  id                   Int                    @id @default(autoincrement())
+  draft_id             Int
+  product_id           Int
+  selection_mode       OrderItemSelectionMode
+  selection_quantity   Decimal?               @db.Decimal(10, 3)
+  selection_grams      Int?
+  selection_amount_egp Decimal?               @db.Decimal(10, 2)
+  unit_option_id       String?                @db.VarChar(64)
+  item_note            String?                @db.VarChar(255)
+  created_at           DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+
+  draft   StorefrontCartDraft @relation(fields: [draft_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_storefront_cart_draft_items_draft")
+  product Product             @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_storefront_cart_draft_items_product")
+
+  @@unique([draft_id, product_id], map: "UQ_storefront_cart_draft_items_draft_product")
+  @@index([product_id], map: "IDX_storefront_cart_draft_items_product")
+  @@map("storefront_cart_draft_items")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -354,6 +409,7 @@ model Product {
   order_items_replaced            OrderItem[]           @relation("order_items_replaced_by_product_idToproducts")
   order_items_pending_replacement OrderItem[]           @relation("order_items_pending_replacement_product_idToproducts")
   product_price_history           ProductPriceHistory[]
+  storefront_cart_draft_items     StorefrontCartDraftItem[]
   catalog_item                    CatalogItem?          @relation("CatalogItemProducts", fields: [catalog_item_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "FK_products_catalog_item_id")
   tenant                          Tenant                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_9c365ebf78f0e8a6d9e4827ea70")
 
@@ -428,6 +484,7 @@ model Tenant {
   zone_storefront_memberships ZoneStorefrontMerchant[] @relation("ZoneStorefrontMerchantTenant")
   targeted_dispatch_assignments OrderDispatchAssignment[] @relation("OrderDispatchAssignmentTargetTenant")
   missing_delivery_area_requests MissingDeliveryAreaRequest[]
+  storefront_cart_drafts StorefrontCartDraft[]
 
   @@map("tenants")
 }
@@ -502,6 +559,7 @@ model DirectoryArea {
   zone_storefronts          ZoneStorefront[]
   missing_delivery_area_requests_as_main MissingDeliveryAreaRequest[] @relation("MissingDeliveryAreaRequestMainArea")
   missing_delivery_area_requests_as_resolved MissingDeliveryAreaRequest[] @relation("MissingDeliveryAreaRequestResolvedArea")
+  storefront_cart_drafts StorefrontCartDraft[]
 
   @@index([parent_area_id], map: "IDX_directory_areas_parent_area_id")
   @@index([is_active, sort_order, name_ar], map: "IDX_directory_areas_active_sort_name")

@@ -39,10 +39,6 @@ import { UnavailableItemAction } from 'src/common/enums/unavailable-item-action.
 import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
 import { OrderType } from 'src/common/enums/order-type.enum';
 import { TenantCancellationPolicyService } from 'src/tenant-cancellation-policy/tenant-cancellation-policy.service';
-import {
-  ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
-  resolveRequiredProductsForTenantCategory,
-} from 'src/products/order-readiness-policy';
 import { getDashboardCacheVersionKey } from 'src/merchant-dashboard/merchant-dashboard.service';
 import { ActivityLogService } from 'src/activity-log/activity-log.service';
 import { ActivityActions } from 'src/activity-log/constants/activity-actions';
@@ -140,6 +136,8 @@ export type OrderCreationOptions = {
     ends_at: string;
     snapshot: string;
   } | null;
+  /** Keeps a draft-owned prescription file available when checkout validation fails. */
+  preservePrescriptionOnFailure?: boolean;
 };
 
 export type OrderReplacementOptions = {
@@ -178,6 +176,10 @@ export class OrdersService {
     createOrderDto: CreateOrderDto,
     prescriptionUpload?: PrescriptionUpload,
     metaTrackingContext?: MetaTrackingContext,
+    options: Pick<
+      OrderCreationOptions,
+      'afterPersist' | 'preservePrescriptionOnFailure'
+    > = {},
   ): Promise<
     Order & {
       customer_access_code: string;
@@ -186,7 +188,7 @@ export class OrdersService {
   > {
     const tenant = await this.tenantsService.findOneBySlug(tenantSlug);
     if (!tenant) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      await this.deleteUploadedFileUnlessPreserved(prescriptionUpload, options);
       throw new NotFoundException(`Tenant with slug ${tenantSlug} not found`);
     }
 
@@ -195,25 +197,30 @@ export class OrdersService {
       select: { id: true },
     });
     if (zoneStorefront) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      await this.deleteUploadedFileUnlessPreserved(prescriptionUpload, options);
       throw new NotFoundException(`Tenant with slug ${tenantSlug} not found`);
     }
 
     if (createOrderDto.order_source === OrderSource.zone_storefront) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      await this.deleteUploadedFileUnlessPreserved(prescriptionUpload, options);
       throw new BadRequestException(
         'Zone storefront orders must use the dedicated zone checkout endpoint',
       );
     }
 
     if (tenant.status !== TenantStatus.active) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      await this.deleteUploadedFileUnlessPreserved(prescriptionUpload, options);
       throw new ForbiddenException('هذا المتجر غير متاح حاليا');
     }
 
-    if (tenant.delivery_available === false) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
-      throw new BadRequestException('التوصيل غير متاح حاليا');
+    const orderAvailability =
+      await this.tenantsService.getStorefrontOrderAvailability(tenant);
+    if (!orderAvailability.accepting_orders) {
+      await this.deleteUploadedFileUnlessPreserved(prescriptionUpload, options);
+      throw new BadRequestException(
+        orderAvailability.message ||
+          'عذراً، هذا المتجر غير مستعد لاستقبال الطلبات حالياً.',
+      );
     }
 
     let deliverySchedule: ReturnType<
@@ -227,34 +234,8 @@ export class OrdersService {
         { allowAlwaysOpenWithoutHours: true },
       );
     } catch (error) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      await this.deleteUploadedFileUnlessPreserved(prescriptionUpload, options);
       throw error;
-    }
-
-    // Explicitly cast to any since tenant model might not have the newly added fields typed correctly if client not fully reloaded, though it should be typed now.
-    const t = tenant as any;
-    if (!t.onboarding_completed) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
-      throw new BadRequestException(
-        'عذراً، هذا المتجر غير مستعد لاستقبال الطلبات حالياً.',
-      );
-    }
-
-    const activeProductsCount = await this.productClient().count({
-      where: {
-        tenant_id: tenant.id,
-        ...ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
-      },
-    });
-
-    const requiredProductsCount = resolveRequiredProductsForTenantCategory(
-      tenant.category,
-    );
-    if (activeProductsCount < requiredProductsCount) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
-      throw new BadRequestException(
-        'عذراً، هذا المتجر غير مستعد لاستقبال الطلبات حالياً.',
-      );
     }
 
     if (
@@ -265,7 +246,7 @@ export class OrdersService {
     }
 
     if (prescriptionUpload && tenant.category !== TenantCategory.pharmacy) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      await this.deleteUploadedFileUnlessPreserved(prescriptionUpload, options);
       throw new BadRequestException(
         'Prescription uploads are only available for pharmacy stores',
       );
@@ -276,7 +257,12 @@ export class OrdersService {
       createOrderDto,
       { source: 'storefront' },
       prescriptionUpload,
-      { metaTrackingContext, deliverySchedule },
+      {
+        metaTrackingContext,
+        deliverySchedule,
+        afterPersist: options.afterPersist,
+        preservePrescriptionOnFailure: options.preservePrescriptionOnFailure,
+      },
     );
   }
 
@@ -555,7 +541,7 @@ export class OrdersService {
         return persistedOrder;
       });
     } catch (error) {
-      await this.deleteUploadedFileQuietly(prescriptionUpload);
+      await this.deleteUploadedFileUnlessPreserved(prescriptionUpload, options);
       throw error;
     }
 
@@ -2663,6 +2649,17 @@ export class OrdersService {
     } catch {
       // Best effort cleanup only.
     }
+  }
+
+  /** Deletes a caller-owned upload unless a retryable draft explicitly retains it. */
+  private async deleteUploadedFileUnlessPreserved(
+    prescriptionUpload: PrescriptionUpload | undefined,
+    options: Pick<OrderCreationOptions, 'preservePrescriptionOnFailure'>,
+  ): Promise<void> {
+    if (options.preservePrescriptionOnFailure) {
+      return;
+    }
+    await this.deleteUploadedFileQuietly(prescriptionUpload);
   }
 
   /** Runs an admin operation with PostgreSQL and AsyncLocalStorage tenant context. */

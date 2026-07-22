@@ -4,7 +4,9 @@ import { cache } from "react";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import JsonLd from "@/components/seo/JsonLd";
 import SafeImage from "@/components/ui/SafeImage";
-import AreaAutocomplete from "@/components/stores-directory/AreaAutocomplete";
+import AreaAutocomplete, {
+  type AreaAutocompleteOption,
+} from "@/components/stores-directory/AreaAutocomplete";
 import ZoneStorefrontHome from "@/components/zone-storefronts/ZoneStorefrontHome";
 import { createPublicMetadata, SITE_URL } from "@/lib/marketing-seo";
 import { storesDirectoryService } from "@/services/api/stores-directory.service";
@@ -12,6 +14,7 @@ import {
   StoresDirectoryArea,
   StoresDirectoryCategory,
   StoresDirectoryLanding,
+  StoresDirectorySearchArea,
   StoresDirectoryStoreCard,
 } from "@/types/models/stores-directory";
 import CategoryGrid, {
@@ -20,6 +23,7 @@ import CategoryGrid, {
 } from "@/components/stores-directory/CategoryGrid";
 import { AppHeader } from "@/components/layout/AppHeader";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
+import { CUSTOMER_PWA, CUSTOMER_PWA_METADATA } from "@/lib/customer-pwa";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
 import type { ZoneStorefront } from "@/types/models/zone-storefront";
@@ -105,7 +109,7 @@ export async function generateMetadata(): Promise<Metadata> {
         description: ZONE_SEO_DESCRIPTION,
         path: STORES_PATH,
       }),
-      manifest: "/pwa/stores-directory/manifest",
+      ...CUSTOMER_PWA_METADATA,
       keywords: [
         "توصيل حسب المنطقة",
         "سوبر ماركت في منطقتك",
@@ -125,7 +129,7 @@ export async function generateMetadata(): Promise<Metadata> {
       description: seo.description,
       path: STORES_PATH,
     }),
-    manifest: "/pwa/stores-directory/manifest",
+    ...CUSTOMER_PWA_METADATA,
     keywords: [
       "دليل المتاجر",
       "سوبر ماركت قريب",
@@ -209,6 +213,17 @@ const toAreaOptions = (areas: StoresDirectoryArea[]): DirectoryAreaOption[] =>
     slug: area.slug,
     stores: area.storesCount,
     categoryCounts: area.categoryCounts ?? {},
+  }));
+
+const toSearchAreaOptions = (
+  areas: StoresDirectorySearchArea[],
+): AreaAutocompleteOption[] =>
+  areas.map((area) => ({
+    name: area.nameAr,
+    nameEn: area.nameEn,
+    slug: area.slug,
+    destinationSlug: area.destinationSlug,
+    stores: area.storesCount,
   }));
 
 const buildJsonLd = (params: {
@@ -341,6 +356,9 @@ async function LegacyStoresDirectoryPage({
   const jsonLd = buildJsonLd({ seo, areas, categories });
   const categoryCards = toCategoryCards(categories, selectedArea);
   const areaOptions = toAreaOptions(areas);
+  const searchAreaOptions = landing?.searchAreas?.length
+    ? toSearchAreaOptions(landing.searchAreas)
+    : areaOptions;
   const topAreas = areas.slice(0, 8);
   const searchedAreas = areas.slice(0, 4);
 
@@ -356,12 +374,12 @@ async function LegacyStoresDirectoryPage({
 
       <AppHeader
         title="دليل المتاجر"
-        innerClassName="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8"
-        actions={<InstallPwaAction appName="دليل تجارتك" />}
+        innerClassName="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 py-3 sm:px-6 lg:px-8"
+        titleActions={<InstallPwaAction appName={CUSTOMER_PWA.name} buttonText="تثبيت التطبيق" />}
       />
 
       <main className="flex-1">
-        <section className="bg-gradient-to-b from-[#E8F5ED] to-[#F7F8F6] px-4 pb-8 pt-16 text-center sm:py-24">
+        <section className="bg-gradient-to-b from-[#E8F5ED] to-[#F7F8F6] px-4 pb-8 pt-16 text-center sm:pt-24 sm:pb-8">
           <div className="mx-auto max-w-4xl">
             <h1 className="mb-6 text-4xl font-bold leading-tight text-[#0F5A3D] sm:text-5xl lg:text-6xl">
               اطلب من سوبر ماركت وصيدليات في منطقتك
@@ -376,7 +394,7 @@ async function LegacyStoresDirectoryPage({
         <section className="sticky top-16 z-40 border-b border-gray-200/50 bg-[#F7F8F6]/90 px-4 py-6 shadow-sm backdrop-blur-md transition-all">
           <div className="mx-auto max-w-3xl">
             <AreaAutocomplete
-              areas={areaOptions}
+              areas={searchAreaOptions}
               destination={{ type: "landing" }}
             />
 

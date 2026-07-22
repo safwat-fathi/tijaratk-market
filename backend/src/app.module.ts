@@ -23,6 +23,7 @@ import { ActivityLogModule } from './activity-log/activity-log.module';
 import { AdminAuditModule } from './admin-audit/admin-audit.module';
 import { ZoneStorefrontsModule } from './zone-storefronts/zone-storefronts.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
+import { StorefrontCartDraftsModule } from './storefront-cart-drafts/storefront-cart-drafts.module';
 
 const ENV = process.env.NODE_ENV;
 
@@ -61,6 +62,7 @@ const ENV = process.env.NODE_ENV;
     ActivityLogModule,
     ZoneStorefrontsModule,
     PushNotificationsModule,
+    StorefrontCartDraftsModule,
   ],
   controllers: [HealthController],
   providers: [TenantRlsInterceptor],
