@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import {
   importManagedProductSpreadsheetAction,
   previewManagedProductImportAction,
-} from "@/actions/admin-server";
+} from "@/actions/managed-product-actions";
 import {
   PRODUCT_IMPORT_FIELDS,
   type ProductImportField,

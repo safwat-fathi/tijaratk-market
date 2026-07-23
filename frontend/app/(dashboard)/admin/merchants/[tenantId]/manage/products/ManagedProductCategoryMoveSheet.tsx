@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { ArrowRightLeft } from "lucide-react";
-import { moveManagedProductCategoryAction } from "@/actions/admin-server";
+import { moveManagedProductCategoryAction } from "@/actions/managed-product-actions";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Combobox } from "@/components/ui/Combobox";

@@ -14,7 +14,7 @@ import {
   updateManagedProductPriceAction,
   updateManagedProductStatusAction,
   bulkUpdateManagedProductsAction,
-} from "@/actions/admin-server";
+} from "@/actions/managed-product-actions";
 import { AdminBulkEssentialsButton } from "../../../_components/AdminBulkEssentialsButton";
 import ProductImportWizard from "./ProductImportWizard";
 
