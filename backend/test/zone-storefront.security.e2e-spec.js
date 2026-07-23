@@ -31,6 +31,12 @@ const {
 const {
   MetaConversionsService,
 } = require('../dist/meta-conversions/meta-conversions.service');
+const {
+  GoogleAnalyticsWorker,
+} = require('../dist/google-analytics/google-analytics.worker');
+const {
+  GoogleAnalyticsService,
+} = require('../dist/google-analytics/google-analytics.service');
 const { decrypt } = require('../dist/common/utils/encryption.util');
 
 process.env.ADMIN_MANAGED_STORES_ENABLED = 'true';
@@ -61,6 +67,11 @@ describe('Zone storefront security E2E', () => {
       imports: [AppModule],
     })
       .overrideProvider(MetaConversionsWorker)
+      .useValue({
+        onApplicationBootstrap: () => undefined,
+        onModuleDestroy: () => undefined,
+      })
+      .overrideProvider(GoogleAnalyticsWorker)
       .useValue({
         onApplicationBootstrap: () => undefined,
         onModuleDestroy: () => undefined,
@@ -1196,6 +1207,266 @@ describe('Zone storefront security E2E', () => {
     });
   });
 
+  it('persists consented GA4 identifiers and delivers an idempotent direct-store lifecycle', async () => {
+    const fixture = grocery;
+    const merchant = fixture.merchants[0];
+
+    await withGa4TestConfig(async () => {
+      const tenant = await prisma.tenant.update({
+        where: { id: merchant.tenantId },
+        data: {
+          onboarding_completed: true,
+          delivery_available: true,
+          delivery_fee: 0,
+        },
+      });
+      const product = await withTenant(prisma, merchant.tenantId, (tx) =>
+        tx.product.create({
+          data: {
+            tenant_id: merchant.tenantId,
+            name: `GA4 merchant product ${runId}`,
+            category: fixture.allowedCategory,
+            source: 'manual',
+            status: 'active',
+            current_price: 24,
+            is_available: true,
+          },
+        }),
+      );
+      const consentCookie = 'tijaratk_marketing_consent=granted';
+
+      const checkout = async ({ suffix, consent = true }) => {
+        const draftResponse = await request(httpServer)
+          .put(`/storefront-cart-drafts/${tenant.slug}`)
+          .send({
+            items: [
+              {
+                product_id: product.id,
+                selection_mode: 'quantity',
+                selection_quantity: 1,
+              },
+            ],
+            delivery_area_id: fixture.area.id,
+          })
+          .expect(200);
+        const draftToken = unwrapBody(draftResponse.body).token;
+        const checkoutRequest = request(httpServer)
+          .post(`/storefront-cart-drafts/${tenant.slug}/checkout`)
+          .set('X-Storefront-Cart-Token', draftToken);
+        if (consent) checkoutRequest.set('Cookie', consentCookie);
+        const response = await checkoutRequest
+          .send({
+            customer: {
+              name: `GA4 Customer ${suffix}`,
+              phone: generateEgyptPhone(400 + suffix),
+              address: 'GA4 delivery address',
+            },
+            delivery_address: 'GA4 delivery address',
+            ga_client_id: `1721000000.${suffix}`,
+            ga_session_id: '1721000000',
+          })
+          .expect(201);
+        return {
+          body: unwrapBody(response.body),
+          draftToken,
+        };
+      };
+
+      const tracked = await checkout({ suffix: 1 });
+      expect(tracked.body).not.toHaveProperty('ga_client_id');
+      expect(tracked.body).not.toHaveProperty('ga_session_id');
+      const retryResponse = await request(httpServer)
+        .post(`/storefront-cart-drafts/${tenant.slug}/checkout`)
+        .set('X-Storefront-Cart-Token', tracked.draftToken)
+        .set('Cookie', consentCookie)
+        .send({
+          customer: {
+            name: 'Retry must not replace the original order',
+            phone: generateEgyptPhone(451),
+            address: 'Retry address',
+          },
+          delivery_address: 'Retry address',
+          ga_client_id: '999.999',
+          ga_session_id: '999',
+        })
+        .expect(201);
+      const retried = unwrapBody(retryResponse.body);
+      expect(retried.id).toBe(tracked.body.id);
+      expect(retried).not.toHaveProperty('ga_client_id');
+      expect(retried).not.toHaveProperty('ga_session_id');
+
+      const persisted = await withTenant(prisma, merchant.tenantId, (tx) =>
+        tx.order.findUniqueOrThrow({ where: { id: tracked.body.id } }),
+      );
+      expect(persisted).toEqual(
+        expect.objectContaining({
+          ga_client_id: '1721000000.1',
+          ga_session_id: '1721000000',
+          order_source: 'storefront',
+        }),
+      );
+
+      await request(httpServer)
+        .patch(`/orders/${tracked.body.id}`)
+        .set('Authorization', `Bearer ${merchant.token}`)
+        .send({ status: 'confirmed' })
+        .expect(200);
+      await request(httpServer)
+        .patch(`/orders/${tracked.body.id}`)
+        .set('Authorization', `Bearer ${merchant.token}`)
+        .send({ status: 'confirmed' })
+        .expect(200);
+      expect(
+        await prisma.ga4EventOutbox.count({
+          where: {
+            order_id: tracked.body.id,
+            event_name: 'order_confirmed',
+          },
+        }),
+      ).toBe(1);
+
+      await request(httpServer)
+        .patch(`/orders/${tracked.body.id}`)
+        .set('Authorization', `Bearer ${merchant.token}`)
+        .send({ status: 'out_for_delivery' })
+        .expect(200);
+      await request(httpServer)
+        .patch(`/orders/${tracked.body.id}`)
+        .set('Authorization', `Bearer ${merchant.token}`)
+        .send({ status: 'completed' })
+        .expect(200);
+
+      const cancelled = await checkout({ suffix: 2 });
+      await request(httpServer)
+        .patch(`/orders/${cancelled.body.id}`)
+        .set('Authorization', `Bearer ${merchant.token}`)
+        .send({
+          status: 'cancelled',
+          cancellation_reason: 'GA4 E2E cancellation',
+        })
+        .expect(200);
+
+      const unconsented = await checkout({ suffix: 3, consent: false });
+      await request(httpServer)
+        .patch(`/orders/${unconsented.body.id}`)
+        .set('Authorization', `Bearer ${merchant.token}`)
+        .send({ status: 'confirmed' })
+        .expect(200);
+      const unconsentedOrder = await withTenant(
+        prisma,
+        merchant.tenantId,
+        (tx) => tx.order.findUniqueOrThrow({ where: { id: unconsented.body.id } }),
+      );
+      expect(unconsentedOrder.ga_client_id).toBeNull();
+      expect(
+        await prisma.ga4EventOutbox.count({
+          where: { order_id: unconsented.body.id },
+        }),
+      ).toBe(0);
+
+      const ga4Service = app.get(GoogleAnalyticsService);
+      await withTenant(prisma, fixture.zone.operator_tenant.id, async (tx) => {
+        await tx.order.update({
+          where: { id: fixture.checkout.id },
+          data: {
+            ga_client_id: '1721000000.4',
+            ga_session_id: '1721000000',
+          },
+        });
+        await ga4Service.enqueueLifecycleEvent({
+          manager: tx,
+          orderId: fixture.checkout.id,
+          eventName: 'order_confirmed',
+          previousStatus: 'draft',
+        });
+      });
+      expect(
+        await prisma.ga4EventOutbox.count({
+          where: { order_id: fixture.checkout.id },
+        }),
+      ).toBe(0);
+
+      const lifecycleRows = await prisma.ga4EventOutbox.findMany({
+        where: {
+          order_id: { in: [tracked.body.id, cancelled.body.id] },
+        },
+        orderBy: { id: 'asc' },
+      });
+      expect(lifecycleRows.map((row) => row.event_name).sort()).toEqual([
+        'order_cancelled',
+        'order_confirmed',
+        'purchase',
+      ]);
+      for (const row of lifecycleRows) {
+        expect(row.encrypted_payload).not.toContain('GA4 Customer');
+        const payload = JSON.parse(decrypt(row.encrypted_payload));
+        expect(JSON.stringify(payload)).not.toContain('GA4 delivery address');
+        expect(payload.client_id).toMatch(/^1721000000\.[12]$/);
+      }
+
+      const originalFetch = global.fetch;
+      try {
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: true,
+          status: 204,
+        });
+        const worker = new GoogleAnalyticsWorker(prisma, ga4Service);
+        await worker.tick();
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+        for (const [endpoint, requestOptions] of global.fetch.mock.calls) {
+          expect(String(endpoint)).toContain(
+            'measurement_id=G-TEST1234',
+          );
+          expect(String(endpoint)).toContain('api_secret=ga4-e2e-secret');
+          expect(JSON.parse(requestOptions.body)).toEqual(
+            expect.objectContaining({
+              client_id: expect.any(String),
+              events: expect.any(Array),
+            }),
+          );
+        }
+        const deliveredRows = await prisma.ga4EventOutbox.findMany({
+          where: { id: { in: lifecycleRows.map((row) => row.id) } },
+        });
+        expect(deliveredRows).toHaveLength(3);
+        expect(
+          deliveredRows.every(
+            (row) => row.status === 'sent' && row.encrypted_payload === null,
+          ),
+        ).toBe(true);
+
+        const retryable = await checkout({ suffix: 5 });
+        await request(httpServer)
+          .patch(`/orders/${retryable.body.id}`)
+          .set('Authorization', `Bearer ${merchant.token}`)
+          .send({ status: 'confirmed' })
+          .expect(200);
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: false,
+          status: 500,
+        });
+        const retryWorker = new GoogleAnalyticsWorker(prisma, ga4Service);
+        await retryWorker.tick();
+        expect(
+          await prisma.ga4EventOutbox.findFirstOrThrow({
+            where: {
+              order_id: retryable.body.id,
+              event_name: 'order_confirmed',
+            },
+          }),
+        ).toEqual(
+          expect.objectContaining({
+            status: 'pending',
+            attempt_count: 1,
+            last_error_code: 'http_500',
+          }),
+        );
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+  });
+
   it('removes uploaded prescriptions rejected before zone order persistence', async () => {
     const filesBefore = await listZonePrescriptionFiles();
     const image = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
@@ -2087,6 +2358,34 @@ async function withMetaTestConfig(callback) {
 
   try {
     return await callback({ signingSecret });
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous[key];
+      }
+    }
+  }
+}
+
+async function withGa4TestConfig(callback) {
+  const keys = [
+    'ENCRYPTION_PASSWORD',
+    'GA4_API_SECRET',
+    'GA4_MEASUREMENT_ID',
+  ];
+  const previous = Object.fromEntries(
+    keys.map((key) => [key, process.env[key]]),
+  );
+  Object.assign(process.env, {
+    ENCRYPTION_PASSWORD: 'ga4-e2e-encryption-password',
+    GA4_API_SECRET: 'ga4-e2e-secret',
+    GA4_MEASUREMENT_ID: 'G-TEST1234',
+  });
+
+  try {
+    return await callback();
   } finally {
     for (const key of keys) {
       if (previous[key] === undefined) {

@@ -11,6 +11,8 @@ import { createUnavailableStorefrontOrderState } from "@/lib/storefront-order-av
 import StoreHeader from "../_components/StoreHeader";
 import HeaderCartButton from "../_components/HeaderCartButton";
 import StorefrontCheckout from "../_components/StorefrontCheckout";
+import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import type { StorefrontAnalyticsContext } from "@/lib/analytics/storefront-ga4";
 
 export const metadata: Metadata = { title: "إتمام الطلب | تجارتك" };
 
@@ -46,9 +48,22 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   if (!orderAvailability.accepting_orders) {
     redirect(`/${encodeURIComponent(slug)}/cart`);
   }
+  const storeAnalytics: StorefrontAnalyticsContext = {
+    storeId: tenant.id,
+    storeSlug: tenant.slug,
+    storeName: tenant.name,
+    storeCategory: tenant.category,
+    ...(tenant.directory_profile?.area?.name_ar
+      ? { area: tenant.directory_profile.area.name_ar }
+      : {}),
+  };
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-md bg-background">
+      <CustomerAnalytics
+        pageLocation={`/${encodeURIComponent(slug)}/checkout`}
+        pageTitle="إتمام الطلب"
+      />
       <StoreHeader
         tenant={tenant}
         cartAction={
@@ -65,6 +80,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
         deliverySettings={tenant}
         deliveryAvailability={orderAvailability.delivery_availability}
         savedCustomerProfile={profile}
+        storeAnalytics={storeAnalytics}
       />
     </div>
   );

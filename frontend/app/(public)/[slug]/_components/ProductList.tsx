@@ -30,6 +30,7 @@ type ProductListProps = {
 	products: Product[];
 	selections: Record<number, ProductCartSelection>;
 	onUpdateSelection: (product: Product, selection: ProductCartSelection | null) => void;
+	onProductViewed?: (product: Product) => void;
 	onAdded?: () => void;
 	onRequestAvailability?: (product: Product) => Promise<AvailabilityRequestOutcome>;
 	onRequestCustomAvailability?: (
@@ -145,6 +146,7 @@ type ProductListCardProps = {
 	onApplyInlineValue: (product: Product, mode: InlineEditorMode) => void;
 	onCancelInlineValue: (product: Product, mode: InlineEditorMode) => void;
 	onOpenAvailabilitySheet?: (product: Product) => void;
+	onProductViewed?: (product: Product) => void;
 };
 
 const resolveSelectionMetrics = ({
@@ -632,6 +634,7 @@ const ProductListCard = ({
 	onApplyInlineValue,
 	onCancelInlineValue,
 	onOpenAvailabilitySheet,
+	onProductViewed,
 }: ProductListCardProps) => {
 	const mode = resolveProductMode(product);
 	const isUnavailable = product.is_available === false;
@@ -682,6 +685,7 @@ const ProductListCard = ({
 							loading="lazy"
 							sizes="56px"
 							thumbnailWrapperClassName="block h-full w-full"
+							onEnlarge={() => onProductViewed?.(product)}
 							imageClassName={`h-full w-full object-cover ${isUnavailable ? "grayscale" : ""}`}
 							fallback={
 								<div className="flex h-full w-full items-center justify-center text-base">
@@ -765,6 +769,7 @@ export default function ProductList({
 	products,
 	selections,
 	onUpdateSelection,
+	onProductViewed,
 	onAdded,
 	onRequestAvailability,
 	onRequestCustomAvailability,
@@ -838,6 +843,7 @@ export default function ProductList({
 		if (!product.is_available) {
 			return;
 		}
+		onProductViewed?.(product);
 
 		const editorKey = resolveInlineEditorKey(product.id, mode);
 		const current = selections[product.id];
@@ -889,6 +895,7 @@ export default function ProductList({
 		if (!product.is_available) {
 			return;
 		}
+		onProductViewed?.(product);
 
 		const selection = selections[product.id];
 		const itemNote =
@@ -928,6 +935,7 @@ export default function ProductList({
 		if (!product.is_available) {
 			return;
 		}
+		onProductViewed?.(product);
 
 		setPreferredQuantityUnitByProduct(prev => ({
 			...prev,
@@ -953,6 +961,7 @@ export default function ProductList({
 		if (!product.is_available) {
 			return;
 		}
+		onProductViewed?.(product);
 
 		const editorKey = resolveInlineEditorKey(product.id, mode);
 		setLastPresetByKey((prev) => ({
@@ -1003,6 +1012,7 @@ export default function ProductList({
 		if (!product.is_available) {
 			return;
 		}
+		onProductViewed?.(product);
 
 		const editorKey = resolveInlineEditorKey(product.id, mode);
 		const parsed = Number((inlineDraftByKey[editorKey] || "").trim().replace(",", "."));
@@ -1146,13 +1156,16 @@ export default function ProductList({
 								onCancelInlineValue={handleCancelInlineValue}
 								onOpenAvailabilitySheet={
 									onRequestAvailability
-										? (selectedProduct) =>
+										? (selectedProduct) => {
+												onProductViewed?.(selectedProduct);
 												setAvailabilitySheet({
 													type: "product",
 													product: selectedProduct,
-												})
+												});
+											}
 										: undefined
 								}
+								onProductViewed={onProductViewed}
 							/>
 						);
 					})}

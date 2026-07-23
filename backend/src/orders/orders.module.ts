@@ -10,6 +10,7 @@ import { ActivityLogModule } from 'src/activity-log/activity-log.module';
 import { MetaConversionsModule } from 'src/meta-conversions/meta-conversions.module';
 import { DeliveryConfigurationModule } from 'src/delivery-configuration/delivery-configuration.module';
 import { PushNotificationsModule } from 'src/push-notifications/push-notifications.module';
+import { GoogleAnalyticsModule } from 'src/google-analytics/google-analytics.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { PushNotificationsModule } from 'src/push-notifications/push-notificatio
     MetaConversionsModule,
     DeliveryConfigurationModule,
     PushNotificationsModule,
+    GoogleAnalyticsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderWhatsappService],

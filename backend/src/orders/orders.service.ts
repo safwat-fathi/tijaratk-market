@@ -64,6 +64,8 @@ import type {
 import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
 import { DeliverySchedulingService } from 'src/delivery-configuration/delivery-scheduling.service';
 import { PushNotificationsService } from 'src/push-notifications/push-notifications.service';
+import { GoogleAnalyticsService } from 'src/google-analytics/google-analytics.service';
+import type { Ga4TrackingContext } from 'src/google-analytics/google-analytics.types';
 
 type DayCloseSummary = {
   orders_count: number;
@@ -130,6 +132,8 @@ export type OrderCreationOptions = {
   skipPostCommitEffects?: boolean;
   /** Carries consented browser matching data for transactional Meta enqueueing. */
   metaTrackingContext?: MetaTrackingContext;
+  /** Carries consented GA4 browser identifiers for later lifecycle events. */
+  ga4TrackingContext?: Ga4TrackingContext;
   /** Trusted scheduled delivery selected by the shared scheduling service. */
   deliverySchedule?: {
     date: Date;
@@ -169,6 +173,7 @@ export class OrdersService {
     private readonly deliveryConfigurationService: DeliveryConfigurationService,
     private readonly deliverySchedulingService: DeliverySchedulingService,
     private readonly pushNotificationsService: PushNotificationsService,
+    private readonly googleAnalyticsService: GoogleAnalyticsService,
     @Optional() @Inject(CACHE_MANAGER) private readonly cacheManager?: Cache,
   ) {}
 
@@ -179,7 +184,9 @@ export class OrdersService {
     metaTrackingContext?: MetaTrackingContext,
     options: Pick<
       OrderCreationOptions,
-      'afterPersist' | 'preservePrescriptionOnFailure'
+      | 'afterPersist'
+      | 'preservePrescriptionOnFailure'
+      | 'ga4TrackingContext'
     > = {},
   ): Promise<
     Order & {
@@ -260,6 +267,7 @@ export class OrdersService {
       prescriptionUpload,
       {
         metaTrackingContext,
+        ga4TrackingContext: options.ga4TrackingContext,
         deliverySchedule,
         afterPersist: options.afterPersist,
         preservePrescriptionOnFailure: options.preservePrescriptionOnFailure,
@@ -402,6 +410,8 @@ export class OrdersService {
           source_metadata: createOrderDto.source_metadata
             ? (createOrderDto.source_metadata as Prisma.InputJsonValue)
             : undefined,
+          ga_client_id: options.ga4TrackingContext?.clientId,
+          ga_session_id: options.ga4TrackingContext?.sessionId,
           prescription_file_url:
             this.buildPrescriptionFileUrl(prescriptionUpload),
           prescription_original_filename:
@@ -981,6 +991,7 @@ export class OrdersService {
               updateOrderDto.cancellation_reason,
               actor,
               updateData,
+              actor?.adminId ? 'admin_cancelled' : 'merchant_cancelled',
             )
           : await manager.order.update({
               where: { id: order.id },
@@ -1005,6 +1016,24 @@ export class OrdersService {
         await manager.customer.update({
           where: { id: order.customer_id },
           data: { completed_order_count: { increment: 1 } },
+        });
+      }
+
+      if (
+        nextStatus &&
+        previousStatus &&
+        nextStatus !== previousStatus &&
+        (nextStatus === OrderStatus.CONFIRMED ||
+          nextStatus === OrderStatus.COMPLETED)
+      ) {
+        await this.googleAnalyticsService.enqueueLifecycleEvent({
+          manager,
+          orderId: order.id,
+          eventName:
+            nextStatus === OrderStatus.COMPLETED
+              ? 'purchase'
+              : 'order_confirmed',
+          previousStatus,
         });
       }
 
@@ -1405,6 +1434,14 @@ export class OrdersService {
           });
         }
 
+        await this.googleAnalyticsService.enqueueLifecycleEvent({
+          manager,
+          orderId: order.id,
+          eventName: 'order_cancelled',
+          previousStatus: order.status as unknown as OrderStatus,
+          cancellationReasonCode: 'customer_rejected',
+        });
+
         return updatedOrder;
       },
     );
@@ -1619,6 +1656,8 @@ export class OrdersService {
               orderItem.order,
               'جميع منتجات الطلب غير متوفرة',
               actor,
+              {},
+              'all_items_unavailable',
             )
           : null;
 
@@ -1726,19 +1765,24 @@ export class OrdersService {
     const dispatch = order.order_dispatch;
     const acceptedAssignment = dispatch?.assignments[0];
     const { order_dispatch: _controlPlaneDispatch, ...publicOrder } = order;
+    const {
+      ga_client_id: _gaClientId,
+      ga_session_id: _gaSessionId,
+      ...safePublicOrder
+    } = publicOrder;
 
     return {
-      ...publicOrder,
+      ...safePublicOrder,
       tenant_id: dispatch
         ? dispatch.zone_storefront.id
-        : publicOrder.tenant_id,
+        : safePublicOrder.tenant_id,
       tenant: dispatch
         ? {
             id: dispatch.zone_storefront.id,
             name: dispatch.zone_storefront.name,
             slug: dispatch.zone_storefront.slug,
           }
-        : publicOrder.tenant,
+        : safePublicOrder.tenant,
       items: order.items ?? orderItems ?? [],
       zone_storefront: dispatch
         ? {
@@ -2139,6 +2183,7 @@ export class OrdersService {
     cancellationReason?: string,
     actor?: OrderActivityActor,
     additionalData: Prisma.OrderUpdateInput = {},
+    analyticsReasonCode = 'merchant_cancelled',
   ): Promise<OrderWithItemsPayload> {
     const previousStatus = order.status as unknown as OrderStatus;
     this.validateStatusTransition(previousStatus, OrderStatus.CANCELLED);
@@ -2226,6 +2271,15 @@ export class OrdersService {
       },
       manager,
     );
+
+    await this.googleAnalyticsService.enqueueLifecycleEvent({
+      manager,
+      orderId: order.id,
+      eventName: 'order_cancelled',
+      previousStatus,
+      occurredAt: cancelledAt,
+      cancellationReasonCode: analyticsReasonCode,
+    });
 
     return updatedOrder as OrderWithItemsPayload;
   }

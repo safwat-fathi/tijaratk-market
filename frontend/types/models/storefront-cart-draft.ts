@@ -56,6 +56,8 @@ export type CheckoutStorefrontCartDraftInput = {
   delivery_slot?: { date: string; starts_at: string; ends_at: string };
   card_on_delivery_requested?: boolean;
   delivery_address?: string;
+  ga_client_id?: string;
+  ga_session_id?: string;
 };
 
 export type StorefrontCheckoutOrder = Order & {

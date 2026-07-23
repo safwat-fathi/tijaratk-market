@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
   ValidateNested,
@@ -42,4 +43,20 @@ export class CheckoutStorefrontCartDraftDto {
   @MinLength(5)
   @MaxLength(500)
   delivery_address?: string;
+
+  @ApiPropertyOptional({
+    description: 'Consented GA4 browser client identifier',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9._-]{1,128}$/)
+  ga_client_id?: string;
+
+  @ApiPropertyOptional({
+    description: 'Consented GA4 browser session identifier',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{1,20}$/)
+  ga_session_id?: string;
 }

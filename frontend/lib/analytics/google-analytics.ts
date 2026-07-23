@@ -13,10 +13,30 @@ export const GOOGLE_ANALYTICS_MEASUREMENT_ID =
     ? configuredMeasurementId
     : undefined;
 
-type GoogleAnalyticsParameters = Record<
+export type GoogleAnalyticsItem = {
+  item_id: string;
+  item_name: string;
+  item_category?: string;
+  price?: number;
+  quantity?: number;
+};
+
+type GoogleAnalyticsParameter =
+  | string
+  | number
+  | boolean
+  | GoogleAnalyticsItem[]
+  | undefined;
+
+export type GoogleAnalyticsParameters = Record<
   string,
-  string | number | boolean | undefined
+  GoogleAnalyticsParameter
 >;
+
+export type GoogleAnalyticsIdentifiers = {
+  clientId: string;
+  sessionId?: string;
+};
 
 type GoogleTag = (...args: unknown[]) => void;
 
@@ -108,6 +128,55 @@ export const configureCustomerAnalyticsPage = (
     return false;
   }
 };
+
+const readGoogleAnalyticsField = (
+  fieldName: "client_id" | "session_id",
+): Promise<string | undefined> =>
+  new Promise((resolve) => {
+    const googleTag = initializeGoogleAnalytics();
+    if (!googleTag || !GOOGLE_ANALYTICS_MEASUREMENT_ID) {
+      resolve(undefined);
+      return;
+    }
+
+    let isSettled = false;
+    const settle = (value?: unknown) => {
+      if (isSettled) return;
+      isSettled = true;
+      window.clearTimeout(timeout);
+      const normalized = String(value ?? "").trim();
+      resolve(normalized || undefined);
+    };
+    const timeout = window.setTimeout(() => settle(), 750);
+
+    try {
+      googleTag(
+        "get",
+        GOOGLE_ANALYTICS_MEASUREMENT_ID,
+        fieldName,
+        settle,
+      );
+    } catch {
+      settle();
+    }
+  });
+
+export const getGoogleAnalyticsIdentifiers =
+  async (): Promise<GoogleAnalyticsIdentifiers | null> => {
+    const [clientId, sessionId] = await Promise.all([
+      readGoogleAnalyticsField("client_id"),
+      readGoogleAnalyticsField("session_id"),
+    ]);
+
+    if (!clientId || !/^[A-Za-z0-9._-]{1,128}$/.test(clientId)) {
+      return null;
+    }
+
+    return {
+      clientId,
+      ...(sessionId && /^\d{1,20}$/.test(sessionId) ? { sessionId } : {}),
+    };
+  };
 
 export const revokeGoogleAnalyticsConsent = () => {
   if (typeof window === "undefined") return;

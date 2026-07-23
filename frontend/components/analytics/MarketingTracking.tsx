@@ -26,6 +26,8 @@ const RESERVED_TOP_LEVEL_PATHS = new Set([
   "track-orders",
 ]);
 
+const STOREFRONT_MARKETING_PATHS = new Set(["cart", "checkout", "success"]);
+
 const isAllowlistedPublicPath = (pathname: string) => {
   if (PUBLIC_MARKETING_PATHS.has(pathname) || pathname.startsWith("/stores")) {
     return true;
@@ -36,8 +38,12 @@ const isAllowlistedPublicPath = (pathname: string) => {
     return true;
   }
 
+  const storefrontSlug = segments[0] || "";
+  if (RESERVED_TOP_LEVEL_PATHS.has(storefrontSlug)) return false;
+
   return (
-    segments.length === 1 && !RESERVED_TOP_LEVEL_PATHS.has(segments[0] || "")
+    segments.length === 1 ||
+    (segments.length === 2 && STOREFRONT_MARKETING_PATHS.has(segments[1] || ""))
   );
 };
 

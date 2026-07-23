@@ -11,6 +11,16 @@ import {
 } from "@/actions/storefront-cart-actions";
 import { formatCurrency } from "@/lib/utils/currency";
 import { sendMetaPixelEvent } from "@/lib/analytics/meta-pixel";
+import {
+  MARKETING_CONSENT_CHANGED_EVENT,
+  readMarketingConsent,
+} from "@/lib/analytics/marketing-consent";
+import {
+  trackBeginCheckout,
+  trackCartSelectionChange,
+  trackViewCart,
+  type StorefrontAnalyticsContext,
+} from "@/lib/analytics/storefront-ga4";
 import { DEFAULT_UNAVAILABLE_ITEM_ACTION } from "@/lib/orders/unavailable-item-action";
 import { UnavailableItemAction } from "@/types/enums";
 import type { StorefrontCartDraft } from "@/types/models/storefront-cart-draft";
@@ -25,6 +35,7 @@ type StorefrontCartProps = {
   deliveryAreas: TenantDeliveryArea[];
   isPharmacy: boolean;
   orderAvailability: StorefrontOrderAvailability;
+  storeAnalytics: StorefrontAnalyticsContext;
 };
 
 const selectionsFromDraft = (draft: StorefrontCartDraft | null) =>
@@ -49,6 +60,7 @@ export default function StorefrontCart({
   deliveryAreas,
   isPharmacy,
   orderAvailability,
+  storeAnalytics,
 }: StorefrontCartProps) {
   const router = useRouter();
   const [draft, setDraft] = useState(initialDraft);
@@ -69,6 +81,7 @@ export default function StorefrontCart({
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const lastSaveSucceeded = useRef(true);
   const freeTextSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasReportedCartView = useRef(false);
 
   const products = useMemo(() => draft?.items.map((item) => item.product) ?? [], [draft]);
   const hasContent =
@@ -119,15 +132,44 @@ export default function StorefrontCart({
     };
   }, []);
 
+  useEffect(() => {
+    const reportCartView = () => {
+      if (
+        hasReportedCartView.current ||
+        readMarketingConsent() !== "granted"
+      ) {
+        return;
+      }
+      if (trackViewCart(storeAnalytics, initialDraft)) {
+        hasReportedCartView.current = true;
+      }
+    };
+
+    reportCartView();
+    window.addEventListener(MARKETING_CONSENT_CHANGED_EVENT, reportCartView);
+    return () =>
+      window.removeEventListener(
+        MARKETING_CONSENT_CHANGED_EVENT,
+        reportCartView,
+      );
+  }, [initialDraft, storeAnalytics]);
+
   const updateSelection = (
     product: (typeof products)[number],
     selection: ProductCartSelection | null,
   ) => {
     const next = { ...selectionsRef.current };
+    const previousSelection = next[product.id];
     if (selection) next[product.id] = selection;
     else delete next[product.id];
     setSelections(next);
     selectionsRef.current = next;
+    trackCartSelectionChange({
+      store: storeAnalytics,
+      product,
+      previousSelection,
+      nextSelection: selection ?? undefined,
+    });
     window.dispatchEvent(
       new CustomEvent(STOREFRONT_CART_CHANGED_EVENT, {
         detail: Object.keys(next).length,
@@ -370,6 +412,12 @@ export default function StorefrontCart({
               num_items: Object.keys(selections).length,
               storefront_type: "tenant",
             });
+            trackBeginCheckout(
+              storeAnalytics,
+              draft,
+              estimatedTotal ?? Number(draft?.subtotal ?? 0),
+              deliveryFee ?? 0,
+            );
             router.push(`/${encodeURIComponent(tenantSlug)}/checkout`);
           }}
           className="mt-5 flex min-h-14 w-full items-center justify-center rounded-xl bg-brand-primary px-5 py-3 text-lg font-black text-white shadow-soft"

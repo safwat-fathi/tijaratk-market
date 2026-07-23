@@ -13,7 +13,19 @@ import {
   getPublicCustomerByPhoneAction,
 } from "@/actions/customer-actions";
 import { sendMetaPixelEvent } from "@/lib/analytics/meta-pixel";
-import { sendCustomerAnalyticsEvent } from "@/lib/analytics/google-analytics";
+import {
+  getGoogleAnalyticsIdentifiers,
+  type GoogleAnalyticsIdentifiers,
+} from "@/lib/analytics/google-analytics";
+import {
+  MARKETING_CONSENT_CHANGED_EVENT,
+  readMarketingConsent,
+} from "@/lib/analytics/marketing-consent";
+import {
+  trackCheckoutError,
+  trackOrderSubmitted,
+  type StorefrontAnalyticsContext,
+} from "@/lib/analytics/storefront-ga4";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { PublicCustomerProfile } from "@/services/api/customers.service";
 import type { DeliveryAvailability, DeliverySlot } from "@/types/models/delivery";
@@ -35,6 +47,7 @@ type StorefrontCheckoutProps = {
     address?: string;
     notes?: string;
   } | null;
+  storeAnalytics: StorefrontAnalyticsContext;
 };
 
 /** PII-only final checkout step backed by a validated server action. */
@@ -45,6 +58,7 @@ export default function StorefrontCheckout({
   deliverySettings,
   deliveryAvailability,
   savedCustomerProfile,
+  storeAnalytics,
 }: StorefrontCheckoutProps) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(
@@ -61,11 +75,56 @@ export default function StorefrontCheckout({
   const [isLookingUp, startLookup] = useTransition();
   const [scheduledWindow, setScheduledWindow] = useState<DeliverySlot | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [analyticsIdentifiers, setAnalyticsIdentifiers] =
+    useState<GoogleAnalyticsIdentifiers | null>(null);
   const hasNavigated = useRef(false);
+  const lastTrackedErrorState = useRef<StorefrontCheckoutState | null>(null);
+  const invalidReportLocked = useRef(false);
   const scheduledRequired = deliveryAvailability.ordering_mode === "scheduled";
   const orderingUnavailable =
     deliveryAvailability.ordering_mode === "unavailable";
   const itemCount = draft.items.length;
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadIdentifiers = () => {
+      if (readMarketingConsent() !== "granted") {
+        setAnalyticsIdentifiers(null);
+        return;
+      }
+      void getGoogleAnalyticsIdentifiers().then((identifiers) => {
+        if (isActive) setAnalyticsIdentifiers(identifiers);
+      });
+    };
+
+    loadIdentifiers();
+    window.addEventListener(MARKETING_CONSENT_CHANGED_EVENT, loadIdentifiers);
+    return () => {
+      isActive = false;
+      window.removeEventListener(
+        MARKETING_CONSENT_CHANGED_EVENT,
+        loadIdentifiers,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      state.success ||
+      !state.analytics_error ||
+      lastTrackedErrorState.current === state
+    ) {
+      return;
+    }
+    lastTrackedErrorState.current = state;
+    trackCheckoutError({
+      store: storeAnalytics,
+      errorField: state.analytics_error.error_field,
+      errorType: state.analytics_error.error_type,
+      httpStatus: state.analytics_error.http_status,
+    });
+  }, [state, storeAnalytics]);
 
   useEffect(() => {
     if (!state.success || !state.data?.public_token || hasNavigated.current) return;
@@ -83,12 +142,12 @@ export default function StorefrontCheckout({
         state.data.meta_purchase.event_id,
       );
     }
-    sendCustomerAnalyticsEvent("order_submitted", {
-      store_slug: tenantSlug,
-      storefront_type: "tenant",
-      item_count: itemCount,
-      has_free_text: Boolean(draft.free_text_payload.trim()),
-      has_prescription: draft.has_prescription,
+    trackOrderSubmitted({
+      store: storeAnalytics,
+      orderId: state.data.order_analytics.order_id,
+      value: state.data.order_analytics.value,
+      deliveryFee: state.data.order_analytics.delivery_fee,
+      itemCount: state.data.order_analytics.item_count,
     });
     const target = new URL(
       `/${encodeURIComponent(tenantSlug)}/success`,
@@ -99,7 +158,7 @@ export default function StorefrontCheckout({
       target.searchParams.set("customerCode", state.data.customer_access_code);
     }
     router.replace(`${target.pathname}${target.search}`);
-  }, [draft.free_text_payload, draft.has_prescription, itemCount, router, state.data, state.success, tenantSlug]);
+  }, [itemCount, router, state.data, state.success, storeAnalytics, tenantSlug]);
 
   const deliveryAreaName = draft.delivery_area?.name_ar ?? "منطقة التوصيل";
   const totalLabel = useMemo(
@@ -145,8 +204,42 @@ export default function StorefrontCheckout({
         </div>
       </section>
 
-      <form action={formAction} className="mt-5 space-y-5">
+      <form
+        action={formAction}
+        className="mt-5 space-y-5"
+        onInvalidCapture={(event) => {
+          if (invalidReportLocked.current) return;
+          invalidReportLocked.current = true;
+          window.setTimeout(() => {
+            invalidReportLocked.current = false;
+          }, 0);
+          const fieldName = (event.target as HTMLInputElement).name;
+          const fieldMap: Record<string, "name" | "phone" | "address"> = {
+            customer_name: "name",
+            customer_phone: "phone",
+            delivery_address: "address",
+          };
+          trackCheckoutError({
+            store: storeAnalytics,
+            errorField: fieldMap[fieldName] ?? "server",
+            errorType:
+              (event.target as HTMLInputElement).validity.valueMissing
+                ? "required"
+                : "invalid_format",
+          });
+        }}
+      >
         <input type="hidden" name="csrf_token" value={csrfToken} />
+        <input
+          type="hidden"
+          name="ga_client_id"
+          value={analyticsIdentifiers?.clientId ?? ""}
+        />
+        <input
+          type="hidden"
+          name="ga_session_id"
+          value={analyticsIdentifiers?.sessionId ?? ""}
+        />
         <input
           type="hidden"
           name="delivery_slot"

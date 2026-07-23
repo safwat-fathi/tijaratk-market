@@ -32,6 +32,7 @@ import { MetaConversionsService } from 'src/meta-conversions/meta-conversions.se
 import { CheckoutStorefrontCartDraftDto } from './dto/checkout-storefront-cart-draft.dto';
 import { UpdateStorefrontCartDraftDto } from './dto/update-storefront-cart-draft.dto';
 import { StorefrontCartDraftsService } from './storefront-cart-drafts.service';
+import { GoogleAnalyticsService } from 'src/google-analytics/google-analytics.service';
 
 const CART_TOKEN_HEADER = 'x-storefront-cart-token';
 
@@ -44,6 +45,7 @@ export class StorefrontCartDraftsController {
   constructor(
     private readonly draftsService: StorefrontCartDraftsService,
     private readonly metaConversionsService: MetaConversionsService,
+    private readonly googleAnalyticsService: GoogleAnalyticsService,
   ) {}
 
   @Get(':tenant_slug')
@@ -129,7 +131,7 @@ export class StorefrontCartDraftsController {
   @ApiHeader({ name: CART_TOKEN_HEADER, required: true })
   @ApiBody({ type: CheckoutStorefrontCartDraftDto })
   @ApiResponse({ status: HttpStatus.CREATED })
-  /** Finalizes the addressed draft using request-level Meta attribution. */
+  /** Finalizes the draft using consented request-level attribution. */
   checkout(
     @Req() request: Request,
     @Param('tenant_slug') tenantSlug: string,
@@ -144,6 +146,11 @@ export class StorefrontCartDraftsController {
         request,
         'tenant',
         `/${encodeURIComponent(tenantSlug)}/checkout`,
+      ),
+      this.googleAnalyticsService.buildTrackingContext(
+        request,
+        input.ga_client_id,
+        input.ga_session_id,
       ),
     );
   }

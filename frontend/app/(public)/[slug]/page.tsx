@@ -21,11 +21,13 @@ import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import StorefrontViewTracking from "@/components/analytics/StorefrontViewTracking";
 import { SITE_URL } from "@/lib/marketing-seo";
 import { getStorefrontCartDraftAction } from "@/actions/storefront-cart-actions";
 import { OrderSource } from "@/types/enums";
 import { createUnavailableStorefrontOrderState } from "@/lib/storefront-order-availability";
 import { CUSTOMER_PWA } from "@/lib/customer-pwa";
+import type { StorefrontAnalyticsContext } from "@/lib/analytics/storefront-ga4";
 
 type StoreSearchParams = {
   reorder?: string;
@@ -193,6 +195,15 @@ export default async function StorePage({ params, searchParams }: Props) {
     orderAvailabilityResponse.success && orderAvailabilityResponse.data
       ? orderAvailabilityResponse.data
       : createUnavailableStorefrontOrderState();
+  const storeAnalytics: StorefrontAnalyticsContext = {
+    storeId: tenant.id,
+    storeSlug: tenant.slug,
+    storeName: tenant.name,
+    storeCategory: tenant.category,
+    ...(tenant.directory_profile?.area?.name_ar
+      ? { area: tenant.directory_profile.area.name_ar }
+      : {}),
+  };
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-md bg-background flex flex-col">
@@ -200,6 +211,7 @@ export default async function StorePage({ params, searchParams }: Props) {
         pageLocation={`/${encodeURIComponent(slug)}`}
         pageTitle={tenant.name}
       />
+      <StorefrontViewTracking store={storeAnalytics} />
       <MetaStorefrontView
         contentId={`tenant:${tenant.id}`}
         storefrontType="tenant"
@@ -230,6 +242,7 @@ export default async function StorePage({ params, searchParams }: Props) {
           }
           sourceMetadata={sourceMetadata}
           orderAvailability={orderAvailability}
+          storeAnalytics={storeAnalytics}
         />
         <div className="mt-4 border-t border-gray-100 p-4 text-center text-xs text-gray-500">
           <p>

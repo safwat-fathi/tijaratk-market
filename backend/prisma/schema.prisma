@@ -289,6 +289,8 @@ model Order {
   customer_rejected_at          DateTime?   @db.Timestamptz(6)
   order_source                  OrderSource @default(storefront) @map("order_source")
   source_metadata               Json?       @map("source_metadata")
+  ga_client_id                  String?     @db.VarChar(128)
+  ga_session_id                 String?     @db.VarChar(20)
   prescription_file_url                  String?
   prescription_original_filename         String?     @db.VarChar(255)
   prescription_mime_type                 String?     @db.VarChar(120)
@@ -301,6 +303,7 @@ model Order {
   cancellation_policy_events TenantCancellationPolicyEvent[]
   order_dispatch             OrderDispatch?
   meta_conversion_outbox     MetaConversionOutbox?
+  ga4_event_outbox           Ga4EventOutbox[]
   storefront_cart_draft      StorefrontCartDraft? @relation("StorefrontCartDraftCompletedOrder")
 
   @@index([delivery_area_id], map: "IDX_orders_delivery_area_id")
@@ -679,6 +682,32 @@ model MetaConversionOutbox {
   @@map("meta_conversion_outbox")
 }
 
+/// Encrypted, idempotent queue for consented GA4 lifecycle events.
+model Ga4EventOutbox {
+  id                   Int               @id(map: "PK_ga4_event_outbox_id") @default(autoincrement())
+  order_id             Int
+  event_name           String            @db.VarChar(64)
+  encrypted_payload    String?
+  status               Ga4OutboxStatus   @default(pending)
+  attempt_count        Int               @default(0)
+  next_attempt_at      DateTime          @default(now()) @db.Timestamptz(6)
+  locked_at            DateTime?         @db.Timestamptz(6)
+  locked_by            String?           @db.VarChar(160)
+  last_error_code      String?           @db.VarChar(64)
+  last_error_message   String?
+  sent_at              DateTime?         @db.Timestamptz(6)
+  terminal_at          DateTime?         @db.Timestamptz(6)
+  created_at           DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+  order                Order             @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_ga4_event_outbox_order")
+
+  @@unique([order_id, event_name], map: "UQ_ga4_event_outbox_order_event")
+  @@index([status, next_attempt_at], map: "IDX_ga4_event_outbox_status_next_attempt")
+  @@index([locked_at], map: "IDX_ga4_event_outbox_locked_at")
+  @@index([terminal_at], map: "IDX_ga4_event_outbox_terminal_at")
+  @@map("ga4_event_outbox")
+}
+
 /// Encrypted Web Push device registration. This control-plane table does not use tenant RLS.
 model PushSubscription {
   id                     Int       @id(map: "PK_push_subscriptions_id") @default(autoincrement())
@@ -872,6 +901,15 @@ enum MetaConversionOutboxStatus {
   dead_letter
 
   @@map("meta_conversion_outbox_status_enum")
+}
+
+enum Ga4OutboxStatus {
+  pending
+  processing
+  sent
+  dead_letter
+
+  @@map("ga4_event_outbox_status_enum")
 }
 
 enum PushNotificationEventType {

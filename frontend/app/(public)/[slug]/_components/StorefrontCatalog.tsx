@@ -9,7 +9,11 @@ import {
 } from "@/actions/storefront-cart-actions";
 import { formatCurrency } from "@/lib/utils/currency";
 import { sendMetaPixelEvent } from "@/lib/analytics/meta-pixel";
-import { sendCustomerAnalyticsEvent } from "@/lib/analytics/google-analytics";
+import {
+  trackCartSelectionChange,
+  trackViewItem,
+  type StorefrontAnalyticsContext,
+} from "@/lib/analytics/storefront-ga4";
 import type {
   Product,
   PublicProductCategory,
@@ -40,6 +44,7 @@ type StorefrontCatalogProps = {
   orderSource?: OrderSource;
   sourceMetadata?: Record<string, unknown>;
   orderAvailability: StorefrontOrderAvailability;
+  storeAnalytics: StorefrontAnalyticsContext;
 };
 
 const draftSelections = (draft: StorefrontCartDraft | null) =>
@@ -69,6 +74,7 @@ export default function StorefrontCatalog({
   orderSource = OrderSource.STOREFRONT,
   sourceMetadata,
   orderAvailability,
+  storeAnalytics,
 }: StorefrontCatalogProps) {
   const router = useRouter();
   const [selections, setSelections] = useState(() => draftSelections(initialDraft));
@@ -91,6 +97,7 @@ export default function StorefrontCatalog({
   const lastSaveSucceeded = useRef(true);
   const searchRequest = useRef(0);
   const catalogBoundaryRef = useRef<HTMLDivElement | null>(null);
+  const viewedProductIds = useRef(new Set<number>());
 
   const knownProducts = useMemo(
     () =>
@@ -141,11 +148,18 @@ export default function StorefrontCatalog({
     if (!orderAvailability.accepting_orders) return;
     setMessage(null);
     const next = { ...selectionsRef.current };
+    const previousSelection = next[product.id];
     const wasPresent = Boolean(next[product.id]);
     if (selection) next[product.id] = selection;
     else delete next[product.id];
     setSelections(next);
     selectionsRef.current = next;
+    trackCartSelectionChange({
+      store: storeAnalytics,
+      product,
+      previousSelection,
+      nextSelection: selection ?? undefined,
+    });
     if (!wasPresent && selection) {
       const lineTotal = resolveSelectionLineTotal(selection, product);
       sendMetaPixelEvent("AddToCart", {
@@ -155,16 +169,19 @@ export default function StorefrontCatalog({
         value: lineTotal ?? 0,
         storefront_type: "tenant",
       });
-      sendCustomerAnalyticsEvent("add_to_cart", {
-        store_slug: tenantSlug,
-        product_id: product.id,
-      });
     }
     const nextCount = Object.keys(next).length;
     window.dispatchEvent(
       new CustomEvent(STOREFRONT_CART_CHANGED_EVENT, { detail: nextCount }),
     );
     persistSelections(next);
+  };
+
+  const trackProductView = (product: Product) => {
+    if (viewedProductIds.current.has(product.id)) return;
+    if (trackViewItem(storeAnalytics, product)) {
+      viewedProductIds.current.add(product.id);
+    }
   };
 
   const replaceWithReorder = async () => {
@@ -356,6 +373,7 @@ export default function StorefrontCatalog({
             products={products}
             selections={selections}
             onUpdateSelection={updateSelection}
+            onProductViewed={trackProductView}
           />
         </fieldset>
       </div>

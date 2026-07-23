@@ -57,16 +57,74 @@ const checkoutSchema = z.object({
   delivery_slot: z.string().optional(),
   card_on_delivery_requested: z.string().optional(),
   csrf_token: z.string().min(1),
+  ga_client_id: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9._-]{1,128}$/)
+    .or(z.literal(""))
+    .optional(),
+  ga_session_id: z
+    .string()
+    .trim()
+    .regex(/^\d{1,20}$/)
+    .or(z.literal(""))
+    .optional(),
 });
+
+type CheckoutAnalyticsError = {
+  error_field: "phone" | "name" | "address" | "delivery_area" | "cart" | "server";
+  error_type:
+    | "required"
+    | "invalid_format"
+    | "outside_delivery_area"
+    | "empty_cart"
+    | "product_unavailable"
+    | "order_creation_failed"
+    | "network_error";
+  http_status?: number;
+};
 
 export type StorefrontCheckoutState = {
   success: boolean;
   message: string;
   errors?: Record<string, string[]>;
+  analytics_error?: CheckoutAnalyticsError;
   data?: {
     public_token: string;
     customer_access_code?: string;
     meta_purchase?: { event_id: string; value: number; currency: "EGP" };
+    order_analytics: {
+      order_id: number;
+      value: number;
+      delivery_fee: number;
+      item_count: number;
+    };
+  };
+};
+
+const checkoutFieldMap = {
+  customer_name: "name",
+  customer_phone: "phone",
+  delivery_address: "address",
+  delivery_slot: "delivery_area",
+} as const;
+
+const resolveValidationAnalyticsError = (
+  errors: Record<string, string[] | undefined>,
+): CheckoutAnalyticsError => {
+  const fieldName = Object.keys(errors).find((key) => errors[key]?.length);
+  if (!fieldName) {
+    return { error_field: "server", error_type: "order_creation_failed" };
+  }
+
+  const errorField =
+    checkoutFieldMap[fieldName as keyof typeof checkoutFieldMap] ?? "server";
+  return {
+    error_field: errorField,
+    error_type:
+      errorField === "phone" || errorField === "delivery_area"
+        ? "invalid_format"
+        : "required",
   };
 };
 
@@ -187,15 +245,21 @@ export async function checkoutStorefrontCartAction(
 ): Promise<StorefrontCheckoutState> {
   const parsed = checkoutSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) {
+    const errors = parsed.error.flatten().fieldErrors;
     return {
       success: false,
       message: "راجع بيانات التوصيل",
-      errors: parsed.error.flatten().fieldErrors,
+      errors,
+      analytics_error: resolveValidationAnalyticsError(errors),
     };
   }
   const token = await getStorefrontCartToken();
   if (!token || !verifyStorefrontCheckoutCsrf(token, parsed.data.csrf_token)) {
-    return { success: false, message: "انتهت جلسة السلة. ارجع للسلة وحاول مرة أخرى." };
+    return {
+      success: false,
+      message: "انتهت جلسة السلة. ارجع للسلة وحاول مرة أخرى.",
+      analytics_error: { error_field: "cart", error_type: "empty_cart" },
+    };
   }
   let deliverySlot:
     | { date: string; starts_at: string; ends_at: string }
@@ -206,11 +270,25 @@ export async function checkoutStorefrontCartAction(
         JSON.parse(parsed.data.delivery_slot),
       );
       if (!parsedSlot.success) {
-        return { success: false, message: "ميعاد التوصيل غير صالح" };
+        return {
+          success: false,
+          message: "ميعاد التوصيل غير صالح",
+          analytics_error: {
+            error_field: "delivery_area",
+            error_type: "invalid_format",
+          },
+        };
       }
       deliverySlot = parsedSlot.data;
     } catch {
-      return { success: false, message: "ميعاد التوصيل غير صالح" };
+      return {
+        success: false,
+        message: "ميعاد التوصيل غير صالح",
+        analytics_error: {
+          error_field: "delivery_area",
+          error_type: "invalid_format",
+        },
+      };
     }
   }
   const response = await storefrontCartDraftsService.checkout(
@@ -227,6 +305,12 @@ export async function checkoutStorefrontCartAction(
       card_on_delivery_requested:
         parsed.data.card_on_delivery_requested === "on" ||
         parsed.data.card_on_delivery_requested === "true",
+      ...(parsed.data.ga_client_id
+        ? { ga_client_id: parsed.data.ga_client_id }
+        : {}),
+      ...(parsed.data.ga_session_id
+        ? { ga_session_id: parsed.data.ga_session_id }
+        : {}),
     },
     token,
     await buildMetaRequestContextHeaders(),
@@ -236,6 +320,18 @@ export async function checkoutStorefrontCartAction(
       success: false,
       message: response.message || "تعذر تأكيد الطلب. حاول مرة أخرى.",
       errors: response.errors as Record<string, string[]> | undefined,
+      analytics_error: {
+        error_field: "server",
+        error_type:
+          response.status === 404 || response.status === 410
+            ? "empty_cart"
+            : response.status === 422
+              ? "product_unavailable"
+              : response.status
+                ? "order_creation_failed"
+                : "network_error",
+        ...(response.status ? { http_status: response.status } : {}),
+      },
     };
   }
   await persistCreatedOrderTrackingArtifacts({
@@ -259,6 +355,12 @@ export async function checkoutStorefrontCartAction(
       ...(response.data.meta_purchase
         ? { meta_purchase: response.data.meta_purchase }
         : {}),
+      order_analytics: {
+        order_id: response.data.id,
+        value: Number(response.data.total ?? 0),
+        delivery_fee: Number(response.data.delivery_fee ?? 0),
+        item_count: response.data.items.length,
+      },
     },
   };
 }

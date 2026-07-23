@@ -25,6 +25,7 @@ import { ProductOrderMode } from 'src/common/enums/product-order-mode.enum';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
 import { UnavailableItemAction } from 'src/common/enums/unavailable-item-action.enum';
 import type { MetaTrackingContext } from 'src/meta-conversions/meta-conversions.types';
+import type { Ga4TrackingContext } from 'src/google-analytics/google-analytics.types';
 import { OrdersService } from 'src/orders/orders.service';
 import { CreateOrderDto, CreateOrderItemDto } from 'src/orders/dto/create-order.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -334,6 +335,7 @@ export class StorefrontCartDraftsService {
     token: string | undefined,
     input: CheckoutStorefrontCartDraftDto,
     metaTrackingContext?: MetaTrackingContext,
+    ga4TrackingContext?: Ga4TrackingContext,
   ) {
     if (!token?.trim()) throw new BadRequestException('سلة الطلب غير متاحة.');
     const tenant = await this.requireMerchantTenant(tenantSlug);
@@ -423,6 +425,7 @@ export class StorefrontCartDraftsService {
         metaTrackingContext,
         {
           preservePrescriptionOnFailure: true,
+          ga4TrackingContext,
           afterPersist: async (manager, persistedOrder) => {
             await manager.storefrontCartDraft.update({
               where: { id: draft.id },
@@ -708,8 +711,13 @@ export class StorefrontCartDraftsService {
     order: NonNullable<DraftWithRelations['completed_order']> & Order,
   ) {
     const accessCode = order?.customer?.global_customer?.access_code;
+    const {
+      ga_client_id: _gaClientId,
+      ga_session_id: _gaSessionId,
+      ...safeOrder
+    } = order;
     return {
-      ...order,
+      ...safeOrder,
       customer_access_code: accessCode ?? undefined,
     };
   }
