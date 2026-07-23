@@ -11,53 +11,57 @@ interface StatusTabsProps {
   zoneStorefrontsEnabled: boolean;
 }
 
+const ALL_TABS = [
+  {
+    id: OrderStatus.DRAFT,
+    label: "جديد",
+    color: "text-status-new bg-status-new/15",
+  },
+  {
+    id: OrderStatus.CONFIRMED,
+    label: "مؤكد",
+    color: "text-status-confirmed bg-status-confirmed/15",
+  },
+  {
+    id: OrderStatus.OUT_FOR_DELIVERY,
+    label: "التوصيل",
+    color: "text-amber-800 bg-status-delivery/25",
+  },
+  {
+    id: OrderStatus.COMPLETED,
+    label: "اكتمل",
+    color: "text-status-completed bg-status-completed/15",
+  },
+  {
+    id: OrderStatus.CANCELLED,
+    label: "ملغي",
+    color: "text-status-cancelled bg-status-cancelled/15",
+  },
+  {
+    id: OrderStatus.REJECTED_BY_CUSTOMER,
+    label: "رفض العميل",
+    color: "text-status-cancelled bg-status-cancelled/15",
+  },
+  {
+    id: "assigned",
+    label: "الطلبات المسندة",
+    color: "text-brand-primary bg-brand-soft",
+  },
+] satisfies ReadonlyArray<{
+  id: OrdersTab;
+  label: string;
+  color: string;
+}>;
+
 export default function StatusTabs({
   currentStatus,
   counts,
   onTabChange,
   zoneStorefrontsEnabled,
 }: StatusTabsProps) {
-  const tabs: {
-    id: OrdersTab;
-    label: string;
-    color: string;
-  }[] = [
-    {
-      id: OrderStatus.DRAFT,
-      label: "جديد",
-      color: "text-status-new bg-status-new/15",
-    },
-    {
-      id: OrderStatus.CONFIRMED,
-      label: "مؤكد",
-      color: "text-status-confirmed bg-status-confirmed/15",
-    },
-    {
-      id: OrderStatus.OUT_FOR_DELIVERY,
-      label: "التوصيل",
-      color: "text-amber-800 bg-status-delivery/25",
-    },
-    {
-      id: OrderStatus.COMPLETED,
-      label: "اكتمل",
-      color: "text-status-completed bg-status-completed/15",
-    },
-    {
-      id: OrderStatus.CANCELLED,
-      label: "ملغي",
-      color: "text-status-cancelled bg-status-cancelled/15",
-    },
-    {
-      id: OrderStatus.REJECTED_BY_CUSTOMER,
-      label: "رفض العميل",
-      color: "text-status-cancelled bg-status-cancelled/15",
-    },
-    {
-      id: "assigned",
-      label: "الطلبات المسندة",
-      color: "text-brand-primary bg-brand-soft",
-    },
-  ].filter((tab) => zoneStorefrontsEnabled || tab.id !== "assigned");
+  const tabs = ALL_TABS.filter(
+    (tab) => zoneStorefrontsEnabled || tab.id !== "assigned",
+  );
 
   return (
     <div className="border-b border-brand-border bg-white">
