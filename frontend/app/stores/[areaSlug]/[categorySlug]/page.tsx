@@ -249,7 +249,7 @@ export default async function StoresCategoryPage({
       <AppHeader
         title="دليل المتاجر"
         innerClassName="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 py-3 sm:px-6 lg:px-8"
-        actions={<InstallPwaAction appName={CUSTOMER_PWA.name} />}
+        titleActions={<InstallPwaAction appName={CUSTOMER_PWA.name} buttonText="تنزيل التطبيق" />}
       />
 
       <main className="flex-1">
