@@ -51,6 +51,7 @@ export default async function OrderSuccessPage({ params, searchParams }: Props) 
 				tenantSlug={slug}
 				orderToken={token}
 				customerAccessCode={customerCode}
+				clearStorefrontCartOnMount
 				scheduledDeliveryLabel={
 					orderResponse.data.scheduled_delivery_date
 						? orderResponse.data.delivery_time_window_snapshot

@@ -87,6 +87,8 @@ describe('Security E2E (multi-tenant)', () => {
   let platformAdminToken;
   let operationsAdminToken;
   const provisionedAdminIds = [];
+  const createdCatalogItemIds = [];
+  const createdDirectoryAreaIds = [];
   const password = 'Passw0rd!';
 
   const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -273,6 +275,12 @@ describe('Security E2E (multi-tenant)', () => {
         runId,
       );
       await cleanupTenants(prisma, [tenantAId, tenantBId]);
+      await prisma.catalogItem.deleteMany({
+        where: { id: { in: createdCatalogItemIds } },
+      });
+      await prisma.directoryArea.deleteMany({
+        where: { id: { in: createdDirectoryAreaIds } },
+      });
     } finally {
       if (app) await app.close();
       for (const key of pushEnvironmentKeys) {
@@ -1055,6 +1063,9 @@ describe('Security E2E (multi-tenant)', () => {
           'products.read',
           'products.create',
           'products.update',
+          'products.update_price',
+          'products.update_availability',
+          'products.archive',
           'activity_logs.read',
         ],
       })
@@ -1216,6 +1227,263 @@ describe('Security E2E (multi-tenant)', () => {
     ]);
     expect(movedProduct.category).toBe(targetCategory);
     expect(unchangedProduct.category).toBe(sourceCategory);
+
+    const legacyCatalogItem = await prisma.catalogItem.create({
+      data: {
+        name: `Legacy cross-source catalog item ${runId}`,
+        category: 'أدوية',
+        source: 'chefaa_csv',
+        external_id: `security-import-${runId}`,
+        price: 10,
+        is_active: true,
+      },
+    });
+    createdCatalogItemIds.push(legacyCatalogItem.id);
+    const legacyCatalogProduct = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantAId)}, true)`;
+      return tx.product.create({
+        data: {
+          tenant_id: tenantAId,
+          catalog_item_id: legacyCatalogItem.id,
+          name: legacyCatalogItem.name,
+          category: legacyCatalogItem.category,
+          current_price: 10,
+          source: 'catalog',
+          status: 'active',
+          order_mode: 'quantity',
+          is_available: true,
+        },
+      });
+    });
+
+    await request(httpServer)
+      .patch(
+        `/admin/managed-tenants/${tenantAId}/products/${managedProduct.id}/status`,
+      )
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .set('Cookie', switchedCookie)
+      .send({ status: 'archived' })
+      .expect(200);
+
+    const importedProductRows = Array.from({ length: 50 }, (_, index) => [
+      `Imported checkout product ${index + 1} ${runId}`,
+      String(30 + index),
+      `Import category ${(index % 5) + 1} ${runId}`,
+      index === 0 ? 'false' : 'true',
+    ]);
+    const csvRows = [
+      ['name', 'price', 'category', 'available'],
+      [managedProduct.name, '25.50', targetCategory, 'true'],
+      ...importedProductRows,
+      [`Invalid price product ${runId}`, '-1', sourceCategory, 'true'],
+      [legacyCatalogItem.name, '44', 'أدوية', 'true'],
+    ];
+    const csvBuffer = Buffer.from(
+      csvRows.map((row) => row.join(',')).join('\n'),
+      'utf8',
+    );
+
+    const previewResponse = await request(httpServer)
+      .post(`/admin/managed-tenants/${tenantAId}/products/import/preview`)
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .set('Cookie', switchedCookie)
+      .attach('file', csvBuffer, {
+        filename: `products-${runId}.csv`,
+        contentType: 'text/csv',
+      })
+      .expect(201);
+    const preview = unwrapBody(previewResponse.body);
+    expect(preview).toEqual(
+      expect.objectContaining({
+        format: 'csv',
+        total_rows: 53,
+      }),
+    );
+    expect(preview.columns.map((column) => column.label)).toEqual([
+      'name',
+      'price',
+      'category',
+      'available',
+    ]);
+
+    const importResponse = await request(httpServer)
+      .post(`/admin/managed-tenants/${tenantAId}/products/import`)
+      .set('Authorization', `Bearer ${operationsAdminToken}`)
+      .set('Cookie', switchedCookie)
+      .field(
+        'mapping',
+        JSON.stringify({
+          name: 0,
+          current_price: 1,
+          category: 2,
+          is_available: 3,
+        }),
+      )
+      .attach('file', csvBuffer, {
+        filename: `products-${runId}.csv`,
+        contentType: 'text/csv',
+      })
+      .expect(201);
+    const importSummary = unwrapBody(importResponse.body);
+    expect(importSummary).toEqual(
+      expect.objectContaining({
+        total_rows: 53,
+        created_rows: 50,
+        updated_rows: 1,
+        failed_rows: 2,
+      }),
+    );
+    expect(importSummary.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'current_price',
+        }),
+        expect.objectContaining({
+          field: 'row',
+          message: expect.stringContaining('كتالوج'),
+        }),
+      ]),
+    );
+
+    const importedProducts = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantAId)}, true)`;
+      return tx.product.findMany({
+        where: {
+          tenant_id: tenantAId,
+          name: {
+            in: [
+              managedProduct.name,
+              importedProductRows[0][0],
+              legacyCatalogItem.name,
+            ],
+          },
+        },
+      });
+    });
+    const reactivatedProduct = importedProducts.find(
+      (product) => product.id === managedProduct.id,
+    );
+    const checkoutProduct = importedProducts.find(
+      (product) => product.name === importedProductRows[0][0],
+    );
+    const preservedCatalogProduct = importedProducts.find(
+      (product) => product.id === legacyCatalogProduct.id,
+    );
+    expect(reactivatedProduct).toEqual(
+      expect.objectContaining({
+        status: 'active',
+        source: 'manual',
+        category: targetCategory,
+        is_available: true,
+      }),
+    );
+    expect(Number(reactivatedProduct.current_price)).toBe(25.5);
+    expect(checkoutProduct).toEqual(
+      expect.objectContaining({
+        source: 'manual',
+        is_available: false,
+      }),
+    );
+    expect(preservedCatalogProduct).toEqual(
+      expect.objectContaining({
+        source: 'catalog',
+        catalog_item_id: legacyCatalogItem.id,
+      }),
+    );
+    expect(Number(preservedCatalogProduct.current_price)).toBe(10);
+
+    const importedPriceHistory = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantAId)}, true)`;
+      return tx.productPriceHistory.findFirst({
+        where: {
+          tenant_id: tenantAId,
+          product_id: managedProduct.id,
+          price: 25.5,
+        },
+      });
+    });
+    expect(importedPriceHistory?.reason).toBe(
+      'Imported from mapped spreadsheet',
+    );
+
+    const readinessProfile =
+      await prisma.tenantDirectoryProfile.findUniqueOrThrow({
+        where: { tenant_id: tenantAId },
+      });
+    expect(readinessProfile.missing_fields).not.toContain(
+      'less_than_25_products',
+    );
+    expect(readinessProfile.missing_fields).not.toContain(
+      'less_than_5_product_categories',
+    );
+
+    const deliveryArea = await prisma.directoryArea.create({
+      data: {
+        name_ar: `منطقة اختبار ${runId}`,
+        name_en: `E2E area ${runId}`,
+        slug: `security-checkout-${runId}`,
+      },
+    });
+    createdDirectoryAreaIds.push(deliveryArea.id);
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantAId)}, true)`;
+      await tx.tenantDeliveryArea.create({
+        data: {
+          tenant_id: tenantAId,
+          area_id: deliveryArea.id,
+          delivery_fee: 12,
+        },
+      });
+      await tx.product.update({
+        where: { id: checkoutProduct.id },
+        data: { is_available: true },
+      });
+      await tx.tenant.update({
+        where: { id: tenantAId },
+        data: { onboarding_completed: true },
+      });
+    });
+    const tenantSlug = (
+      await prisma.tenant.findUniqueOrThrow({
+        where: { id: tenantAId },
+        select: { slug: true },
+      })
+    ).slug;
+    const draftResponse = await request(httpServer)
+      .put(`/storefront-cart-drafts/${tenantSlug}`)
+      .send({
+        items: [
+          {
+            product_id: checkoutProduct.id,
+            selection_mode: 'quantity',
+            selection_quantity: 1,
+          },
+        ],
+        delivery_area_id: deliveryArea.id,
+      })
+      .expect(200);
+    const draftToken = unwrapBody(draftResponse.body).token;
+    const checkoutPayload = {
+      customer: {
+        name: `Import checkout customer ${runId}`,
+        phone: generateEgyptPhone(61),
+        address: '4th district, Cairo',
+      },
+      delivery_address: '4th district, Cairo',
+    };
+    const firstCheckoutResponse = await request(httpServer)
+      .post(`/storefront-cart-drafts/${tenantSlug}/checkout`)
+      .set('X-Storefront-Cart-Token', draftToken)
+      .send(checkoutPayload)
+      .expect(201);
+    const firstCheckout = unwrapBody(firstCheckoutResponse.body);
+    const retryCheckoutResponse = await request(httpServer)
+      .post(`/storefront-cart-drafts/${tenantSlug}/checkout`)
+      .set('X-Storefront-Cart-Token', draftToken)
+      .send(checkoutPayload)
+      .expect(201);
+    const retryCheckout = unwrapBody(retryCheckoutResponse.body);
+    expect(retryCheckout.id).toBe(firstCheckout.id);
 
     const categoryMoveActivity = await prisma.activityLog.findFirstOrThrow({
       where: { request_id: categoryMoveRequestId },

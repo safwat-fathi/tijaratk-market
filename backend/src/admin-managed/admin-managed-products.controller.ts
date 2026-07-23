@@ -1,20 +1,28 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
+  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { AdminAuthGuard } from 'src/admin/guards/admin-auth.guard';
 import CONSTANTS from 'src/common/constants';
 import { ProductStatus } from 'src/common/enums/product-status.enum';
@@ -25,6 +33,12 @@ import { GetTenantProductsDto } from 'src/products/dto/get-tenant-products.dto';
 import { BulkUpdateProductsDto } from 'src/products/dto/bulk-update-products.dto';
 import { AddBulkEssentialItemsDto } from 'src/products/dto/add-bulk-essential.dto';
 import { ProductsService } from 'src/products/products.service';
+import { ProductImportService } from 'src/products/product-import.service';
+import {
+  ImportProductSpreadsheetDto,
+  PreviewProductImportDto,
+} from 'src/products/dto/product-import.dto';
+import { productSpreadsheetFileFilter } from 'src/common/utils/file-filters';
 import { AdminActorContext } from './admin-managed.types';
 import { CurrentAdminActor } from './decorators/current-admin-actor.decorator';
 import {
@@ -46,7 +60,10 @@ import {
 @Controller('admin/managed-tenants/:tenantId')
 @UseGuards(AdminAuthGuard, ManagedTenantGuard)
 export class AdminManagedProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly productImportService: ProductImportService,
+  ) {}
 
   /** Lists or searches products belonging to the active managed tenant. */
   @Get('products')
@@ -142,6 +159,84 @@ export class AdminManagedProductsController {
       actor.tenantId,
       dto,
       undefined,
+      actor,
+    );
+  }
+
+  /** Parses an uploaded product spreadsheet for the mapping wizard. */
+  @Post('products/import/preview')
+  @RequireManagedFeature('product_write')
+  @RequireManagedPermissions(
+    ADMIN_MANAGED_PERMISSIONS.ProductsCreate,
+    ADMIN_MANAGED_PERMISSIONS.ProductsUpdate,
+    ADMIN_MANAGED_PERMISSIONS.ProductsUpdatePrice,
+  )
+  @ApiOperation({ summary: 'Preview a managed product spreadsheet import' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: PreviewProductImportDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Spreadsheet columns and sample rows returned',
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: CONSTANTS.UPLOAD.MAX_CSV_SIZE_BYTES },
+      fileFilter: productSpreadsheetFileFilter,
+    }),
+  )
+  previewProductImport(@UploadedFile() file?: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('ملف المنتجات مطلوب');
+    }
+    return this.productImportService.preview(file);
+  }
+
+  /** Imports mapped spreadsheet rows into the managed tenant. */
+  @Post('products/import')
+  @RequireManagedFeature('product_write')
+  @RequireManagedPermissions(
+    ADMIN_MANAGED_PERMISSIONS.ProductsCreate,
+    ADMIN_MANAGED_PERMISSIONS.ProductsUpdate,
+    ADMIN_MANAGED_PERMISSIONS.ProductsUpdatePrice,
+  )
+  @ApiOperation({ summary: 'Import a mapped managed product spreadsheet' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: ImportProductSpreadsheetDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Valid product rows created or updated',
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: CONSTANTS.UPLOAD.MAX_CSV_SIZE_BYTES },
+      fileFilter: productSpreadsheetFileFilter,
+    }),
+  )
+  importProductSpreadsheet(
+    @CurrentAdminActor() actor: AdminActorContext,
+    @Body() dto: ImportProductSpreadsheetDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('ملف المنتجات مطلوب');
+    }
+    if (
+      dto.mapping.is_available !== undefined &&
+      !actor.permissions.includes(
+        ADMIN_MANAGED_PERMISSIONS.ProductsUpdateAvailability,
+      )
+    ) {
+      throw new ForbiddenException(
+        'ليس لديك صلاحية تحديث إتاحة المنتجات',
+      );
+    }
+
+    return this.productImportService.import(
+      actor.tenantId,
+      file,
+      dto.mapping,
       actor,
     );
   }

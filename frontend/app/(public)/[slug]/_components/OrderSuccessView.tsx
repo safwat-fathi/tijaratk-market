@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { clearCompletedStorefrontCartAction } from "@/actions/storefront-cart-actions";
 
 type OrderSuccessViewProps = {
   tenantSlug: string;
@@ -11,6 +12,7 @@ type OrderSuccessViewProps = {
   newOrderLabel?: string;
   successDescription?: string;
   scheduledDeliveryLabel?: string | null;
+  clearStorefrontCartOnMount?: boolean;
 };
 
 const TrackingOrdersIcon = () => (
@@ -43,9 +45,25 @@ export default function OrderSuccessView({
   newOrderLabel = "عمل طلب جديد من نفس المتجر",
   successDescription = "سيتواصل معك صاحب المتجر للتأكيد.",
   scheduledDeliveryLabel,
+  clearStorefrontCartOnMount = false,
 }: OrderSuccessViewProps) {
   const [copied, setCopied] = useState(false);
   const [copiedCustomerCode, setCopiedCustomerCode] = useState(false);
+  const cartCleanupRequested = useRef(false);
+
+  useEffect(() => {
+    if (
+      !clearStorefrontCartOnMount ||
+      cartCleanupRequested.current
+    ) {
+      return;
+    }
+
+    cartCleanupRequested.current = true;
+    void clearCompletedStorefrontCartAction(tenantSlug).catch((error) => {
+      console.error("Failed to clear completed storefront cart:", error);
+    });
+  }, [clearStorefrontCartOnMount, tenantSlug]);
 
   const handleCopyToken = useCallback(() => {
     const url = `${window.location.origin}/track-order/${orderToken}`;

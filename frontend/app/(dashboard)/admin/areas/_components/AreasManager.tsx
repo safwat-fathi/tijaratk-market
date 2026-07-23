@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  AlertTriangle,
   Check,
   Loader2,
   Map as MapIcon,
@@ -75,6 +76,13 @@ export default function AreasManager({
   const editingAreaHasChildren = Boolean(
     editingArea && (editingArea.child_count ?? 0) > 0,
   );
+  const areaPendingDeletion = useMemo(
+    () =>
+      confirmingDeleteId === null
+        ? null
+        : initialAreas.find((area) => area.id === confirmingDeleteId) ?? null,
+    [confirmingDeleteId, initialAreas],
+  );
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -92,6 +100,20 @@ export default function AreasManager({
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isModalOpen, loading]);
+
+  useEffect(() => {
+    if (!areaPendingDeletion) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !loading) {
+        setConfirmingDeleteId(null);
+        setError("");
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [areaPendingDeletion, loading]);
 
   const handleOpenModal = (area?: AdminDirectoryArea) => {
     setConfirmingDeleteId(null);
@@ -176,7 +198,7 @@ export default function AreasManager({
     setError("");
     try {
       await deleteDirectoryAreaAction(id);
-      setFeedback({ id: Date.now(), message: "تم حذف المنطقة بنجاح." });
+      setFeedback({ id: Date.now(), message: "تمت أرشفة المنطقة بنجاح." });
       setConfirmingDeleteId(null);
       if (initialAreas.length === 1 && page > 1) {
         const params = new URLSearchParams(searchParams.toString());
@@ -313,41 +335,18 @@ export default function AreasManager({
                         >
                           تعديل
                         </Button>
-                        {confirmingDeleteId === area.id ? (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-red-600 bg-red-600 text-white hover:bg-red-700"
-                              onClick={() => handleDelete(area.id)}
-                              disabled={loading}
-                              autoFocus
-                            >
-                              {loading ? "جارٍ الحذف..." : "تأكيد الحذف"}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setConfirmingDeleteId(null)}
-                              disabled={loading}
-                            >
-                              إلغاء
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-red-200 text-red-600 hover:bg-red-50"
-                            onClick={() => {
-                              setConfirmingDeleteId(area.id);
-                              setError("");
-                            }}
-                            disabled={loading}
-                          >
-                            حذف
-                          </Button>
-                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-red-200 text-red-600 hover:bg-red-50"
+                          onClick={() => {
+                            setConfirmingDeleteId(area.id);
+                            setError("");
+                          }}
+                          disabled={loading}
+                        >
+                          حذف
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -369,6 +368,83 @@ export default function AreasManager({
           </table>
         </div>
       </Card>
+
+      {areaPendingDeletion ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-area-dialog-title"
+            aria-describedby="delete-area-dialog-description"
+            className="w-full max-w-md rounded-xl bg-white p-5 text-right shadow-xl sm:p-6"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+                  <AlertTriangle className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h2 id="delete-area-dialog-title" className="text-lg font-bold text-gray-900">
+                    حذف المنطقة
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {areaPendingDeletion.name_ar}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setConfirmingDeleteId(null);
+                  setError("");
+                }}
+                disabled={loading}
+                aria-label="إغلاق النافذة"
+                className="shrink-0"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </Button>
+            </div>
+
+            <p
+              id="delete-area-dialog-description"
+              className="mt-5 rounded-lg bg-red-50 p-3 text-sm font-medium leading-6 text-red-700"
+            >
+              ستتم أرشفة المنطقة ومناطق توصيلها وفك ربط المتاجر منها. لن تظهر المنطقة في الدليل بعد الآن.
+            </p>
+
+            {error ? (
+              <p className="mt-4 rounded-lg border border-(--status-error)/25 bg-red-50 p-3 text-sm font-medium text-(--status-error)" role="alert">
+                {error}
+              </p>
+            ) : null}
+
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setConfirmingDeleteId(null);
+                  setError("");
+                }}
+                disabled={loading}
+                className="w-full sm:w-auto"
+              >
+                إلغاء
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => handleDelete(areaPendingDeletion.id)}
+                disabled={loading}
+                autoFocus
+                className="w-full sm:w-auto"
+              >
+                {loading ? "جارٍ الحذف..." : "تأكيد الحذف"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">

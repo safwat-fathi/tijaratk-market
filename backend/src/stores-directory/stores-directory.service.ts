@@ -14,6 +14,7 @@ import {
   TenantStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { CreateDirectoryEventDto } from './dto/create-directory-event.dto';
 import { UpdateDirectoryProfileDto } from './dto/update-directory-profile.dto';
 import {
@@ -58,6 +59,11 @@ const AREA_HIERARCHY_ERRORS = {
   parentMustBeMain: 'AREA_PARENT_MUST_BE_MAIN',
   selfReference: 'AREA_PARENT_SELF_REFERENCE',
   hasChildren: 'AREA_HAS_CHILDREN',
+} as const;
+
+const AREA_DELETION_ERRORS = {
+  hasZoneStorefront: 'AREA_HAS_ZONE_STOREFRONT',
+  hasMissingDeliveryAreaRequests: 'AREA_HAS_MISSING_DELIVERY_AREA_REQUESTS',
 } as const;
 
 type DirectoryCategorySlug = (typeof CATEGORY_DEFINITIONS)[number]['slug'];
@@ -717,22 +723,14 @@ export class StoresDirectoryService {
   }
 
   /**
-   * Deletes a directory area.
+   * Archives a directory area after removing its merchant assignments.
    */
   async adminDeleteArea(id: number) {
     await this.ensureAreaExists(id);
 
-    const [profileCount, deliveryAreaCount, childAreaCount] = await Promise.all([
-      this.prisma.tenantDirectoryProfile.count({
-        where: { area_id: id },
-      }),
-      this.prisma.tenantDeliveryArea.count({
-        where: { area_id: id },
-      }),
-      this.prisma.directoryArea.count({
-        where: { parent_area_id: id, deleted_at: null },
-      }),
-    ]);
+    const childAreaCount = await this.prisma.directoryArea.count({
+      where: { parent_area_id: id, deleted_at: null },
+    });
 
     if (childAreaCount > 0) {
       this.throwAreaHierarchyError(
@@ -741,19 +739,81 @@ export class StoresDirectoryService {
       );
     }
 
-    if (profileCount > 0 || deliveryAreaCount > 0) {
-      throw new BadRequestException(
-        'Cannot delete area currently in use by a tenant',
-      );
+    const [zoneStorefrontCount, missingRequestCount] = await Promise.all([
+      this.prisma.zoneStorefront.count({ where: { area_id: id } }),
+      this.prisma.missingDeliveryAreaRequest.count({
+        where: { main_area_id: id },
+      }),
+    ]);
+
+    if (zoneStorefrontCount > 0) {
+      throw new BadRequestException({
+        code: AREA_DELETION_ERRORS.hasZoneStorefront,
+        message: 'Delete the zone storefront before deleting its area',
+      });
     }
 
-    return this.prisma.directoryArea.delete({
-      where: { id },
+    if (missingRequestCount > 0) {
+      throw new BadRequestException({
+        code: AREA_DELETION_ERRORS.hasMissingDeliveryAreaRequests,
+        message: 'Resolve or remove missing delivery area requests first',
+      });
+    }
+
+    return this.prisma.$transaction(async (manager) => {
+      const archivedAt = new Date();
+
+      await Promise.all([
+        manager.tenantDeliveryArea.updateMany({
+          where: { area_id: id },
+          data: {
+            is_active: false,
+            deleted_at: archivedAt,
+          },
+        }),
+        manager.tenantDirectoryProfile.updateMany({
+          where: { area_id: id },
+          data: { area_id: null },
+        }),
+      ]);
+
+      return manager.directoryArea.update({
+        where: { id },
+        data: {
+          is_active: false,
+          deleted_at: archivedAt,
+        },
+      });
     });
   }
 
+  /**
+   * Recalculates one tenant's directory readiness inside a tenant-scoped
+   * transaction so row-level security can see its imported products.
+   */
   async recalculateTenantReadiness(tenantId: number) {
-    const tenant = await this.prisma.tenant.findUnique({
+    const currentManager = DbTenantContext.getManager();
+    if (currentManager) {
+      return this.recalculateTenantReadinessWithManager(
+        tenantId,
+        currentManager,
+      );
+    }
+
+    return this.prisma.$transaction(async (manager) => {
+      await manager.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+      return DbTenantContext.run({ tenantId, manager }, () =>
+        this.recalculateTenantReadinessWithManager(tenantId, manager),
+      );
+    });
+  }
+
+  /** Performs readiness reads and writes through one tenant-scoped manager. */
+  private async recalculateTenantReadinessWithManager(
+    tenantId: number,
+    manager: Prisma.TransactionClient,
+  ) {
+    const tenant = await manager.tenant.findUnique({
       where: { id: tenantId },
       select: {
         id: true,
@@ -774,7 +834,7 @@ export class StoresDirectoryService {
       throw new NotFoundException('Tenant not found');
     }
 
-    const stats = await this.getProductStatsForTenant(tenantId);
+    const stats = await this.getProductStatsForTenant(tenantId, manager);
     const readiness = this.calculateReadinessScore({
       logoUrl: tenant.directory_profile?.logo_url,
       activeProductsCount: stats.activeProductsCount,
@@ -786,7 +846,7 @@ export class StoresDirectoryService {
       deliveryEndsAt: tenant.delivery_ends_at,
     });
 
-    await this.prisma.tenantDirectoryProfile.upsert({
+    await manager.tenantDirectoryProfile.upsert({
       where: { tenant_id: tenantId },
       update: {
         profile_completion_score: readiness.score,
@@ -1851,17 +1911,22 @@ export class StoresDirectoryService {
 
   private async getProductStatsForTenant(
     tenantId: number,
+    manager?: Prisma.TransactionClient,
   ): Promise<StoreProductStats> {
-    const stats = await this.getProductStatsByTenantIds([tenantId]);
+    const stats = await this.getProductStatsByTenantIds([tenantId], manager);
     return this.getStatsForTenant(stats, tenantId);
   }
 
-  private async getProductStatsByTenantIds(tenantIds: number[]) {
+  private async getProductStatsByTenantIds(
+    tenantIds: number[],
+    manager?: Prisma.TransactionClient,
+  ) {
     if (tenantIds.length === 0) {
       return new Map<number, StoreProductStats>();
     }
 
-    const rows = await this.prisma.$queryRaw<
+    const database = manager ?? this.prisma;
+    const rows = await database.$queryRaw<
       {
         tenant_id: number;
         active_products_count: number;

@@ -32,6 +32,7 @@ import {
   CATALOG_SOURCE_TALABAT,
   CatalogSource,
   findActiveCatalogCategoryNamesForSource,
+  isCatalogCategoryCompatibleWithSource,
   resolveCatalogSourceForTenantCategory,
 } from './catalog-source-policy';
 import { arabicNormalize } from './utils/arabic-normalize.util';
@@ -3099,6 +3100,17 @@ export class ProductsService {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  /**
+   * Refreshes derived product state once after a mapped spreadsheet import.
+   */
+  async refreshAfterProductImport(tenantId: number): Promise<void> {
+    await Promise.all([
+      this.bumpTenantSearchCacheVersion(tenantId),
+      this.bumpCatalogSearchCacheVersion(tenantId),
+    ]);
+    await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+  }
+
   async importProductsFromCsv(
     tenantId: number,
     file: Express.Multer.File,
@@ -3112,6 +3124,17 @@ export class ProductsService {
     if (!tenant) {
       throw new NotFoundException('Tenant not found');
     }
+    const catalogSource = resolveCatalogSourceForTenantCategory(
+      tenant.category,
+    );
+    const activeCatalogCategories = catalogSource
+      ? new Set(
+          await findActiveCatalogCategoryNamesForSource(
+            this.getPrismaClient(),
+            catalogSource,
+          ),
+        )
+      : new Set<string>();
 
     const summary = {
       total_rows: 0,
@@ -3177,6 +3200,51 @@ export class ProductsService {
           const categoryName = rawCategory ? rawCategory.trim() : 'أخرى';
 
           const client = this.getPrismaClient();
+          const existingProduct = await client.product.findFirst({
+            where: { tenant_id: tenantId, name },
+            include: {
+              catalog_item: {
+                select: {
+                  id: true,
+                  source: true,
+                  category: true,
+                  is_active: true,
+                  deleted_at: true,
+                },
+              },
+            },
+          });
+          if (
+            existingProduct &&
+            (existingProduct.source === ProductSource.CATALOG ||
+              existingProduct.catalog_item_id !== null)
+          ) {
+            const catalogItem = existingProduct.catalog_item;
+            const categoryIsValid = (value: string) =>
+              Boolean(
+                catalogSource &&
+                  activeCatalogCategories.has(value) &&
+                  isCatalogCategoryCompatibleWithSource(
+                    catalogSource,
+                    value,
+                  ),
+              );
+            if (
+              !catalogSource ||
+              !catalogItem ||
+              catalogItem.id !== existingProduct.catalog_item_id ||
+              catalogItem.source !== catalogSource ||
+              !catalogItem.is_active ||
+              catalogItem.deleted_at ||
+              !categoryIsValid(catalogItem.category.trim()) ||
+              !categoryIsValid(categoryName)
+            ) {
+              throw new Error(
+                'المنتج المطابق مرتبط بكتالوج أو تصنيف غير مسموح لهذا المتجر',
+              );
+            }
+          }
+
           let category = await client.tenantProductCategory.findUnique({
             where: {
               tenant_id_name: { tenant_id: tenantId, name: categoryName },
@@ -3187,10 +3255,6 @@ export class ProductsService {
               data: { tenant_id: tenantId, name: categoryName },
             });
           }
-
-          const existingProduct = await client.product.findFirst({
-            where: { tenant_id: tenantId, name },
-          });
 
           if (existingProduct) {
             const oldPrice = existingProduct.current_price;

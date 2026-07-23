@@ -36,7 +36,7 @@ export default function HeaderCartButton({
     >
       <ShoppingCart className="h-5 w-5" aria-hidden="true" />
       {count > 0 ? (
-        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-black leading-none text-brand-primary shadow-sm">
+        <span className="absolute -start-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-black leading-none text-brand-primary shadow-sm">
           {count}
         </span>
       ) : null}

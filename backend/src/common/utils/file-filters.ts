@@ -92,6 +92,8 @@ export const prescriptionFileFilter = (
 };
 
 const UNSUPPORTED_CSV_FORMAT_MESSAGE = 'Unsupported file format. Please upload a CSV file.';
+const UNSUPPORTED_PRODUCT_SPREADSHEET_FORMAT_MESSAGE =
+  'الصيغة غير مدعومة. استخدم ملف CSV أو XLSX';
 
 /**
  * Multer file filter for CSV uploads.
@@ -116,6 +118,43 @@ export const csvFileFilter = (
 
   callback(
     new BadRequestException(UNSUPPORTED_CSV_FORMAT_MESSAGE),
+    false,
+  );
+};
+
+const PRODUCT_SPREADSHEET_MIME_TYPES = new Set([
+  'text/csv',
+  'application/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/octet-stream',
+]);
+
+/**
+ * Multer file filter for mapped product imports.
+ * Accepts modern XLSX workbooks and CSV files only.
+ */
+export const productSpreadsheetFileFilter = (
+  _req: Request,
+  file: MulterLikeFile,
+  callback: (error: Error | null, acceptFile: boolean) => void,
+) => {
+  const mimeType = file.mimetype?.trim().toLowerCase() || '';
+  const fileExtension = extname(file.originalname || '').toLowerCase();
+  const hasAllowedExtension =
+    fileExtension === '.csv' || fileExtension === '.xlsx';
+  const hasAllowedMimeType =
+    !mimeType || PRODUCT_SPREADSHEET_MIME_TYPES.has(mimeType);
+
+  if (hasAllowedExtension && hasAllowedMimeType) {
+    callback(null, true);
+    return;
+  }
+
+  callback(
+    new BadRequestException(
+      UNSUPPORTED_PRODUCT_SPREADSHEET_FORMAT_MESSAGE,
+    ),
     false,
   );
 };

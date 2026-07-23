@@ -171,6 +171,14 @@ export async function loadStorefrontProductsAction(
     : { success: false, message: response.message || "تعذر تحميل المنتجات" };
 }
 
+/** Clears a completed merchant cart after the verified success page mounts. */
+export async function clearCompletedStorefrontCartAction(
+  tenantSlug: string,
+): Promise<void> {
+  const normalizedSlug = z.string().trim().min(1).max(120).parse(tenantSlug);
+  await clearStorefrontCartToken(normalizedSlug);
+}
+
 /** Validates PII and converts the claimed cart to an order. */
 export async function checkoutStorefrontCartAction(
   tenantSlug: string,
@@ -240,7 +248,6 @@ export async function checkoutStorefrontCartAction(
       notes: parsed.data.notes,
     },
   });
-  await clearStorefrontCartToken(tenantSlug);
   return {
     success: true,
     message: "تم إنشاء الطلب بنجاح",

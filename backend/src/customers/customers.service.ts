@@ -535,7 +535,13 @@ export class CustomersService {
     }
 
     if (address) {
-      await this.upsertCustomerAddress(customer.id, tenantId, address, areaId);
+      await this.upsertCustomerAddress(
+        customer.id,
+        tenantId,
+        address,
+        areaId,
+        scopedManager,
+      );
     }
 
     if (hasUpdates) {
@@ -578,7 +584,13 @@ export class CustomersService {
     });
 
     if (address) {
-      await this.upsertCustomerAddress(customer.id, tenantId, address, areaId);
+      await this.upsertCustomerAddress(
+        customer.id,
+        tenantId,
+        address,
+        areaId,
+        manager,
+      );
     }
 
     return customer;
@@ -592,13 +604,14 @@ export class CustomersService {
     tenantId: number,
     rawAddress: string,
     areaId?: number | null,
+    transactionManager?: Prisma.TransactionClient,
   ): Promise<void> {
     const address = rawAddress.trim();
     if (!address) {
       return;
     }
 
-    const manager = DbTenantContext.getManager();
+    const manager = transactionManager ?? DbTenantContext.getManager();
     const addressDb = manager
       ? manager.customerAddress
       : this.prisma.customerAddress;

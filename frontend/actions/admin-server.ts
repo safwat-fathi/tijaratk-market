@@ -23,6 +23,11 @@ import type {
   PublicProductCategory,
 } from "@/types/models/product";
 import type {
+  ProductImportActionResult,
+  ProductImportPreview,
+  ProductImportSummary,
+} from "@/types/models/product-import";
+import type {
   AdminCatalogItem,
   AdminCatalogSource,
   AdminDirectoryArea,
@@ -923,6 +928,43 @@ async function revalidateManagedProductPaths(tenantId: number) {
   }
 }
 
+function localizeProductImportError(
+  message: string | undefined,
+  fallback: string,
+): string {
+  const normalized = message?.trim();
+  if (!normalized) return fallback;
+  if (/[\u0600-\u06ff]/.test(normalized)) return normalized;
+
+  const lowerMessage = normalized.toLowerCase();
+  if (
+    lowerMessage.includes("file too large") ||
+    lowerMessage.includes("payload too large")
+  ) {
+    return "حجم الملف أكبر من الحد الأقصى 5 ميجابايت";
+  }
+  if (
+    lowerMessage.includes("unsupported file format") ||
+    lowerMessage.includes("only csv and xlsx")
+  ) {
+    return "الصيغة غير مدعومة. استخدم ملف CSV أو XLSX";
+  }
+  if (lowerMessage.includes("property file should not exist")) {
+    return "تعذر معالجة الملف المرفوع. حدّث الخادم ثم أعد المحاولة";
+  }
+  if (lowerMessage.includes("cannot post")) {
+    return "خدمة استيراد المنتجات غير متاحة على الخادم الحالي";
+  }
+  if (
+    lowerMessage.includes("forbidden") ||
+    lowerMessage.includes("permission")
+  ) {
+    return "ليس لديك الصلاحيات المطلوبة لاستيراد المنتجات";
+  }
+
+  return fallback;
+}
+
 export async function createManagedProductAction(
   tenantId: number,
   formData: FormData,
@@ -940,6 +982,88 @@ export async function createManagedProductAction(
   });
   if (!response.success) throw new Error(response.message || "تعذر إضافة المنتج");
   await revalidateManagedProductPaths(tenantId);
+}
+
+export async function previewManagedProductImportAction(
+  tenantId: number,
+  formData: FormData,
+): Promise<ProductImportActionResult<ProductImportPreview>> {
+  try {
+    positiveIdSchema.parse(tenantId);
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      return { success: false, message: "اختر ملف CSV أو XLSX أولًا" };
+    }
+
+    const payload = new FormData();
+    payload.set("file", file);
+    const response = await adminService.previewManagedProductImport(
+      tenantId,
+      payload,
+    );
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: localizeProductImportError(
+          response.message,
+          "تعذر قراءة ملف المنتجات",
+        ),
+      };
+    }
+
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error("Managed product import preview failed:", error);
+    return {
+      success: false,
+      message: "تعذر قراءة ملف المنتجات",
+    };
+  }
+}
+
+export async function importManagedProductSpreadsheetAction(
+  tenantId: number,
+  formData: FormData,
+): Promise<ProductImportActionResult<ProductImportSummary>> {
+  try {
+    positiveIdSchema.parse(tenantId);
+    const file = formData.get("file");
+    const mapping = formData.get("mapping");
+    if (!(file instanceof File) || file.size === 0) {
+      return { success: false, message: "ملف المنتجات مطلوب" };
+    }
+    if (typeof mapping !== "string" || !mapping.trim()) {
+      return { success: false, message: "تعيين الأعمدة مطلوب" };
+    }
+
+    const payload = new FormData();
+    payload.set("file", file);
+    payload.set("mapping", mapping);
+    const response = await adminService.importManagedProductSpreadsheet(
+      tenantId,
+      payload,
+    );
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message: localizeProductImportError(
+          response.message,
+          "تعذر استيراد المنتجات",
+        ),
+      };
+    }
+
+    await revalidateManagedProductPaths(tenantId);
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error("Managed product spreadsheet import failed:", error);
+    return {
+      success: false,
+      message: "تعذر استيراد المنتجات",
+    };
+  }
 }
 
 export async function addManagedCatalogProductAction(
@@ -2331,6 +2455,10 @@ const directoryAreaMutationMessages: Record<string, string> = {
     "لا يمكن أن تكون المنطقة هي المنطقة الرئيسية لنفسها.",
   AREA_HAS_CHILDREN:
     "هذه المنطقة مرتبطة بمناطق فرعية. انقلها أو حوّلها إلى مناطق رئيسية أولاً.",
+  AREA_HAS_ZONE_STOREFRONT:
+    "لا يمكن حذف المنطقة لأنها مرتبطة بواجهة منطقة مركزية. احذف الواجهة أو انقلها أولاً.",
+  AREA_HAS_MISSING_DELIVERY_AREA_REQUESTS:
+    "لا يمكن حذف المنطقة لوجود طلبات مناطق توصيل مرتبطة بها. عالج الطلبات أولاً.",
 };
 
 const getDirectoryAreaMutationMessage = (
@@ -2401,6 +2529,9 @@ export async function deleteDirectoryAreaAction(id: number): Promise<void> {
     );
   }
   revalidatePath("/admin/areas");
+  revalidatePath("/");
+  revalidatePath("/stores");
+  revalidatePath("/stores/[areaSlug]/[categorySlug]", "page");
 }
 
 export async function resolveMissingDeliveryAreaRequestAction(

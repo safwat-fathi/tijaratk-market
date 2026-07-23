@@ -10,6 +10,10 @@ import type {
 	PublicProductCategory,
 	TenantProductsSearchResponse,
 } from "@/types/models/product";
+import type {
+	ProductImportPreview,
+	ProductImportSummary,
+} from "@/types/models/product-import";
 import type { Order } from "@/types/models/order";
 import type {
 	AdminAuditLogsResponse,
@@ -645,6 +649,36 @@ class AdminApiService extends HttpService {
 			payload,
 			undefined,
 			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
+	public async previewManagedProductImport(
+		tenantId: number,
+		payload: FormData,
+	) {
+		return this.post<ProductImportPreview>(
+			`managed-tenants/${tenantId}/products/import/preview`,
+			payload,
+			undefined,
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: 120000,
+			},
+		);
+	}
+
+	public async importManagedProductSpreadsheet(
+		tenantId: number,
+		payload: FormData,
+	) {
+		return this.post<ProductImportSummary>(
+			`managed-tenants/${tenantId}/products/import`,
+			payload,
+			undefined,
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: 120000,
+			},
 		);
 	}
 

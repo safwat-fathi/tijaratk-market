@@ -316,7 +316,7 @@ export default function StorefrontCart({
           <option value="">اختر منطقتك</option>
           {deliveryAreas.map((area) => (
             <option key={area.area_id} value={area.area_id}>
-              {area.area?.name_ar || `منطقة ${area.area_id}`} — {formatCurrency(Number(area.delivery_fee))}
+              {area.area?.name_ar || `منطقة ${area.area_id}`} — {Number(area.delivery_fee) > 0 ? formatCurrency(Number(area.delivery_fee)) : "مجاني"}
             </option>
           ))}
         </select>
@@ -343,7 +343,7 @@ export default function StorefrontCart({
 
       <section className="mt-5 space-y-3 rounded-2xl border border-brand-border bg-white p-5 shadow-soft">
         <div className="flex justify-between text-sm"><span>الإجمالي الفرعي</span><strong>{formatCurrency(Number(draft?.subtotal ?? 0))}</strong></div>
-        <div className="flex justify-between text-sm"><span>التوصيل</span><strong>{deliveryFee === null ? "حدد المنطقة" : formatCurrency(deliveryFee)}</strong></div>
+        <div className="flex justify-between text-sm"><span>التوصيل</span><strong>{deliveryFee === null ? "حدد المنطقة" : (deliveryFee > 0 ? formatCurrency(deliveryFee) : "مجاني")}</strong></div>
         <div className="flex justify-between border-t border-brand-border pt-3 text-lg"><span className="font-black">الإجمالي المتوقع</span><strong className="text-brand-primary">{estimatedTotal === null ? "—" : formatCurrency(estimatedTotal)}</strong></div>
       </section>
 

@@ -556,7 +556,9 @@ export class OrdersService {
       };
     }
 
-    const completeOrder = await this.findOne(savedOrder.id);
+    const completeOrder = await this.withTenantManager(tenantId, () =>
+      this.findOne(savedOrder.id),
+    );
     await this.bumpDashboardCacheVersion(tenantId);
     await this.notifyOrderCreated(completeOrder);
 
@@ -2724,7 +2726,10 @@ export class OrdersService {
 
     return this.prisma.$transaction(async (transactionManager) => {
       await transactionManager.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
-      return callback(transactionManager);
+      return DbTenantContext.run(
+        { tenantId, manager: transactionManager },
+        () => callback(transactionManager),
+      );
     });
   }
 

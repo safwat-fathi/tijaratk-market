@@ -16,6 +16,7 @@ import {
   bulkUpdateManagedProductsAction,
 } from "@/actions/admin-server";
 import { AdminBulkEssentialsButton } from "../../../_components/AdminBulkEssentialsButton";
+import ProductImportWizard from "./ProductImportWizard";
 
 type ProductsClientViewProps = {
   tenantId: number;
@@ -46,6 +47,7 @@ export default function ProductsClientView({
   const [isPending, startTransition] = useTransition();
 
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [isProductImportOpen, setIsProductImportOpen] = useState(false);
   const [addTab, setAddTab] = useState<"catalog" | "manual">("catalog");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
@@ -57,6 +59,10 @@ export default function ProductsClientView({
   const currentStatus = searchParams.get("status") || "active";
   const productsSearch = searchParams.get("products_search") || "";
   const productsCategory = searchParams.get("products_category") || "";
+  const canImportProducts =
+    permissions.has("products.create") &&
+    permissions.has("products.update") &&
+    permissions.has("products.update_price");
 
   const updateUrlParams = (updates: Record<string, string | null>) => {
     setSelectedIds(new Set()); // Reset selection on any query change
@@ -119,7 +125,16 @@ export default function ProductsClientView({
           <h1 className="text-2xl font-bold text-gray-900">منتجات المتجر</h1>
           <p className="text-sm text-gray-500">البيانات المعروضة مقيدة بالمتجر النشط في الجلسة.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {canImportProducts && (
+            <Button
+              variant="outline"
+              onClick={() => setIsProductImportOpen(true)}
+              className="shadow-sm"
+            >
+              استيراد ملف
+            </Button>
+          )}
           {permissions.has("products.create") && (
             <Button onClick={() => setIsAddProductOpen(true)} className="shadow-sm">
               إضافة منتج
@@ -332,6 +347,14 @@ export default function ProductsClientView({
           </div>
         )}
       </Card>
+
+      <ProductImportWizard
+        isOpen={isProductImportOpen}
+        tenantId={tenantId}
+        tenantName={tenantName}
+        canMapAvailability={permissions.has("products.update_availability")}
+        onClose={() => setIsProductImportOpen(false)}
+      />
 
       {/* Bulk Category Move Sheet */}
       <BottomSheet
