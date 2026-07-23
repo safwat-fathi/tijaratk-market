@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Copy, Download, ExternalLink, Share2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePwaStandalone } from "@/hooks/usePwaStandalone";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -39,11 +40,6 @@ const getBrowserFamily = (): BrowserFamily => {
   return "unknown";
 };
 
-const isStandaloneDisplay = () =>
-  window.matchMedia("(display-mode: standalone)").matches ||
-  window.matchMedia("(display-mode: fullscreen)").matches ||
-  Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-
 export default function InstallPwaAction({
   appName,
   shareUrl,
@@ -55,7 +51,7 @@ export default function InstallPwaAction({
 }: InstallPwaActionProps) {
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const isStandalone = usePwaStandalone();
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [browserFamily, setBrowserFamily] = useState<BrowserFamily>("unknown");
@@ -63,7 +59,6 @@ export default function InstallPwaAction({
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
-      setIsStandalone(isStandaloneDisplay());
       setBrowserFamily(getBrowserFamily());
       setMounted(true);
     });
@@ -77,7 +72,6 @@ export default function InstallPwaAction({
 
     const handleAppInstalled = () => {
       setInstallPrompt(null);
-      setIsStandalone(true);
       setIsOpen(false);
     };
 

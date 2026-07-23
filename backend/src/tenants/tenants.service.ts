@@ -21,6 +21,7 @@ import {
   StorefrontOrderAvailabilityDto,
   type StorefrontOrderUnavailableReason,
 } from './dto/storefront-order-availability.dto';
+import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 
 const STOREFRONT_UNAVAILABLE_MESSAGES: Record<
   StorefrontOrderUnavailableReason,
@@ -162,14 +163,38 @@ export class TenantsService {
       | 'delivery_ends_at'
     >,
   ): Promise<StorefrontOrderAvailabilityDto> {
+    const scopedManager = DbTenantContext.getManager();
+    if (scopedManager) {
+      return this.resolveStorefrontOrderAvailability(tenant, scopedManager);
+    }
+
+    return this.prisma.$transaction(async (manager) => {
+      await manager.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenant.id)}, true)`;
+      return this.resolveStorefrontOrderAvailability(tenant, manager);
+    });
+  }
+
+  /** Calculates storefront ordering state through a tenant-scoped database client. */
+  private async resolveStorefrontOrderAvailability(
+    tenant: Pick<
+      Tenant,
+      | 'id'
+      | 'category'
+      | 'onboarding_completed'
+      | 'delivery_available'
+      | 'delivery_starts_at'
+      | 'delivery_ends_at'
+    >,
+    manager: Prisma.TransactionClient,
+  ): Promise<StorefrontOrderAvailabilityDto> {
     const [activeProductsCount, activeDeliveryAreasCount] = await Promise.all([
-      this.prisma.product.count({
+      manager.product.count({
         where: {
           tenant_id: tenant.id,
           ...ACTIVE_PRODUCT_FOR_ORDERS_WHERE,
         },
       }),
-      this.prisma.tenantDeliveryArea.count({
+      manager.tenantDeliveryArea.count({
         where: {
           tenant_id: tenant.id,
           is_active: true,
