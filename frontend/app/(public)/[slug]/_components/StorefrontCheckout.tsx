@@ -87,21 +87,37 @@ export default function StorefrontCheckout({
 
   useEffect(() => {
     let isActive = true;
+    let identifierRequestId = 0;
 
     const loadIdentifiers = () => {
+      const requestId = ++identifierRequestId;
       if (readMarketingConsent() !== "granted") {
         setAnalyticsIdentifiers(null);
         return;
       }
-      void getGoogleAnalyticsIdentifiers().then((identifiers) => {
-        if (isActive) setAnalyticsIdentifiers(identifiers);
-      });
+      if (typeof getGoogleAnalyticsIdentifiers !== "function") {
+        setAnalyticsIdentifiers(null);
+        return;
+      }
+
+      void getGoogleAnalyticsIdentifiers()
+        .then((identifiers) => {
+          if (isActive && requestId === identifierRequestId) {
+            setAnalyticsIdentifiers(identifiers);
+          }
+        })
+        .catch(() => {
+          if (isActive && requestId === identifierRequestId) {
+            setAnalyticsIdentifiers(null);
+          }
+        });
     };
 
     loadIdentifiers();
     window.addEventListener(MARKETING_CONSENT_CHANGED_EVENT, loadIdentifiers);
     return () => {
       isActive = false;
+      identifierRequestId += 1;
       window.removeEventListener(
         MARKETING_CONSENT_CHANGED_EVENT,
         loadIdentifiers,

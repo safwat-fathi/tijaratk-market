@@ -19,7 +19,10 @@ import type {
   PublicProductCategory,
   PublicProductsMeta,
 } from "@/types/models/product";
-import type { StorefrontCartDraft } from "@/types/models/storefront-cart-draft";
+import type {
+  SaveStorefrontCartDraftInput,
+  StorefrontCartDraft,
+} from "@/types/models/storefront-cart-draft";
 import type { Order } from "@/types/models/order";
 import type { StorefrontOrderAvailability } from "@/types/models/delivery";
 import { OrderSource } from "@/types/enums";
@@ -88,13 +91,15 @@ export default function StorefrontCatalog({
   const normalizedSearch = search.trim();
   const validSearch = normalizedSearch.length >= 2 ? normalizedSearch : "";
   const [message, setMessage] = useState<string | null>(null);
+  const [cartOpenError, setCartOpenError] = useState<string | null>(null);
   const [isCatalogBoundaryVisible, setIsCatalogBoundaryVisible] = useState(false);
   const [draftProducts, setDraftProducts] = useState(
     initialDraft?.items.map((item) => item.product) ?? [],
   );
   const [isLoading, startLoading] = useTransition();
+  const [isOpeningCart, startOpeningCart] = useTransition();
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
-  const lastSaveSucceeded = useRef(true);
+  const openingCartRef = useRef(false);
   const searchRequest = useRef(0);
   const catalogBoundaryRef = useRef<HTMLDivElement | null>(null);
   const viewedProductIds = useRef(new Set<number>());
@@ -117,27 +122,75 @@ export default function StorefrontCatalog({
     [knownProducts, selections],
   );
 
+  const buildDraftInput = (
+    next: Record<number, ProductCartSelection>,
+  ): SaveStorefrontCartDraftInput => ({
+    items: Object.entries(next).map(([productId, selection]) => ({
+      product_id: Number(productId),
+      ...selection,
+    })),
+    free_text_payload: initialDraft?.free_text_payload || undefined,
+    delivery_area_id: initialDraft?.delivery_area_id || undefined,
+    unavailable_item_action: initialDraft?.unavailable_item_action,
+    order_source: initialDraft?.order_source || orderSource,
+    source_metadata:
+      initialDraft?.source_metadata || sourceMetadata || undefined,
+    prescription_unavailability_action:
+      initialDraft?.prescription_unavailability_action || undefined,
+  });
+
+  const saveSelections = async (
+    next: Record<number, ProductCartSelection>,
+  ) => {
+    try {
+      const result = await saveStorefrontCartDraftAction(
+        tenantSlug,
+        buildDraftInput(next),
+      );
+      if (!result.success) {
+        setMessage(result.message || "تعذر حفظ السلة");
+      }
+      return result;
+    } catch {
+      const failure = { success: false, message: "تعذر حفظ السلة" } as const;
+      setMessage(failure.message);
+      return failure;
+    }
+  };
+
   const persistSelections = (next: Record<number, ProductCartSelection>) => {
-    saveQueue.current = saveQueue.current.catch(() => undefined).then(async () => {
-      const result = await saveStorefrontCartDraftAction(tenantSlug, {
-        items: Object.entries(next).map(([productId, selection]) => ({
-          product_id: Number(productId),
-          ...selection,
-        })),
-        free_text_payload: initialDraft?.free_text_payload || undefined,
-        delivery_area_id: initialDraft?.delivery_area_id || undefined,
-        unavailable_item_action: initialDraft?.unavailable_item_action,
-        order_source: initialDraft?.order_source || orderSource,
-        source_metadata:
-          initialDraft?.source_metadata || sourceMetadata || undefined,
-        prescription_unavailability_action:
-          initialDraft?.prescription_unavailability_action || undefined,
+    saveQueue.current = saveQueue.current
+      .catch(() => undefined)
+      .then(async () => {
+        await saveSelections(next);
       });
-      lastSaveSucceeded.current = result.success;
-      if (!result.success) setMessage(result.message || "تعذر حفظ السلة");
-    }).catch(() => {
-      lastSaveSucceeded.current = false;
-      setMessage("تعذر حفظ السلة");
+  };
+
+  const openCart = () => {
+    if (openingCartRef.current) return;
+
+    openingCartRef.current = true;
+    setMessage(null);
+    setCartOpenError(null);
+    startOpeningCart(async () => {
+      try {
+        await saveQueue.current;
+        const result = await saveSelections(selectionsRef.current);
+        if (!result.success) {
+          setMessage(null);
+          setCartOpenError(
+            result.message || "تعذر حفظ السلة. حاول مرة أخرى.",
+          );
+          openingCartRef.current = false;
+          return;
+        }
+        router.push(`/${encodeURIComponent(tenantSlug)}/cart`);
+      } catch {
+        const failureMessage = "تعذر حفظ السلة. حاول مرة أخرى.";
+        setMessage(null);
+        setCartOpenError(failureMessage);
+        openingCartRef.current = false;
+      }
     });
   };
 
@@ -145,8 +198,14 @@ export default function StorefrontCatalog({
     product: Product,
     selection: ProductCartSelection | null,
   ) => {
-    if (!orderAvailability.accepting_orders) return;
+    if (
+      !orderAvailability.accepting_orders ||
+      openingCartRef.current
+    ) {
+      return;
+    }
     setMessage(null);
+    setCartOpenError(null);
     const next = { ...selectionsRef.current };
     const previousSelection = next[product.id];
     const wasPresent = Boolean(next[product.id]);
@@ -185,7 +244,13 @@ export default function StorefrontCatalog({
   };
 
   const replaceWithReorder = async () => {
-    if (!reorderOrder || !orderAvailability.accepting_orders) return;
+    if (
+      !reorderOrder ||
+      !orderAvailability.accepting_orders ||
+      openingCartRef.current
+    ) {
+      return;
+    }
     const next = Object.fromEntries(
       reorderOrder.items.flatMap((item) => {
         if (!item.product_id) return [];
@@ -323,7 +388,8 @@ export default function StorefrontCatalog({
           <button
             type="button"
             onClick={replaceWithReorder}
-            className="mt-3 min-h-11 rounded-xl bg-brand-primary px-4 text-sm font-bold text-white"
+            disabled={isOpeningCart}
+            className="mt-3 min-h-11 rounded-xl bg-brand-primary px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             استبدال السلة وإعادة الطلب
           </button>
@@ -361,7 +427,9 @@ export default function StorefrontCatalog({
 
       <div className="mt-4">
         <fieldset
-          disabled={!orderAvailability.accepting_orders}
+          disabled={
+            !orderAvailability.accepting_orders || isOpeningCart
+          }
           aria-describedby={
             orderAvailability.accepting_orders
               ? undefined
@@ -405,16 +473,25 @@ export default function StorefrontCatalog({
               : "fixed inset-x-0 bottom-0 z-40 border-t border-brand-border bg-white/95 p-4 safe-bottom-padding shadow-float backdrop-blur-xl"
           }
         >
+          {cartOpenError ? (
+            <p
+              role="alert"
+              aria-live="assertive"
+              className="mx-auto mb-2 max-w-md rounded-xl border border-status-error/20 bg-status-error/10 px-4 py-2 text-center text-sm font-semibold text-status-error"
+            >
+              {cartOpenError}
+            </p>
+          ) : null}
           <button
             type="button"
-            onClick={async () => {
-              await saveQueue.current;
-              if (!lastSaveSucceeded.current) return;
-              router.push(`/${encodeURIComponent(tenantSlug)}/cart`);
-            }}
-            className="mx-auto flex min-h-14 w-full max-w-md items-center justify-between rounded-xl bg-brand-primary px-5 py-3 text-white shadow-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/30"
+            disabled={isOpeningCart}
+            aria-busy={isOpeningCart}
+            onClick={openCart}
+            className="mx-auto flex min-h-14 w-full max-w-md items-center justify-between rounded-xl bg-brand-primary px-5 py-3 text-white shadow-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/30 disabled:cursor-wait disabled:opacity-70"
           >
-            <span className="font-black">عرض الطلب</span>
+            <span className="font-black">
+              {isOpeningCart ? "جاري فتح الطلب…" : "عرض الطلب"}
+            </span>
             <span className="text-sm font-bold">
               {summary.totalItems} منتجات
               {summary.hasPricedItems

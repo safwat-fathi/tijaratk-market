@@ -103,6 +103,7 @@ export const TabButton = React.forwardRef<HTMLElement, TabButtonProps>(
       variant = "pill",
       href,
       as,
+      prefetch,
       className,
       children,
       ...props
@@ -135,9 +136,14 @@ export const TabButton = React.forwardRef<HTMLElement, TabButtonProps>(
 
     const Component = as || (href ? Link : "button");
     const isButton = Component === "button";
+    const isLink = Component === Link;
 
-    // Only pass href if we're not rendering a button
-    const componentProps = isButton ? { type: "button" } : { href };
+    // Next.js-specific props must not leak to native or custom elements.
+    const componentProps = isButton
+      ? { type: "button" }
+      : isLink
+        ? { href, prefetch }
+        : { href };
 
     return (
       <Component
