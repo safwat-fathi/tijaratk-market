@@ -48,6 +48,51 @@ describe('StoresDirectoryService area search', () => {
     await expect(service.findAreas('منطقة مخفية')).resolves.toEqual([]);
   });
 
+  it('labels a child delivery area with its parent main area', () => {
+    const service = new StoresDirectoryService({} as any);
+
+    const results = (service as any).toPublicAreaSearchOptions([
+      {
+        tenant: { id: 10 },
+        area: {
+          id: 2,
+          name_ar: 'الحي السابع',
+          name_en: 'Seventh District',
+          slug: 'seventh-district',
+          sort_order: 2,
+          parent_area_id: 1,
+          parent_area: {
+            id: 1,
+            name_ar: 'مدينة نصر',
+            name_en: 'Nasr City',
+            slug: 'nasr-city',
+            sort_order: 1,
+          },
+        },
+      },
+    ]);
+
+    expect(results).toEqual([
+      {
+        id: 1,
+        nameAr: 'مدينة نصر',
+        nameEn: 'Nasr City',
+        slug: 'nasr-city',
+        destinationSlug: 'nasr-city',
+        storesCount: 1,
+      },
+      {
+        id: 2,
+        nameAr: 'الحي السابع',
+        nameEn: 'Seventh District',
+        slug: 'seventh-district',
+        destinationSlug: 'nasr-city',
+        parentNameAr: 'مدينة نصر',
+        storesCount: 1,
+      },
+    ]);
+  });
+
   it('uses the lowest active relationship fee for generic store listings', () => {
     const service = new StoresDirectoryService({} as any);
 

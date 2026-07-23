@@ -223,6 +223,7 @@ const toSearchAreaOptions = (
     nameEn: area.nameEn,
     slug: area.slug,
     destinationSlug: area.destinationSlug,
+    parentNameAr: area.parentNameAr,
     stores: area.storesCount,
   }));
 

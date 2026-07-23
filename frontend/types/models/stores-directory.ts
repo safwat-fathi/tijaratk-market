@@ -23,6 +23,7 @@ export type StoresDirectorySearchArea = {
   nameEn: string | null;
   slug: string;
   destinationSlug: string;
+  parentNameAr?: string;
   storesCount: number;
 };
 

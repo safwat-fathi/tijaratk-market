@@ -13,6 +13,7 @@ export type AreaAutocompleteOption = {
   nameEn?: string | null;
   slug: string;
   destinationSlug?: string;
+  parentNameAr?: string;
   stores: number;
 };
 
@@ -128,6 +129,11 @@ export default function AreaAutocomplete({
                     <span className="block truncate text-sm font-bold text-[#222B2E]">
                       {area.name}
                     </span>
+                    {area.parentNameAr && (
+                      <span className="mt-0.5 block truncate text-xs font-medium text-gray-500">
+                        ضمن: {area.parentNameAr}
+                      </span>
+                    )}
                   </span>
                   <span className="flex-none rounded-full bg-[#F7F8F6] px-3 py-1 text-xs font-semibold text-[#0F5A3D]">
                     {area.stores} متجر

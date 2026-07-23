@@ -1319,6 +1319,7 @@ export class StoresDirectoryService {
         nameEn: string | null;
         slug: string;
         destinationSlug: string;
+        parentNameAr?: string;
         sortOrder: number;
         tenantIds: Set<number>;
       }
@@ -1346,6 +1347,10 @@ export class StoresDirectoryService {
           nameEn: searchableArea.name_en,
           slug: searchableArea.slug,
           destinationSlug: destinationArea.slug,
+          parentNameAr:
+            searchableArea.id === destinationArea.id
+              ? undefined
+              : destinationArea.name_ar,
           sortOrder: searchableArea.sort_order,
           tenantIds: new Set([deliveryArea.tenant.id]),
         });
@@ -1365,6 +1370,7 @@ export class StoresDirectoryService {
         nameEn: area.nameEn,
         slug: area.slug,
         destinationSlug: area.destinationSlug,
+        ...(area.parentNameAr ? { parentNameAr: area.parentNameAr } : {}),
         storesCount: area.tenantIds.size,
       }));
   }
