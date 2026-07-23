@@ -8,9 +8,15 @@ import { isAllowedImageSource } from '@/lib/image-source-policy';
 type ImageThumbnailProps = ComponentProps<typeof SafeImage> & {
   thumbnailWrapperClassName?: string;
   disableEnlarge?: boolean;
+  onEnlarge?: () => void;
 };
 
-export default function ImageThumbnail({ thumbnailWrapperClassName, disableEnlarge, ...props }: ImageThumbnailProps) {
+export default function ImageThumbnail({
+  thumbnailWrapperClassName,
+  disableEnlarge,
+  onEnlarge,
+  ...props
+}: ImageThumbnailProps) {
   const [isEnlarged, setIsEnlarged] = useState(false);
 
   useEffect(() => {
@@ -38,6 +44,7 @@ export default function ImageThumbnail({ thumbnailWrapperClassName, disableEnlar
           if (isEnlargeable) {
             e.preventDefault();
             e.stopPropagation();
+            onEnlarge?.();
             setIsEnlarged(true);
           }
         }}
@@ -45,6 +52,7 @@ export default function ImageThumbnail({ thumbnailWrapperClassName, disableEnlar
           if (isEnlargeable && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
             e.stopPropagation();
+            onEnlarge?.();
             setIsEnlarged(true);
           }
         }}
