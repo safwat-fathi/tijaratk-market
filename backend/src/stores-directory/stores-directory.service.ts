@@ -1245,7 +1245,7 @@ export class StoresDirectoryService {
       }));
   }
 
-  /** Builds searchable delivery-area rows that route through their public main area. */
+  /** Builds searchable delivery and main-area rows that route through their public main area. */
   private toPublicAreaSearchOptions(
     deliveryAreas: Awaited<
       ReturnType<StoresDirectoryService['findPublicDeliveryAreas']>
@@ -1270,21 +1270,26 @@ export class StoresDirectoryService {
         area.parent_area_id === null ? area : area.parent_area;
       if (!destinationArea) continue;
 
-      const existing = areasById.get(area.id);
-      if (existing) {
-        existing.tenantIds.add(deliveryArea.tenant.id);
-        continue;
-      }
+      const searchableAreas =
+        area.id === destinationArea.id ? [area] : [area, destinationArea];
 
-      areasById.set(area.id, {
-        id: area.id,
-        nameAr: area.name_ar,
-        nameEn: area.name_en,
-        slug: area.slug,
-        destinationSlug: destinationArea.slug,
-        sortOrder: area.sort_order,
-        tenantIds: new Set([deliveryArea.tenant.id]),
-      });
+      for (const searchableArea of searchableAreas) {
+        const existing = areasById.get(searchableArea.id);
+        if (existing) {
+          existing.tenantIds.add(deliveryArea.tenant.id);
+          continue;
+        }
+
+        areasById.set(searchableArea.id, {
+          id: searchableArea.id,
+          nameAr: searchableArea.name_ar,
+          nameEn: searchableArea.name_en,
+          slug: searchableArea.slug,
+          destinationSlug: destinationArea.slug,
+          sortOrder: searchableArea.sort_order,
+          tenantIds: new Set([deliveryArea.tenant.id]),
+        });
+      }
     }
 
     return Array.from(areasById.values())
