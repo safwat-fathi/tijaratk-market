@@ -18,6 +18,7 @@ interface OrdersViewProps {
   inboxSummary: MerchantOrderInboxSummary;
   initialTab: OrdersTab;
   selectedDate?: string;
+  zoneStorefrontsEnabled: boolean;
 }
 
 export default function OrdersView({
@@ -26,6 +27,7 @@ export default function OrdersView({
   inboxSummary,
   initialTab,
   selectedDate,
+  zoneStorefrontsEnabled,
 }: OrdersViewProps) {
   const router = useRouter();
   const [activeStatus, setActiveStatus] = useState<OrdersTab>(initialTab);
@@ -103,6 +105,7 @@ export default function OrdersView({
           currentStatus={activeStatus}
           counts={statusCounts}
           onTabChange={handleTabChange}
+          zoneStorefrontsEnabled={zoneStorefrontsEnabled}
         />
       </div>
 

@@ -17,6 +17,7 @@ import { ZoneCatalogReconciliationService } from './zone-catalog-reconciliation.
 import { ZoneCatalogReconciliationWorker } from './zone-catalog-reconciliation.worker';
 import { PushNotificationsModule } from 'src/push-notifications/push-notifications.module';
 import { DeliveryConfigurationModule } from 'src/delivery-configuration/delivery-configuration.module';
+import { ZoneStorefrontFeatureGuard } from './zone-storefront-feature';
 
 /** Encapsulates public zones, control-plane membership, and manual dispatch. */
 @Module({
@@ -41,6 +42,7 @@ import { DeliveryConfigurationModule } from 'src/delivery-configuration/delivery
     ZoneStorefrontNotificationsService,
     ZoneCatalogReconciliationService,
     ZoneCatalogReconciliationWorker,
+    ZoneStorefrontFeatureGuard,
   ],
   exports: [
     ZoneStorefrontsService,

@@ -3,6 +3,7 @@ import OrderSuccessView from "@/app/(public)/[slug]/_components/OrderSuccessView
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
 import { ordersService } from "@/services/api/orders.service";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 export const metadata = createNoIndexMetadata(
   "تم إرسال طلب المنطقة",
@@ -21,6 +22,8 @@ export default async function ZoneOrderSuccessPage({
   params,
   searchParams,
 }: ZoneSuccessPageProps) {
+  if (!isZoneStorefrontEnabled()) notFound();
+
   const { zoneSlug } = await params;
   const resolvedSearchParams = await searchParams;
   const { token, customerCode } = resolvedSearchParams;

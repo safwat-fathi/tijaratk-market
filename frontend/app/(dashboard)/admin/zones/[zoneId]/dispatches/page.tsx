@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { adminService } from "@/services/api/admin.service";
 import { DispatchRefresh } from "./_components/DispatchRefresh";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ const statusLabels: Record<string, string> = {
 };
 
 export default async function DispatchQueuePage({ params, searchParams }: DispatchQueuePageProps) {
+  if (!isZoneStorefrontEnabled()) notFound();
+
   const zoneId = Number((await params).zoneId);
   const { status } = await searchParams;
   if (!Number.isInteger(zoneId) || zoneId <= 0) notFound();

@@ -1,6 +1,6 @@
+import { Suspense } from "react";
 import { getCookieAction } from "@/app/actions/cookie-store";
 import { STORAGE_KEYS } from "@/constants";
-import { tenantsService } from "@/services/api/tenants.service";
 import { ordersService } from "@/services/api/orders.service";
 import { merchantDashboardService } from "@/services/api/merchant-dashboard.service";
 import { DashboardPeriod } from "@/types/services/merchant-dashboard";
@@ -11,6 +11,7 @@ import MeasurementsDashboard from "./_components/MeasurementsDashboard";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
 import type { CancellationPolicyMetric } from "@/types/services/merchant-dashboard";
 import ProductReadinessProgress from "@/components/merchant/ProductReadinessProgress";
+import { getMyTenantCached } from "@/lib/server/dashboard-request-cache";
 
 export const metadata = createNoIndexMetadata(
   "لوحة التحكم",
@@ -55,21 +56,11 @@ function CancellationPolicyBanner({
   );
 }
 
-export default async function Dashboard({
-  searchParams,
-}: {
-  searchParams?: Promise<{ period?: string | string[] }>;
-}) {
-  const resolvedSearchParams = searchParams ? await searchParams : {};
-  const period = normalizePeriod(resolvedSearchParams.period);
-  const userCookie = await getCookieAction(STORAGE_KEYS.USER);
-  const user = userCookie ? JSON.parse(userCookie) : null;
-  const name = user?.name || "تاجر";
-
+async function DashboardContent({ period }: { period: DashboardPeriod }) {
   const [measurementsResponse, tenantResponse, dayCloseStatusResponse] =
     await Promise.all([
       merchantDashboardService.getMeasurements(period),
-      tenantsService.getMyTenant(),
+      getMyTenantCached(),
       ordersService.getTodayDayCloseStatus(),
     ]);
 
@@ -78,19 +69,13 @@ export default async function Dashboard({
       ? tenantResponse.data.slug
       : undefined;
   const tenant = tenantResponse.success ? tenantResponse.data : undefined;
-
   const dayCloseStatus =
     dayCloseStatusResponse.success && dayCloseStatusResponse.data
       ? dayCloseStatusResponse.data
       : null;
 
   return (
-    <div className="flex flex-col gap-6 pb-20">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold tracking-tight">
-          {new Date().getHours() < 12 ? "صباح الخير" : "مساء الخير"} {name}
-        </h1>
-      </div>
+    <>
       <StorefrontLinkCard
         slug={tenantSlug}
         status={tenant?.status}
@@ -122,6 +107,48 @@ export default async function Dashboard({
       {dayCloseStatus ? (
         <EndOfDayTeaser initialStatus={dayCloseStatus} />
       ) : null}
+    </>
+  );
+}
+
+function DashboardContentFallback() {
+  return (
+    <div className="grid gap-6" aria-hidden="true">
+      <div className="h-32 animate-pulse rounded-lg bg-gray-200" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div
+            key={index}
+            className="h-28 animate-pulse rounded-lg bg-gray-200"
+          />
+        ))}
+      </div>
+      <div className="h-72 animate-pulse rounded-lg bg-gray-200" />
+    </div>
+  );
+}
+
+export default async function Dashboard({
+  searchParams,
+}: {
+  searchParams?: Promise<{ period?: string | string[] }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const period = normalizePeriod(resolvedSearchParams.period);
+  const userCookie = await getCookieAction(STORAGE_KEYS.USER);
+  const user = userCookie ? JSON.parse(userCookie) : null;
+  const name = user?.name || "تاجر";
+
+  return (
+    <div className="flex flex-col gap-6 pb-20">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight">
+          {new Date().getHours() < 12 ? "صباح الخير" : "مساء الخير"} {name}
+        </h1>
+      </div>
+      <Suspense fallback={<DashboardContentFallback />}>
+        <DashboardContent period={period} />
+      </Suspense>
     </div>
   );
 }

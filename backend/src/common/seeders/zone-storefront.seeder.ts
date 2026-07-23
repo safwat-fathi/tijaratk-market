@@ -11,6 +11,9 @@ import {
   syncZoneEssentialCatalog,
   type ZoneEssentialCatalogItem,
 } from 'src/zone-storefronts/zone-essential-catalog-sync';
+import {
+  isZoneStorefrontEnabled,
+} from 'src/zone-storefronts/zone-storefront-feature';
 
 const ZONE_SLUG = 'sheikh-zayed';
 const ZONE_NAME = 'تجارتك - الشيخ زايد';
@@ -57,6 +60,12 @@ type ZoneSeedReadiness = {
 /** Seeds the explicit Sheikh Zayed development fixture after a safe preflight. */
 export async function seedZoneStorefront(prisma: PrismaClient) {
   const logger = new Logger('ZoneStorefrontSeeder');
+  if (!isZoneStorefrontEnabled()) {
+    logger.log(
+      'Skipping zone storefront fixture because the feature is disabled.',
+    );
+    return;
+  }
 
   const area = await prisma.directoryArea.findFirst({
     where: { slug: ZONE_SLUG, is_active: true, deleted_at: null },

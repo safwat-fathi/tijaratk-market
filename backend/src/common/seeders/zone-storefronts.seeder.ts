@@ -3,9 +3,19 @@ import { PrismaClient, Prisma } from '../../../generated/prisma/client';
 import { TENANT_CATEGORIES } from 'src/tenants/constants/tenant-category';
 import { SUPERMARKET_SEED_MERCHANTS } from './supermarket-merchant.seeder';
 import { PHARMACY_SEED_MERCHANTS } from './pharmacy-merchant.seeder';
+import {
+  isZoneStorefrontEnabled,
+} from 'src/zone-storefronts/zone-storefront-feature';
 
+/** Seeds demo zone storefronts only when the experiment is explicitly enabled. */
 export async function seedZoneStorefronts(prisma: PrismaClient) {
   const logger = new Logger('ZoneStorefrontsSeeder');
+  if (!isZoneStorefrontEnabled()) {
+    logger.log(
+      'Skipping zone storefronts seed because the feature is disabled.',
+    );
+    return;
+  }
 
   const zayedArea = await prisma.directoryArea.findUnique({
     where: { slug: 'sheikh-zayed' },

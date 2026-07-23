@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
@@ -110,48 +110,45 @@ function NavGroup({
   );
 }
 
-export function DashboardSidebar({
+type SidebarContentProps = Pick<
+  DashboardSidebarProps,
+  | "title"
+  | "navigation"
+  | "logoutAction"
+  | "pushScope"
+  | "setSidebarOpen"
+  | "topContent"
+  | "mobileTopContent"
+  | "footerContent"
+> & {
+  mobile?: boolean;
+  isItemActive: (href: string) => boolean;
+  activeClass: string;
+  inactiveClass: string;
+};
+
+function SidebarContent({
   title,
   navigation,
   logoutAction,
   pushScope,
-  sidebarOpen,
   setSidebarOpen,
   topContent,
   mobileTopContent,
   footerContent,
-  basePath = "/",
-  activeClass = "bg-red-50 text-red-700",
-  inactiveClass = "text-gray-900 hover:bg-gray-50 hover:text-gray-900",
-}: DashboardSidebarProps) {
-  const pathname = usePathname();
+  mobile = false,
+  isItemActive,
+  activeClass,
+  inactiveClass,
+}: SidebarContentProps) {
+  const resolvedTopContent = mobile
+    ? mobileTopContent ?? topContent
+    : topContent;
 
-  const allNavItems = navigation.flatMap((item) =>
-    item.children ? [item, ...item.children] : [item],
-  );
-
-  const activeHref = allNavItems
-    .filter((item) => item.href && item.href !== "#")
-    .sort((a, b) => b.href.length - a.href.length)
-    .find((item) =>
-      pathname === item.href ||
-      pathname.startsWith(`${item.href}/`) ||
-      item.activePrefixes?.some(
-        (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-      ),
-    )?.href;
-
-  const isItemActive = (href: string) => {
-    if (href === basePath) {
-      return pathname === href || pathname === `${href}/`;
-    }
-    return href === activeHref;
-  };
-
-  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
-    <div className="flex grow flex-col overflow-y-auto bg-white min-h-screen border-e border-gray-200">
+  return (
+    <div className="flex min-h-screen grow flex-col overflow-y-auto border-e border-gray-200 bg-white">
       {title && (
-        <div className="h-16 flex justify-center items-center px-6 border-b border-gray-200 shrink-0">
+        <div className="flex h-16 shrink-0 items-center justify-center border-b border-gray-200 px-6">
           {typeof title === "string" ? (
             <span className="font-bold text-brand-accent">{title}</span>
           ) : (
@@ -159,14 +156,12 @@ export function DashboardSidebar({
           )}
         </div>
       )}
-      
-      {(mobile ? mobileTopContent ?? topContent : topContent) ? (
-        <div className="px-6 pt-4">
-          {mobile ? mobileTopContent ?? topContent : topContent}
-        </div>
+
+      {resolvedTopContent ? (
+        <div className="px-6 pt-4">{resolvedTopContent}</div>
       ) : null}
 
-      <nav className="p-4 space-y-1 flex-1">
+      <nav className="flex-1 space-y-1 p-4">
         {navigation.map((item) => {
           if (item.children) {
             return (
@@ -187,7 +182,7 @@ export function DashboardSidebar({
               key={item.href}
               href={item.href}
               onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-x-3 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex items-center gap-x-3 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                 isActive ? activeClass : inactiveClass
               }`}
             >
@@ -203,17 +198,76 @@ export function DashboardSidebar({
         })}
       </nav>
 
-      <div className="p-4 flex flex-col gap-4 justify-center items-center border-t border-gray-200 shrink-0">
+      <div className="flex shrink-0 flex-col items-center justify-center gap-4 border-t border-gray-200 p-4">
         {footerContent ? <div className="w-full">{footerContent}</div> : null}
-
         <div className="w-full">
           <PushAwareLogoutForm scope={pushScope} logoutAction={logoutAction} />
         </div>
-
         <Logo className="rounded-lg" />
       </div>
     </div>
   );
+}
+
+export function DashboardSidebar({
+  title,
+  navigation,
+  logoutAction,
+  pushScope,
+  sidebarOpen,
+  setSidebarOpen,
+  topContent,
+  mobileTopContent,
+  footerContent,
+  basePath = "/",
+  activeClass = "bg-red-50 text-red-700",
+  inactiveClass = "text-gray-900 hover:bg-gray-50 hover:text-gray-900",
+}: DashboardSidebarProps) {
+  const pathname = usePathname();
+
+  const activeHref = useMemo(
+    () =>
+      navigation
+        .flatMap((item) =>
+          item.children ? [item, ...item.children] : [item],
+        )
+        .filter((item) => item.href && item.href !== "#")
+        .sort((a, b) => b.href.length - a.href.length)
+        .find(
+          (item) =>
+            pathname === item.href ||
+            pathname.startsWith(`${item.href}/`) ||
+            item.activePrefixes?.some(
+              (prefix) =>
+                pathname === prefix || pathname.startsWith(`${prefix}/`),
+            ),
+        )?.href,
+    [navigation, pathname],
+  );
+
+  const isItemActive = useCallback(
+    (href: string) => {
+      if (href === basePath) {
+        return pathname === href || pathname === `${href}/`;
+      }
+      return href === activeHref;
+    },
+    [activeHref, basePath, pathname],
+  );
+
+  const sidebarContentProps = {
+    title,
+    navigation,
+    logoutAction,
+    pushScope,
+    setSidebarOpen,
+    topContent,
+    mobileTopContent,
+    footerContent,
+    isItemActive,
+    activeClass,
+    inactiveClass,
+  };
 
   return (
     <>
@@ -254,7 +308,7 @@ export function DashboardSidebar({
                   </svg>
                 </button>
               </div>
-              <SidebarContent mobile />
+              <SidebarContent {...sidebarContentProps} mobile />
             </div>
           </div>
         </div>
@@ -262,7 +316,7 @@ export function DashboardSidebar({
 
       {/* Static sidebar for desktop */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col lg:start-0">
-        <SidebarContent />
+        <SidebarContent {...sidebarContentProps} />
       </div>
     </>
   );

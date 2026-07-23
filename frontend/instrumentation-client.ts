@@ -3,26 +3,18 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import { runAfterLoadAndIdle } from "@/lib/browser/run-after-load-and-idle";
+import { sentryTracesSampler } from "@/lib/monitoring/sentry-sampling";
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   environment: process.env.NODE_ENV || "development",
 
-  // Add optional integrations for additional features
-  integrations: [Sentry.replayIntegration()],
+  tracesSampler: sentryTracesSampler,
+  enableLogs: process.env.NODE_ENV !== "production",
 
-  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
-
-  // Define how likely Replay events are sampled.
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
-  replaysSessionSampleRate: 0.1,
-
-  // Define how likely Replay events are sampled when an error occurs.
-  replaysOnErrorSampleRate: 1.0,
+  replaysSessionSampleRate: process.env.NODE_ENV === "production" ? 0.01 : 0,
+  replaysOnErrorSampleRate: 1,
 
   dataCollection: {
     // To disable sending user data and HTTP bodies, uncomment the lines below. For more info visit:
@@ -31,5 +23,13 @@ Sentry.init({
     // httpBodies: [],
   },
 });
+
+if (typeof window !== "undefined") {
+  runAfterLoadAndIdle(() => {
+    void import("@/lib/monitoring/deferred-replay")
+      .then(({ initializeDeferredReplay }) => initializeDeferredReplay())
+      .catch(() => undefined);
+  });
+}
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

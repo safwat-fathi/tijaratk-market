@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { CheckSquare, Square, X, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -72,24 +79,24 @@ export default function AdminCatalogItemsBulkClient({
   const allVisibleSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
 
-  const toggleId = (id: number) => {
+  const toggleId = useCallback((id: number) => {
     setSelectedIds((current) =>
       current.includes(id)
         ? current.filter((selectedId) => selectedId !== id)
         : [...current, id],
     );
-  };
+  }, []);
 
   const toggleVisible = () => {
     setSelectedIds(allVisibleSelected ? [] : visibleIds);
   };
 
-  const openEditItem = (item: AdminCatalogItem) => {
+  const openEditItem = useCallback((item: AdminCatalogItem) => {
     setEditingItem(item);
     setEditCategory(item.category);
     setEditIsActive(item.is_active);
     setEditIsEssential(item.is_essential);
-  };
+  }, []);
 
   const runBulkAction = (payload: {
     category?: string;
@@ -216,8 +223,8 @@ export default function AdminCatalogItemsBulkClient({
                   key={item.id}
                   item={item}
                   isSelected={selectedSet.has(item.id)}
-                  onToggle={() => toggleId(item.id)}
-                  onEdit={() => openEditItem(item)}
+                  onToggle={toggleId}
+                  onEdit={openEditItem}
                 />
               ))
             )}
@@ -540,7 +547,7 @@ export default function AdminCatalogItemsBulkClient({
   );
 }
 
-function CatalogItemRow({
+const CatalogItemRow = memo(function CatalogItemRow({
   item,
   isSelected,
   onToggle,
@@ -548,15 +555,15 @@ function CatalogItemRow({
 }: {
   item: AdminCatalogItem;
   isSelected: boolean;
-  onToggle: () => void;
-  onEdit: () => void;
+  onToggle: (id: number) => void;
+  onEdit: (item: AdminCatalogItem) => void;
 }) {
   return (
     <tr className={item.is_active ? "" : "bg-gray-50"}>
       <td className="px-4 py-3 align-top">
         <button
           type="button"
-          onClick={onToggle}
+          onClick={() => onToggle(item.id)}
           className={`inline-flex h-10 w-10 items-center justify-center rounded-md border ${
             isSelected
               ? "border-brand-primary bg-brand-primary text-white"
@@ -626,11 +633,16 @@ function CatalogItemRow({
         </span>
       </td>
       <td className="px-4 py-3 whitespace-nowrap">
-        <Button size="sm" variant="secondary" onClick={onEdit} className="gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => onEdit(item)}
+          className="gap-2"
+        >
           <Edit className="h-4 w-4" />
           تعديل
         </Button>
       </td>
     </tr>
   );
-}
+});

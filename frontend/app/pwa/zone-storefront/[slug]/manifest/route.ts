@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -19,6 +20,13 @@ const DEFAULT_ICONS = [
 ];
 
 export async function GET(_request: Request, { params }: Props) {
+  if (!isZoneStorefrontEnabled()) {
+    return NextResponse.json(
+      { error: "Zone storefront not found" },
+      { status: 404 },
+    );
+  }
+
   const { slug } = await params;
   const response = await zoneStorefrontsService.getPublicZone(slug);
 

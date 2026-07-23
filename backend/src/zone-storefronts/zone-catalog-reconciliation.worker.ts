@@ -11,6 +11,7 @@ import {
 } from 'src/products/catalog-source-policy';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ZoneCatalogReconciliationService } from './zone-catalog-reconciliation.service';
+import { isZoneStorefrontEnabled } from './zone-storefront-feature';
 
 type ClaimedReconciliation = {
   source: string;
@@ -34,7 +35,13 @@ export class ZoneCatalogReconciliationWorker
     private readonly reconciliation: ZoneCatalogReconciliationService,
   ) {}
 
+  /** Starts polling only while the zone storefront experiment is enabled. */
   onApplicationBootstrap(): void {
+    if (!isZoneStorefrontEnabled()) {
+      this.logger.log('Zone catalog reconciliation is disabled');
+      return;
+    }
+
     this.timer = setInterval(() => void this.tick(), POLL_INTERVAL_MS);
     this.timer.unref?.();
     void this.tick();
@@ -45,7 +52,7 @@ export class ZoneCatalogReconciliationWorker
   }
 
   private async tick(): Promise<void> {
-    if (this.running) return;
+    if (this.running || !isZoneStorefrontEnabled()) return;
     this.running = true;
     try {
       const claim = await this.claimNext();

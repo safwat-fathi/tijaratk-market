@@ -53,6 +53,7 @@ import {
 import { ActivityActor } from 'src/activity-log/activity-log.types';
 import { OrderInboxSummaryDto } from './dto/order-inbox-summary.dto';
 import {
+  isZoneStorefrontEnabled,
   resolveZoneStorefrontReorderUrl,
 } from 'src/zone-storefronts/zone-storefront-feature';
 import { MetaConversionsService } from 'src/meta-conversions/meta-conversions.service';
@@ -624,26 +625,34 @@ export class OrdersService {
       };
     }
 
+    const zoneStorefrontsEnabled = isZoneStorefrontEnabled();
     const [ownedGroups, assignedGroups] = await Promise.all([
       this.orderClient().groupBy({
         by: ['status'],
         where: ownedWhere,
         _count: { _all: true },
       }),
-      this.prisma.orderDispatchAssignment.groupBy({
-        by: ['status'],
-        where: {
-          target_tenant_id: tenantId,
-          is_current: true,
-          status: {
-            in: [
-              OrderDispatchAssignmentStatus.pending,
-              OrderDispatchAssignmentStatus.accepted,
-            ],
-          },
-        },
-        _count: { _all: true },
-      }),
+      zoneStorefrontsEnabled
+        ? this.prisma.orderDispatchAssignment.groupBy({
+            by: ['status'],
+            where: {
+              target_tenant_id: tenantId,
+              is_current: true,
+              status: {
+                in: [
+                  OrderDispatchAssignmentStatus.pending,
+                  OrderDispatchAssignmentStatus.accepted,
+                ],
+              },
+            },
+            _count: { _all: true },
+          })
+        : Promise.resolve(
+            [] as {
+              status: OrderDispatchAssignmentStatus;
+              _count: { _all: number };
+            }[],
+          ),
     ]);
 
     const ownedStatusCounts: Record<OrderStatus, number> = {

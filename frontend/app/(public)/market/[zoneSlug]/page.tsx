@@ -11,6 +11,7 @@ import type { PublicProductsMeta } from "@/types/models/product";
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import { CUSTOMER_PWA } from "@/lib/customer-pwa";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 type ZoneSearchParams = {
   reorder?: string;
@@ -31,6 +32,8 @@ const EMPTY_PRODUCTS_META: PublicProductsMeta = {
 };
 
 export async function generateMetadata({ params }: ZonePageProps): Promise<Metadata> {
+  if (!isZoneStorefrontEnabled()) return { title: "المنطقة غير متاحة" };
+
   const { zoneSlug } = await params;
   const response = await zoneStorefrontsService.getPublicZone(zoneSlug);
   if (!response.success || !response.data) return { title: "المنطقة غير متاحة" };
@@ -46,6 +49,8 @@ export default async function ZoneStorefrontPage({
   params,
   searchParams,
 }: ZonePageProps) {
+  if (!isZoneStorefrontEnabled()) notFound();
+
   const { zoneSlug } = await params;
   const resolvedSearchParams = await searchParams;
   const { reorder, category } = resolvedSearchParams;

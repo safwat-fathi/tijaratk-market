@@ -20,7 +20,7 @@ export default function LoginForm() {
 	return (
 		<Card className="w-full max-w-md px-6 py-8 sm:px-10">
 			<div className="mb-6 flex flex-col items-center text-center">
-				<Logo variant="icon" width={72} height={72} className="mb-4 rounded-xl" />
+				<Logo variant="icon-light" width={72} height={72} className="mb-4 rounded-xl" />
 				<h2 className="text-3xl font-bold tracking-tight text-brand-text">
 					تسجيل الدخول
 				</h2>

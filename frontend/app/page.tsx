@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { cache } from "react";
+import { cache, Suspense } from "react";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import JsonLd from "@/components/seo/JsonLd";
 import SafeImage from "@/components/ui/SafeImage";
@@ -28,6 +28,7 @@ import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
 import type { ZoneStorefront } from "@/types/models/zone-storefront";
 import { formatCurrency } from "@/lib/utils/currency";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 type StoresDirectorySearchParams = {
   area?: string;
@@ -92,6 +93,8 @@ const getStoresLanding = cache(
 );
 
 const getPublicZoneStorefronts = cache(async (): Promise<ZoneStorefront[]> => {
+  if (!isZoneStorefrontEnabled()) return [];
+
   try {
     const response = await zoneStorefrontsService.getPublicZones();
     return response.success && Array.isArray(response.data) ? response.data : [];
@@ -100,9 +103,8 @@ const getPublicZoneStorefronts = cache(async (): Promise<ZoneStorefront[]> => {
   }
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const publicZones = await getPublicZoneStorefronts();
-  if (publicZones.length > 0) {
+export function generateMetadata(): Metadata {
+  if (isZoneStorefrontEnabled()) {
     return {
       ...createPublicMetadata({
         title: ZONE_SEO_TITLE,
@@ -120,13 +122,10 @@ export async function generateMetadata(): Promise<Metadata> {
     };
   }
 
-  const landing = await getStoresLanding();
-  const seo = resolveSeo(landing);
-
   return {
     ...createPublicMetadata({
-      title: seo.title,
-      description: seo.description,
+      title: DEFAULT_SEO_TITLE,
+      description: DEFAULT_SEO_DESCRIPTION,
       path: STORES_PATH,
     }),
     ...CUSTOMER_PWA_METADATA,
@@ -338,7 +337,7 @@ const StoreCard = ({ store }: { store: StoresDirectoryStoreCard }) => (
   </Link>
 );
 
-async function LegacyStoresDirectoryPage({
+async function LegacyDirectoryContent({
   searchParams,
 }: StoresDirectoryPageProps) {
   const resolvedSearchParams = await searchParams;
@@ -364,7 +363,7 @@ async function LegacyStoresDirectoryPage({
   const searchedAreas = areas.slice(0, 4);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
+    <>
       {jsonLd.map((item, index) => (
         <JsonLd
           key={`${item["@type"]}-${index}`}
@@ -373,62 +372,43 @@ async function LegacyStoresDirectoryPage({
         />
       ))}
 
-      <AppHeader
-        title="دليل المتاجر"
-        innerClassName="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 py-3 sm:px-6 lg:px-8"
-        titleActions={<InstallPwaAction appName={CUSTOMER_PWA.name} buttonText="تثبيت التطبيق" />}
-      />
+      <section className="sticky top-16 z-40 border-b border-gray-200/50 bg-[#F7F8F6]/90 px-4 py-6 shadow-sm backdrop-blur-md transition-all">
+        <div className="mx-auto max-w-3xl">
+          <AreaAutocomplete
+            areas={searchAreaOptions}
+            destination={{ type: "landing" }}
+          />
 
-      <main className="flex-1">
-        <section className="bg-gradient-to-b from-[#E8F5ED] to-[#F7F8F6] px-4 pb-8 pt-16 text-center sm:pt-24 sm:pb-8">
-          <div className="mx-auto max-w-4xl">
-            <h1 className="mb-6 text-4xl font-bold leading-tight text-[#0F5A3D] sm:text-5xl lg:text-6xl">
-              اطلب من سوبر ماركت وصيدليات في منطقتك
-            </h1>
-            <p className="mx-auto max-w-2xl text-lg leading-relaxed text-[#222B2E]/80">
-              اختر منطقتك وشوف السوبر ماركت والصيدليات المتاحة للطلب والتوصيل
-              مباشرة من المتاجر المحلية على تجارتك.
-            </p>
-          </div>
-        </section>
-
-        <section className="sticky top-16 z-40 border-b border-gray-200/50 bg-[#F7F8F6]/90 px-4 py-6 shadow-sm backdrop-blur-md transition-all">
-          <div className="mx-auto max-w-3xl">
-            <AreaAutocomplete
-              areas={searchAreaOptions}
-              destination={{ type: "landing" }}
-            />
-
-            {searchedAreas.length > 0 && (
-              <div className="mt-4 flex items-start gap-3">
-                <span className="shrink-0 pt-1.5 text-sm font-semibold text-gray-500">
-                  الأكثر بحثاً:
-                </span>
-                <div className="flex flex-wrap items-center gap-2">
-                  {searchedAreas.map((area) => {
-                    const isSelected = area.slug === selectedAreaSlug;
-                    return (
-                      <Link
-                        key={area.slug}
-                        href={`/?area=${encodeURIComponent(area.slug)}`}
-                        className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
-                          isSelected
-                            ? "border-[#0F5A3D] bg-[#0F5A3D] text-white"
-                            : "border-gray-200 bg-white text-[#0F5A3D] hover:border-[#27AE60]/30 hover:bg-[#E8F5ED]"
-                        }`}
-                      >
-                        {area.nameAr}
-                      </Link>
-                    );
-                  })}
-                </div>
+          {searchedAreas.length > 0 && (
+            <div className="mt-4 flex items-start gap-3">
+              <span className="shrink-0 pt-1.5 text-sm font-semibold text-gray-500">
+                الأكثر بحثاً:
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {searchedAreas.map((area) => {
+                  const isSelected = area.slug === selectedAreaSlug;
+                  return (
+                    <Link
+                      key={area.slug}
+                      href={`/?area=${encodeURIComponent(area.slug)}`}
+                      className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
+                        isSelected
+                          ? "border-[#0F5A3D] bg-[#0F5A3D] text-white"
+                          : "border-gray-200 bg-white text-[#0F5A3D] hover:border-[#27AE60]/30 hover:bg-[#E8F5ED]"
+                      }`}
+                    >
+                      {area.nameAr}
+                    </Link>
+                  );
+                })}
               </div>
-            )}
-          </div>
-        </section>
+            </div>
+          )}
+        </div>
+      </section>
 
-        <div className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
-          <section>
+      <div className="mx-auto max-w-7xl space-y-20 px-4 py-16 sm:px-6 lg:px-8">
+        <section>
             <div className="mb-8 flex items-center justify-between">
               <h2 className="text-3xl font-bold text-[#222B2E]">
                 بتدور على إيه؟
@@ -439,9 +419,9 @@ async function LegacyStoresDirectoryPage({
               areas={areaOptions}
               selectedAreaSlug={selectedAreaSlug}
             />
-          </section>
+        </section>
 
-          {topAreas.length > 0 && (
+        {topAreas.length > 0 && (
             <section id="areas">
               <div className="mb-4 flex flex-col gap-3">
                 <h2 className="text-3xl font-bold text-[#222B2E]">
@@ -499,9 +479,9 @@ async function LegacyStoresDirectoryPage({
                 ))}
               </div>
             </section>
-          )}
+        )}
 
-          {featuredStores.length > 0 && (
+        {featuredStores.length > 0 && (
             <section>
               <div className="mb-6 flex flex-col gap-2">
                 <h2 className="text-3xl font-bold text-[#222B2E]">
@@ -517,8 +497,63 @@ async function LegacyStoresDirectoryPage({
                 ))}
               </div>
             </section>
-          )}
-        </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function LegacyDirectoryFallback() {
+  return (
+    <>
+      <section className="border-b border-gray-200/50 bg-[#F7F8F6] px-4 py-6">
+        <div className="mx-auto h-14 max-w-3xl animate-pulse rounded-full bg-gray-200" />
+      </section>
+      <div
+        className="mx-auto grid min-h-64 max-w-7xl grid-cols-2 gap-4 px-4 py-16 sm:px-6 md:grid-cols-4 lg:px-8"
+        aria-hidden="true"
+      >
+        {Array.from({ length: 4 }, (_, index) => (
+          <div
+            key={index}
+            className="h-36 animate-pulse rounded-2xl bg-gray-200"
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function LegacyStoresDirectoryPage(props: StoresDirectoryPageProps) {
+  return (
+    <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
+      <AppHeader
+        title="دليل المتاجر"
+        innerClassName="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 py-3 sm:px-6 lg:px-8"
+        titleActions={
+          <InstallPwaAction
+            appName={CUSTOMER_PWA.name}
+            buttonText="تثبيت التطبيق"
+          />
+        }
+      />
+
+      <main className="flex-1">
+        <section className="bg-gradient-to-b from-[#E8F5ED] to-[#F7F8F6] px-4 pb-8 pt-16 text-center sm:pt-24 sm:pb-8">
+          <div className="mx-auto max-w-4xl">
+            <h1 className="mb-6 text-4xl font-bold leading-tight text-[#0F5A3D] sm:text-5xl lg:text-6xl">
+              اطلب من سوبر ماركت وصيدليات في منطقتك
+            </h1>
+            <p className="mx-auto max-w-2xl text-lg leading-relaxed text-[#222B2E]/80">
+              اختر منطقتك وشوف السوبر ماركت والصيدليات المتاحة للطلب والتوصيل
+              مباشرة من المتاجر المحلية على تجارتك.
+            </p>
+          </div>
+        </section>
+
+        <Suspense fallback={<LegacyDirectoryFallback />}>
+          <LegacyDirectoryContent {...props} />
+        </Suspense>
       </main>
 
       <PublicFooter />
@@ -527,6 +562,15 @@ async function LegacyStoresDirectoryPage({
 }
 
 export default async function HomePage(props: StoresDirectoryPageProps) {
+  if (!isZoneStorefrontEnabled()) {
+    return (
+      <>
+        <CustomerAnalytics pageLocation={STORES_PATH} />
+        <LegacyStoresDirectoryPage {...props} />
+      </>
+    );
+  }
+
   const publicZones = await getPublicZoneStorefronts();
 
   return (

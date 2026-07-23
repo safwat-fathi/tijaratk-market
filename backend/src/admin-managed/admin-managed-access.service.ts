@@ -36,6 +36,9 @@ import {
   ManagedFeature,
 } from './admin-managed.types';
 import { AdminManagedFeatureService } from './admin-managed-feature.service';
+import {
+  isZoneStorefrontEnabled,
+} from 'src/zone-storefronts/zone-storefront-feature';
 
 type RequestMetadata = {
   requestId?: string;
@@ -186,10 +189,16 @@ export class AdminManagedAccessService {
       orderBy: { tenant: { name: 'asc' } },
     });
 
-    return accesses.map((access) => ({
-      ...access.tenant,
-      access: this.mapAccess(access),
-    }));
+    return accesses
+      .filter(
+        (access) =>
+          isZoneStorefrontEnabled() ||
+          access.tenant.operated_zone_storefront === null,
+      )
+      .map((access) => ({
+        ...access.tenant,
+        access: this.mapAccess(access),
+      }));
   }
 
   /** Returns one merchant context when the current admin may inspect it. */
@@ -198,6 +207,8 @@ export class AdminManagedAccessService {
     adminRole: AdminRole,
     tenantId: number,
   ) {
+    await this.assertManagedTenantAvailable(tenantId);
+
     const tenant = await this.prisma.tenant.findFirst({
       where: { id: tenantId, deleted_at: null },
       select: {
@@ -462,6 +473,8 @@ export class AdminManagedAccessService {
     metadata: RequestMetadata,
   ) {
     this.featureService.assertStoreManagementEnabled();
+    await this.assertManagedTenantAvailable(dto.tenant_id);
+
     const access = await this.prisma.adminTenantAccess.findUnique({
       where: {
         admin_user_id_tenant_id: {
@@ -601,6 +614,12 @@ export class AdminManagedAccessService {
       },
     });
     if (!session || session.ended_at) return null;
+    if (
+      !isZoneStorefrontEnabled() &&
+      session.tenant.operated_zone_storefront
+    ) {
+      return null;
+    }
 
     const now = new Date();
     const idleDeadline = new Date(
@@ -691,6 +710,8 @@ export class AdminManagedAccessService {
     feature?: ManagedFeature,
   ): Promise<AdminActorContext> {
     this.featureService.assertFeatureEnabled(feature);
+    await this.assertManagedTenantAvailable(tenantId);
+
     const adminUserId = request.user?.userId;
     const rawToken = this.extractSessionToken(request);
     if (!adminUserId || !rawToken) {
@@ -930,6 +951,21 @@ export class AdminManagedAccessService {
       tenant,
       permissions: normalizeAdminManagedPermissions(permissions),
     };
+  }
+
+  /** Rejects internal zone operators from generic managed-store access while disabled. */
+  private async assertManagedTenantAvailable(tenantId: number): Promise<void> {
+    if (isZoneStorefrontEnabled()) return;
+
+    const tenant = await this.prisma.tenant.findFirst({
+      where: {
+        id: tenantId,
+        deleted_at: null,
+        operated_zone_storefront: { is: null },
+      },
+      select: { id: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
   }
 
   private async ensureTenantExists(tenantId: number): Promise<void> {

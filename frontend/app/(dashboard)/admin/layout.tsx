@@ -2,10 +2,13 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { STORAGE_KEYS } from "@/constants";
-import { adminService } from "@/services/api/admin.service";
 import { AdminShell } from "./_components/AdminShell";
 import type { Metadata } from "next";
-import { merchantPushNotificationsService } from "@/services/api/push-notifications.service";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
+import {
+  getCurrentAdminCached,
+  getPushNotificationsConfigCached,
+} from "@/lib/server/dashboard-request-cache";
 
 export const metadata: Metadata = {
   title: "لوحة تحكم الإدارة",
@@ -26,8 +29,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   const [response, pushConfigResponse] = await Promise.all([
-    adminService.getCurrentAdmin(),
-    merchantPushNotificationsService.getConfig(),
+    getCurrentAdminCached(),
+    getPushNotificationsConfigCached(),
   ]);
   if (!response.success || !response.data) {
     redirect("/admin/login");
@@ -37,6 +40,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     <AdminShell
       adminName={response.data.name}
       role={response.data.role}
+      zoneStorefrontsEnabled={isZoneStorefrontEnabled()}
       pushConfig={
         pushConfigResponse.success && pushConfigResponse.data
           ? pushConfigResponse.data

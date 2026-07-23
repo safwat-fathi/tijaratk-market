@@ -4,6 +4,7 @@ import type {
   AdminTenantAccess,
 } from "@/services/api/admin.service";
 import type { ServiceResponse } from "@/services/base/http.service";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 const MANAGED_SESSION_FAILURE_CODES = new Set([
   "MANAGEMENT_SESSION_REQUIRED",
@@ -79,7 +80,11 @@ export function getManagedStoreLandingPath(
   const { tenant_id: tenantId, permissions } = session;
   const operatedZone = session.tenant.operated_zone_storefront;
 
-  if (operatedZone && hasManagedSectionAccess(permissions, "dispatches")) {
+  if (
+    isZoneStorefrontEnabled() &&
+    operatedZone &&
+    hasManagedSectionAccess(permissions, "dispatches")
+  ) {
     return `/admin/zones/${operatedZone.id}/dispatches`;
   }
 

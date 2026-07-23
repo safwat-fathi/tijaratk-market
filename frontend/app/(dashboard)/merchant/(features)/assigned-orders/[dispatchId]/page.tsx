@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { assignedOrdersService } from "@/services/api/assigned-orders.service";
 import AssignedOrderItems from "./_components/AssignedOrderItems";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ type AssignedOrderPageProps = { params: Promise<{ dispatchId: string }> };
 export default async function AssignedOrderPage({
   params,
 }: AssignedOrderPageProps) {
+  if (!isZoneStorefrontEnabled()) notFound();
+
   const dispatchId = Number((await params).dispatchId);
   if (!Number.isInteger(dispatchId) || dispatchId <= 0) notFound();
   const response = await assignedOrdersService.getAssignedOrder(dispatchId);

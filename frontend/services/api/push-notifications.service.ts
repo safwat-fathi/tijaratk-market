@@ -10,6 +10,8 @@ const AUTHENTICATED_OPTIONS = {
   cache: "no-store" as const,
 };
 
+const PUSH_CONFIG_REVALIDATE_SECONDS = 300;
+
 /** Server-only API client for merchant Web Push subscription state. */
 class MerchantPushNotificationsService extends HttpService {
   constructor() {
@@ -18,7 +20,7 @@ class MerchantPushNotificationsService extends HttpService {
 
   public getConfig() {
     return this.get<PushNotificationsConfig>("config", undefined, {
-      cache: "no-store",
+      next: { revalidate: PUSH_CONFIG_REVALIDATE_SECONDS },
     });
   }
 

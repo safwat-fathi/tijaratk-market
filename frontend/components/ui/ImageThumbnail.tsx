@@ -12,11 +12,6 @@ type ImageThumbnailProps = ComponentProps<typeof SafeImage> & {
 
 export default function ImageThumbnail({ thumbnailWrapperClassName, disableEnlarge, ...props }: ImageThumbnailProps) {
   const [isEnlarged, setIsEnlarged] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (isEnlarged) {
@@ -58,7 +53,7 @@ export default function ImageThumbnail({ thumbnailWrapperClassName, disableEnlar
         <SafeImage {...props} />
       </div>
 
-      {mounted && isEnlarged && isEnlargeable && typeof document !== 'undefined' && createPortal(
+      {isEnlarged && isEnlargeable && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm transition-all"
           onClick={(e) => {
@@ -80,10 +75,14 @@ export default function ImageThumbnail({ thumbnailWrapperClassName, disableEnlar
               <path d="m6 6 12 12" />
             </svg>
           </button>
-          <img
+          <SafeImage
             src={props.src as string}
             alt={props.alt || ''}
-            className="max-h-[90vh] max-w-full rounded-xl object-contain shadow-2xl"
+            width={1200}
+            height={1200}
+            sizes="90vw"
+            imageClassName="max-h-[90vh] max-w-full rounded-xl object-contain shadow-2xl"
+            fallback={null}
             onClick={(e) => e.stopPropagation()}
           />
         </div>,

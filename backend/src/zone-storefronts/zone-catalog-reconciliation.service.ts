@@ -9,6 +9,7 @@ import {
   enqueueZoneCatalogReconciliation,
 } from './zone-catalog-reconciliation.repository';
 import { ZoneStorefrontsService } from './zone-storefronts.service';
+import { isZoneStorefrontEnabled } from './zone-storefront-feature';
 
 @Injectable()
 export class ZoneCatalogReconciliationService {
@@ -23,6 +24,8 @@ export class ZoneCatalogReconciliationService {
 
   /** Synchronizes every zone whose vertical owns the requested source. */
   async reconcileSource(source: CatalogSource): Promise<void> {
+    if (!isZoneStorefrontEnabled()) return;
+
     const category =
       source === CATALOG_SOURCE_CHEFAA
         ? TenantCategory.pharmacy

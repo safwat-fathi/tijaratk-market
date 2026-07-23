@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { adminLogoutAction } from "@/actions/admin-server";
 import {
   DashboardSidebar,
@@ -21,6 +21,7 @@ type AdminShellProps = {
   role: AdminRole;
   children: ReactNode;
   pushConfig: PushNotificationsConfig;
+  zoneStorefrontsEnabled: boolean;
 };
 
 const platformNavigation: NavItem[] = [
@@ -54,11 +55,19 @@ export const AdminShell = ({
   role,
   children,
   pushConfig,
+  zoneStorefrontsEnabled,
 }: AdminShellProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const navigation = role === "platform_admin"
-    ? platformNavigation
-    : operationsNavigation;
+  const navigation = useMemo(
+    () =>
+      (role === "platform_admin"
+        ? platformNavigation
+        : operationsNavigation
+      ).filter(
+        (item) => zoneStorefrontsEnabled || item.href !== "/admin/zones",
+      ),
+    [role, zoneStorefrontsEnabled],
+  );
 
   return (
     <PushNotificationsProvider scope="admin" config={pushConfig}>

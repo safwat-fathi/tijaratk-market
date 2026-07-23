@@ -1,4 +1,5 @@
 import { ordersService } from "@/services/api/orders.service";
+import { getInboxSummaryCached } from "@/lib/server/dashboard-request-cache";
 import OrdersView from "./_components/OrdersView";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
@@ -6,6 +7,7 @@ import { assignedOrdersService } from "@/services/api/assigned-orders.service";
 import { OrderStatus } from "@/types/enums";
 import type { MerchantOrderInboxSummary } from "@/types/services/orders";
 import type { OrdersTab } from "./_components/StatusTabs";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 export const metadata = createNoIndexMetadata(
 	"إدارة الطلبات",
@@ -48,8 +50,15 @@ const VALID_TABS = new Set<string>([
 	"assigned",
 ]);
 
-const normalizeTab = (tab?: string): OrdersTab =>
-	tab && VALID_TABS.has(tab) ? (tab as OrdersTab) : OrderStatus.DRAFT;
+const normalizeTab = (
+	tab: string | undefined,
+	zoneStorefrontsEnabled: boolean,
+): OrdersTab =>
+	tab &&
+	VALID_TABS.has(tab) &&
+	(zoneStorefrontsEnabled || tab !== "assigned")
+		? (tab as OrdersTab)
+		: OrderStatus.DRAFT;
 
 export default async function OrdersPage({
 	searchParams,
@@ -57,13 +66,16 @@ export default async function OrdersPage({
 	searchParams: Promise<{ date?: string; tab?: string }>;
 }) {
 	const { date, tab } = await searchParams;
+	const zoneStorefrontsEnabled = isZoneStorefrontEnabled();
 
 	const [orders, assignedResponse, summaryResponse] = await Promise.all([
 		getOrders(date),
-		assignedOrdersService.getAssignedOrders(),
-		ordersService.getInboxSummary(date),
+		zoneStorefrontsEnabled
+			? assignedOrdersService.getAssignedOrders()
+			: Promise.resolve(null),
+		getInboxSummaryCached(date),
 	]);
-	const assignedOrders = assignedResponse.data?.filter(Boolean) ?? [];
+	const assignedOrders = assignedResponse?.data?.filter(Boolean) ?? [];
 	const inboxSummary =
 		summaryResponse.success && summaryResponse.data
 			? summaryResponse.data
@@ -71,12 +83,13 @@ export default async function OrdersPage({
 
 	return (
 		<OrdersView
-			key={normalizeTab(tab)}
+			key={normalizeTab(tab, zoneStorefrontsEnabled)}
 			initialOrders={orders}
 			initialAssignedOrders={assignedOrders}
 			inboxSummary={inboxSummary}
-			initialTab={normalizeTab(tab)}
+			initialTab={normalizeTab(tab, zoneStorefrontsEnabled)}
 			selectedDate={date}
+			zoneStorefrontsEnabled={zoneStorefrontsEnabled}
 		/>
 	);
 }

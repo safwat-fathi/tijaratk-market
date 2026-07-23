@@ -4,12 +4,15 @@ import { assignZoneDispatchAction, cancelZoneDispatchAction } from "@/actions/ad
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { adminService } from "@/services/api/admin.service";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 export const dynamic = "force-dynamic";
 
 type DispatchDetailPageProps = { params: Promise<{ zoneId: string; dispatchId: string }> };
 
 export default async function DispatchDetailPage({ params }: DispatchDetailPageProps) {
+  if (!isZoneStorefrontEnabled()) notFound();
+
   const values = await params;
   const zoneId = Number(values.zoneId);
   const dispatchId = Number(values.dispatchId);

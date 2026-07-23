@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Combobox } from "@/components/ui/Combobox";
 import { MerchantSearchCombobox } from "./MerchantSearchCombobox";
@@ -8,6 +9,25 @@ import type { AdminDirectoryArea } from "@/services/api/admin.service";
 type AdminMerchantFiltersProps = {
   areas: AdminDirectoryArea[];
 };
+
+const STATUS_OPTIONS = [
+  { label: "الكل", value: "all" },
+  { label: "طلبات قيد المراجعة", value: "pending" },
+  { label: "نشط", value: "active" },
+  { label: "غير نشط", value: "inactive" },
+  { label: "موقوف", value: "suspended" },
+  { label: "مرفوض", value: "rejected" },
+];
+
+const CATEGORY_OPTIONS = [
+  { label: "الكل", value: "all" },
+  { label: "بقالة", value: "grocery" },
+  { label: "خضار وفاكهة", value: "greengrocer" },
+  { label: "جزارة", value: "butcher" },
+  { label: "مخبز", value: "bakery" },
+  { label: "صيدلية", value: "pharmacy" },
+  { label: "أخرى", value: "other" },
+];
 
 export function AdminMerchantFilters({ areas }: AdminMerchantFiltersProps) {
   const router = useRouter();
@@ -32,29 +52,16 @@ export function AdminMerchantFilters({ areas }: AdminMerchantFiltersProps) {
     router.push(pathname);
   };
 
-  const areaOptions = [
-    { label: "الكل", value: "all" },
-    ...areas.map((a) => ({ label: a.name_ar, value: String(a.id) })),
-  ];
-
-  const statusOptions = [
-    { label: "الكل", value: "all" },
-    { label: "طلبات قيد المراجعة", value: "pending" },
-    { label: "نشط", value: "active" },
-    { label: "غير نشط", value: "inactive" },
-    { label: "موقوف", value: "suspended" },
-    { label: "مرفوض", value: "rejected" },
-  ];
-
-  const categoryOptions = [
-    { label: "الكل", value: "all" },
-    { label: "بقالة", value: "grocery" },
-    { label: "خضار وفاكهة", value: "greengrocer" },
-    { label: "جزارة", value: "butcher" },
-    { label: "مخبز", value: "bakery" },
-    { label: "صيدلية", value: "pharmacy" },
-    { label: "أخرى", value: "other" },
-  ];
+  const areaOptions = useMemo(
+    () => [
+      { label: "الكل", value: "all" },
+      ...areas.map((area) => ({
+        label: area.name_ar,
+        value: String(area.id),
+      })),
+    ],
+    [areas],
+  );
 
   return (
     <div className="grid grid-cols-1 gap-4 rounded-lg border border-gray-100 bg-white p-4 shadow-sm md:grid-cols-5 md:items-end">
@@ -77,7 +84,7 @@ export function AdminMerchantFilters({ areas }: AdminMerchantFiltersProps) {
       <div className="md:col-span-1">
         <Combobox
           label="حالة المتجر"
-          options={statusOptions}
+          options={STATUS_OPTIONS}
           value={searchParams.get("status") || "all"}
           onValueChange={(val) => handleFilterChange("status", val)}
           inputClassName="py-2 px-3"
@@ -88,7 +95,7 @@ export function AdminMerchantFilters({ areas }: AdminMerchantFiltersProps) {
       <div className="md:col-span-1">
         <Combobox
           label="نوع المتجر"
-          options={categoryOptions}
+          options={CATEGORY_OPTIONS}
           value={searchParams.get("category") || "all"}
           onValueChange={(val) => handleFilterChange("category", val)}
           inputClassName="py-2 px-3"

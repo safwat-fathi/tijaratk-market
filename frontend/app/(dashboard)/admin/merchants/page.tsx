@@ -10,6 +10,7 @@ import {
 } from "@/actions/admin-server";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { PlanSelect } from "./_components/PlanSelect";
 import { TenantAreaForm } from "./_components/TenantAreaForm";
 import { DirectoryStatusForm } from "./_components/DirectoryStatusForm";
@@ -21,6 +22,7 @@ import type {
 } from "@/services/api/admin.service";
 import { AdminPagination } from "../_components/AdminPagination";
 import { AdminMerchantFilters } from "./_components/AdminMerchantFilters";
+import { getCurrentAdminCached } from "@/lib/server/dashboard-request-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -267,7 +269,7 @@ function ToggleTenantStatusForm({ merchant }: { merchant: AdminTenant }) {
 }
 
 export default async function AdminMerchants(props: Props) {
-  const profileResponse = await adminService.getCurrentAdmin();
+  const profileResponse = await getCurrentAdminCached();
   if (profileResponse.data?.role === "operations_admin") {
     const assignedResponse = await adminService.getAssignedTenants();
     const assignedMerchants = assignedResponse.success && assignedResponse.data
@@ -299,12 +301,12 @@ export default async function AdminMerchants(props: Props) {
                   </span>
                 ))}
               </div>
-              <a
+              <Link
                 href={`/admin/merchants/${merchant.id}`}
                 className="inline-flex min-h-10 items-center justify-center rounded-md bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary-hover"
               >
                 فتح المتجر
-              </a>
+              </Link>
             </Card>
           ))}
           {assignedMerchants.length === 0 ? (
@@ -438,12 +440,12 @@ export default async function AdminMerchants(props: Props) {
                 </div>
 
                 <div className="flex w-full flex-col gap-2">
-                  <a
+                  <Link
                     href={`/admin/merchants/${merchant.id}`}
                     className="inline-flex w-full min-h-10 items-center justify-center rounded-md bg-brand-primary px-3 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-hover"
                   >
                     إدارة المتجر
-                  </a>
+                  </Link>
                   <ToggleTenantStatusForm merchant={merchant} />
                 </div>
               </div>
@@ -566,12 +568,12 @@ export default async function AdminMerchants(props: Props) {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex flex-col gap-2">
-                          <a
+                          <Link
                             href={`/admin/merchants/${merchant.id}`}
                             className="inline-flex w-full min-h-10 items-center justify-center rounded-md bg-brand-primary px-3 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-hover"
                           >
                             إدارة المتجر
-                          </a>
+                          </Link>
                           <ToggleTenantStatusForm merchant={merchant} />
                         </div>
                       </td>

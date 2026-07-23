@@ -20,12 +20,15 @@ import {
   ZoneActivationControl,
   ZoneMerchantControls,
 } from "./_components/ZoneAdminControls";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 export const dynamic = "force-dynamic";
 
 type AdminZonePageProps = { params: Promise<{ zoneId: string }> };
 
 export default async function AdminZonePage({ params }: AdminZonePageProps) {
+  if (!isZoneStorefrontEnabled()) notFound();
+
   const zoneId = Number((await params).zoneId);
   if (!Number.isInteger(zoneId) || zoneId <= 0) notFound();
   const zoneResponse = await adminService.getZone(zoneId);

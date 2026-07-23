@@ -4,6 +4,7 @@ declare global {
       NODE_ENV: "development" | "production";
       NEXT_PUBLIC_API_BASE_URL: string;
       NEXT_PUBLIC_APP_BASE_URL: string;
+      ZONE_STOREFRONTS_ENABLED?: string;
       ANDROID_CUSTOMER_CERT_SHA256_FINGERPRINTS?: string;
       NEXT_PUBLIC_SENTRY_DSN: string;
       NEXT_PUBLIC_GA_MEASUREMENT_ID?: string;

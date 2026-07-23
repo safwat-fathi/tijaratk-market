@@ -58,6 +58,41 @@ export type DispatchSessionStartResult = {
   message: string;
 };
 
+export type AdminMerchantSearchSuggestion = {
+  id: number;
+  name: string;
+  phone: string;
+};
+
+export async function searchAdminMerchantsAction(
+  query: string,
+): Promise<AdminMerchantSearchSuggestion[]> {
+  const normalizedQuery = query.trim().slice(0, 100);
+  if (!normalizedQuery) return [];
+
+  try {
+    const response = await adminService.getTenants({
+      search: normalizedQuery,
+      limit: 5,
+    });
+    if (!response.success || !response.data) return [];
+
+    const tenants = Array.isArray(response.data)
+      ? response.data
+      : response.data.data;
+
+    return tenants.slice(0, 5).map((tenant) => ({
+      id: tenant.id,
+      name: tenant.name,
+      phone: tenant.phone,
+    }));
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error;
+    console.error("Admin merchant suggestion search failed:", error);
+    return [];
+  }
+}
+
 const zoneMutationMessages: Record<string, string> = {
   ZONE_OPERATOR_NOT_READY:
     "مشغل المنطقة غير جاهز لاستقبال الطلبات. راجع حالة المشغل وإتاحة التوصيل.",

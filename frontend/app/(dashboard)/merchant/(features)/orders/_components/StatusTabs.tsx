@@ -8,14 +8,20 @@ interface StatusTabsProps {
   currentStatus: OrdersTab;
   counts: Record<OrdersTab, number>;
   onTabChange: (status: OrdersTab) => void;
+  zoneStorefrontsEnabled: boolean;
 }
 
 export default function StatusTabs({
   currentStatus,
   counts,
   onTabChange,
+  zoneStorefrontsEnabled,
 }: StatusTabsProps) {
-  const tabs = [
+  const tabs: {
+    id: OrdersTab;
+    label: string;
+    color: string;
+  }[] = [
     {
       id: OrderStatus.DRAFT,
       label: "جديد",
@@ -47,11 +53,11 @@ export default function StatusTabs({
       color: "text-status-cancelled bg-status-cancelled/15",
     },
     {
-      id: "assigned" as const,
+      id: "assigned",
       label: "الطلبات المسندة",
       color: "text-brand-primary bg-brand-soft",
     },
-  ];
+  ].filter((tab) => zoneStorefrontsEnabled || tab.id !== "assigned");
 
   return (
     <div className="border-b border-brand-border bg-white">
@@ -66,7 +72,7 @@ export default function StatusTabs({
               variant="pill"
               isActive={isActive}
               className={isActive ? tab.color : ""}
-              onClick={() => onTabChange(tab.id as OrdersTab)}
+              onClick={() => onTabChange(tab.id)}
             >
               {tab.label}
               <span

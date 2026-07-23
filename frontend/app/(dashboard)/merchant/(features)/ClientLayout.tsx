@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { logoutAction } from "@/actions/auth-server";
 import { Logo } from "@/components/ui/Logo";
 import { DashboardPwaInstallAction } from "@/components/pwa/DashboardPwaControls";
@@ -9,7 +9,7 @@ import {
   PushNotificationsProvider,
 } from "@/components/pwa/PushNotificationsControl";
 import { SupportWidget } from "@/components/ui/SupportWidget";
-import { GuidedTour } from "@/components/merchant/GuidedTour";
+import { GuidedTourLauncher } from "@/components/merchant/GuidedTourLauncher";
 import type { PushNotificationsConfig } from "@/types/services/push-notifications";
 
 const navigation = [
@@ -181,27 +181,35 @@ export default function MerchantLayoutClient({
   merchantAppName,
   newOrdersCount,
   pushConfig,
+  zoneStorefrontsEnabled,
 }: {
   children: React.ReactNode;
   merchantAppName: string;
   newOrdersCount: number;
   pushConfig: PushNotificationsConfig;
+  zoneStorefrontsEnabled: boolean;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const merchantNavigation = navigation.map((item) =>
-    item.href === "/merchant/orders"
-      ? {
-          ...item,
-          badgeCount: newOrdersCount,
-          activePrefixes: ["/merchant/assigned-orders"],
-        }
-      : item,
+  const merchantNavigation = useMemo(
+    () =>
+      navigation.map((item) =>
+        item.href === "/merchant/orders"
+          ? {
+              ...item,
+              badgeCount: newOrdersCount,
+              activePrefixes: zoneStorefrontsEnabled
+                ? ["/merchant/assigned-orders"]
+                : undefined,
+            }
+          : item,
+      ),
+    [newOrdersCount, zoneStorefrontsEnabled],
   );
 
   return (
     <PushNotificationsProvider scope="merchant" config={pushConfig}>
       <div className="min-h-screen bg-background">
-        <GuidedTour />
+        <GuidedTourLauncher />
         {/* Mobile sidebar placeholder/trigger */}
         <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-x-4 border-b border-brand-border bg-white px-4 py-4 shadow-soft sm:px-6 lg:hidden">
           <button

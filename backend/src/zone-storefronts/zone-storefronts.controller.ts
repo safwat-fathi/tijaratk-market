@@ -56,6 +56,7 @@ import { diskStorage } from 'multer';
 import { randomUUID } from 'node:crypto';
 import { extname, join } from 'node:path';
 import { MetaConversionsService } from 'src/meta-conversions/meta-conversions.service';
+import { ZoneStorefrontFeatureGuard } from './zone-storefront-feature';
 
 /** Public customer-safe zone storefront endpoints. */
 @ApiTags('Zone Storefronts')
@@ -79,7 +80,7 @@ export class ZoneStorefrontsController {
 
   /** Returns sanitized public zone identity and delivery configuration. */
   @Get('public/:slug')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(ZoneStorefrontFeatureGuard, ThrottlerGuard)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Get a public zone storefront' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Public zone returned' })
@@ -89,7 +90,7 @@ export class ZoneStorefrontsController {
 
   /** Returns authoritative Cairo-time ordering mode and valid scheduled slots. */
   @Get('public/:slug/delivery-availability')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(ZoneStorefrontFeatureGuard, ThrottlerGuard)
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({ summary: 'Get zone delivery availability' })
   findDeliveryAvailability(@Param('slug') slug: string) {
@@ -98,7 +99,7 @@ export class ZoneStorefrontsController {
 
   /** Returns paginated catalog products from the operator tenant only. */
   @Get('public/:slug/products')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(ZoneStorefrontFeatureGuard, ThrottlerGuard)
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({ summary: 'List public zone products' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Zone products returned' })
@@ -111,7 +112,7 @@ export class ZoneStorefrontsController {
 
   /** Returns category summaries scoped to the zone catalog source. */
   @Get('public/:slug/categories')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(ZoneStorefrontFeatureGuard, ThrottlerGuard)
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({ summary: 'List public zone categories' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Zone categories returned' })
@@ -121,7 +122,7 @@ export class ZoneStorefrontsController {
 
   /** Creates a zone order and pending dispatch in one transaction. */
   @Post('public/:slug/orders')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(ZoneStorefrontFeatureGuard, ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiConsumes('application/json', 'multipart/form-data')
   @ApiOperation({ summary: 'Create a public zone order' })
@@ -164,7 +165,7 @@ export class ZoneStorefrontsController {
 @ApiTags('Admin Zones')
 @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
 @Controller('admin/zones')
-@UseGuards(AdminAuthGuard)
+@UseGuards(AdminAuthGuard, ZoneStorefrontFeatureGuard)
 @RequirePlatformAdmin()
 export class AdminZoneStorefrontsController {
   constructor(private readonly zones: ZoneStorefrontsService) {}
@@ -295,7 +296,11 @@ export class AdminZoneStorefrontsController {
 @ApiTags('Admin Managed Zone Dispatches')
 @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
 @Controller('admin/managed-tenants/:tenantId/zone-dispatches')
-@UseGuards(AdminAuthGuard, ManagedTenantGuard)
+@UseGuards(
+  AdminAuthGuard,
+  ManagedTenantGuard,
+  ZoneStorefrontFeatureGuard,
+)
 export class ManagedZoneDispatchesController {
   constructor(private readonly dispatches: OrderDispatchService) {}
 
@@ -360,7 +365,7 @@ export class ManagedZoneDispatchesController {
 @ApiTags('Assigned Orders')
 @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
 @Controller('assigned-orders')
-@UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+@UseGuards(AuthGuard(CONSTANTS.AUTH.JWT), ZoneStorefrontFeatureGuard)
 export class AssignedOrdersController {
   constructor(private readonly dispatches: OrderDispatchService) {}
 

@@ -4,10 +4,14 @@ import { adminService } from "@/services/api/admin.service";
 import { hasActiveManagedPermission } from "@/lib/admin-managed-access";
 import { CreateZoneStorefrontForm } from "./_components/CreateZoneStorefrontForm";
 import { DispatchSessionForm } from "./_components/DispatchSessionForm";
+import { notFound } from "next/navigation";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminZonesPage() {
+  if (!isZoneStorefrontEnabled()) notFound();
+
   const profileResponse = await adminService.getCurrentAdmin();
   const profile = profileResponse.data;
 

@@ -24,6 +24,7 @@ import {
   subscribePushNotificationsAction,
   unsubscribePushNotificationsAction,
 } from "@/actions/push-notification-actions";
+import { runAfterLoadAndIdle } from "@/lib/browser/run-after-load-and-idle";
 import { cn } from "@/lib/utils";
 import {
   PUSH_SCOPES,
@@ -143,10 +144,12 @@ export const PushNotificationsProvider = ({
 
   useEffect(() => {
     if (!config.enabled || !config.publicKey) {
-      if ("serviceWorker" in navigator) {
-        void registerWorker().catch(() => undefined);
-      }
       setState("disabled");
+      if ("serviceWorker" in navigator) {
+        return runAfterLoadAndIdle(() => {
+          void registerWorker().catch(() => undefined);
+        });
+      }
       return;
     }
 
@@ -195,9 +198,12 @@ export const PushNotificationsProvider = ({
       }
     };
 
-    void initialize();
+    const cancelInitialization = runAfterLoadAndIdle(() => {
+      void initialize();
+    });
     return () => {
       cancelled = true;
+      cancelInitialization();
     };
   }, [config.enabled, config.publicKey, registerWorker, scope]);
 

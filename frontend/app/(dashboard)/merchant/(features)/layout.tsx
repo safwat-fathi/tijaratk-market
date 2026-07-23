@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { tenantsService } from "@/services/api/tenants.service";
-import { ordersService } from "@/services/api/orders.service";
 import MerchantLayoutClient from "./ClientLayout";
-import { merchantPushNotificationsService } from "@/services/api/push-notifications.service";
+import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
+import {
+  getInboxSummaryCached,
+  getMyTenantCached,
+  getPushNotificationsConfigCached,
+} from "@/lib/server/dashboard-request-cache";
 
 export const metadata: Metadata = {
   manifest: "/pwa/merchant/manifest",
@@ -25,9 +28,9 @@ export default async function MerchantFeaturesLayout({
 }) {
   const [tenantResponse, inboxSummaryResponse, pushConfigResponse] =
     await Promise.all([
-      tenantsService.getMyTenant(),
-      ordersService.getInboxSummary(),
-      merchantPushNotificationsService.getConfig(),
+      getMyTenantCached(),
+      getInboxSummaryCached(),
+      getPushNotificationsConfigCached(),
     ]);
 
   if (tenantResponse.success && tenantResponse.data) {
@@ -50,6 +53,7 @@ export default async function MerchantFeaturesLayout({
     <MerchantLayoutClient
       merchantAppName={merchantAppName}
       newOrdersCount={newOrdersCount}
+      zoneStorefrontsEnabled={isZoneStorefrontEnabled()}
       pushConfig={
         pushConfigResponse.success && pushConfigResponse.data
           ? pushConfigResponse.data

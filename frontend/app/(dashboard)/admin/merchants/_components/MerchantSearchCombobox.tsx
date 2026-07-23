@@ -1,9 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { adminService, type AdminTenant } from "@/services/api/admin.service";
-import { useDebounce } from 'use-debounce';
+import {
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  searchAdminMerchantsAction,
+  type AdminMerchantSearchSuggestion,
+} from "@/actions/admin-server";
 
 const normalizeMerchantSearch = (value: string) => {
   const trimmed = value.trim();
@@ -17,18 +25,17 @@ export function MerchantSearchCombobox() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  
   const searchParamValue = searchParams.get("search") || "";
   const tenantIdParam = searchParams.get("tenantId");
   const [inputValue, setInputValue] = useState(searchParamValue);
-  const [suggestions, setSuggestions] = useState<AdminTenant[]>([]);
+  const deferredSearch = useDeferredValue(inputValue);
+  const [suggestions, setSuggestions] = useState<
+    AdminMerchantSearchSuggestion[]
+  >([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const [debouncedSearch] = useDebounce(inputValue, 400);
+  const requestSequence = useRef(0);
 
   useEffect(() => {
     if (!tenantIdParam) {
@@ -37,50 +44,43 @@ export function MerchantSearchCombobox() {
   }, [searchParamValue, tenantIdParam]);
 
   useEffect(() => {
-    let active = true;
+    const query = normalizeMerchantSearch(deferredSearch);
+    const requestId = ++requestSequence.current;
 
-    if (!debouncedSearch || !debouncedSearch.trim()) {
+    if (!query) {
       setSuggestions([]);
+      setIsLoading(false);
       return;
     }
 
-    const fetchSuggestions = async () => {
-      const query = normalizeMerchantSearch(debouncedSearch);
-      if (!query) {
-        setSuggestions([]);
-        return;
-      }
-
+    const searchTimeout = window.setTimeout(() => {
       setIsLoading(true);
-      try {
-        const res = await adminService.getTenants({ search: query, limit: 5 });
-        if (active && res.success && res.data && 'data' in res.data) {
-          setSuggestions(res.data.data as AdminTenant[]);
-        } else if (active && res.success && res.data && Array.isArray(res.data)) {
-           setSuggestions(res.data as AdminTenant[]);
-        } else if (active) {
-          setSuggestions([]);
-        }
-      } catch (err) {
-        console.error("Failed to fetch suggestions", err);
-      } finally {
-        if (active) setIsLoading(false);
-      }
-    };
+      void searchAdminMerchantsAction(query)
+        .then((results) => {
+          if (requestSequence.current !== requestId) return;
+          startTransition(() => setSuggestions(results));
+        })
+        .catch(() => {
+          if (requestSequence.current === requestId) setSuggestions([]);
+        })
+        .finally(() => {
+          if (requestSequence.current === requestId) setIsLoading(false);
+        });
+    }, 300);
 
-    fetchSuggestions();
-
-    return () => {
-      active = false;
-    };
-  }, [debouncedSearch]);
+    return () => window.clearTimeout(searchTimeout);
+  }, [deferredSearch]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     }
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
@@ -88,7 +88,7 @@ export function MerchantSearchCombobox() {
   const handleSearchSubmit = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     const normalizedSearch = normalizeMerchantSearch(value);
-    params.delete("tenantId"); // Reset exact ID
+    params.delete("tenantId");
     params.set("page", "1");
     if (normalizedSearch) {
       params.set("search", normalizedSearch);
@@ -99,12 +99,14 @@ export function MerchantSearchCombobox() {
     setIsOpen(false);
   };
 
-  const handleSelectSuggestion = (tenant: AdminTenant) => {
+  const handleSelectSuggestion = (
+    tenant: AdminMerchantSearchSuggestion,
+  ) => {
     setInputValue(tenant.name);
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", "1");
     params.set("tenantId", String(tenant.id));
-    params.delete("search"); // Delete broad search since we have exact
+    params.delete("search");
     router.push(`${pathname}?${params.toString()}`);
     setIsOpen(false);
   };
@@ -113,20 +115,25 @@ export function MerchantSearchCombobox() {
     <div className="relative w-full" ref={containerRef}>
       <div className="relative">
         <input
-          ref={inputRef}
           type="text"
-          className="w-full rounded-md border border-brand-border focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15 px-4 py-2"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls="merchant-search-suggestions"
+          aria-autocomplete="list"
+          className="w-full rounded-md border border-brand-border px-4 py-2 focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/15"
           placeholder="ابحث بالاسم أو رقم الهاتف..."
           value={inputValue}
-          onChange={(e) => {
-            setInputValue(e.target.value);
+          onChange={(event) => {
+            setInputValue(event.target.value);
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
               handleSearchSubmit(inputValue);
+            } else if (event.key === "Escape") {
+              setIsOpen(false);
             }
           }}
         />
@@ -134,39 +141,65 @@ export function MerchantSearchCombobox() {
           type="button"
           onClick={() => handleSearchSubmit(inputValue)}
           className="absolute inset-y-0 left-0 flex items-center px-3 text-gray-500 hover:text-brand-accent focus:outline-none"
+          aria-label="بحث"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
           </svg>
         </button>
       </div>
 
-      {isOpen && inputValue.trim() && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-brand-border rounded-md shadow-lg max-h-60 overflow-auto">
+      {isOpen && inputValue.trim() ? (
+        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-brand-border bg-white shadow-lg">
           {isLoading ? (
-            <div className="px-4 py-3 text-sm text-gray-500 text-center">جاري البحث...</div>
+            <div className="px-4 py-3 text-center text-sm text-gray-500">
+              جاري البحث...
+            </div>
           ) : suggestions.length > 0 ? (
-            <ul className="py-1 text-sm text-brand-text divide-y divide-brand-border/50">
+            <ul
+              id="merchant-search-suggestions"
+              role="listbox"
+              className="divide-y divide-brand-border/50 py-1 text-sm text-brand-text"
+            >
               {suggestions.map((tenant) => (
                 <li key={tenant.id}>
                   <button
                     type="button"
-                    className="w-full text-right px-4 py-3 hover:bg-brand-soft focus:bg-brand-soft focus:outline-none flex justify-between items-center transition-colors"
+                    role="option"
+                    className="flex w-full items-center justify-between px-4 py-3 text-right transition-colors hover:bg-brand-soft focus:bg-brand-soft focus:outline-none"
                     onClick={() => handleSelectSuggestion(tenant)}
                   >
-                    <span className="font-medium truncate ml-2">{tenant.name}</span>
-                    <span className="text-gray-500 text-xs shrink-0" dir="ltr">{tenant.phone}</span>
+                    <span className="ml-2 truncate font-medium">
+                      {tenant.name}
+                    </span>
+                    <span
+                      className="shrink-0 text-xs text-gray-500"
+                      dir="ltr"
+                    >
+                      {tenant.phone}
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
-            <div className="px-4 py-3 text-sm text-gray-500 text-center">
+            <div className="px-4 py-3 text-center text-sm text-gray-500">
               لا توجد نتائج مطابقة
             </div>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

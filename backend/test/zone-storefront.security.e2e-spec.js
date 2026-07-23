@@ -1670,7 +1670,7 @@ describe('Zone storefront security E2E', () => {
     ).toEqual(dashboardAfterCompletion);
   });
 
-  it('keeps tracking and dispatch available when discovery is disabled', async () => {
+  it('keeps tracking available and blocks dispatch when disabled', async () => {
     const fixture = grocery;
     const rejectionOrder = await createZoneOrder(httpServer, fixture, {
       phone: generateEgyptPhone(40),
@@ -1759,6 +1759,10 @@ describe('Zone storefront security E2E', () => {
         where: { id: fixture.dispatch.id },
       });
       await request(httpServer)
+        .get('/admin/zones')
+        .set('Authorization', `Bearer ${platformAdminToken}`)
+        .expect(404);
+      await request(httpServer)
         .post(
           `/admin/managed-tenants/${fixture.zone.operator_tenant.id}/zone-dispatches/${fixture.dispatch.id}/cancel`,
         )
@@ -1768,7 +1772,11 @@ describe('Zone storefront security E2E', () => {
           expected_version: acceptedDispatch.version,
           reason: 'إلغاء تشغيلي للاختبار',
         })
-        .expect(201);
+        .expect(404);
+      await request(httpServer)
+        .get('/assigned-orders')
+        .set('Authorization', `Bearer ${fixture.merchants[1].token}`)
+        .expect(404);
       await request(httpServer)
         .get(`/assigned-orders/${fixture.dispatch.id}`)
         .set('Authorization', `Bearer ${fixture.merchants[1].token}`)

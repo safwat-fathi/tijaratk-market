@@ -1,12 +1,12 @@
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
-interface LogoProps {
+type LogoProps = {
   className?: string;
-  variant?: 'auto' | 'light' | 'dark' | 'icon';
+  variant?: 'auto' | 'light' | 'dark' | 'icon' | 'icon-light' | 'icon-dark';
   width?: number;
   height?: number;
-}
+};
 
 export function Logo({ className, variant = 'auto', width = 160, height = 48 }: LogoProps) {
   // 'auto' uses tailwind dark mode classes to swap automatically
@@ -32,6 +32,18 @@ export function Logo({ className, variant = 'auto', width = 160, height = 48 }: 
           className={cn("hidden dark:block", className)} 
         />
       </>
+    );
+  }
+
+  if (variant === 'icon-light' || variant === 'icon-dark') {
+    return (
+      <Image
+        src={`/tijaratk-logo-suite/app-icon-${variant === 'icon-light' ? 'light' : 'dark'}.png`}
+        alt="Tijaratk App Icon"
+        width={width}
+        height={height}
+        className={className}
+      />
     );
   }
 
