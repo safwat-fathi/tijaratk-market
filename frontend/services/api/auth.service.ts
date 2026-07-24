@@ -6,6 +6,10 @@ import {
   RequestPasswordResetRequest,
   VerifyPasswordResetRequest,
   UpdatePasswordRequest,
+  PhoneChangeChallengeResponse,
+  RequestPhoneChangeRequest,
+  ResendPhoneChangeRequest,
+  VerifyPhoneChangeRequest,
 } from "@/types/services/auth";
 
 class AuthService extends HttpService {
@@ -39,6 +43,33 @@ class AuthService extends HttpService {
 	public async updatePassword(payload: UpdatePasswordRequest) {
 		return this.post<{ success: boolean; message?: string }>(
 			"update-password",
+			payload,
+			undefined,
+			{ authRequired: true },
+		);
+	}
+
+	public async requestPhoneChange(payload: RequestPhoneChangeRequest) {
+		return this.post<PhoneChangeChallengeResponse>(
+			"phone-change/request",
+			payload,
+			undefined,
+			{ authRequired: true },
+		);
+	}
+
+	public async resendPhoneChange(payload: ResendPhoneChangeRequest) {
+		return this.post<PhoneChangeChallengeResponse>(
+			"phone-change/resend",
+			payload,
+			undefined,
+			{ authRequired: true },
+		);
+	}
+
+	public async verifyPhoneChange(payload: VerifyPhoneChangeRequest) {
+		return this.post<{ success: boolean; message?: string }>(
+			"phone-change/verify",
 			payload,
 			undefined,
 			{ authRequired: true },

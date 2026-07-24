@@ -16,6 +16,8 @@ declare global {
       ZONE_STOREFRONTS_ENABLED: string;
       CSRF_SECRET: string;
       CLIENT_URL: string;
+      TWILIO_ACCOUNT_SID: string;
+      TWILIO_AUTH_TOKEN: string;
       ACCOUNT_SID: string;
       AUTH_TOKEN: string;
       WHATSAPP_PHONE_NUMBER: string;

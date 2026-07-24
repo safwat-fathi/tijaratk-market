@@ -6,7 +6,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { HealthController } from './health/health.controller';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
-import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { ProductsModule } from './products/products.module';
 import { CustomersModule } from './customers/customers.module';
@@ -48,7 +47,6 @@ const ENV = process.env.NODE_ENV;
     ]),
     UsersModule,
     AuthModule,
-    WhatsappModule,
     TenantsModule,
     ProductsModule,
     CustomersModule,

@@ -55,11 +55,20 @@ const {
 const {
   PushNotificationsService,
 } = require('../dist/push-notifications/push-notifications.service');
+const {
+  TwilioVerifyService,
+} = require('../dist/auth/twilio-verify.service');
+const { WhatsappService } = require('../dist/whatsapp/whatsapp.service');
 const webPush = require('web-push');
 
 const AUTH_SIGNUP_PATH = '/auth/signup';
 const AUTH_LOGIN_PATH = '/auth/login';
 const AUTH_UPDATE_PASSWORD_PATH = '/auth/update-password';
+const AUTH_PASSWORD_RESET_REQUEST_PATH = '/auth/password-reset/request';
+const AUTH_PASSWORD_RESET_VERIFY_PATH = '/auth/password-reset/verify';
+const AUTH_PHONE_CHANGE_REQUEST_PATH = '/auth/phone-change/request';
+const AUTH_PHONE_CHANGE_RESEND_PATH = '/auth/phone-change/resend';
+const AUTH_PHONE_CHANGE_VERIFY_PATH = '/auth/phone-change/verify';
 const PRODUCTS_PATH = '/products';
 const PRODUCTS_ITEM_PATH = (id) => `${PRODUCTS_PATH}/${id}`;
 const ADMIN_LOGIN_PATH = '/admin/login';
@@ -79,6 +88,9 @@ describe('Security E2E (multi-tenant)', () => {
   let httpServer;
   let tokenTenantA;
   let tokenTenantB;
+  let tenantAPhone;
+  let tenantBPhone;
+  let tenantAPassword;
   let tenantAId;
   let tenantBId;
   let tenantBProductId;
@@ -90,6 +102,19 @@ describe('Security E2E (multi-tenant)', () => {
   const createdCatalogItemIds = [];
   const createdDirectoryAreaIds = [];
   const password = 'Passw0rd!';
+  const approvedVerifyCode = '123456';
+  const twilioVerifyService = {
+    isConfigured: jest.fn(() => true),
+    startSmsVerification: jest.fn(async (to) => ({
+      sid: `VE-${String(to).replace(/\D/g, '')}-${Date.now()}`,
+    })),
+    checkCodeByPhone: jest.fn(
+      async (_to, code) => code === approvedVerifyCode,
+    ),
+    checkCodeByVerificationSid: jest.fn(
+      async (_sid, code) => code === approvedVerifyCode,
+    ),
+  };
 
   const runId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
@@ -103,6 +128,8 @@ describe('Security E2E (multi-tenant)', () => {
         onApplicationBootstrap: () => undefined,
         onModuleDestroy: () => undefined,
       })
+      .overrideProvider(TwilioVerifyService)
+      .useValue(twilioVerifyService)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -139,8 +166,9 @@ describe('Security E2E (multi-tenant)', () => {
     adminProvisioningService = app.get(AdminProvisioningService);
     pushNotificationsService = app.get(PushNotificationsService);
 
-    const tenantAPhone = generateEgyptPhone(1);
-    const tenantBPhone = generateEgyptPhone(2);
+    tenantAPhone = generateEgyptPhone(1);
+    tenantBPhone = generateEgyptPhone(2);
+    tenantAPassword = password;
 
     await signupTenant(httpServer, {
       storeName: `E2E Store A ${runId}`,
@@ -920,15 +948,195 @@ describe('Security E2E (multi-tenant)', () => {
       .expect(400);
   });
 
+  it('boots with outbound WhatsApp runtime wiring disabled', () => {
+    expect(() => app.get(WhatsappService, { strict: false })).toThrow();
+  });
+
   it('updates password for an authenticated merchant token', async () => {
+    const previousToken = tokenTenantA;
+    const newPassword = `NewPassw0rd!${runId}`;
+
     await request(httpServer)
       .post(AUTH_UPDATE_PASSWORD_PATH)
       .set('Authorization', `Bearer ${tokenTenantA}`)
       .send({
-        currentPassword: password,
-        newPassword: `NewPassw0rd!${runId}`,
+        currentPassword: tenantAPassword,
+        newPassword,
       })
       .expect(200);
+
+    await request(httpServer)
+      .get('/tenants/me')
+      .set('Authorization', `Bearer ${previousToken}`)
+      .expect(401);
+
+    tenantAPassword = newPassword;
+    const session = await loginAndGetSession(httpServer, {
+      phone: tenantAPhone,
+      pass: tenantAPassword,
+    });
+    tokenTenantA = session.token;
+  });
+
+  it('keeps password reset requests generic and fails closed', async () => {
+    twilioVerifyService.startSmsVerification.mockClear();
+
+    await request(httpServer)
+      .post(AUTH_PASSWORD_RESET_REQUEST_PATH)
+      .send({ phone: generateEgyptPhone(8) })
+      .expect(200);
+    expect(twilioVerifyService.startSmsVerification).not.toHaveBeenCalled();
+
+    twilioVerifyService.startSmsVerification.mockRejectedValueOnce(
+      new Error('provider unavailable'),
+    );
+    const response = await request(httpServer)
+      .post(AUTH_PASSWORD_RESET_REQUEST_PATH)
+      .send({ phone: tenantAPhone })
+      .expect(200);
+
+    expect(response.body.data).toEqual(
+      expect.objectContaining({
+        success: true,
+        message: 'If this phone exists, a reset code has been sent.',
+      }),
+    );
+  });
+
+  it('resets a password through Verify and invalidates prior sessions', async () => {
+    await request(httpServer)
+      .post(AUTH_PASSWORD_RESET_REQUEST_PATH)
+      .send({ phone: tenantAPhone })
+      .expect(200);
+
+    await request(httpServer)
+      .post(AUTH_PASSWORD_RESET_VERIFY_PATH)
+      .send({
+        phone: tenantAPhone,
+        otp: '000000',
+        password: `ResetPassw0rd!${runId}`,
+        confirm_password: `ResetPassw0rd!${runId}`,
+      })
+      .expect(400);
+
+    const previousToken = tokenTenantA;
+    const resetPassword = `ResetPassw0rd!${runId}`;
+    await request(httpServer)
+      .post(AUTH_PASSWORD_RESET_VERIFY_PATH)
+      .send({
+        phone: tenantAPhone,
+        otp: approvedVerifyCode,
+        password: resetPassword,
+        confirm_password: resetPassword,
+      })
+      .expect(200);
+
+    await request(httpServer)
+      .get('/tenants/me')
+      .set('Authorization', `Bearer ${previousToken}`)
+      .expect(401);
+
+    tenantAPassword = resetPassword;
+    const session = await loginAndGetSession(httpServer, {
+      phone: tenantAPhone,
+      pass: tenantAPassword,
+    });
+    tokenTenantA = session.token;
+  });
+
+  it('changes the owner login and store phone through a bound Verify challenge', async () => {
+    const newPhone = generateEgyptPhone(9);
+    const previousPhone = tenantAPhone;
+    const previousToken = tokenTenantA;
+
+    await request(httpServer)
+      .post(AUTH_PHONE_CHANGE_REQUEST_PATH)
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({
+        currentPassword: tenantAPassword,
+        newPhone: tenantBPhone,
+      })
+      .expect(409);
+
+    await request(httpServer)
+      .post(AUTH_PHONE_CHANGE_REQUEST_PATH)
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({
+        currentPassword: 'WrongPassword!',
+        newPhone,
+      })
+      .expect(400);
+
+    const requestResponse = await request(httpServer)
+      .post(AUTH_PHONE_CHANGE_REQUEST_PATH)
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({
+        currentPassword: tenantAPassword,
+        newPhone,
+      })
+      .expect(200);
+    const initialChallenge = requestResponse.body.data.challengeToken;
+
+    await request(httpServer)
+      .get('/tenants/me')
+      .set('Authorization', `Bearer ${initialChallenge}`)
+      .expect(401);
+
+    const resendResponse = await request(httpServer)
+      .post(AUTH_PHONE_CHANGE_RESEND_PATH)
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({ challengeToken: initialChallenge })
+      .expect(200);
+    const challengeToken = resendResponse.body.data.challengeToken;
+
+    await request(httpServer)
+      .post(AUTH_PHONE_CHANGE_VERIFY_PATH)
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({
+        challengeToken: `${challengeToken}tampered`,
+        otp: approvedVerifyCode,
+      })
+      .expect(400);
+
+    await request(httpServer)
+      .post(AUTH_PHONE_CHANGE_VERIFY_PATH)
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({ challengeToken, otp: '000000' })
+      .expect(400);
+
+    await request(httpServer)
+      .post(AUTH_PHONE_CHANGE_VERIFY_PATH)
+      .set('Authorization', `Bearer ${tokenTenantA}`)
+      .send({ challengeToken, otp: approvedVerifyCode })
+      .expect(200);
+
+    const [storedUser, storedTenant] = await Promise.all([
+      prisma.user.findUniqueOrThrow({
+        where: { phone: newPhone },
+        select: { tenant_id: true },
+      }),
+      prisma.tenant.findUniqueOrThrow({
+        where: { id: tenantAId },
+        select: { phone: true },
+      }),
+    ]);
+    expect(storedUser.tenant_id).toBe(tenantAId);
+    expect(storedTenant.phone).toBe(newPhone);
+
+    await request(httpServer)
+      .get('/tenants/me')
+      .set('Authorization', `Bearer ${previousToken}`)
+      .expect(401);
+    expect(
+      await prisma.user.findUnique({ where: { phone: previousPhone } }),
+    ).toBeNull();
+
+    tenantAPhone = newPhone;
+    const session = await loginAndGetSession(httpServer, {
+      phone: tenantAPhone,
+      pass: tenantAPassword,
+    });
+    tokenTenantA = session.token;
   });
 
   it('prevents cross-tenant READ', async () => {

@@ -3,7 +3,7 @@ import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
 export const metadata = createNoIndexMetadata(
 	"إعادة تعيين كلمة مرور التاجر",
-	"استعد الوصول إلى حساب التاجر عبر رمز تحقق واتساب.",
+	"استعد الوصول إلى حساب التاجر عبر رمز تحقق في رسالة نصية.",
 );
 
 export default function ResetPasswordPage() {

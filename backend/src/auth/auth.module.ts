@@ -10,6 +10,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import CONSTANTS from 'src/common/constants';
 import { TenantsModule } from '../tenants/tenants.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
+import { ActivityLogModule } from 'src/activity-log/activity-log.module';
+import { TwilioVerifyService } from './twilio-verify.service';
 
 @Module({
   imports: [
@@ -35,9 +37,10 @@ import { PushNotificationsModule } from '../push-notifications/push-notification
     }),
     TenantsModule,
     PushNotificationsModule,
+    ActivityLogModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  providers: [AuthService, JwtStrategy, TwilioVerifyService],
+  exports: [AuthService, TwilioVerifyService],
 })
 export class AuthModule {}

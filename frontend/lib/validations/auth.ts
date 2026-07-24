@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { TENANT_CATEGORIES, TENANT_CATEGORY_VALUES } from "@/constants";
+import { isValidEgyptianCustomerPhone } from "@/lib/utils/phone";
 
 export const loginSchema = z.object({
   phone: z.string().min(10, "Phone number must be at least 10 characters"),
@@ -55,3 +56,21 @@ export const updatePasswordSchema = z.object({
 });
 
 export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>;
+
+export const requestPhoneChangeSchema = z.object({
+  currentPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
+  newPhone: z
+    .string()
+    .trim()
+    .refine(
+      isValidEgyptianCustomerPhone,
+      "اكتب رقم موبايل مصري صحيح",
+    ),
+});
+
+export const verifyPhoneChangeSchema = z.object({
+  otp: z.string().regex(/^\d{6}$/, "رمز التحقق يجب أن يتكون من 6 أرقام"),
+});
+
+export type RequestPhoneChangeInput = z.infer<typeof requestPhoneChangeSchema>;
+export type VerifyPhoneChangeInput = z.infer<typeof verifyPhoneChangeSchema>;

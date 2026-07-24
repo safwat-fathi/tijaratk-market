@@ -3,6 +3,7 @@ import { IBM_Plex_Sans_Arabic, Poppins } from "next/font/google";
 import { SITE_DESCRIPTION, SITE_URL } from "@/lib/marketing-seo";
 import MarketingTracking from "@/components/analytics/MarketingTracking";
 import CustomerServiceWorkerRegistration from "@/components/pwa/CustomerServiceWorkerRegistration";
+import KeyboardStateDetector from "@/components/pwa/KeyboardStateDetector";
 import "./globals.css";
 
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
@@ -88,9 +89,23 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="ar" dir="rtl">
+			<head>
+				<script
+					dangerouslySetInnerHTML={{
+						__html: `
+              window.__installPromptEvent = null;
+              window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                window.__installPromptEvent = e;
+              });
+            `,
+					}}
+				/>
+			</head>
 			<body
 				className={`${ibmPlexSansArabic.variable} ${poppins.variable} font-sans antialiased`}
 			>
+				<KeyboardStateDetector />
 				<CustomerServiceWorkerRegistration />
 				{children}
 				<MarketingTracking />

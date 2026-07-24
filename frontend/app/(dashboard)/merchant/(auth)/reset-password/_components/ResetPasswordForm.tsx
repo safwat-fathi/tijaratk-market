@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import {
 	requestPasswordResetAction,
@@ -36,6 +36,8 @@ const resolveSubmitLabel = ({
 
 export default function ResetPasswordForm() {
 	const [phone, setPhone] = useState("");
+	const [hasRequestedCode, setHasRequestedCode] = useState(false);
+	const [resendCooldown, setResendCooldown] = useState(0);
 	const [requestState, requestAction, isRequestPending] = useActionState(
 		requestPasswordResetAction,
 		initialState,
@@ -44,7 +46,7 @@ export default function ResetPasswordForm() {
 		verifyPasswordResetAction,
 		initialState,
 	);
-	const shouldShowCodeStep = requestState.success === true;
+	const shouldShowCodeStep = hasRequestedCode;
 
 	const activeState = shouldShowCodeStep ? verifyState : requestState;
 	const submitLabel = resolveSubmitLabel({
@@ -52,6 +54,24 @@ export default function ResetPasswordForm() {
 		isRequestPending,
 		isVerifyPending,
 	});
+
+	useEffect(() => {
+		if (!requestState.success || !requestState.timestamp) return;
+
+		setHasRequestedCode(true);
+		setResendCooldown(30);
+		const interval = window.setInterval(() => {
+			setResendCooldown((current) => {
+				if (current <= 1) {
+					window.clearInterval(interval);
+					return 0;
+				}
+				return current - 1;
+			});
+		}, 1000);
+
+		return () => window.clearInterval(interval);
+	}, [requestState.success, requestState.timestamp]);
 
 	return (
 		<Card className="w-full max-w-md px-6 py-8 sm:px-10">
@@ -102,6 +122,17 @@ export default function ResetPasswordForm() {
 
 					{shouldShowCodeStep && (
 						<>
+							<p className="rounded-md border border-brand-border bg-brand-soft/40 p-3 text-sm text-muted-foreground">
+								إذا كان الرقم مسجلاً، فسيصل إليه رمز مكوّن من 6 أرقام.
+							</p>
+							{requestState.success === false && requestState.message ? (
+								<p
+									className="rounded-md border border-status-error/20 bg-status-error/10 p-3 text-sm text-status-error"
+									role="alert"
+								>
+									{requestState.message}
+								</p>
+							) : null}
 							<Field
 								label="رمز التحقق"
 								htmlFor="otp"
@@ -165,6 +196,27 @@ export default function ResetPasswordForm() {
 					>
 						{submitLabel}
 					</Button>
+
+					{shouldShowCodeStep ? (
+						<Button
+							type="submit"
+							variant="ghost"
+							formAction={requestAction}
+							formNoValidate
+							disabled={
+								isRequestPending ||
+								isVerifyPending ||
+								resendCooldown > 0
+							}
+							className="w-full"
+						>
+							{isRequestPending
+								? "جاري إعادة الإرسال…"
+								: resendCooldown > 0
+									? `إعادة الإرسال بعد ${resendCooldown} ثانية`
+									: "إعادة إرسال الرمز"}
+						</Button>
+					) : null}
 				</form>
 			)}
 

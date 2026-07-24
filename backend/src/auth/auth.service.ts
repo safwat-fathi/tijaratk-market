@@ -1,16 +1,17 @@
 import {
   Injectable,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
-import twilio from 'twilio';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { randomInt } from 'node:crypto';
 import {
+  Prisma,
   TenantStatus,
   User,
   UserRole,
@@ -22,12 +23,24 @@ import {
   maskPhoneNumber,
 } from 'src/common/utils/phone.util';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { WhatsappService } from 'src/whatsapp/whatsapp.service';
 import { PushNotificationsService } from 'src/push-notifications/push-notifications.service';
 import {
   getDatabaseTargetFingerprint,
   getRuntimeIdentity,
 } from 'src/common/utils/runtime-identity.util';
+import { TwilioVerifyService } from './twilio-verify.service';
+import {
+  MERCHANT_ACCESS_TOKEN_TYPE,
+  PHONE_CHANGE_CHALLENGE_TOKEN_TYPE,
+  PHONE_CHANGE_CHALLENGE_TTL_SECONDS,
+  PhoneChangeChallengePayload,
+} from './auth-token.constants';
+import { hashPassword } from 'src/common/utils/password.util';
+import { ActivityLogService } from 'src/activity-log/activity-log.service';
+import {
+  ActivityEntityTypes,
+  ActivitySources,
+} from 'src/activity-log/constants/activity-types';
 
 type AuthenticationFailureStage =
   | 'user_not_found'
@@ -35,20 +48,25 @@ type AuthenticationFailureStage =
   | 'tenant_status_blocked'
   | 'signup_password_verification_failed';
 
+type CredentialAuditContext = {
+  requestId?: string;
+  ipAddress?: string;
+};
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly runtimeIdentity = getRuntimeIdentity();
   private readonly databaseTargetFingerprint = getDatabaseTargetFingerprint();
-  private twilioClient: twilio.Twilio | null = null;
 
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private tenantsService: TenantsService,
     private prisma: PrismaService,
-    private whatsappService: WhatsappService,
     private pushNotificationsService: PushNotificationsService,
+    private twilioVerifyService: TwilioVerifyService,
+    private activityLogService: ActivityLogService,
   ) {}
 
   async validateUser(
@@ -148,9 +166,8 @@ export class AuthService {
   login(user: Omit<User, 'password'>) {
     const payload = {
       sub: user.id,
-      phone: user.phone,
-      tenantId: user.tenant_id,
-      role: user.role,
+      tokenType: MERCHANT_ACCESS_TOKEN_TYPE,
+      authVersion: user.auth_version,
     };
 
     return {
@@ -241,61 +258,24 @@ export class AuthService {
     };
   }
 
-  private isNotificationsEnabled(): boolean {
-    return String(process.env.WHATSAPP_NOTIFICATIONS_ENABLED) !== 'false';
-  }
-
-  private getTwilioClient(): twilio.Twilio | null {
-    if (this.twilioClient) {
-      return this.twilioClient;
-    }
-
-    const accountSid = process.env.TWILIO_ACCOUNT_SID || process.env.ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN || process.env.AUTH_TOKEN;
-
-    if (!accountSid || !authToken) {
-      this.logger.warn('Twilio env vars are missing; Verify will fail.');
-      return null;
-    }
-
-    this.twilioClient = twilio(accountSid, authToken);
-    return this.twilioClient;
-  }
-
+  /**
+   * Starts a non-enumerating merchant password reset.
+   */
   async requestPasswordReset(rawPhone: string) {
     const phone = formatPhoneNumber(rawPhone);
     const user = await this.usersService.findOneByPhone(phone);
 
-    if (!user) {
-      return {
-        success: true,
-        message: 'If this phone exists, a reset code has been sent.',
-      };
-    }
-
-    try {
-      if (!this.isNotificationsEnabled()) {
-        this.logger.log(`Notifications disabled; would send Verify SMS to ${phone}.`);
-      } else {
-        const client = this.getTwilioClient();
-        const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
-
-        if (!client || !serviceSid) {
-          throw new Error('Twilio client or TWILIO_VERIFY_SERVICE_SID is missing');
-        }
-
-        const to = phone.startsWith('+') ? phone : `+${phone}`;
-        this.logger.log(`Sending Verify SMS to ${maskPhoneNumber(to)}`);
-        
-        await client.verify.v2
-          .services(serviceSid)
-          .verifications.create({ to, channel: 'sms' });
-          
-        this.logger.log(`Verify SMS sent to ${maskPhoneNumber(to)}`);
+    if (user) {
+      try {
+        await this.twilioVerifyService.startSmsVerification(phone);
+      } catch {
+        this.logger.warn(
+          JSON.stringify({
+            event: 'merchant_password_reset_delivery_failed',
+            maskedPhone: maskPhoneNumber(phone),
+          }),
+        );
       }
-    } catch (error) {
-      this.logger.error('Failed to send Verify SMS', error);
-      throw new BadRequestException('Could not send reset code. Please try again later.');
     }
 
     return {
@@ -304,7 +284,15 @@ export class AuthService {
     };
   }
 
-  async verifyPasswordReset(rawPhone: string, otp: string, password: string) {
+  /**
+   * Verifies a reset code and invalidates all existing merchant sessions.
+   */
+  async verifyPasswordReset(
+    rawPhone: string,
+    otp: string,
+    password: string,
+    audit: CredentialAuditContext = {},
+  ) {
     const phone = formatPhoneNumber(rawPhone);
     const user = await this.usersService.findOneByPhone(phone);
 
@@ -312,39 +300,18 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired reset code');
     }
 
-    let isValid = false;
-
-    if (!this.isNotificationsEnabled()) {
-      this.logger.log(`Notifications disabled; mocking Verify check for ${phone} as true.`);
-      isValid = true;
-    } else {
-      const client = this.getTwilioClient();
-      const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
-
-      if (!client || !serviceSid) {
-        this.logger.warn('Twilio client or TWILIO_VERIFY_SERVICE_SID is missing');
-        throw new BadRequestException('Invalid or expired reset code');
-      }
-
-      const to = phone.startsWith('+') ? phone : `+${phone}`;
-
-      try {
-        const verificationCheck = await client.verify.v2
-          .services(serviceSid)
-          .verificationChecks.create({ to, code: otp });
-        
-        isValid = verificationCheck.status === 'approved';
-      } catch (error) {
-        this.logger.error(`Failed to check Verify token for ${to}`, error);
-        isValid = false;
-      }
-    }
-
+    const isValid = await this.twilioVerifyService.checkCodeByPhone(phone, otp);
     if (!isValid) {
       throw new BadRequestException('Invalid or expired reset code');
     }
 
-    await this.usersService.updatePassword(user.id, password);
+    await this.updatePasswordAndInvalidateSessions(
+      user,
+      password,
+      'user.password_reset',
+      'تمت إعادة تعيين كلمة المرور',
+      audit,
+    );
 
     return {
       success: true,
@@ -352,7 +319,15 @@ export class AuthService {
     };
   }
 
-  async updatePassword(userId: number, currentPass: string, newPass: string) {
+  /**
+   * Updates an authenticated merchant password and invalidates all sessions.
+   */
+  async updatePassword(
+    userId: number,
+    currentPass: string,
+    newPass: string,
+    audit: CredentialAuditContext = {},
+  ) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new BadRequestException('User not found');
@@ -363,12 +338,304 @@ export class AuthService {
       throw new BadRequestException('Incorrect current password');
     }
 
-    await this.usersService.updatePassword(userId, newPass);
+    await this.updatePasswordAndInvalidateSessions(
+      user,
+      newPass,
+      'user.password_changed',
+      'تم تغيير كلمة المرور',
+      audit,
+    );
 
     return {
       success: true,
       message: 'Password updated successfully',
     };
+  }
+
+  /**
+   * Starts an owner-only phone change after verifying the current password.
+   */
+  async requestPhoneChange(
+    userId: number,
+    currentPassword: string,
+    rawNewPhone: string,
+  ) {
+    const newPhone = formatPhoneNumber(rawNewPhone);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { tenant: { select: { id: true, phone: true } } },
+    });
+
+    this.assertOwnerCanChangePhone(user);
+    const passwordMatches = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
+    if (!passwordMatches) {
+      throw new BadRequestException('Incorrect current password');
+    }
+    if (newPhone === user.phone || newPhone === user.tenant.phone) {
+      throw new BadRequestException('New phone must differ from current phone');
+    }
+
+    await this.assertPhoneAvailable(
+      newPhone,
+      user.id,
+      user.tenant_id,
+      this.prisma,
+    );
+
+    let verificationSid: string;
+    try {
+      const verification =
+        await this.twilioVerifyService.startSmsVerification(newPhone);
+      verificationSid = verification.sid;
+    } catch {
+      throw new ServiceUnavailableException(
+        'Could not send verification code. Please try again later.',
+      );
+    }
+
+    return this.createPhoneChangeChallenge({
+      userId: user.id,
+      tenantId: user.tenant_id,
+      newPhone,
+      verificationSid,
+    });
+  }
+
+  /**
+   * Resends a phone-change code using a still-valid signed challenge.
+   */
+  async resendPhoneChange(userId: number, challengeToken: string) {
+    const challenge = this.verifyPhoneChangeChallenge(
+      challengeToken,
+      userId,
+    );
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { tenant: { select: { id: true, phone: true } } },
+    });
+
+    this.assertOwnerCanChangePhone(user);
+    if (user.tenant_id !== challenge.tenantId) {
+      throw new BadRequestException('Invalid or expired phone change');
+    }
+    await this.assertPhoneAvailable(
+      challenge.newPhone,
+      user.id,
+      user.tenant_id,
+      this.prisma,
+    );
+
+    let verificationSid: string;
+    try {
+      const verification =
+        await this.twilioVerifyService.startSmsVerification(
+          challenge.newPhone,
+        );
+      verificationSid = verification.sid;
+    } catch {
+      throw new ServiceUnavailableException(
+        'Could not send verification code. Please try again later.',
+      );
+    }
+
+    return this.createPhoneChangeChallenge({
+      userId: user.id,
+      tenantId: user.tenant_id,
+      newPhone: challenge.newPhone,
+      verificationSid,
+    });
+  }
+
+  /**
+   * Verifies and atomically commits an owner login/store phone change.
+   */
+  async verifyPhoneChange(
+    userId: number,
+    challengeToken: string,
+    otp: string,
+    audit: CredentialAuditContext = {},
+  ) {
+    const challenge = this.verifyPhoneChangeChallenge(
+      challengeToken,
+      userId,
+    );
+    const isValid =
+      await this.twilioVerifyService.checkCodeByVerificationSid(
+        challenge.verificationSid,
+        otp,
+      );
+    if (!isValid) {
+      throw new BadRequestException('Invalid or expired verification code');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: { tenant: { select: { id: true, phone: true } } },
+      });
+      this.assertOwnerCanChangePhone(user);
+      if (user.tenant_id !== challenge.tenantId) {
+        throw new BadRequestException('Invalid or expired phone change');
+      }
+
+      await this.assertPhoneAvailable(
+        challenge.newPhone,
+        user.id,
+        user.tenant_id,
+        tx,
+      );
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(user.tenant_id)}, true)`;
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          phone: challenge.newPhone,
+          auth_version: { increment: 1 },
+        },
+      });
+      await tx.tenant.update({
+        where: { id: user.tenant_id },
+        data: { phone: challenge.newPhone },
+      });
+      await this.activityLogService.create(
+        {
+          tenantId: user.tenant_id,
+          actorUserId: user.id,
+          entityType: ActivityEntityTypes.User,
+          entityId: user.id,
+          action: 'user.phone_changed',
+          title: 'تم تغيير رقم هاتف الحساب والمتجر',
+          oldValues: { phone: user.phone },
+          newValues: { phone: challenge.newPhone },
+          metadata: { sessionsInvalidated: true },
+          source: ActivitySources.Dashboard,
+          requestId: audit.requestId,
+          ipAddress: audit.ipAddress,
+        },
+        tx,
+      );
+    });
+
+    return {
+      success: true,
+      message: 'Phone number updated successfully',
+    };
+  }
+
+  /** Commits a password hash, session invalidation, and activity atomically. */
+  private async updatePasswordAndInvalidateSessions(
+    user: User,
+    password: string,
+    action: 'user.password_reset' | 'user.password_changed',
+    title: string,
+    audit: CredentialAuditContext,
+  ): Promise<void> {
+    const hashedPassword = await hashPassword(password);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${String(user.tenant_id)}, true)`;
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          auth_version: { increment: 1 },
+        },
+      });
+      await this.activityLogService.create(
+        {
+          tenantId: user.tenant_id,
+          actorUserId: user.id,
+          entityType: ActivityEntityTypes.User,
+          entityId: user.id,
+          action,
+          title,
+          metadata: { sessionsInvalidated: true },
+          source: ActivitySources.Dashboard,
+          requestId: audit.requestId,
+          ipAddress: audit.ipAddress,
+        },
+        tx,
+      );
+    });
+  }
+
+  /** Rejects missing and non-owner users for shared merchant phone changes. */
+  private assertOwnerCanChangePhone(
+    user:
+      | (User & { tenant: { id: number; phone: string } })
+      | null,
+  ): asserts user is User & { tenant: { id: number; phone: string } } {
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    if (user.role !== UserRole.owner) {
+      throw new ForbiddenException('Only the merchant owner can change phone');
+    }
+  }
+
+  /** Enforces global user and tenant phone uniqueness on a chosen client. */
+  private async assertPhoneAvailable(
+    phone: string,
+    userId: number,
+    tenantId: number,
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    const [phoneUser, phoneTenant] = await Promise.all([
+      db.user.findUnique({ where: { phone }, select: { id: true } }),
+      db.tenant.findUnique({ where: { phone }, select: { id: true } }),
+    ]);
+
+    if (
+      (phoneUser && phoneUser.id !== userId) ||
+      (phoneTenant && phoneTenant.id !== tenantId)
+    ) {
+      throw new ConflictException('Phone number is already in use');
+    }
+  }
+
+  /** Signs a short-lived challenge tied to one Twilio verification SID. */
+  private createPhoneChangeChallenge(
+    payload: Omit<PhoneChangeChallengePayload, 'tokenType'>,
+  ) {
+    const challengeToken = this.jwtService.sign(
+      {
+        ...payload,
+        tokenType: PHONE_CHANGE_CHALLENGE_TOKEN_TYPE,
+      },
+      { expiresIn: PHONE_CHANGE_CHALLENGE_TTL_SECONDS },
+    );
+
+    return {
+      challengeToken,
+      maskedPhone: maskPhoneNumber(payload.newPhone),
+      expiresInSeconds: PHONE_CHANGE_CHALLENGE_TTL_SECONDS,
+    };
+  }
+
+  /** Validates challenge purpose, expiry, shape, and authenticated ownership. */
+  private verifyPhoneChangeChallenge(
+    challengeToken: string,
+    userId: number,
+  ): PhoneChangeChallengePayload {
+    try {
+      const payload =
+        this.jwtService.verify<PhoneChangeChallengePayload>(challengeToken);
+      if (
+        payload.tokenType !== PHONE_CHANGE_CHALLENGE_TOKEN_TYPE ||
+        payload.userId !== userId ||
+        !Number.isInteger(payload.tenantId) ||
+        !payload.newPhone ||
+        !payload.verificationSid
+      ) {
+        throw new Error('Invalid phone-change challenge payload');
+      }
+      return payload;
+    } catch {
+      throw new BadRequestException('Invalid or expired phone change');
+    }
   }
 
   // Helper for registering via API if needed (or seeding)

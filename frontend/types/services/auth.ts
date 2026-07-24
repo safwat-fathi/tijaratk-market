@@ -42,3 +42,23 @@ export interface UpdatePasswordRequest {
 	currentPassword: string;
 	newPassword: string;
 }
+
+export type RequestPhoneChangeRequest = {
+	currentPassword: string;
+	newPhone: string;
+};
+
+export type PhoneChangeChallengeResponse = {
+	challengeToken: string;
+	maskedPhone: string;
+	expiresInSeconds: number;
+};
+
+export type ResendPhoneChangeRequest = {
+	challengeToken: string;
+};
+
+export type VerifyPhoneChangeRequest = {
+	challengeToken: string;
+	otp: string;
+};

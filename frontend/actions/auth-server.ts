@@ -7,9 +7,15 @@ import {
   requestPasswordResetSchema,
   verifyPasswordResetSchema,
   updatePasswordSchema,
+  requestPhoneChangeSchema,
+  verifyPhoneChangeSchema,
 } from "@/lib/validations/auth";
 import { redirect } from "next/navigation";
-import { setCookieAction, deleteCookieAction } from "@/app/actions/cookie-store";
+import {
+  deleteCookieAction,
+  getCookieAction,
+  setCookieAction,
+} from "@/app/actions/cookie-store";
 import { STORAGE_KEYS } from "@/constants";
 
 const MERCHANT_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
@@ -24,6 +30,7 @@ export type ActionState = {
   errors?: Record<string, string[] | undefined>;
   timestamp?: number; // Force re-render on similar errors
   code?: string;
+  maskedPhone?: string;
 };
 
 export async function loginAction(
@@ -187,7 +194,8 @@ export async function requestPasswordResetAction(
 
     return {
       success: true,
-      message: "تم إرسال رمز إعادة التعيين في رسالة نصية (SMS)",
+      message:
+        "إذا كان الرقم مسجلاً، فسيصل إليه رمز إعادة التعيين في رسالة نصية.",
       timestamp: Date.now(),
     };
   } catch (error) {
@@ -276,12 +284,6 @@ export async function updatePasswordAction(
         timestamp: Date.now(),
       };
     }
-
-    return {
-      success: true,
-      message: "تم تحديث كلمة المرور بنجاح",
-      timestamp: Date.now(),
-    };
   } catch (error) {
     console.error("Update password action failed:", error);
     return {
@@ -290,4 +292,191 @@ export async function updatePasswordAction(
       timestamp: Date.now(),
     };
   }
+
+  await clearMerchantCredentialCookies();
+  redirect("/merchant/login?credentialChanged=password");
+}
+
+export async function requestPhoneChangeAction(
+  prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const validated = requestPhoneChangeSchema.safeParse(
+    Object.fromEntries(formData.entries()),
+  );
+  if (!validated.success) {
+    return {
+      success: false,
+      message: "راجع البيانات المطلوبة.",
+      errors: validated.error.flatten().fieldErrors,
+      timestamp: Date.now(),
+    };
+  }
+
+  try {
+    const response = await authService.requestPhoneChange(validated.data);
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message:
+          response.status === 409
+            ? "رقم الهاتف مستخدم بالفعل."
+            : response.status === 403
+              ? "تغيير رقم المتجر متاح لصاحب الحساب فقط."
+              : response.status === 400
+                ? "تأكد من كلمة المرور وأن الرقم الجديد مختلف."
+                : "تعذر إرسال رمز التحقق الآن.",
+        timestamp: Date.now(),
+      };
+    }
+
+    await setPhoneChangeChallengeCookie(
+      response.data.challengeToken,
+      response.data.expiresInSeconds,
+    );
+    return {
+      success: true,
+      message: "تم إرسال رمز تحقق إلى الرقم الجديد.",
+      maskedPhone: response.data.maskedPhone,
+      timestamp: Date.now(),
+    };
+  } catch (error) {
+    console.error("Request phone change action failed:", error);
+    return {
+      success: false,
+      message: "حدث خطأ غير متوقع.",
+      timestamp: Date.now(),
+    };
+  }
+}
+
+export async function resendPhoneChangeAction(
+  prevState: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  void _formData;
+  const challengeToken = await getCookieAction(
+    STORAGE_KEYS.PHONE_CHANGE_CHALLENGE,
+  );
+  if (!challengeToken) {
+    return {
+      success: false,
+      message: "انتهت جلسة تغيير الرقم. ابدأ من جديد.",
+      timestamp: Date.now(),
+    };
+  }
+
+  try {
+    const response = await authService.resendPhoneChange({ challengeToken });
+    if (!response.success || !response.data) {
+      return {
+        success: false,
+        message:
+          response.status === 409
+            ? "رقم الهاتف أصبح مستخدماً بالفعل."
+            : response.status === 400
+              ? "انتهت جلسة تغيير الرقم. ابدأ من جديد."
+              : "تعذر إعادة إرسال الرمز الآن.",
+        timestamp: Date.now(),
+      };
+    }
+
+    await setPhoneChangeChallengeCookie(
+      response.data.challengeToken,
+      response.data.expiresInSeconds,
+    );
+    return {
+      success: true,
+      message: "تم إرسال رمز جديد.",
+      maskedPhone: response.data.maskedPhone,
+      timestamp: Date.now(),
+    };
+  } catch (error) {
+    console.error("Resend phone change action failed:", error);
+    return {
+      success: false,
+      message: "حدث خطأ غير متوقع.",
+      timestamp: Date.now(),
+    };
+  }
+}
+
+export async function verifyPhoneChangeAction(
+  prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const validated = verifyPhoneChangeSchema.safeParse(
+    Object.fromEntries(formData.entries()),
+  );
+  if (!validated.success) {
+    return {
+      success: false,
+      message: "راجع رمز التحقق.",
+      errors: validated.error.flatten().fieldErrors,
+      timestamp: Date.now(),
+    };
+  }
+
+  const challengeToken = await getCookieAction(
+    STORAGE_KEYS.PHONE_CHANGE_CHALLENGE,
+  );
+  if (!challengeToken) {
+    return {
+      success: false,
+      message: "انتهت جلسة تغيير الرقم. ابدأ من جديد.",
+      timestamp: Date.now(),
+    };
+  }
+
+  try {
+    const response = await authService.verifyPhoneChange({
+      challengeToken,
+      otp: validated.data.otp,
+    });
+    if (!response.success) {
+      return {
+        success: false,
+        message:
+          response.status === 409
+            ? "رقم الهاتف أصبح مستخدماً بالفعل."
+            : "رمز التحقق غير صحيح أو منتهي.",
+        timestamp: Date.now(),
+      };
+    }
+  } catch (error) {
+    console.error("Verify phone change action failed:", error);
+    return {
+      success: false,
+      message: "حدث خطأ غير متوقع.",
+      timestamp: Date.now(),
+    };
+  }
+
+  await clearMerchantCredentialCookies();
+  redirect("/merchant/login?credentialChanged=phone");
+}
+
+export async function cancelPhoneChangeAction() {
+  await deleteCookieAction(STORAGE_KEYS.PHONE_CHANGE_CHALLENGE);
+  redirect("/merchant/settings/security");
+}
+
+async function setPhoneChangeChallengeCookie(
+  challengeToken: string,
+  maxAge: number,
+) {
+  await setCookieAction(
+    STORAGE_KEYS.PHONE_CHANGE_CHALLENGE,
+    challengeToken,
+    {
+      maxAge,
+      sameSite: "strict",
+    },
+  );
+}
+
+async function clearMerchantCredentialCookies() {
+  await deleteCookieAction(STORAGE_KEYS.ACCESS_TOKEN);
+  await deleteCookieAction(STORAGE_KEYS.USER);
+  await deleteCookieAction(STORAGE_KEYS.PHONE_CHANGE_CHALLENGE);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import {
   useActionState,
   useEffect,
@@ -273,16 +274,25 @@ export default function SettingsForm({
             ) : null}
           </label>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
-            رقم الهاتف{" "}
-            <span className="text-xs text-gray-400">(للقراءة فقط)</span>
+          <div className="flex flex-col gap-2 text-sm font-medium text-gray-700">
+            <label htmlFor="storePhone">
+              رقم الهاتف{" "}
+              <span className="text-xs text-gray-400">(للقراءة فقط)</span>
+            </label>
             <input
+              id="storePhone"
               type="text"
               value={tenant.phone}
               readOnly
               className="min-h-12 w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-100 px-4 text-base text-gray-500"
             />
-          </label>
+            <Link
+              href="/merchant/settings/security"
+              className="w-fit text-sm font-semibold text-brand-primary hover:text-brand-primary/80"
+            >
+              تغيير رقم الهاتف
+            </Link>
+          </div>
 
           <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
             رابط المتجر{" "}

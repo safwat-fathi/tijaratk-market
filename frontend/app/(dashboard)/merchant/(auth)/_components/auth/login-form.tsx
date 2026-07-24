@@ -14,7 +14,11 @@ const initialState: ActionState = {
   errors: undefined,
 };
 
-export default function LoginForm() {
+type LoginFormProps = {
+  notice?: string;
+};
+
+export default function LoginForm({ notice }: LoginFormProps) {
   const [state, action, isPending] = useActionState(loginAction, initialState);
 
 	return (
@@ -26,6 +30,12 @@ export default function LoginForm() {
 				</h2>
 				<p className="mt-2 text-sm text-muted-foreground">الدخول متاح بعد مراجعة الطلب واعتماده</p>
 			</div>
+
+			{notice ? (
+				<div className="mb-6 rounded-md border border-status-success/20 bg-status-success/10 p-4 text-sm font-medium text-status-success">
+					{notice}
+				</div>
+			) : null}
 
 			<form action={action} className="space-y-6">
 				<Field

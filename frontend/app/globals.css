@@ -198,6 +198,9 @@
     direction: ltr !important;
     text-align: left !important;
   }
+  body.keyboard-open .sticky {
+    position: relative !important;
+  }
 }
 
 @layer utilities {

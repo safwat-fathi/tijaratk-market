@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { TenantStatus } from '../../../generated/prisma/client';
+import { MERCHANT_ACCESS_TOKEN_TYPE } from '../auth-token.constants';
 
 const cookieTokenExtractor = (request: Request): string | null => {
   if (!request?.cookies) {
@@ -21,9 +22,8 @@ const cookieTokenExtractor = (request: Request): string | null => {
 
 type JwtPayload = {
   sub: number;
-  phone: string;
-  tenantId: number;
-  role: string;
+  tokenType?: string;
+  authVersion?: number;
 };
 
 @Injectable()
@@ -51,21 +51,32 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    if (
+      payload.tokenType &&
+      payload.tokenType !== MERCHANT_ACCESS_TOKEN_TYPE
+    ) {
+      throw new UnauthorizedException();
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       include: { tenant: { select: { status: true } } },
     });
 
-    if (!user || user.tenant.status !== TenantStatus.active) {
+    const tokenAuthVersion = payload.authVersion ?? 0;
+    if (
+      !user ||
+      user.tenant.status !== TenantStatus.active ||
+      user.auth_version !== tokenAuthVersion
+    ) {
       throw new UnauthorizedException();
     }
 
-    // Return the user object (or a subset) which will be injected into the request object
     return {
-      userId: payload.sub,
-      phone: payload.phone,
-      tenant_id: payload.tenantId,
-      role: payload.role,
+      userId: user.id,
+      phone: user.phone,
+      tenant_id: user.tenant_id,
+      role: user.role,
     };
   }
 }

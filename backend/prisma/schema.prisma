@@ -763,6 +763,7 @@ model User {
   created_at DateTime  @default(now()) @db.Timestamp(6)
   updated_at DateTime  @default(now()) @db.Timestamp(6)
   deleted_at DateTime? @db.Timestamp(6)
+  auth_version Int     @default(0)
   tenant_id  Int
   id         Int       @id(map: "PK_a3ffb1c0c8416b9fc6f907b7433") @default(autoincrement())
   phone      String    @unique(map: "UQ_a000cca60bcf04454e727699490") @db.VarChar

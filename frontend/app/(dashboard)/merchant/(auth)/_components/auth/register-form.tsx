@@ -136,7 +136,7 @@ export default function RegisterForm() {
           />
         </Field>
 
-        <Field label="الاسم" htmlFor="name" error={state?.errors?.name?.[0]}>
+        <Field label="اسم صاحب المتجر" htmlFor="name" error={state?.errors?.name?.[0]}>
           <Input
             id="name"
             name="name"

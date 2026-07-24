@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { WhatsappService } from 'src/whatsapp/whatsapp.service';
 
 type ZoneOrderNotification = {
@@ -15,12 +15,16 @@ type ZoneOrderNotification = {
 export class ZoneStorefrontNotificationsService {
   private readonly logger = new Logger(ZoneStorefrontNotificationsService.name);
 
-  constructor(private readonly whatsappService: WhatsappService) {}
+  constructor(
+    @Inject(WhatsappService)
+    @Optional()
+    private readonly whatsappService: WhatsappService | undefined,
+  ) {}
 
   /** Notifies operations about a newly committed zone order. */
   async notifyNewOrder(payload: ZoneOrderNotification): Promise<void> {
-    await this.safeSend('new zone order operations', () =>
-      this.whatsappService.sendTemplatedMessage({
+    await this.safeSend('new zone order operations', (whatsappService) =>
+      whatsappService.sendTemplatedMessage({
         key: 'zone_order_operations',
         to: payload.operationsPhone,
         payload: {
@@ -42,13 +46,15 @@ export class ZoneStorefrontNotificationsService {
     zoneName: string;
     area: string;
   }): Promise<void> {
+    if (!this.whatsappService) return;
+
     const clientUrl = String(process.env.CLIENT_URL || '').replace(/\/$/, '');
     if (!clientUrl) {
       this.logger.warn('CLIENT_URL is missing; skipping dispatch assignment link');
       return;
     }
-    await this.safeSend('zone order assignment', () =>
-      this.whatsappService.sendTemplatedMessage({
+    await this.safeSend('zone order assignment', (whatsappService) =>
+      whatsappService.sendTemplatedMessage({
         key: 'zone_order_assigned',
         to: payload.merchantPhone,
         payload: {
@@ -69,8 +75,8 @@ export class ZoneStorefrontNotificationsService {
     merchantName: string;
     reason: string;
   }): Promise<void> {
-    await this.safeSend('zone dispatch rejection', () =>
-      this.whatsappService.sendTemplatedMessage({
+    await this.safeSend('zone dispatch rejection', (whatsappService) =>
+      whatsappService.sendTemplatedMessage({
         key: 'zone_dispatch_rejected_operations',
         to: payload.operationsPhone,
         payload: {
@@ -89,8 +95,8 @@ export class ZoneStorefrontNotificationsService {
     previousMerchantName: string;
     newMerchantName: string;
   }): Promise<void> {
-    await this.safeSend('zone dispatch reassignment', () =>
-      this.whatsappService.sendTemplatedMessage({
+    await this.safeSend('zone dispatch reassignment', (whatsappService) =>
+      whatsappService.sendTemplatedMessage({
         key: 'zone_dispatch_reassigned_operations',
         to: payload.operationsPhone,
         payload: {
@@ -112,13 +118,15 @@ export class ZoneStorefrontNotificationsService {
     oldTotal: number;
     newTotal: number;
   }): Promise<void> {
+    if (!this.whatsappService) return;
+
     const clientUrl = String(process.env.CLIENT_URL || '').replace(/\/$/, '');
     if (!clientUrl) {
       this.logger.warn('CLIENT_URL is missing; skipping zone acceptance notification');
       return;
     }
-    await this.safeSend('zone order acceptance', () =>
-      this.whatsappService.sendTemplatedMessage({
+    await this.safeSend('zone order acceptance', (whatsappService) =>
+      whatsappService.sendTemplatedMessage({
         key: 'zone_order_accepted_customer',
         to: payload.customerPhone,
         payload: {
@@ -140,8 +148,8 @@ export class ZoneStorefrontNotificationsService {
     orderNumber: string;
     statusLabel: string;
   }): Promise<void> {
-    await this.safeSend('zone order status', () =>
-      this.whatsappService.sendTemplatedMessage({
+    await this.safeSend('zone order status', (whatsappService) =>
+      whatsappService.sendTemplatedMessage({
         key: 'order_status_update_customer',
         to: payload.customerPhone,
         payload: {
@@ -156,10 +164,12 @@ export class ZoneStorefrontNotificationsService {
   /** Logs delivery failures without allowing them to affect committed state. */
   private async safeSend(
     label: string,
-    send: () => Promise<void>,
+    send: (whatsappService: WhatsappService) => Promise<void>,
   ): Promise<void> {
+    if (!this.whatsappService) return;
+
     try {
-      await send();
+      await send(this.whatsappService);
     } catch (error) {
       this.logger.warn(`Failed to send ${label} notification`, error);
     }

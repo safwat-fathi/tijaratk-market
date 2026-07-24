@@ -1,11 +1,21 @@
-import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { TwilioVerifyService } from 'src/auth/twilio-verify.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @ApiTags('API Health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly twilioVerifyService: TwilioVerifyService,
+  ) {}
 
   @Get('/')
   @HttpCode(HttpStatus.OK)
@@ -22,6 +32,13 @@ export class HealthController {
   @ApiResponse({ status: HttpStatus.OK, description: 'Return readiness state' })
   async ready() {
     await this.prisma.$queryRaw`SELECT 1`;
+    const twilioVerifyConfigured = this.twilioVerifyService.isConfigured();
+
+    if (process.env.NODE_ENV === 'production' && !twilioVerifyConfigured) {
+      throw new ServiceUnavailableException(
+        'Twilio Verify is not configured',
+      );
+    }
 
     return {
       status: 'ok',
@@ -32,6 +49,7 @@ export class HealthController {
         twilio_webhook_auth: Boolean(
           process.env.TWILIO_AUTH_TOKEN || process.env.AUTH_TOKEN,
         ),
+        twilio_verify: twilioVerifyConfigured,
       },
     };
   }

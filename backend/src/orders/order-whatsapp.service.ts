@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { WhatsappService } from 'src/whatsapp/whatsapp.service';
 import {
   Order,
@@ -27,7 +27,9 @@ export class OrderWhatsappService {
   private static readonly MAX_ORDER_DETAILS_LENGTH = 1000;
 
   constructor(
-    private readonly whatsappService: WhatsappService,
+    @Inject(WhatsappService)
+    @Optional()
+    private readonly whatsappService: WhatsappService | undefined,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -43,6 +45,9 @@ export class OrderWhatsappService {
   }
 
   async notifySellerNewOrder(order: OrderWithRelations): Promise<void> {
+    const whatsappService = this.whatsappService;
+    if (!whatsappService) return;
+
     const sellerNumber = order.tenant?.phone;
     if (!sellerNumber) return;
 
@@ -58,7 +63,7 @@ export class OrderWhatsappService {
     const orderDetails = this.buildOrderDetails(order);
     const total = Number(order.total || 0);
 
-    await this.whatsappService.sendTemplatedMessage({
+    await whatsappService.sendTemplatedMessage({
       key: 'new_order_merchant',
       to: sellerNumber,
       payload: {
@@ -148,6 +153,9 @@ export class OrderWhatsappService {
   }
 
   async notifyCustomerStatusUpdate(order: OrderWithRelations): Promise<void> {
+    const whatsappService = this.whatsappService;
+    if (!whatsappService) return;
+
     const customerNumber = order.customer_phone || order.customer?.phone;
     if (!customerNumber) return;
 
@@ -167,7 +175,7 @@ export class OrderWhatsappService {
 
     const customerName = order.customer_name || order.customer?.name || 'عميل';
 
-    await this.whatsappService.sendTemplatedMessage({
+    await whatsappService.sendTemplatedMessage({
       key: 'order_status_update_customer',
       to: customerNumber,
       payload: {
@@ -185,13 +193,16 @@ export class OrderWhatsappService {
     order: OrderWithRelations,
     item: OrderItemWithProduct,
   ): Promise<void> {
+    const whatsappService = this.whatsappService;
+    if (!whatsappService) return;
+
     const customerNumber = order.customer_phone || order.customer?.phone;
     if (!customerNumber || !item.pending_replacement_product?.name) return;
 
     const fulfillingMerchant = await this.resolveFulfillingMerchant(order);
     const storeName = fulfillingMerchant?.name || order.tenant?.name || 'المتجر';
 
-    await this.whatsappService.sendTemplatedMessage({
+    await whatsappService.sendTemplatedMessage({
       key: 'order_product_replacement',
       to: customerNumber,
       payload: {
@@ -210,12 +221,15 @@ export class OrderWhatsappService {
   async notifyMerchantReplacementAccepted(
     order: OrderWithRelations,
   ): Promise<void> {
+    const whatsappService = this.whatsappService;
+    if (!whatsappService) return;
+
     const sellerNumber = (await this.resolveFulfillingMerchant(order))?.phone;
     if (!sellerNumber) return;
 
     const customerName = order.customer_name || order.customer?.name || 'عميل';
 
-    await this.whatsappService.sendTemplatedMessage({
+    await whatsappService.sendTemplatedMessage({
       key: 'merchant_replacement_accepted',
       to: sellerNumber,
       payload: {
@@ -233,12 +247,15 @@ export class OrderWhatsappService {
     item: OrderItemWithProduct,
     reason?: string,
   ): Promise<void> {
+    const whatsappService = this.whatsappService;
+    if (!whatsappService) return;
+
     const sellerNumber = (await this.resolveFulfillingMerchant(order))?.phone;
     if (!sellerNumber) return;
 
     const customerName = order.customer_name || order.customer?.name || 'عميل';
 
-    await this.whatsappService.sendTemplatedMessage({
+    await whatsappService.sendTemplatedMessage({
       key: 'merchant_replacement_rejected',
       to: sellerNumber,
       payload: {
@@ -291,11 +308,12 @@ export class OrderWhatsappService {
     totalSalesEgp: number;
     totalCollectedEgp: number;
   }): Promise<boolean> {
-    if (!phone) {
+    const whatsappService = this.whatsappService;
+    if (!whatsappService || !phone) {
       return false;
     }
 
-    await this.whatsappService.sendTemplatedMessage({
+    await whatsappService.sendTemplatedMessage({
       key: 'merchant_day_closure_summary',
       to: phone,
       payload: {
