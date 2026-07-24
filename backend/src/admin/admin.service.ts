@@ -65,6 +65,7 @@ import {
   enqueueZoneCatalogReconciliation,
 } from 'src/zone-storefronts/zone-catalog-reconciliation.repository';
 import { QueryAdminOrdersDto } from './dto/query-admin-orders.dto';
+import { UpdateTenantCategoryDto } from './dto/update-tenant-category.dto';
 
 const CATALOG_EXPORT_COLUMNS = [
   'catalog_item_id',
@@ -595,6 +596,127 @@ export class AdminService {
                 : 'تم تغيير حالة المتجر',
           oldValues: { status: tenant.status },
           newValues: { status },
+          source: ActivitySources.Admin,
+          requestId: metadata.requestId,
+          ipAddress: metadata.ipAddress,
+        },
+        tx,
+      );
+
+      return updatedTenant;
+    });
+  }
+
+  async updateTenantCategory(
+    tenantId: number,
+    dto: UpdateTenantCategoryDto,
+    adminUserId?: number,
+    metadata: AdminAuditRequestMetadata = {},
+  ) {
+    const tenantSelect = {
+      id: true,
+      name: true,
+      phone: true,
+      slug: true,
+      status: true,
+      category: true,
+      delivery_available: true,
+      delivery_starts_at: true,
+      delivery_ends_at: true,
+      last_bulk_essentials_added_at: true,
+      directory_profile: { include: { area: true } },
+      tenant_delivery_areas: {
+        where: { deleted_at: null },
+        include: { area: true },
+        orderBy: [
+          { area: { sort_order: 'asc' as const } },
+          { area: { name_ar: 'asc' as const } },
+        ],
+      },
+    };
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, category: true, status: true, name: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    if (tenant.category === dto.category) {
+      return this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: tenantSelect,
+      });
+    }
+
+    const activeOrdersCount = await this.prisma.order.count({
+      where: {
+        tenant_id: tenantId,
+        status: {
+          in: [
+            OrderStatus.draft,
+            OrderStatus.confirmed,
+            OrderStatus.out_for_delivery,
+          ],
+        },
+      },
+    });
+
+    if (activeOrdersCount > 0) {
+      throw new BadRequestException(
+        'لا يمكن تغيير نشاط المتجر أثناء وجود طلبات نشطة جارية',
+      );
+    }
+
+    const activeProductsCount = await this.prisma.product.count({
+      where: {
+        tenant_id: tenantId,
+        deleted_at: null,
+      },
+    });
+
+    if (activeProductsCount > 0 && !dto.force_cleanup) {
+      throw new BadRequestException({
+        message: `المتجر يحتوي على ${activeProductsCount} منتج. تغيير نشاط المتجر يتطلب تأكيد إلغاء تنشيط المنتجات السابقة.`,
+        product_count: activeProductsCount,
+        requires_force_cleanup: true,
+      });
+    }
+
+    return this.runWithTenantRls(tenantId, async (tx) => {
+      if (activeProductsCount > 0 && dto.force_cleanup) {
+        await tx.product.updateMany({
+          where: { tenant_id: tenantId, deleted_at: null },
+          data: {
+            deleted_at: new Date(),
+            is_available: false,
+          },
+        });
+      }
+
+      const updatedTenant = await tx.tenant.update({
+        where: { id: tenantId },
+        data: { category: dto.category },
+        select: tenantSelect,
+      });
+
+      await this.storesDirectoryService.recalculateTenantReadiness(tenantId);
+
+      await this.activityLogService.create(
+        {
+          tenantId,
+          actorAdminId: adminUserId,
+          entityType: ActivityEntityTypes.Tenant,
+          entityId: tenantId,
+          action: ActivityActions.TenantCategoryChanged,
+          title: 'تم تغيير نشاط المتجر',
+          oldValues: { category: tenant.category },
+          newValues: {
+            category: dto.category,
+            products_deactivated:
+              activeProductsCount > 0 && dto.force_cleanup
+                ? activeProductsCount
+                : 0,
+          },
           source: ActivitySources.Admin,
           requestId: metadata.requestId,
           ipAddress: metadata.ipAddress,

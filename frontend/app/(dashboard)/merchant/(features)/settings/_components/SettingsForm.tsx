@@ -33,11 +33,13 @@ import type {
 type SettingsFormProps = {
   tenant: Tenant;
   activeAreas: DirectoryArea[];
+  hasProducts?: boolean;
 };
 
 export default function SettingsForm({
   tenant,
   activeAreas,
+  hasProducts = false,
 }: SettingsFormProps) {
   const router = useRouter();
   const [isPreparingMissingArea, setIsPreparingMissingArea] = useState(false);
@@ -255,10 +257,16 @@ export default function SettingsForm({
 
           <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
             نشاط المتجر
+            {hasProducts ? (
+              <input type="hidden" name="category" value={tenant.category} />
+            ) : null}
             <select
               name="category"
               defaultValue={tenant.category}
-              className="min-h-12 w-full rounded-xl border border-gray-200 bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-brand-accent/50"
+              disabled={hasProducts}
+              className={`min-h-12 w-full rounded-xl border border-gray-200 bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-brand-accent/50 ${
+                hasProducts ? "cursor-not-allowed bg-gray-100 text-gray-500" : ""
+              }`}
             >
               <option value="grocery">سوبر ماركت</option>
               <option value="greengrocer">خضار وفاكهة</option>
@@ -267,6 +275,11 @@ export default function SettingsForm({
               <option value="pharmacy">صيدلية</option>
               <option value="other">أخرى</option>
             </select>
+            {hasProducts ? (
+              <span className="text-xs text-gray-500">
+                لا يمكن تغيير نشاط المتجر أثناء وجود منتجات مضافة. يرجى حذف كافة المنتجات أولاً أو التواصل مع الدعم.
+              </span>
+            ) : null}
             {state.errors?.category ? (
               <span className="text-sm text-status-error">
                 {state.errors.category[0]}

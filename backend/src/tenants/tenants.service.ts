@@ -1,7 +1,7 @@
 import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, Tenant, TenantStatus } from '../../generated/prisma/client';
+import { OrderStatus, Prisma, Tenant, TenantStatus } from '../../generated/prisma/client';
 import { TENANT_CATEGORIES, TenantCategory } from './constants/tenant-category';
 import { generateUniqueSlug } from '../common/utils/slug.utils';
 import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-settings.dto';
@@ -289,6 +289,40 @@ export class TenantsService {
       select: { category: true },
     });
 
+    if (existingTenant?.category !== dto.category) {
+      const activeOrdersCount = await this.prisma.order.count({
+        where: {
+          tenant_id: id,
+          status: {
+            in: [
+              OrderStatus.draft,
+              OrderStatus.confirmed,
+              OrderStatus.out_for_delivery,
+            ],
+          },
+        },
+      });
+
+      if (activeOrdersCount > 0) {
+        throw new BadRequestException(
+          'لا يمكن تغيير نشاط المتجر أثناء وجود طلبات نشطة جارية',
+        );
+      }
+
+      const activeProductsCount = await this.prisma.product.count({
+        where: {
+          tenant_id: id,
+          deleted_at: null,
+        },
+      });
+
+      if (activeProductsCount > 0) {
+        throw new BadRequestException(
+          'لا يمكن تغيير نشاط المتجر أثناء وجود منتجات مضافة. يرجى حذف كافة المنتجات أولاً أو التواصل مع الدعم',
+        );
+      }
+    }
+
     await this.prisma.tenant.update({
       where: { id },
       data: {
@@ -311,6 +345,7 @@ export class TenantsService {
         getDashboardCacheVersionKey(id),
         Date.now().toString(),
       );
+      await this.storesDirectoryService.recalculateTenantReadiness(id);
     }
 
     return this.findOneById(id);

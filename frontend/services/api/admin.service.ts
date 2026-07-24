@@ -1002,6 +1002,19 @@ class AdminApiService extends HttpService {
 		return this.patch<AdminTenant>(`tenants/${id}/plan`, { plan_id }, undefined, ADMIN_AUTH_OPTIONS);
 	}
 
+	public async updateTenantCategory(
+		id: number,
+		category: string,
+		force_cleanup?: boolean,
+	) {
+		return this.patch<AdminTenant>(
+			`tenants/${id}/category`,
+			{ category, force_cleanup },
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
 	public async updateTenantDirectoryProfile(
 		id: number,
 		payload: UpdateTenantDirectoryProfilePayload,

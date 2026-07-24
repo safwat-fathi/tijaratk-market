@@ -1,5 +1,6 @@
 import { tenantsService } from "@/services/api/tenants.service";
 import { merchantDirectoryService } from "@/services/api/stores-directory.service";
+import { productsService } from "@/services/api/products.service";
 import SettingsForm from "./_components/SettingsForm";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
 import Link from "next/link";
@@ -11,11 +12,13 @@ export const metadata = createNoIndexMetadata(
 );
 
 export default async function SettingsPage() {
-  const [tenantResponse, profileResponse, areasResponse] = await Promise.all([
-    tenantsService.getMyTenant(),
-    merchantDirectoryService.getProfile(),
-    merchantDirectoryService.getActiveAreas(),
-  ]);
+  const [tenantResponse, profileResponse, areasResponse, productsResponse] =
+    await Promise.all([
+      tenantsService.getMyTenant(),
+      merchantDirectoryService.getProfile(),
+      merchantDirectoryService.getActiveAreas(),
+      productsService.getProducts(),
+    ]);
 
   if (!tenantResponse.success || !tenantResponse.data) {
     return (
@@ -35,6 +38,11 @@ export default async function SettingsPage() {
       [];
   }
 
+  const hasProducts =
+    productsResponse.success &&
+    Array.isArray(productsResponse.data) &&
+    productsResponse.data.length > 0;
+
   return (
     <div className="flex flex-col gap-6 pb-20 max-w-2xl mx-auto">
       <div className="flex justify-between items-center">
@@ -49,12 +57,13 @@ export default async function SettingsPage() {
         </Link>
       </div>
 
+      <PushNotificationsSettingsCard />
+
       <SettingsForm 
         tenant={tenant} 
         activeAreas={areasResponse.data || []} 
+        hasProducts={hasProducts}
       />
-
-      <PushNotificationsSettingsCard />
     </div>
   );
 }

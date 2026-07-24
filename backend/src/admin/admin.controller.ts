@@ -31,6 +31,7 @@ import { AdminLoginDto } from './dto/admin-login.dto';
 import { UpdateTenantStatusDto } from './dto/update-tenant-status.dto';
 import { TogglePlanStatusDto } from './dto/toggle-plan-status.dto';
 import { UpdateTenantPlanDto } from './dto/update-tenant-plan.dto';
+import { UpdateTenantCategoryDto } from './dto/update-tenant-category.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { ProductsService } from '../products/products.service';
 import { AddBulkEssentialItemsDto } from '../products/dto/add-bulk-essential.dto';
@@ -347,6 +348,36 @@ export class AdminController {
     return this.adminService.updateTenantPlan(
       id,
       updateTenantPlanDto.plan_id,
+      this.getAdminUserId(req),
+      this.adminManagedAccessService.getRequestMetadata(req),
+    );
+  }
+
+  @UseGuards(AdminAuthGuard)
+  @Patch('tenants/:id/category')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @ApiOperation({
+    summary: 'Update tenant store type / category',
+    description: 'Update the store category (type) of a specific tenant with optional force cleanup of existing products.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The unique ID of the tenant',
+    type: Number,
+  })
+  @ApiBody({ type: UpdateTenantCategoryDto })
+  @ApiResponse({ status: 200, description: 'Tenant category updated successfully' })
+  @ApiResponse({ status: 400, description: 'Active orders in progress or force cleanup required' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Tenant not found' })
+  updateTenantCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateTenantCategoryDto: UpdateTenantCategoryDto,
+    @Req() req: Request,
+  ) {
+    return this.adminService.updateTenantCategory(
+      id,
+      updateTenantCategoryDto,
       this.getAdminUserId(req),
       this.adminManagedAccessService.getRequestMetadata(req),
     );

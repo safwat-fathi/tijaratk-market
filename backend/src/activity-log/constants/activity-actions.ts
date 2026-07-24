@@ -1,5 +1,6 @@
 export const ActivityActions = {
   TenantStatusChanged: 'tenant.status_changed',
+  TenantCategoryChanged: 'tenant.category_changed',
   TenantApplicationApproved: 'tenant.application_approved',
   TenantApplicationRejected: 'tenant.application_rejected',
   OrderCreated: 'order.created',

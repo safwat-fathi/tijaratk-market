@@ -11,6 +11,7 @@ import {
 } from "@/constants/admin-managed-permissions";
 import { adminService } from "@/services/api/admin.service";
 import { ManageStoreDialog } from "./_components/ManageStoreDialog";
+import { TenantCategoryForm } from "../_components/TenantCategoryForm";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,11 @@ export default async function AdminMerchantDetailsPage({ params }: PageProps) {
           }
         />
       </Card>
+
+      <TenantCategoryForm
+        tenantId={tenantId}
+        currentCategory={context.tenant.category ?? "other"}
+      />
 
       {profile.role === "platform_admin" ? (
         <Card className="space-y-5 p-5">
