@@ -6,15 +6,20 @@ import type {
 
 export const extractMainAreaIds = (
   tenantDeliveryAreas: Array<{ area_id: number; area?: { parent_area_id: number | null } }>,
-) => {
-  const deliveryAreaIds = new Set(tenantDeliveryAreas.map((a) => a.area_id));
-  return tenantDeliveryAreas
-    .filter((a) => {
-      const parentId = a.area?.parent_area_id;
-      return parentId === null || parentId === undefined || !deliveryAreaIds.has(parentId);
-    })
-    .map((a) => a.area_id);
-};
+) =>
+  Array.from(
+    tenantDeliveryAreas.reduce((mainAreaIds, deliveryArea) => {
+      const parentAreaId = deliveryArea.area?.parent_area_id;
+
+      if (typeof parentAreaId === "number") {
+        mainAreaIds.add(parentAreaId);
+      } else if (parentAreaId === null) {
+        mainAreaIds.add(deliveryArea.area_id);
+      }
+
+      return mainAreaIds;
+    }, new Set<number>()),
+  );
 
 export const excludeMainAreasFromDeliveryAreas = (
   deliveryAreas: DeliveryAreaFeeInput[],
