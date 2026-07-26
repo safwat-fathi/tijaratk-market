@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CustomersModule } from 'src/customers/customers.module';
 import {
   AdminPushNotificationsController,
   PushNotificationsController,
@@ -8,6 +9,7 @@ import { PushNotificationsWorker } from './push-notifications.worker';
 
 /** Encapsulates Web Push registration, durable enqueueing, and delivery. */
 @Module({
+  imports: [CustomersModule],
   controllers: [
     PushNotificationsController,
     AdminPushNotificationsController,

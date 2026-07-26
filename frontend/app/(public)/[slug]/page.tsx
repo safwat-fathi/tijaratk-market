@@ -21,13 +21,17 @@ import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import CustomerPwaInstallTracking from "@/components/analytics/CustomerPwaInstallTracking";
 import StorefrontViewTracking from "@/components/analytics/StorefrontViewTracking";
 import { SITE_URL } from "@/lib/marketing-seo";
 import { getStorefrontCartDraftAction } from "@/actions/storefront-cart-actions";
 import { OrderSource } from "@/types/enums";
 import { createUnavailableStorefrontOrderState } from "@/lib/storefront-order-availability";
 import { CUSTOMER_PWA } from "@/lib/customer-pwa";
-import type { StorefrontAnalyticsContext } from "@/lib/analytics/storefront-ga4";
+import {
+  CUSTOMER_PWA_INSTALL_SURFACES,
+  type StorefrontAnalyticsContext,
+} from "@/lib/analytics/storefront-ga4";
 
 type StoreSearchParams = {
   reorder?: string;
@@ -211,6 +215,10 @@ export default async function StorePage({ params, searchParams }: Props) {
         pageLocation={`/${encodeURIComponent(slug)}`}
         pageTitle={tenant.name}
       />
+      <CustomerPwaInstallTracking
+        installSurface={CUSTOMER_PWA_INSTALL_SURFACES.DIRECT_STOREFRONT}
+        store={storeAnalytics}
+      />
       <StorefrontViewTracking store={storeAnalytics} />
       <MetaStorefrontView
         contentId={`tenant:${tenant.id}`}
@@ -241,6 +249,7 @@ export default async function StorePage({ params, searchParams }: Props) {
               : OrderSource.STOREFRONT
           }
           sourceMetadata={sourceMetadata}
+          isPharmacy={tenant.category === "pharmacy"}
           orderAvailability={orderAvailability}
           storeAnalytics={storeAnalytics}
         />

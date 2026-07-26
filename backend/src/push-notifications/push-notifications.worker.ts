@@ -7,7 +7,10 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import webpush from 'web-push';
-import { PushNotificationOutboxStatus } from '../../generated/prisma/client';
+import {
+  PushNotificationEventType,
+  PushNotificationOutboxStatus,
+} from '../../generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   PUSH_CLEANUP_INTERVAL_MS,
@@ -204,12 +207,17 @@ export class PushNotificationsWorker
     }
 
     const envelope = this.pushNotificationsService.buildEnvelope(event, target);
+    const topicKey =
+      event.event_type ===
+      PushNotificationEventType.customer_order_status_changed
+        ? `customer-order:${event.order_id}`
+        : event.event_key;
     try {
       await webpush.sendNotification(subscription, JSON.stringify(envelope), {
         TTL: PUSH_MESSAGE_TTL_SECONDS,
         urgency: 'high',
         topic: createHash('sha256')
-          .update(event.event_key)
+          .update(topicKey)
           .digest('base64url')
           .slice(0, 32),
         vapidDetails: {

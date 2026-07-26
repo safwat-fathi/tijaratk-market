@@ -1703,7 +1703,7 @@ export default function OrderForm({
     sendCustomerAnalyticsEvent("order_submitted", {
       store_slug: tenantSlug,
       storefront_type: storefrontKind,
-      item_count: totalItems,
+      items_count: totalItems,
       has_free_text: hasFreeTextRequest,
       has_prescription: hasPrescription,
     });

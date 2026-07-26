@@ -1069,6 +1069,26 @@ export class OrdersService {
       }
 
       if (
+        nextStatus &&
+        nextStatus !== previousStatus &&
+        nextStatus !== OrderStatus.CANCELLED &&
+        this.isCustomerPushStatus(nextStatus) &&
+        !(
+          order.order_source === OrderSource.zone_storefront &&
+          nextStatus === OrderStatus.CONFIRMED
+        )
+      ) {
+        await this.pushNotificationsService.enqueueCustomerOrderStatus(
+          manager,
+          {
+            orderId: order.id,
+            tenantId: order.tenant_id,
+            status: nextStatus,
+          },
+        );
+      }
+
+      if (
         updateOrderDto.total !== undefined &&
         String(order.total ?? '') !== String(updateOrderDto.total ?? '')
       ) {
@@ -1115,6 +1135,21 @@ export class OrdersService {
     actor?: OrderActivityActor,
     options: OrderReplacementOptions = {},
   ): Promise<OrderItem> {
+    if (!DbTenantContext.getManager()) {
+      return this.prisma.$transaction(async (manager) => {
+        await manager.$executeRaw`SELECT set_config('app.tenant_id', ${String(tenantId)}, true)`;
+        return DbTenantContext.run({ tenantId, manager }, () =>
+          this.replaceOrderItem(
+            tenantId,
+            itemId,
+            replacementProductId,
+            actor,
+            options,
+          ),
+        );
+      });
+    }
+
     const orderItem = await this.orderItemClient().findFirst({
       where: { id: itemId },
       include: { order: true },
@@ -1175,28 +1210,40 @@ export class OrdersService {
       },
     });
 
-    await this.activityLogService.create({
-      tenantId,
-      ...this.toActivityActorFields(actor),
-      entityType: ActivityEntityTypes.Order,
-      entityId: orderItem.order_id,
-      action: ActivityActions.OrderReplacementProposed,
-      title: 'تم اقتراح بديل لمنتج',
-      description: `تم اقتراح ${replacement.name} كبديل عن ${orderItem.name_snapshot}`,
-      oldValues: {
-        pending_replacement_product_id:
-          orderItem.pending_replacement_product_id,
+    const activityLog = await this.activityLogService.create(
+      {
+        tenantId,
+        ...this.toActivityActorFields(actor),
+        entityType: ActivityEntityTypes.Order,
+        entityId: orderItem.order_id,
+        action: ActivityActions.OrderReplacementProposed,
+        title: 'تم اقتراح بديل لمنتج',
+        description: `تم اقتراح ${replacement.name} كبديل عن ${orderItem.name_snapshot}`,
+        oldValues: {
+          pending_replacement_product_id:
+            orderItem.pending_replacement_product_id,
+        },
+        newValues: {
+          pending_replacement_product_id: replacement.id,
+        },
+        metadata: {
+          order_item_id: orderItem.id,
+          original_product_name: orderItem.name_snapshot,
+          replacement_product_name: replacement.name,
+        },
+        source: actor?.source ?? ActivitySources.Dashboard,
       },
-      newValues: {
-        pending_replacement_product_id: replacement.id,
+      DbTenantContext.getManager(),
+    );
+
+    await this.pushNotificationsService.enqueueCustomerReplacement(
+      DbTenantContext.getManager()!,
+      {
+        orderId: orderItem.order_id,
+        tenantId,
+        activityLogId: activityLog.id,
       },
-      metadata: {
-        order_item_id: orderItem.id,
-        original_product_name: orderItem.name_snapshot,
-        replacement_product_name: replacement.name,
-      },
-      source: actor?.source ?? ActivitySources.Dashboard,
-    });
+    );
 
     if (!options.skipCustomerNotification) {
       await this.notifyCustomerReplacementRequested(
@@ -2281,6 +2328,12 @@ export class OrdersService {
       cancellationReasonCode: analyticsReasonCode,
     });
 
+    await this.pushNotificationsService.enqueueCustomerOrderStatus(manager, {
+      orderId: order.id,
+      tenantId: order.tenant_id,
+      status: OrderStatus.CANCELLED,
+    });
+
     return updatedOrder as OrderWithItemsPayload;
   }
 
@@ -2297,6 +2350,16 @@ export class OrdersService {
     }
 
     return ActivityActions.OrderStatusChanged;
+  }
+
+  /** Limits customer push to meaningful merchant-controlled lifecycle changes. */
+  private isCustomerPushStatus(status: OrderStatus): boolean {
+    return (
+      status === OrderStatus.CONFIRMED ||
+      status === OrderStatus.OUT_FOR_DELIVERY ||
+      status === OrderStatus.COMPLETED ||
+      status === OrderStatus.CANCELLED
+    );
   }
 
   /**

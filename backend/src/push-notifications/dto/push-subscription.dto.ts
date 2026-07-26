@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsInt,
   IsOptional,
   IsString,
@@ -62,6 +64,60 @@ export class DeletePushSubscriptionDto {
   endpoint: string;
 }
 
+/** One customer identity previously verified through the public access flow. */
+export class CustomerPushIdentityDto {
+  @ApiProperty({ description: 'Customer access code' })
+  @IsString()
+  @Length(4, 32)
+  code: string;
+
+  @ApiProperty({ description: 'Phone number paired with the access code' })
+  @IsString()
+  @Length(6, 32)
+  phone: string;
+}
+
+/** Anonymous installed-app device registration with optional customer links. */
+export class UpsertCustomerPushSubscriptionDto {
+  @ApiProperty({
+    description: 'Opaque device credential stored only in a secure cookie',
+  })
+  @IsString()
+  @Length(43, 128)
+  @Matches(/^[A-Za-z0-9_-]+$/, {
+    message: 'deviceToken must be an unpadded base64url value',
+  })
+  deviceToken: string;
+
+  @ApiProperty({ type: UpsertPushSubscriptionDto })
+  @ValidateNested()
+  @Type(() => UpsertPushSubscriptionDto)
+  subscription: UpsertPushSubscriptionDto;
+
+  @ApiProperty({
+    type: [CustomerPushIdentityDto],
+    description: 'Saved customer identities to validate and link',
+  })
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => CustomerPushIdentityDto)
+  identities: CustomerPushIdentityDto[];
+}
+
+/** Anonymous installed-app device credential used to remove its registration. */
+export class DeleteCustomerPushSubscriptionDto {
+  @ApiProperty({
+    description: 'Opaque device credential stored only in a secure cookie',
+  })
+  @IsString()
+  @Length(43, 128)
+  @Matches(/^[A-Za-z0-9_-]+$/, {
+    message: 'deviceToken must be an unpadded base64url value',
+  })
+  deviceToken: string;
+}
+
 /** Public browser configuration for opt-in notification controls. */
 export class PushNotificationsConfigDto {
   @ApiProperty()
@@ -75,4 +131,10 @@ export class PushNotificationsConfigDto {
 export class PushSubscriptionStatusDto {
   @ApiProperty()
   subscribed: boolean;
+}
+
+/** Customer device registration result with the number of verified links. */
+export class CustomerPushSubscriptionStatusDto extends PushSubscriptionStatusDto {
+  @ApiProperty({ minimum: 0, maximum: 5 })
+  linkedCustomers: number;
 }

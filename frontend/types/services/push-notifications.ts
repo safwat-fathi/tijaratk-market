@@ -19,6 +19,17 @@ export type BrowserPushSubscriptionPayload = {
   };
 };
 
+export type CustomerPushIdentityPayload = {
+  code: string;
+  phone: string;
+};
+
+export type CustomerPushSubscriptionPayload = {
+  deviceToken: string;
+  subscription: BrowserPushSubscriptionPayload;
+  identities: CustomerPushIdentityPayload[];
+};
+
 export type PushNotificationMessage = {
   version: 1;
   eventId: string;
@@ -26,7 +37,9 @@ export type PushNotificationMessage = {
     | "admin.merchant.registered"
     | "merchant.order.created"
     | "admin.order.created"
-    | "merchant.assignment.created";
+    | "merchant.assignment.created"
+    | "customer.order.status_changed"
+    | "customer.order.replacement_requested";
   title: string;
   body: string;
   url: string;

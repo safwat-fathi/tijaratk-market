@@ -411,6 +411,29 @@ export async function getSavedAccessCodesFromCookie(): Promise<SavedAccessCodeCo
 	return payload.access_codes || [];
 }
 
+/** Persists a credential only after the backend confirms the complete pair. */
+export async function persistVerifiedAccessCodeInCookie(input: {
+	code: string;
+	phone: string;
+}): Promise<void> {
+	const code = input.code.trim();
+	const phone = input.phone.trim();
+	if (!code || !phone) return;
+
+	const payload = await readTrackedOrdersCookiePayload();
+	await writeTrackedOrdersCookie({
+		...payload,
+		access_codes: normalizeSavedAccessCodes([
+			{
+				code,
+				phone,
+				last_used_at: new Date().toISOString(),
+			},
+			...(payload.access_codes || []),
+		]),
+	});
+}
+
 export async function getCustomerProfileBySlugFromCookie(
 	slug: string,
 ): Promise<CustomerProfileCookieItem | null> {

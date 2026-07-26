@@ -597,6 +597,14 @@ export class OrderDispatchService {
           },
           manager,
         );
+        await this.pushNotificationsService.enqueueCustomerOrderStatus(
+          manager,
+          {
+            orderId: order.id,
+            tenantId: zone.operator_tenant_id,
+            status: OrderStatus.CANCELLED,
+          },
+        );
         return order;
       },
     );
@@ -1060,6 +1068,14 @@ export class OrderDispatchService {
             source: ActivitySources.Dashboard,
           },
           manager,
+        );
+        await this.pushNotificationsService.enqueueCustomerOrderStatus(
+          manager,
+          {
+            orderId: updatedOrder.id,
+            tenantId: operatorTenantId,
+            status: dto.status,
+          },
         );
         return updatedOrder;
       },

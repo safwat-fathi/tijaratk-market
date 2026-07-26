@@ -170,14 +170,15 @@ model Customer {
 }
 
 model GlobalCustomer {
-  created_at  DateTime   @default(now()) @db.Timestamp(6)
-  updated_at  DateTime   @default(now()) @updatedAt @db.Timestamp(6)
-  deleted_at  DateTime?  @db.Timestamp(6)
-  id          Int        @id(map: "PK_global_customers_id") @default(autoincrement())
-  phone       String     @unique(map: "UQ_global_customers_phone") @db.VarChar(32)
-  access_code String     @unique(map: "UQ_global_customers_access_code") @db.VarChar(16)
-  name        String?    @db.VarChar
-  customers   Customer[]
+  created_at              DateTime                       @default(now()) @db.Timestamp(6)
+  updated_at              DateTime                       @default(now()) @updatedAt @db.Timestamp(6)
+  deleted_at              DateTime?                      @db.Timestamp(6)
+  id                      Int                            @id(map: "PK_global_customers_id") @default(autoincrement())
+  phone                   String                         @unique(map: "UQ_global_customers_phone") @db.VarChar(32)
+  access_code             String                         @unique(map: "UQ_global_customers_access_code") @db.VarChar(16)
+  name                    String?                        @db.VarChar
+  customers               Customer[]
+  push_subscription_links PushSubscriptionCustomer[]
 
   @@index([access_code], map: "IDX_global_customers_access_code")
   @@map("global_customers")
@@ -710,25 +711,43 @@ model Ga4EventOutbox {
 
 /// Encrypted Web Push device registration. This control-plane table does not use tenant RLS.
 model PushSubscription {
-  id                     Int       @id(map: "PK_push_subscriptions_id") @default(autoincrement())
-  endpoint_hash          String    @unique(map: "UQ_push_subscriptions_endpoint_hash") @db.Char(64)
-  encrypted_subscription String
-  merchant_user_id       Int?
-  merchant_tenant_id     Int?
-  admin_user_id          Int?
-  expiration_time        DateTime? @db.Timestamptz(6)
-  last_seen_at           DateTime  @default(now()) @db.Timestamptz(6)
-  created_at             DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  id                         Int       @id(map: "PK_push_subscriptions_id") @default(autoincrement())
+  endpoint_hash              String    @unique(map: "UQ_push_subscriptions_endpoint_hash") @db.Char(64)
+  encrypted_subscription     String
+  merchant_user_id           Int?
+  merchant_tenant_id         Int?
+  admin_user_id              Int?
+  customer_device_token_hash String?   @unique(map: "UQ_push_subscriptions_customer_device_token_hash") @db.Char(64)
+  expiration_time            DateTime? @db.Timestamptz(6)
+  last_seen_at               DateTime  @default(now()) @db.Timestamptz(6)
+  created_at                 DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   merchant_user   User?      @relation(fields: [merchant_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_push_subscriptions_merchant_user")
   merchant_tenant Tenant?    @relation("PushSubscriptionMerchantTenant", fields: [merchant_tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_push_subscriptions_merchant_tenant")
   admin_user      AdminUser? @relation(fields: [admin_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_push_subscriptions_admin_user")
+  customer_links  PushSubscriptionCustomer[]
 
   @@index([merchant_tenant_id, merchant_user_id], map: "IDX_push_subscriptions_merchant_actor")
   @@index([admin_user_id], map: "IDX_push_subscriptions_admin_actor")
   @@index([last_seen_at], map: "IDX_push_subscriptions_last_seen")
   @@map("push_subscriptions")
+}
+
+/// Control-plane customer recipients linked to one anonymous PWA device.
+model PushSubscriptionCustomer {
+  id                   Int              @id(map: "PK_push_subscription_customers_id") @default(autoincrement())
+  push_subscription_id Int
+  global_customer_id   Int
+  created_at           DateTime         @default(now()) @db.Timestamptz(6)
+
+  push_subscription PushSubscription @relation(fields: [push_subscription_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_push_subscription_customers_subscription")
+  global_customer   GlobalCustomer   @relation(fields: [global_customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_push_subscription_customers_global_customer")
+
+  @@unique([push_subscription_id, global_customer_id], map: "UQ_push_subscription_customers_pair")
+  @@index([global_customer_id, push_subscription_id], map: "IDX_push_subscription_customers_customer")
+  @@index([push_subscription_id], map: "IDX_push_subscription_customers_subscription")
+  @@map("push_subscription_customers")
 }
 
 /// Durable, privacy-minimized queue for Web Push delivery.
@@ -918,6 +937,8 @@ enum PushNotificationEventType {
   merchant_order_created
   zone_order_created
   zone_assignment_created
+  customer_order_status_changed
+  customer_replacement_requested
 
   @@map("push_notification_event_type_enum")
 }

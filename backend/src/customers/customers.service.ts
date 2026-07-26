@@ -41,6 +41,11 @@ type PublicCustomerOrder = Pick<
   } | null;
 };
 
+export type PublicCustomerIdentityCredential = {
+  code: string;
+  phone: string;
+};
+
 @Injectable()
 export class CustomersService {
   private static readonly ACCESS_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -58,6 +63,47 @@ export class CustomersService {
     return normalized.length > 4
       ? `${normalized.slice(0, 4)}-${normalized.slice(4)}`
       : normalized;
+  }
+
+  /**
+   * Resolves customer IDs only when both saved public credentials still match.
+   *
+   * Invalid credentials are intentionally omitted so callers cannot use this
+   * method to distinguish which half of a pair was incorrect.
+   */
+  async resolvePublicIdentityIds(
+    credentials: PublicCustomerIdentityCredential[],
+  ): Promise<number[]> {
+    const normalizedPairs = Array.from(
+      new Map(
+        credentials
+          .slice(0, 5)
+          .map((credential) => ({
+            accessCode: this.normalizeAccessCode(credential.code),
+            phone: formatPhoneNumber(credential.phone),
+          }))
+          .filter((pair) => pair.accessCode && pair.phone)
+          .map(
+            (pair) =>
+              [`${pair.accessCode}:${pair.phone}`, pair] as const,
+          ),
+      ).values(),
+    );
+
+    if (normalizedPairs.length === 0) return [];
+
+    const customers = await this.prisma.globalCustomer.findMany({
+      where: {
+        deleted_at: null,
+        OR: normalizedPairs.map((pair) => ({
+          access_code: pair.accessCode,
+          phone: pair.phone,
+        })),
+      },
+      select: { id: true },
+    });
+
+    return customers.map((customer) => customer.id);
   }
 
   private generateAccessCode(): string {

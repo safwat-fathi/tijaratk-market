@@ -5,6 +5,7 @@ import {
   customersService,
   type PublicCustomerProfile,
 } from "@/services/api/customers.service";
+import { persistVerifiedAccessCodeInCookie } from "@/lib/tracking/customer-tracking-cookie";
 import { Customer } from "@/types/models/customer";
 
 type CustomersPageMeta = {
@@ -253,6 +254,10 @@ export async function getPublicCustomerByAccessCodeAction(input: {
       };
     }
 
+    if (response.data) {
+      await persistVerifiedAccessCodeInCookie({ code, phone });
+    }
+
     return {
       success: true,
       data: response.data
@@ -298,6 +303,16 @@ export async function getPublicOrdersByAccessCodeAction(input: {
         message: response.message || "تعذر تحميل الطلبات",
         data: [],
       };
+    }
+
+    if (response.data.length > 0) {
+      await persistVerifiedAccessCodeInCookie({ code, phone });
+    } else {
+      const profileResponse =
+        await customersService.getPublicCustomerByAccessCode({ code, phone });
+      if (profileResponse.success && profileResponse.data) {
+        await persistVerifiedAccessCodeInCookie({ code, phone });
+      }
     }
 
     return {

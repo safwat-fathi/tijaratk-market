@@ -196,8 +196,11 @@ export default async function OrderDetailsPage({
 								<ImageThumbnail
 									src={getImageUrl(order.prescription_file_url)}
 									alt="Prescription"
-									imageClassName="max-h-96 object-contain"
-									thumbnailWrapperClassName="block max-h-96 w-full"
+									width={1200}
+									height={1600}
+									sizes="100vw"
+									imageClassName="h-full w-full object-contain"
+									thumbnailWrapperClassName="block h-72 w-full sm:h-96"
 									fallback={<span className="text-gray-500">لا توجد صورة</span>}
 								/>
 							</div>

@@ -22,10 +22,13 @@ import { AllowAnyAdmin } from 'src/admin/decorators/admin-role.decorator';
 import { AdminAuthGuard } from 'src/admin/guards/admin-auth.guard';
 import CONSTANTS from 'src/common/constants';
 import {
+  CustomerPushSubscriptionStatusDto,
+  DeleteCustomerPushSubscriptionDto,
   DeletePushSubscriptionDto,
   PushNotificationsConfigDto,
   PushSubscriptionStatusDto,
   UpsertPushSubscriptionDto,
+  UpsertCustomerPushSubscriptionDto,
 } from './dto/push-subscription.dto';
 import { PushNotificationsService } from './push-notifications.service';
 
@@ -53,6 +56,42 @@ export class PushNotificationsController {
   @ApiResponse({ status: 200, type: PushNotificationsConfigDto })
   getConfig() {
     return this.pushNotificationsService.getBrowserConfig();
+  }
+
+  /** Registers an installed customer app and any valid saved identities. */
+  @Post('customer/subscriptions')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Register a customer Web Push subscription' })
+  @ApiBody({ type: UpsertCustomerPushSubscriptionDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Customer device registered',
+    type: CustomerPushSubscriptionStatusDto,
+  })
+  upsertCustomerSubscription(
+    @Body() dto: UpsertCustomerPushSubscriptionDto,
+  ) {
+    return this.pushNotificationsService.upsertCustomerSubscription(dto);
+  }
+
+  /** Removes an installed customer app by its secure device credential. */
+  @Delete('customer/subscriptions')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Delete a customer Web Push subscription' })
+  @ApiBody({ type: DeleteCustomerPushSubscriptionDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Customer device removed',
+    type: PushSubscriptionStatusDto,
+  })
+  deleteCustomerSubscription(
+    @Body() dto: DeleteCustomerPushSubscriptionDto,
+  ) {
+    return this.pushNotificationsService.deleteCustomerSubscription(
+      dto.deviceToken,
+    );
   }
 
   /** Registers one browser device for the authenticated merchant user. */

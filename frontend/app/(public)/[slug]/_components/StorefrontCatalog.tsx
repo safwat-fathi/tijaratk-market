@@ -1,11 +1,12 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { FileText, Search, UploadCloud } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   loadStorefrontProductsAction,
   saveStorefrontCartDraftAction,
+  uploadStorefrontPrescriptionAction,
 } from "@/actions/storefront-cart-actions";
 import { formatCurrency } from "@/lib/utils/currency";
 import { sendMetaPixelEvent } from "@/lib/analytics/meta-pixel";
@@ -46,6 +47,7 @@ type StorefrontCatalogProps = {
   initialCategory?: string;
   orderSource?: OrderSource;
   sourceMetadata?: Record<string, unknown>;
+  isPharmacy: boolean;
   orderAvailability: StorefrontOrderAvailability;
   storeAnalytics: StorefrontAnalyticsContext;
 };
@@ -76,6 +78,7 @@ export default function StorefrontCatalog({
   initialCategory,
   orderSource = OrderSource.STOREFRONT,
   sourceMetadata,
+  isPharmacy,
   orderAvailability,
   storeAnalytics,
 }: StorefrontCatalogProps) {
@@ -92,14 +95,19 @@ export default function StorefrontCatalog({
   const validSearch = normalizedSearch.length >= 2 ? normalizedSearch : "";
   const [message, setMessage] = useState<string | null>(null);
   const [cartOpenError, setCartOpenError] = useState<string | null>(null);
+  const [prescriptionUploadError, setPrescriptionUploadError] = useState<
+    string | null
+  >(null);
   const [isCatalogBoundaryVisible, setIsCatalogBoundaryVisible] = useState(false);
   const [draftProducts, setDraftProducts] = useState(
     initialDraft?.items.map((item) => item.product) ?? [],
   );
   const [isLoading, startLoading] = useTransition();
   const [isOpeningCart, startOpeningCart] = useTransition();
+  const [isUploadingPrescription, startPrescriptionUpload] = useTransition();
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const openingCartRef = useRef(false);
+  const prescriptionUploadRef = useRef(false);
   const searchRequest = useRef(0);
   const catalogBoundaryRef = useRef<HTMLDivElement | null>(null);
   const viewedProductIds = useRef(new Set<number>());
@@ -121,6 +129,7 @@ export default function StorefrontCatalog({
     () => calculateCartSummary(selections, knownProducts),
     [knownProducts, selections],
   );
+  const isOrderActionPending = isOpeningCart || isUploadingPrescription;
 
   const buildDraftInput = (
     next: Record<number, ProductCartSelection>,
@@ -167,7 +176,7 @@ export default function StorefrontCatalog({
   };
 
   const openCart = () => {
-    if (openingCartRef.current) return;
+    if (openingCartRef.current || prescriptionUploadRef.current) return;
 
     openingCartRef.current = true;
     setMessage(null);
@@ -194,13 +203,67 @@ export default function StorefrontCatalog({
     });
   };
 
+  const uploadPrescription = (
+    file: File,
+    input: HTMLInputElement,
+  ) => {
+    if (
+      !orderAvailability.accepting_orders ||
+      openingCartRef.current ||
+      prescriptionUploadRef.current
+    ) {
+      input.value = "";
+      return;
+    }
+
+    prescriptionUploadRef.current = true;
+    setMessage(null);
+    setCartOpenError(null);
+    setPrescriptionUploadError(null);
+
+    startPrescriptionUpload(async () => {
+      try {
+        await saveQueue.current;
+        const savedDraft = await saveSelections(selectionsRef.current);
+        if (!savedDraft.success) {
+          setMessage(null);
+          setPrescriptionUploadError(
+            savedDraft.message || "تعذر تجهيز الطلب. حاول مرة أخرى.",
+          );
+          return;
+        }
+
+        const payload = new FormData();
+        payload.set("prescription_file", file);
+        const uploaded = await uploadStorefrontPrescriptionAction(
+          tenantSlug,
+          payload,
+        );
+        if (!uploaded.success || !uploaded.data) {
+          setPrescriptionUploadError(
+            uploaded.message || "تعذر رفع الروشتة. حاول مرة أخرى.",
+          );
+          return;
+        }
+
+        router.push(`/${encodeURIComponent(tenantSlug)}/cart`);
+      } catch {
+        setPrescriptionUploadError("تعذر رفع الروشتة. حاول مرة أخرى.");
+      } finally {
+        input.value = "";
+        prescriptionUploadRef.current = false;
+      }
+    });
+  };
+
   const updateSelection = (
     product: Product,
     selection: ProductCartSelection | null,
   ) => {
     if (
       !orderAvailability.accepting_orders ||
-      openingCartRef.current
+      openingCartRef.current ||
+      prescriptionUploadRef.current
     ) {
       return;
     }
@@ -247,7 +310,8 @@ export default function StorefrontCatalog({
     if (
       !reorderOrder ||
       !orderAvailability.accepting_orders ||
-      openingCartRef.current
+      openingCartRef.current ||
+      prescriptionUploadRef.current
     ) {
       return;
     }
@@ -388,13 +452,102 @@ export default function StorefrontCatalog({
           <button
             type="button"
             onClick={replaceWithReorder}
-            disabled={isOpeningCart}
+            disabled={isOrderActionPending}
             className="mt-3 min-h-11 rounded-xl bg-brand-primary px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             استبدال السلة وإعادة الطلب
           </button>
         </div>
       ) : null}
+
+      {isPharmacy ? (
+        <section
+          data-customer-tour="prescription"
+          className="mb-4 rounded-2xl border border-brand-accent/30 bg-brand-soft/50 p-4 shadow-soft"
+          aria-labelledby="catalog-prescription-title"
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-brand-primary shadow-sm">
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2
+                id="catalog-prescription-title"
+                className="font-black text-brand-text"
+              >
+                اطلب بالروشتة
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                ارفع صورة الروشتة أو ملف PDF وكمّل بيانات التوصيل مباشرة.
+              </p>
+            </div>
+          </div>
+
+          {initialDraft?.has_prescription ? (
+            <div className="mt-4">
+              <p className="break-words text-xs font-semibold text-brand-text">
+                {initialDraft.prescription_original_filename ||
+                  "تم رفع الروشتة"}
+              </p>
+              <button
+                type="button"
+                onClick={openCart}
+                disabled={
+                  !orderAvailability.accepting_orders || isOrderActionPending
+                }
+                aria-busy={isOpeningCart}
+                className="mt-3 flex min-h-12 w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isOpeningCart
+                  ? "جاري فتح مراجعة الطلب…"
+                  : "متابعة طلب الروشتة"}
+              </button>
+            </div>
+          ) : (
+            <label
+              aria-disabled={
+                !orderAvailability.accepting_orders || isOrderActionPending
+              }
+              className={`mt-4 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-3 text-sm font-black text-white ${
+                !orderAvailability.accepting_orders || isOrderActionPending
+                  ? "cursor-not-allowed opacity-60"
+                  : "cursor-pointer"
+              }`}
+            >
+              <UploadCloud className="h-5 w-5" aria-hidden="true" />
+              <span aria-live="polite">
+                {isUploadingPrescription
+                  ? "جاري رفع الروشتة…"
+                  : "التقط صورة أو ارفع ملف"}
+              </span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                capture="environment"
+                disabled={
+                  !orderAvailability.accepting_orders || isOrderActionPending
+                }
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (!file) return;
+                  uploadPrescription(file, event.currentTarget);
+                }}
+              />
+            </label>
+          )}
+
+          {prescriptionUploadError ? (
+            <p
+              role="alert"
+              className="mt-3 rounded-xl border border-status-error/20 bg-white px-3 py-2 text-sm font-semibold text-status-error"
+            >
+              {prescriptionUploadError}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
       <div className="sticky z-30 rounded-2xl border border-brand-border bg-white/95 p-4 shadow-soft backdrop-blur-xl" style={{ top: '131px' }}>
         <label className="relative block">
           <span className="sr-only">ابحث عن منتج</span>
@@ -428,7 +581,7 @@ export default function StorefrontCatalog({
       <div className="mt-4">
         <fieldset
           disabled={
-            !orderAvailability.accepting_orders || isOpeningCart
+            !orderAvailability.accepting_orders || isOrderActionPending
           }
           aria-describedby={
             orderAvailability.accepting_orders
@@ -484,8 +637,8 @@ export default function StorefrontCatalog({
           ) : null}
           <button
             type="button"
-            disabled={isOpeningCart}
-            aria-busy={isOpeningCart}
+            disabled={isOrderActionPending}
+            aria-busy={isOrderActionPending}
             onClick={openCart}
             className="mx-auto flex min-h-14 w-full max-w-md items-center justify-between rounded-xl bg-brand-primary px-5 py-3 text-white shadow-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/30 disabled:cursor-wait disabled:opacity-70"
           >

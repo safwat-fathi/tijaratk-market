@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cache, Suspense } from "react";
+import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import CustomerPwaInstallTracking from "@/components/analytics/CustomerPwaInstallTracking";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import JsonLd from "@/components/seo/JsonLd";
 import SafeImage from "@/components/ui/SafeImage";
@@ -23,8 +25,8 @@ import CategoryGrid, {
 } from "@/components/stores-directory/CategoryGrid";
 import { AppHeader } from "@/components/layout/AppHeader";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
+import { CUSTOMER_PWA_INSTALL_SURFACES } from "@/lib/analytics/storefront-ga4";
 import { CUSTOMER_PWA, CUSTOMER_PWA_METADATA } from "@/lib/customer-pwa";
-import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
 import type { ZoneStorefront } from "@/types/models/zone-storefront";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -566,6 +568,9 @@ export default async function HomePage(props: StoresDirectoryPageProps) {
     return (
       <>
         <CustomerAnalytics pageLocation={STORES_PATH} />
+        <CustomerPwaInstallTracking
+          installSurface={CUSTOMER_PWA_INSTALL_SURFACES.HOME}
+        />
         <LegacyStoresDirectoryPage {...props} />
       </>
     );
@@ -576,6 +581,9 @@ export default async function HomePage(props: StoresDirectoryPageProps) {
   return (
     <>
       <CustomerAnalytics pageLocation={STORES_PATH} />
+      <CustomerPwaInstallTracking
+        installSurface={CUSTOMER_PWA_INSTALL_SURFACES.HOME}
+      />
       {publicZones.length > 0 ? (
         <ZoneStorefrontHome zones={publicZones} />
       ) : (

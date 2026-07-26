@@ -4,7 +4,7 @@ const scopePath = new URL(self.registration.scope).pathname
   .replace(/[^a-z0-9]+/gi, "-")
   .replace(/^-|-$/g, "") || "root";
 const CACHE_PREFIX = `tijaratk-${scopePath}-pwa`;
-const CACHE_NAME = `${CACHE_PREFIX}-v2`;
+const CACHE_NAME = `${CACHE_PREFIX}-v3`;
 const OFFLINE_URL = "/offline";
 const FALLBACK_NOTIFICATION_ICON = "/android-chrome-192x192.png";
 const NOTIFICATION_BADGE = "/notification-badge-96x96.png";
@@ -27,6 +27,8 @@ const PUSH_MESSAGE_TYPES = new Set([
   "merchant.order.created",
   "admin.order.created",
   "merchant.assignment.created",
+  "customer.order.status_changed",
+  "customer.order.replacement_requested",
 ]);
 
 const getScopedTargetUrl = (targetPath) => {

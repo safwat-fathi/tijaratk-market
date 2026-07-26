@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import CustomerPwaInstallTracking from "@/components/analytics/CustomerPwaInstallTracking";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import JsonLd from "@/components/seo/JsonLd";
@@ -8,12 +10,12 @@ import SafeImage from "@/components/ui/SafeImage";
 import { createPublicMetadata, SITE_URL } from "@/lib/marketing-seo";
 import { storesDirectoryService } from "@/services/api/stores-directory.service";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
+import { CUSTOMER_PWA_INSTALL_SURFACES } from "@/lib/analytics/storefront-ga4";
 import { CUSTOMER_PWA, CUSTOMER_PWA_METADATA } from "@/lib/customer-pwa";
 import {
   StoresDirectoryCategoryPage,
   StoresDirectoryStoreCard,
 } from "@/types/models/stores-directory";
-import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import { formatCurrency } from "@/lib/utils/currency";
 
 type StoresCategorySearchParams = {
@@ -237,6 +239,9 @@ export default async function StoresCategoryPage({
       <CustomerAnalytics
         pageLocation={`/stores/${encodeURIComponent(areaSlug)}/${encodeURIComponent(categorySlug)}`}
         pageTitle={page.seo.title}
+      />
+      <CustomerPwaInstallTracking
+        installSurface={CUSTOMER_PWA_INSTALL_SURFACES.STORE_DIRECTORY}
       />
       {jsonLd.map((item, index) => (
         <JsonLd

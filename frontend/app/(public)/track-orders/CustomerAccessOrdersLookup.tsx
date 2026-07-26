@@ -8,6 +8,7 @@ import { clearTrackedOrdersAction, removeTrackedOrderAction } from "@/actions/or
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { CustomerPushNotificationsSettingsCard } from "@/components/pwa/CustomerPwaEngagement";
 import { formatCurrency } from "@/lib/utils/currency";
 import { OrderStatus } from "@/types/enums";
 import type { Order } from "@/types/models/order";
@@ -102,6 +103,7 @@ export default function CustomerAccessOrdersLookup({
       return;
     }
 
+    window.dispatchEvent(new Event("customer-push-identities-changed"));
     setLookupOrders(response.data);
     setMessage(
       response.data.length > 0
@@ -189,6 +191,8 @@ export default function CustomerAccessOrdersLookup({
 
   return (
     <>
+      <CustomerPushNotificationsSettingsCard />
+
       {initialSavedCodes.length > 0 && (
         <div className="mt-6 rounded-lg border border-brand-accent/30 bg-brand-soft/20 px-4 py-3">
           <p className="text-sm font-semibold text-brand-text">

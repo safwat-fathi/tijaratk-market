@@ -1,4 +1,7 @@
-import { Metadata } from "next";
+import type { Metadata } from "next";
+import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
+import CustomerPwaInstallTracking from "@/components/analytics/CustomerPwaInstallTracking";
+import { CUSTOMER_PWA_INSTALL_SURFACES } from "@/lib/analytics/storefront-ga4";
 import InstallGuide from "./_components/InstallGuide";
 
 export const metadata: Metadata = {
@@ -7,5 +10,16 @@ export const metadata: Metadata = {
 };
 
 export default function InstallPage() {
-  return <InstallGuide />;
+  return (
+    <>
+      <CustomerAnalytics
+        pageLocation="/install"
+        pageTitle="تثبيت التطبيق - تجارتك"
+      />
+      <CustomerPwaInstallTracking
+        installSurface={CUSTOMER_PWA_INSTALL_SURFACES.INSTALL_GUIDE}
+      />
+      <InstallGuide />
+    </>
+  );
 }

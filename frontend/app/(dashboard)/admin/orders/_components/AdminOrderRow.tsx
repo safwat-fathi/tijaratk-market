@@ -3,16 +3,26 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  CalendarClock,
   Check,
   ChevronDown,
   Copy,
   Eye,
   EyeOff,
+  ExternalLink,
+  FileText,
+  MapPin,
   PackageOpen,
   Phone,
   ShieldCheck,
 } from "lucide-react";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import {
+  formatPrescriptionUnavailabilityAction,
+} from "@/lib/orders/prescription-unavailability";
+import { formatUnavailableItemAction } from "@/lib/orders/unavailable-item-action";
+import { getImageUrl } from "@/lib/utils/image";
 import type { AdminOrderListItem } from "@/services/api/admin.service";
 import { OrderStatus, OrderType, PricingMode } from "@/types/enums";
 
@@ -34,10 +44,33 @@ const MONEY_FORMATTER = new Intl.NumberFormat("ar-EG", {
   maximumFractionDigits: 2,
 });
 
+const DATE_FORMATTER = new Intl.DateTimeFormat("ar-EG", {
+  dateStyle: "medium",
+  timeZone: "Africa/Cairo",
+});
+
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("ar-EG", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Africa/Cairo",
+});
+
 function formatMoney(value: number | string | null | undefined) {
   return value === null || value === undefined
     ? "غير محدد"
     : MONEY_FORMATTER.format(Number(value));
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : DATE_FORMATTER.format(date);
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : DATE_TIME_FORMATTER.format(date);
 }
 
 function maskValue(value: string, visibleSuffix: number) {
@@ -123,6 +156,103 @@ function SecretValue({
   );
 }
 
+function PrescriptionDetails({
+  order,
+}: {
+  order: AdminOrderListItem;
+}) {
+  if (!order.prescription_file_url) return null;
+
+  const fileUrl = getImageUrl(order.prescription_file_url);
+  const filename =
+    order.prescription_original_filename?.trim() || "ملف الوصفة الطبية";
+  const mimeType = order.prescription_mime_type?.trim().toLowerCase();
+  const isImage =
+    Boolean(mimeType?.startsWith("image/")) ||
+    /\.(?:jpe?g|png|webp|heic|heif)(?:$|[?#])/i.test(
+      order.prescription_file_url,
+    );
+  let fileTypeLabel: string | null = null;
+  if (mimeType === "application/pdf") {
+    fileTypeLabel = "PDF";
+  } else if (isImage) {
+    fileTypeLabel = "صورة";
+  } else if (mimeType) {
+    fileTypeLabel = "ملف";
+  }
+  const unavailabilityLabel =
+    formatPrescriptionUnavailabilityAction(
+      order.prescription_unavailability_action,
+    ) || "غير محدد";
+
+  return (
+    <article className="rounded-lg border border-brand-border bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 font-bold text-brand-text">
+            <FileText className="h-4 w-4 text-brand-primary" aria-hidden="true" />
+            الوصفة الطبية
+          </p>
+          <p className="mt-1 break-words text-xs text-gray-500">{filename}</p>
+        </div>
+        {fileTypeLabel ? (
+          <span className="rounded-full bg-brand-soft px-2.5 py-1 text-[11px] font-semibold text-brand-primary">
+            {fileTypeLabel}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3 rounded-md border border-brand-accent/20 bg-brand-soft/45 px-3 py-2 text-sm text-brand-text">
+        <span className="font-semibold text-brand-primary">
+          في حالة عدم توفر الأصناف:
+        </span>{" "}
+        {unavailabilityLabel}
+      </div>
+
+      {isImage ? (
+        <div className="mt-3 flex max-h-96 w-full justify-center overflow-hidden rounded-md border border-brand-border bg-brand-soft/20">
+          <ImageThumbnail
+            src={fileUrl}
+            alt={`الوصفة الطبية للطلب رقم ${order.id}`}
+            width={1200}
+            height={1600}
+            sizes="(min-width: 1024px) 60vw, 100vw"
+            imageClassName="h-full w-full object-contain"
+            thumbnailWrapperClassName="block h-72 w-full sm:h-96"
+            fallback={
+              <span className="flex min-h-36 items-center justify-center px-4 text-sm text-gray-500">
+                تعذر عرض صورة الوصفة الطبية
+              </span>
+            }
+          />
+        </div>
+      ) : (
+        <div className="mt-3 flex min-h-28 items-center justify-center rounded-md border border-dashed border-brand-border bg-brand-soft/20 px-4 text-center">
+          <div>
+            <FileText
+              className="mx-auto h-8 w-8 text-brand-primary"
+              aria-hidden="true"
+            />
+            <p className="mt-2 text-sm text-gray-600">
+              معاينة هذا النوع غير متاحة داخل الصفحة.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <a
+        href={fileUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-md border border-brand-border px-3 text-xs font-semibold text-brand-primary transition hover:bg-brand-soft focus:brand-focus"
+      >
+        فتح الملف الأصلي
+        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+      </a>
+    </article>
+  );
+}
+
 function OrderDetails({
   order,
   idPrefix,
@@ -130,16 +260,55 @@ function OrderDetails({
   order: AdminOrderListItem;
   idPrefix: string;
 }) {
-  const orderTypeLabel =
+  const hasItems = order.items.length > 0;
+  const hasFreeText = Boolean(order.free_text_payload?.text);
+  const hasPrescription = Boolean(order.prescription_file_url);
+
+  let orderTypeLabel =
     order.order_type === OrderType.FREE_TEXT ? "طلب نصي" : "طلب من الكتالوج";
+  if (hasPrescription && hasItems) {
+    orderTypeLabel = "طلب من الكتالوج مع وصفة طبية";
+  } else if (hasPrescription && hasFreeText) {
+    orderTypeLabel = "طلب نصي مع وصفة طبية";
+  } else if (hasPrescription) {
+    orderTypeLabel = "طلب بوصفة طبية";
+  }
+
   const pricingLabel =
     order.pricing_mode === PricingMode.MANUAL ? "تسعير يدوي" : "تسعير تلقائي";
+
   let contentCountLabel = "بدون منتجات";
-  if (order.items.length) {
+  if (hasItems && hasPrescription) {
+    contentCountLabel = `${order.items.length} ${order.items.length === 1 ? "منتج" : "منتجات"} + وصفة`;
+  } else if (hasItems) {
     contentCountLabel = `${order.items.length} ${order.items.length === 1 ? "منتج" : "منتجات"}`;
-  } else if (order.order_type === OrderType.FREE_TEXT) {
+  } else if (hasPrescription) {
+    contentCountLabel = "وصفة طبية";
+  } else if (hasFreeText) {
     contentCountLabel = "طلب نصي";
   }
+
+  const deliveryAreaLabel =
+    order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
+  const scheduledDateLabel = formatDate(order.scheduled_delivery_date);
+  let deliveryWindowLabel = order.delivery_time_window_snapshot?.trim() || null;
+  if (!deliveryWindowLabel && order.scheduled_delivery_starts_at) {
+    deliveryWindowLabel = order.scheduled_delivery_ends_at
+      ? `${order.scheduled_delivery_starts_at} - ${order.scheduled_delivery_ends_at}`
+      : `من ${order.scheduled_delivery_starts_at}`;
+  } else if (!deliveryWindowLabel && order.scheduled_delivery_ends_at) {
+    deliveryWindowLabel = `حتى ${order.scheduled_delivery_ends_at}`;
+  }
+  const hasDeliverySchedule = Boolean(
+    scheduledDateLabel || deliveryWindowLabel,
+  );
+
+  const unavailableItemActionLabel =
+    formatUnavailableItemAction(order.unavailable_item_action) ||
+    order.unavailable_item_action?.trim() ||
+    null;
+  const merchantCancelledAt = formatDateTime(order.merchant_cancelled_at);
+  const customerRejectedAt = formatDateTime(order.customer_rejected_at);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(16rem,1fr)]">
@@ -157,103 +326,221 @@ function OrderDetails({
           </span>
         </div>
 
-        {order.items.length ? (
-          <div className="overflow-hidden rounded-lg border border-brand-border bg-white">
-            {order.items.map((item) => (
-              <div
-                key={item.id}
-                className="grid gap-2 border-b border-brand-border p-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto]"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold text-brand-text">{item.name_snapshot}</p>
-                    {item.is_out_of_stock ? (
-                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-                        غير متوفر
-                      </span>
-                    ) : null}
-                    {item.pending_replacement_product ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                        بديل مقترح: {item.pending_replacement_product.name}
-                      </span>
-                    ) : item.replaced_by_product ? (
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                        البديل: {item.replaced_by_product.name}
-                      </span>
+        <div className="space-y-3">
+          {hasItems ? (
+            <div className="overflow-hidden rounded-lg border border-brand-border bg-white">
+              {order.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="grid gap-2 border-b border-brand-border p-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-brand-text">
+                        {item.name_snapshot}
+                      </p>
+                      {item.is_out_of_stock ? (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                          غير متوفر
+                        </span>
+                      ) : null}
+                      {item.pending_replacement_product ? (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                          بديل مقترح: {item.pending_replacement_product.name}
+                        </span>
+                      ) : item.replaced_by_product ? (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          البديل: {item.replaced_by_product.name}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      الكمية: {item.quantity}
+                    </p>
+                    {item.notes ? (
+                      <p className="mt-1 text-xs text-amber-800">
+                        ملاحظة: {item.notes}
+                      </p>
                     ) : null}
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">الكمية: {item.quantity}</p>
-                  {item.notes ? (
-                    <p className="mt-1 text-xs text-amber-800">ملاحظة: {item.notes}</p>
-                  ) : null}
+                  <div className="text-xs text-gray-600 sm:text-left">
+                    <p>سعر الوحدة: {formatMoney(item.unit_price)}</p>
+                    <p className="mt-1 font-bold text-brand-text">
+                      الإجمالي: {formatMoney(item.total_price)}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-xs text-gray-600 sm:text-left">
-                  <p>سعر الوحدة: {formatMoney(item.unit_price)}</p>
-                  <p className="mt-1 font-bold text-brand-text">
-                    الإجمالي: {formatMoney(item.total_price)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : order.free_text_payload?.text ? (
-          <div className="rounded-lg border border-brand-border bg-white p-4">
-            <p className="text-xs font-semibold text-gray-500">تفاصيل الطلب النصي</p>
-            <p className="mt-2 whitespace-pre-wrap leading-7 text-brand-text">
-              {order.free_text_payload.text}
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed border-brand-border bg-white p-5 text-center text-sm text-gray-500">
-            لا توجد منتجات مسجلة لهذا الطلب.
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          ) : null}
 
-      <section className="rounded-lg border border-brand-border bg-white p-4" aria-label="ملخص الطلب">
-        <h3 className="text-sm font-bold text-brand-text">ملخص الطلب</h3>
-        <dl className="mt-3 space-y-2.5 text-sm">
-          <div className="flex items-start justify-between gap-4">
-            <dt className="text-gray-500">نوع الطلب</dt>
-            <dd className="font-medium text-brand-text">{orderTypeLabel}</dd>
-          </div>
-          <div className="flex items-start justify-between gap-4">
-            <dt className="text-gray-500">طريقة التسعير</dt>
-            <dd className="font-medium text-brand-text">{pricingLabel}</dd>
-          </div>
-          <div className="flex items-start justify-between gap-4">
-            <dt className="text-gray-500">الإجمالي الفرعي</dt>
-            <dd className="font-medium text-brand-text">{formatMoney(order.subtotal)}</dd>
-          </div>
-          <div className="flex items-start justify-between gap-4">
-            <dt className="text-gray-500">رسوم التوصيل</dt>
-            <dd className="font-medium text-brand-text">{formatMoney(order.delivery_fee)}</dd>
-          </div>
-          <div className="flex items-start justify-between gap-4 border-t border-brand-border pt-2.5">
-            <dt className="font-bold text-brand-text">الإجمالي النهائي</dt>
-            <dd className="font-bold text-brand-primary">{formatMoney(order.total)}</dd>
-          </div>
-        </dl>
-        <div className="mt-4 space-y-3 border-t border-brand-border pt-4 text-sm">
-          <div>
-            <p className="text-xs font-semibold text-gray-500">عنوان التوصيل</p>
-            <p className="mt-1 leading-6 text-brand-text">
-              {order.delivery_address || "غير متاح"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-gray-500">ملاحظات الطلب</p>
-            <p className="mt-1 whitespace-pre-wrap leading-6 text-brand-text">
-              {order.notes || "لا توجد ملاحظات"}
-            </p>
-          </div>
-          <p className="rounded-md bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-primary">
-            {order.card_on_delivery_requested
-              ? "طلب العميل الدفع بالكارت عند التوصيل"
-              : "لا يوجد طلب للدفع بالكارت عند التوصيل"}
-          </p>
+          {hasFreeText ? (
+            <div className="rounded-lg border border-brand-border bg-white p-4">
+              <p className="text-xs font-semibold text-gray-500">
+                تفاصيل الطلب النصي
+              </p>
+              <p className="mt-2 whitespace-pre-wrap leading-7 text-brand-text">
+                {order.free_text_payload?.text}
+              </p>
+            </div>
+          ) : null}
+
+          <PrescriptionDetails order={order} />
+
+          {!hasItems && !hasFreeText && !hasPrescription ? (
+            <div className="rounded-lg border border-dashed border-brand-border bg-white p-5 text-center text-sm text-gray-500">
+              لا يوجد محتوى مسجل لهذا الطلب.
+            </div>
+          ) : null}
         </div>
       </section>
+
+      <div className="space-y-3">
+        <section
+          className="rounded-lg border border-brand-border bg-white p-4"
+          aria-label="ملخص الطلب"
+        >
+          <h3 className="text-sm font-bold text-brand-text">ملخص الطلب</h3>
+          <dl className="mt-3 space-y-2.5 text-sm">
+            <div className="flex items-start justify-between gap-4">
+              <dt className="text-gray-500">نوع الطلب</dt>
+              <dd className="text-left font-medium text-brand-text">
+                {orderTypeLabel}
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <dt className="text-gray-500">طريقة التسعير</dt>
+              <dd className="font-medium text-brand-text">{pricingLabel}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <dt className="text-gray-500">الإجمالي الفرعي</dt>
+              <dd className="font-medium text-brand-text">
+                {formatMoney(order.subtotal)}
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <dt className="text-gray-500">رسوم التوصيل</dt>
+              <dd className="font-medium text-brand-text">
+                {formatMoney(order.delivery_fee)}
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-4 border-t border-brand-border pt-2.5">
+              <dt className="font-bold text-brand-text">الإجمالي النهائي</dt>
+              <dd className="font-bold text-brand-primary">
+                {formatMoney(order.total)}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="mt-4 space-y-3 border-t border-brand-border pt-4 text-sm">
+            {deliveryAreaLabel ? (
+              <div>
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
+                  <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                  منطقة التوصيل
+                </p>
+                <p className="mt-1 leading-6 text-brand-text">
+                  {deliveryAreaLabel}
+                </p>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500">
+                عنوان التوصيل
+              </p>
+              <p className="mt-1 leading-6 text-brand-text">
+                {order.delivery_address || "غير متاح"}
+              </p>
+            </div>
+
+            {hasDeliverySchedule ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+                  <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+                  موعد التوصيل المحدد
+                </p>
+                {scheduledDateLabel ? (
+                  <p className="mt-1 font-medium text-amber-950">
+                    {scheduledDateLabel}
+                  </p>
+                ) : null}
+                {deliveryWindowLabel ? (
+                  <p className="mt-0.5 text-xs text-amber-900">
+                    {deliveryWindowLabel}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {hasItems && unavailableItemActionLabel ? (
+              <div>
+                <p className="text-xs font-semibold text-gray-500">
+                  عند عدم توفر منتج
+                </p>
+                <p className="mt-1 leading-6 text-brand-text">
+                  {unavailableItemActionLabel}
+                </p>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500">
+                ملاحظات الطلب
+              </p>
+              <p className="mt-1 whitespace-pre-wrap leading-6 text-brand-text">
+                {order.notes || "لا توجد ملاحظات"}
+              </p>
+            </div>
+
+            <p className="rounded-md bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-primary">
+              {order.card_on_delivery_requested
+                ? "طلب العميل الدفع بالكارت عند التوصيل"
+                : "لا يوجد طلب للدفع بالكارت عند التوصيل"}
+            </p>
+          </div>
+        </section>
+
+        {order.merchant_cancellation_reason ? (
+          <section
+            className="rounded-lg border border-red-200 bg-red-50 p-4"
+            aria-label="تفاصيل إلغاء التاجر"
+          >
+            <h3 className="text-sm font-bold text-red-800">إلغاء التاجر</h3>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-red-900">
+              {order.merchant_cancellation_reason}
+            </p>
+            {merchantCancelledAt ? (
+              <time
+                dateTime={order.merchant_cancelled_at || undefined}
+                className="mt-2 block text-xs text-red-700"
+              >
+                {merchantCancelledAt}
+              </time>
+            ) : null}
+          </section>
+        ) : null}
+
+        {order.customer_rejection_reason ? (
+          <section
+            className="rounded-lg border border-red-200 bg-red-50 p-4"
+            aria-label="تفاصيل رفض العميل"
+          >
+            <h3 className="text-sm font-bold text-red-800">رفض العميل</h3>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-red-900">
+              {order.customer_rejection_reason}
+            </p>
+            {customerRejectedAt ? (
+              <time
+                dateTime={order.customer_rejected_at || undefined}
+                className="mt-2 block text-xs text-red-700"
+              >
+                {customerRejectedAt}
+              </time>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
     </div>
   );
 }

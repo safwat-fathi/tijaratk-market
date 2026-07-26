@@ -2526,10 +2526,24 @@ export class AdminService {
                 subtotal: true,
                 delivery_fee: true,
                 delivery_address: true,
+                delivery_area_id: true,
+                delivery_time_window_snapshot: true,
+                scheduled_delivery_date: true,
+                scheduled_delivery_starts_at: true,
+                scheduled_delivery_ends_at: true,
                 total: true,
                 free_text_payload: true,
+                prescription_file_url: true,
+                prescription_original_filename: true,
+                prescription_mime_type: true,
+                prescription_unavailability_action: true,
+                unavailable_item_action: true,
                 notes: true,
                 card_on_delivery_requested: true,
+                merchant_cancellation_reason: true,
+                merchant_cancelled_at: true,
+                customer_rejection_reason: true,
+                customer_rejected_at: true,
                 tenant: {
                   select: {
                     id: true,
@@ -2544,6 +2558,14 @@ export class AdminService {
                     global_customer: {
                       select: { access_code: true },
                     },
+                  },
+                },
+                delivery_area: {
+                  select: {
+                    id: true,
+                    name_ar: true,
+                    name_en: true,
+                    slug: true,
                   },
                 },
                 order_items: {

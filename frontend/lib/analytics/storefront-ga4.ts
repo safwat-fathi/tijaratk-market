@@ -15,6 +15,31 @@ export type StorefrontAnalyticsContext = {
   area?: string;
 };
 
+export const CUSTOMER_PWA_INSTALL_SURFACES = {
+  HOME: "home",
+  STORE_DIRECTORY: "store_directory",
+  DIRECT_STOREFRONT: "direct_storefront",
+  INSTALL_GUIDE: "install_guide",
+} as const;
+
+export type CustomerPwaInstallSurface =
+  (typeof CUSTOMER_PWA_INSTALL_SURFACES)[keyof typeof CUSTOMER_PWA_INSTALL_SURFACES];
+
+type CustomerPwaNonStoreInstallSurface = Exclude<
+  CustomerPwaInstallSurface,
+  typeof CUSTOMER_PWA_INSTALL_SURFACES.DIRECT_STOREFRONT
+>;
+
+export type CustomerPwaInstallTrackingContext =
+  | {
+      installSurface: typeof CUSTOMER_PWA_INSTALL_SURFACES.DIRECT_STOREFRONT;
+      store: StorefrontAnalyticsContext;
+    }
+  | {
+      installSurface: CustomerPwaNonStoreInstallSurface;
+      store?: never;
+    };
+
 type SelectionSnapshot = {
   item: GoogleAnalyticsItem;
   value: number;
@@ -79,6 +104,27 @@ export const toAnalyticsDraftItems = (
 
 export const trackStoreView = (store: StorefrontAnalyticsContext) =>
   sendCustomerAnalyticsEvent("store_view", storeParameters(store));
+
+export const trackCustomerPwaInstall = (
+  context: CustomerPwaInstallTrackingContext,
+) => {
+  const parameters = {
+    pwa_app: "customer",
+    install_surface: context.installSurface,
+  };
+
+  if (
+    context.installSurface ===
+    CUSTOMER_PWA_INSTALL_SURFACES.DIRECT_STOREFRONT
+  ) {
+    return sendCustomerAnalyticsEvent("pwa_install", {
+      ...parameters,
+      ...storeParameters(context.store),
+    });
+  }
+
+  return sendCustomerAnalyticsEvent("pwa_install", parameters);
+};
 
 export const trackViewItem = (
   store: StorefrontAnalyticsContext,

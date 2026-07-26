@@ -1,5 +1,6 @@
 import type {
   AdminRole,
+  OrderStatus,
   Prisma,
   PushNotificationEventType,
 } from '../../generated/prisma/client';
@@ -26,7 +27,9 @@ export type PushNotificationEnvelope = {
     | 'admin.merchant.registered'
     | 'merchant.order.created'
     | 'admin.order.created'
-    | 'merchant.assignment.created';
+    | 'merchant.assignment.created'
+    | 'customer.order.status_changed'
+    | 'customer.order.replacement_requested';
   title: string;
   body: string;
   url: string;
@@ -45,6 +48,10 @@ export type OrderPushOutboxPayload = {
   zoneName?: string;
 };
 
+export type CustomerOrderStatusPushOutboxPayload = {
+  status: OrderStatus;
+};
+
 export type ClaimedPushEvent = {
   id: number;
   event_key: string;
@@ -59,10 +66,23 @@ export type ClaimedPushEvent = {
   created_at: Date;
 };
 
-export type PushDeliveryTarget = {
+type BasePushDeliveryTarget = {
   subscriptionId: number;
   encryptedSubscription: string;
-  actor: 'merchant' | 'admin';
   notificationIconUrl?: string;
-  adminRole?: AdminRole;
 };
+
+export type PushDeliveryTarget =
+  | (BasePushDeliveryTarget & {
+      actor: 'merchant';
+    })
+  | (BasePushDeliveryTarget & {
+      actor: 'admin';
+      adminRole: AdminRole;
+    })
+  | (BasePushDeliveryTarget & {
+      actor: 'customer';
+      notificationUrl: string;
+      storeName: string;
+      orderNumber: string;
+    });
