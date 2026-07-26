@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, MapPin, Trash2, UploadCloud } from "lucide-react";
+import { FileText, Trash2, UploadCloud } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -28,6 +28,7 @@ import type { TenantDeliveryArea } from "@/types/models/tenant";
 import type { StorefrontOrderAvailability } from "@/types/models/delivery";
 import ProductList, { type ProductCartSelection } from "./ProductList";
 import { STOREFRONT_CART_CHANGED_EVENT } from "./HeaderCartButton";
+import DeliveryAreaSelector from "./DeliveryAreaSelector";
 
 type StorefrontCartProps = {
   tenantSlug: string;
@@ -70,6 +71,8 @@ export default function StorefrontCart({
   const [deliveryAreaId, setDeliveryAreaId] = useState<number | undefined>(
     initialDraft?.delivery_area_id ?? undefined,
   );
+  const [isDeliveryAreaSelectorOpen, setIsDeliveryAreaSelectorOpen] =
+    useState(false);
   const [unavailableAction, setUnavailableAction] = useState(
     initialDraft?.unavailable_item_action ?? DEFAULT_UNAVAILABLE_ITEM_ACTION,
   );
@@ -342,26 +345,18 @@ export default function StorefrontCart({
       ) : null}
 
       <section className="mt-5 rounded-2xl border border-brand-border bg-white p-5 shadow-soft">
-        <div className="flex items-center gap-3">
-          <MapPin className="h-5 w-5 text-brand-primary" />
-          <h3 className="font-black text-brand-text">منطقة التوصيل</h3>
-        </div>
-        <select
-          value={deliveryAreaId ?? ""}
-          onChange={(event) => {
-            const next = event.target.value ? Number(event.target.value) : undefined;
-            setDeliveryAreaId(next);
-            persist(selections, freeText, next);
+        <DeliveryAreaSelector
+          areas={deliveryAreas}
+          selectedAreaId={deliveryAreaId}
+          isOpen={isDeliveryAreaSelectorOpen}
+          onOpenChange={setIsDeliveryAreaSelectorOpen}
+          onSelect={(nextAreaId) => {
+            setDeliveryAreaId(nextAreaId);
+            persist(selections, freeText, nextAreaId);
           }}
-          className="mt-4 min-h-12 w-full rounded-xl border border-brand-border bg-white px-3 text-base"
-        >
-          <option value="">اختر منطقتك</option>
-          {deliveryAreas.map((area) => (
-            <option key={area.area_id} value={area.area_id}>
-              {area.area?.name_ar || `منطقة ${area.area_id}`} — {Number(area.delivery_fee) > 0 ? formatCurrency(Number(area.delivery_fee)) : "مجاني"}
-            </option>
-          ))}
-        </select>
+          containerClassName="p-0"
+          showHelpText={false}
+        />
       </section>
 
       <section className="mt-5 rounded-2xl border border-brand-border bg-white p-5 shadow-soft">

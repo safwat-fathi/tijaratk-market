@@ -502,6 +502,17 @@ export class StorefrontCartDraftsService {
             area_id: draft.delivery_area_id,
             is_active: true,
             deleted_at: null,
+            area: {
+              is_active: true,
+              deleted_at: null,
+              parent_area_id: { not: null },
+              parent_area: {
+                is: {
+                  is_active: true,
+                  deleted_at: null,
+                },
+              },
+            },
           },
           select: { delivery_fee: true },
         })
@@ -590,7 +601,17 @@ export class StorefrontCartDraftsService {
         area_id: areaId,
         is_active: true,
         deleted_at: null,
-        area: { is_active: true, deleted_at: null },
+        area: {
+          is_active: true,
+          deleted_at: null,
+          parent_area_id: { not: null },
+          parent_area: {
+            is: {
+              is_active: true,
+              deleted_at: null,
+            },
+          },
+        },
       },
       select: { area_id: true },
     });

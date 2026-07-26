@@ -154,14 +154,14 @@ export class DeliveryConfigurationService {
               },
             },
             update: {
-              is_active: true,
+              is_active: false,
               deleted_at: null,
             },
             create: {
               tenant_id: tenantId,
               area_id: mainAreaId,
               delivery_fee: 0,
-              is_active: true,
+              is_active: false,
             },
           });
         }
@@ -221,6 +221,13 @@ export class DeliveryConfigurationService {
               area: {
                 is_active: true,
                 deleted_at: null,
+                parent_area_id: { not: null },
+                parent_area: {
+                  is: {
+                    is_active: true,
+                    deleted_at: null,
+                  },
+                },
                 ...(input.areaId
                   ? { id: input.areaId }
                   : { slug: normalizedSlug }),
@@ -247,7 +254,17 @@ export class DeliveryConfigurationService {
         tenant_id: tenantId,
         is_active: true,
         deleted_at: null,
-        area: { is_active: true, deleted_at: null },
+        area: {
+          is_active: true,
+          deleted_at: null,
+          parent_area_id: { not: null },
+          parent_area: {
+            is: {
+              is_active: true,
+              deleted_at: null,
+            },
+          },
+        },
       },
       select: { area_id: true, delivery_fee: true },
       take: 2,

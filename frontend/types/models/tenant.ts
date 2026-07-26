@@ -32,6 +32,10 @@ export interface DirectoryArea {
   governorate: string | null;
   is_active: boolean;
   sort_order: number;
+  parent_area?: Pick<
+    DirectoryArea,
+    "id" | "name_ar" | "name_en" | "slug"
+  > | null;
 }
 
 export interface TenantDirectoryProfile {

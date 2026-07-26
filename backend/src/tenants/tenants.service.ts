@@ -111,7 +111,17 @@ export class TenantsService {
           where: {
             is_active: true,
             deleted_at: null,
-            area: { is_active: true, deleted_at: null },
+            area: {
+              is_active: true,
+              deleted_at: null,
+              parent_area_id: { not: null },
+              parent_area: {
+                is: {
+                  is_active: true,
+                  deleted_at: null,
+                },
+              },
+            },
           },
           select: {
             id: true,
@@ -129,6 +139,14 @@ export class TenantsService {
                 governorate: true,
                 is_active: true,
                 sort_order: true,
+                parent_area: {
+                  select: {
+                    id: true,
+                    name_ar: true,
+                    name_en: true,
+                    slug: true,
+                  },
+                },
               },
             },
           },
@@ -199,7 +217,17 @@ export class TenantsService {
           tenant_id: tenant.id,
           is_active: true,
           deleted_at: null,
-          area: { is_active: true, deleted_at: null },
+          area: {
+            is_active: true,
+            deleted_at: null,
+            parent_area_id: { not: null },
+            parent_area: {
+              is: {
+                is_active: true,
+                deleted_at: null,
+              },
+            },
+          },
         },
       }),
     ]);

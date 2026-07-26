@@ -76,7 +76,7 @@ export function TenantAreaForm({ tenant, areas }: TenantAreaFormProps) {
           (area) => area.is_active !== false && area.area?.is_active !== false
         ) || [];
 
-      const mainAreaIds = extractMainAreaIds(deliveryAreas as any);
+      const mainAreaIds = extractMainAreaIds(deliveryAreas);
 
       if (mainAreaIds.length === 0 && tenant.directory_profile?.area_id) {
         const resolvedId = resolveMainAreaId(
