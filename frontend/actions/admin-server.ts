@@ -35,6 +35,8 @@ import type {
 } from "@/services/api/admin.service";
 import { z } from "zod";
 
+const ADMIN_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+
 export type ActionState = {
   success?: boolean;
   message?: string;
@@ -331,7 +333,9 @@ export async function adminLoginAction(prevState: ActionState, formData: FormDat
     const token = response.data?.admin_access_token;
     
     if (response.success && token) {
-      await setCookieAction(STORAGE_KEYS.ADMIN_ACCESS_TOKEN, token);
+      await setCookieAction(STORAGE_KEYS.ADMIN_ACCESS_TOKEN, token, {
+        maxAge: ADMIN_SESSION_MAX_AGE_SECONDS,
+      });
       // Redirect handled outside
     } else {
       return {
