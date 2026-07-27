@@ -22,7 +22,7 @@ class StoresDirectoryService extends HttpService {
   public async getCategoryPage(
     areaSlug: string,
     categorySlug: string,
-    params?: IParams,
+    params?: IParams & { delivery_area_slug?: string },
   ) {
     return this.get<StoresDirectoryCategoryPage>(
       `areas/${areaSlug}/categories/${categorySlug}`,

@@ -165,19 +165,27 @@ export default async function StorePage({ params, searchParams }: Props) {
   const { reorder, category, areaSlug, categorySlug, src } =
     resolvedSearchParams;
   const landingSource = src === "directory" || src === "qr" ? src : null;
-  const sourceMetadata = landingSource
-    ? {
-        landingSource,
-        ...(areaSlug ? { areaSlug } : {}),
-        ...(categorySlug ? { categorySlug } : {}),
-        landedAt: new Date().toISOString(),
-      }
-    : undefined;
 
   const tenant = await getTenant(slug);
   if (!tenant || !tenant.id) {
     notFound();
   }
+  const linkedDeliveryArea = areaSlug
+    ? tenant.tenant_delivery_areas?.find(
+        (deliveryArea) => deliveryArea.area?.slug === areaSlug,
+      )
+    : undefined;
+  const linkedDeliveryAreaSlug = linkedDeliveryArea?.area?.slug;
+  const sourceMetadata = landingSource
+    ? {
+        landingSource,
+        ...(linkedDeliveryAreaSlug
+          ? { areaSlug: linkedDeliveryAreaSlug }
+          : {}),
+        ...(categorySlug ? { categorySlug } : {}),
+        landedAt: new Date().toISOString(),
+      }
+    : undefined;
 
   const [
     { products, meta },
@@ -231,6 +239,7 @@ export default async function StorePage({ params, searchParams }: Props) {
           <HeaderCartButton
             tenantSlug={tenant.slug}
             initialCount={initialDraft?.items.length ?? 0}
+            areaSlug={linkedDeliveryAreaSlug}
           />
         }
       />
@@ -249,6 +258,8 @@ export default async function StorePage({ params, searchParams }: Props) {
               : OrderSource.STOREFRONT
           }
           sourceMetadata={sourceMetadata}
+          initialDeliveryAreaId={linkedDeliveryArea?.area_id}
+          initialDeliveryAreaSlug={linkedDeliveryAreaSlug}
           isPharmacy={tenant.category === "pharmacy"}
           orderAvailability={orderAvailability}
           storeAnalytics={storeAnalytics}

@@ -92,13 +92,15 @@ export class StoresDirectoryController {
 
   @Get('stores/areas/:areaSlug/categories/:categorySlug')
   @ApiOperation({
-    summary: 'Get public stores directory main-area category page payload',
+    summary:
+      'Get a main-area category payload, returning stores only for an exact child delivery zone',
   })
   @ApiParam({ name: 'areaSlug', example: 'sheikh-zayed' })
   @ApiParam({ name: 'categorySlug', example: 'supermarkets' })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Main-area category page payload returned successfully',
+    description:
+      'Category delivery-zone choices and exact-zone store results returned successfully',
   })
   getCategoryPage(
     @Param('areaSlug') areaSlug: string,
@@ -106,6 +108,7 @@ export class StoresDirectoryController {
     @Query() query: DirectoryCategoryStoresQueryDto,
   ) {
     return this.storesDirectoryService.getCategoryPage(areaSlug, categorySlug, {
+      deliveryAreaSlug: query.delivery_area_slug,
       search: query.search,
       openNow: query.open_now,
       page: query.page,

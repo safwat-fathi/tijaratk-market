@@ -34,6 +34,8 @@ type StorefrontCartProps = {
   tenantSlug: string;
   initialDraft: StorefrontCartDraft | null;
   deliveryAreas: TenantDeliveryArea[];
+  initialDeliveryAreaId?: number;
+  initialDeliveryAreaSlug?: string;
   isPharmacy: boolean;
   orderAvailability: StorefrontOrderAvailability;
   storeAnalytics: StorefrontAnalyticsContext;
@@ -59,6 +61,8 @@ export default function StorefrontCart({
   tenantSlug,
   initialDraft,
   deliveryAreas,
+  initialDeliveryAreaId,
+  initialDeliveryAreaSlug,
   isPharmacy,
   orderAvailability,
   storeAnalytics,
@@ -69,7 +73,7 @@ export default function StorefrontCart({
   const selectionsRef = useRef(selections);
   const [freeText, setFreeText] = useState(initialDraft?.free_text_payload ?? "");
   const [deliveryAreaId, setDeliveryAreaId] = useState<number | undefined>(
-    initialDraft?.delivery_area_id ?? undefined,
+    initialDeliveryAreaId ?? initialDraft?.delivery_area_id ?? undefined,
   );
   const [isDeliveryAreaSelectorOpen, setIsDeliveryAreaSelectorOpen] =
     useState(false);
@@ -182,6 +186,8 @@ export default function StorefrontCart({
   };
 
   const selectedArea = deliveryAreas.find((area) => area.area_id === deliveryAreaId);
+  const selectedAreaSlug =
+    selectedArea?.area?.slug || initialDeliveryAreaSlug;
   const deliveryFee = selectedArea ? Number(selectedArea.delivery_fee) : null;
   const estimatedTotal =
     deliveryFee === null ? null : Number((Number(draft?.subtotal ?? 0) + deliveryFee).toFixed(2));
@@ -194,7 +200,11 @@ export default function StorefrontCart({
           <h2 className="mt-1 text-2xl font-black text-brand-text">مراجعة الطلب</h2>
         </div>
         <Link
-          href={`/${encodeURIComponent(tenantSlug)}`}
+          href={`/${encodeURIComponent(tenantSlug)}${
+            selectedAreaSlug
+              ? `?areaSlug=${encodeURIComponent(selectedAreaSlug)}`
+              : ""
+          }`}
           className="min-h-11 rounded-xl border border-brand-border bg-white px-4 py-2.5 text-sm font-bold text-brand-text"
         >
           إضافة منتجات
@@ -353,6 +363,17 @@ export default function StorefrontCart({
           onSelect={(nextAreaId) => {
             setDeliveryAreaId(nextAreaId);
             persist(selections, freeText, nextAreaId);
+            const nextAreaSlug = deliveryAreas.find(
+              (deliveryArea) => deliveryArea.area_id === nextAreaId,
+            )?.area?.slug;
+            if (nextAreaSlug) {
+              router.replace(
+                `/${encodeURIComponent(
+                  tenantSlug,
+                )}/cart?areaSlug=${encodeURIComponent(nextAreaSlug)}`,
+                { scroll: false },
+              );
+            }
           }}
           containerClassName="p-0"
           showHelpText={false}

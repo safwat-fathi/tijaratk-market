@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { X } from "lucide-react";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import CustomerPwaInstallTracking from "@/components/analytics/CustomerPwaInstallTracking";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
+import AreaAutocomplete from "@/components/stores-directory/AreaAutocomplete";
 import JsonLd from "@/components/seo/JsonLd";
 import SafeImage from "@/components/ui/SafeImage";
 import { createPublicMetadata, SITE_URL } from "@/lib/marketing-seo";
@@ -19,6 +21,7 @@ import {
 import { formatCurrency } from "@/lib/utils/currency";
 
 type StoresCategorySearchParams = {
+  deliveryArea?: string;
   search?: string;
   open_now?: string;
   page?: string;
@@ -65,6 +68,7 @@ async function getCategoryPage(
     areaSlug,
     categorySlug,
     {
+      delivery_area_slug: searchParams?.deliveryArea?.trim() || undefined,
       search: searchParams?.search,
       open_now: openNow,
       page: Number.isFinite(page) && page > 0 ? page : undefined,
@@ -203,9 +207,7 @@ const StoreCard = ({
       {store.deliveryAvailable ? (
         <p className="mt-1 text-xs font-bold text-[#0F5A3D]">
           رسوم التوصيل:{" "}
-          {store.deliveryFee > 0
-            ? formatCurrency(store.deliveryFee)
-            : "مجاني"}
+          {store.deliveryFee > 0 ? formatCurrency(store.deliveryFee) : "مجاني"}
         </p>
       ) : null}
     </div>
@@ -232,6 +234,7 @@ export default async function StoresCategoryPage({
 
   const categoryName = getCategoryName(page.category.slug, page.category.label);
   const storesCount = page.pagination.total;
+  const selectedDeliveryArea = page.selectedDeliveryArea;
   const jsonLd = buildCategoryJsonLd(page, categoryName);
 
   return (
@@ -254,7 +257,12 @@ export default async function StoresCategoryPage({
       <AppHeader
         title="دليل المتاجر"
         innerClassName="mx-auto flex max-w-7xl flex-col items-start gap-3 px-4 py-3 sm:px-6 lg:px-8"
-        titleActions={<InstallPwaAction appName={CUSTOMER_PWA.name} buttonText="تنزيل التطبيق" />}
+        titleActions={
+          <InstallPwaAction
+            appName={CUSTOMER_PWA.name}
+            buttonText="تنزيل التطبيق"
+          />
+        }
       />
 
       <main className="flex-1">
@@ -267,16 +275,30 @@ export default async function StoresCategoryPage({
               العودة لدليل المتاجر
             </Link>
             <h1 className="text-3xl font-black leading-tight text-[#222B2E] sm:text-5xl">
-              {categoryName} في {page.area.nameAr}
+              {categoryName} في{" "}
+              {selectedDeliveryArea?.nameAr || page.area.nameAr}
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-gray-600">
-              تصفح المتاجر المتاحة للطلب والتوصيل في منطقتك مباشرة من خلال
-              تجارتك.
+              {selectedDeliveryArea
+                ? "هذه المتاجر توصل إلى منطقة التوصيل التي اخترتها."
+                : "اختر منطقة التوصيل الدقيقة أولاً لعرض المتاجر التي تخدم عنوانك."}
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
-              <span className="rounded-full bg-[#E8F5ED] px-4 py-2 text-sm font-bold text-[#0F5A3D]">
-                {storesCount} متجر
-              </span>
+              {selectedDeliveryArea ? (
+                <>
+                  <Link
+                    href={`/stores/${encodeURIComponent(page.area.slug)}/${encodeURIComponent(page.category.slug)}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F5ED] px-4 py-2 text-sm font-bold text-[#0F5A3D] transition-colors hover:bg-[#D1EBDC]"
+                    title="تغيير منطقة التوصيل"
+                  >
+                    <span>التوصيل إلى {selectedDeliveryArea.nameAr}</span>
+                    <X className="h-4 w-4" />
+                  </Link>
+                  <span className="rounded-full bg-[#E8F5ED] px-4 py-2 text-sm font-bold text-[#0F5A3D]">
+                    {storesCount} متجر
+                  </span>
+                </>
+              ) : null}
               {page.area.city && (
                 <span className="rounded-full bg-gray-100 px-4 py-2 text-sm font-bold text-gray-600">
                   {page.area.city}
@@ -287,7 +309,53 @@ export default async function StoresCategoryPage({
         </section>
 
         <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-          {page.stores.length > 0 ? (
+          {!selectedDeliveryArea ? (
+            <div className="mx-auto max-w-2xl rounded-xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+              <h2 className="text-xl font-black text-[#222B2E]">
+                اختر منطقة التوصيل
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                لن نعرض أي متجر قبل التأكد أنه يوصل إلى منطقتك داخل{" "}
+                {page.area.nameAr}.
+              </p>
+              <div className="mt-5">
+                <AreaAutocomplete
+                  areas={page.deliveryAreas.map((deliveryArea) => ({
+                    name: deliveryArea.nameAr,
+                    nameEn: deliveryArea.nameEn,
+                    slug: deliveryArea.slug,
+                    destinationSlug: page.area.slug,
+                    parentNameAr: page.area.nameAr,
+                    stores: deliveryArea.storesCount,
+                  }))}
+                  destination={{
+                    type: "category",
+                    categorySlug: page.category.slug,
+                  }}
+                  placeholder="ابحث عن منطقة التوصيل..."
+                  emptyMessage="لا توجد منطقة توصيل متاحة لهذا القسم"
+                />
+              </div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {page.deliveryAreas.map((deliveryArea) => (
+                  <Link
+                    key={deliveryArea.id}
+                    href={`/stores/${encodeURIComponent(
+                      page.area.slug,
+                    )}/${encodeURIComponent(
+                      page.category.slug,
+                    )}?deliveryArea=${encodeURIComponent(deliveryArea.slug)}`}
+                    className="rounded-full border border-gray-200 bg-[#F7F8F6] px-4 py-2 text-sm font-semibold text-[#0F5A3D] transition-colors hover:border-[#27AE60]/30 hover:bg-[#E8F5ED]"
+                  >
+                    {deliveryArea.nameAr}
+                    <span className="mr-1 text-xs text-gray-500">
+                      ({deliveryArea.storesCount})
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : page.stores.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {page.stores.map((store) => (
                 <StoreCard
@@ -303,14 +371,16 @@ export default async function StoresCategoryPage({
                 لا توجد متاجر متاحة حالياً
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-gray-600">
-                لا يوجد {categoryName} متاح في {page.area.nameAr} الآن. جرّب
-                منطقة أخرى من دليل المتاجر.
+                لا يوجد {categoryName} متاح للتوصيل إلى{" "}
+                {selectedDeliveryArea.nameAr} الآن. جرّب منطقة أخرى.
               </p>
               <Link
-                href="/"
+                href={`/stores/${encodeURIComponent(
+                  page.area.slug,
+                )}/${encodeURIComponent(page.category.slug)}`}
                 className="mt-6 inline-flex rounded-lg bg-[#0F5A3D] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#27AE60]"
               >
-                عرض المناطق المتاحة
+                تغيير منطقة التوصيل
               </Link>
             </div>
           )}

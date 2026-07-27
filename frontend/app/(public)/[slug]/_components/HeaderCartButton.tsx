@@ -9,14 +9,19 @@ export const STOREFRONT_CART_CHANGED_EVENT = "storefront-cart-changed";
 type HeaderCartButtonProps = {
   tenantSlug: string;
   initialCount: number;
+  areaSlug?: string;
 };
 
 /** Keeps the header cart badge in sync with client-side catalog edits. */
 export default function HeaderCartButton({
   tenantSlug,
   initialCount,
+  areaSlug,
 }: HeaderCartButtonProps) {
   const [count, setCount] = useState(initialCount);
+  const areaQuery = areaSlug
+    ? `?areaSlug=${encodeURIComponent(areaSlug)}`
+    : "";
 
   useEffect(() => {
     const updateCount = (event: Event) => {
@@ -30,7 +35,7 @@ export default function HeaderCartButton({
 
   return (
     <Link
-      href={`/${encodeURIComponent(tenantSlug)}/cart`}
+      href={`/${encodeURIComponent(tenantSlug)}/cart${areaQuery}`}
       className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-white/30 bg-white/10 p-2.5 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
       aria-label={`عرض الطلب${count > 0 ? `، ${count} منتجات` : ""}`}
     >

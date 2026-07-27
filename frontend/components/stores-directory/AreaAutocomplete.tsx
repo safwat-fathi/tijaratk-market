@@ -15,6 +15,7 @@ export type AreaAutocompleteOption = {
   destinationSlug?: string;
   parentNameAr?: string;
   stores: number;
+  categoryCounts?: Record<string, number>;
 };
 
 type Props = {
@@ -40,12 +41,25 @@ const getAreaHref = (
   destination: Props["destination"],
 ) => {
   if (destination.type === "landing") {
-    return `/?area=${encodeURIComponent(area.destinationSlug || area.slug)}`;
+    const params = new URLSearchParams({
+      area: area.destinationSlug || area.slug,
+    });
+    if (area.destinationSlug && area.destinationSlug !== area.slug) {
+      params.set("deliveryArea", area.slug);
+    }
+    return `/?${params.toString()}`;
   }
 
-  return `/stores/${encodeURIComponent(area.slug)}/${encodeURIComponent(
+  const mainAreaSlug = area.destinationSlug || area.slug;
+  const params = new URLSearchParams();
+  if (area.destinationSlug && area.destinationSlug !== area.slug) {
+    params.set("deliveryArea", area.slug);
+  }
+  const queryString = params.toString();
+  const query = queryString ? `?${queryString}` : "";
+  return `/stores/${encodeURIComponent(mainAreaSlug)}/${encodeURIComponent(
     destination.categorySlug,
-  )}`;
+  )}${query}`;
 };
 
 export default function AreaAutocomplete({

@@ -47,6 +47,8 @@ type StorefrontCatalogProps = {
   initialCategory?: string;
   orderSource?: OrderSource;
   sourceMetadata?: Record<string, unknown>;
+  initialDeliveryAreaId?: number;
+  initialDeliveryAreaSlug?: string;
   isPharmacy: boolean;
   orderAvailability: StorefrontOrderAvailability;
   storeAnalytics: StorefrontAnalyticsContext;
@@ -78,6 +80,8 @@ export default function StorefrontCatalog({
   initialCategory,
   orderSource = OrderSource.STOREFRONT,
   sourceMetadata,
+  initialDeliveryAreaId,
+  initialDeliveryAreaSlug,
   isPharmacy,
   orderAvailability,
   storeAnalytics,
@@ -139,7 +143,10 @@ export default function StorefrontCatalog({
       ...selection,
     })),
     free_text_payload: initialDraft?.free_text_payload || undefined,
-    delivery_area_id: initialDraft?.delivery_area_id || undefined,
+    delivery_area_id:
+      initialDeliveryAreaId ??
+      initialDraft?.delivery_area_id ??
+      undefined,
     unavailable_item_action: initialDraft?.unavailable_item_action,
     order_source: initialDraft?.order_source || orderSource,
     source_metadata:
@@ -193,7 +200,10 @@ export default function StorefrontCatalog({
           openingCartRef.current = false;
           return;
         }
-        router.push(`/${encodeURIComponent(tenantSlug)}/cart`);
+        const areaQuery = initialDeliveryAreaSlug
+          ? `?areaSlug=${encodeURIComponent(initialDeliveryAreaSlug)}`
+          : "";
+        router.push(`/${encodeURIComponent(tenantSlug)}/cart${areaQuery}`);
       } catch {
         const failureMessage = "تعذر حفظ السلة. حاول مرة أخرى.";
         setMessage(null);
@@ -246,7 +256,10 @@ export default function StorefrontCatalog({
           return;
         }
 
-        router.push(`/${encodeURIComponent(tenantSlug)}/cart`);
+        const areaQuery = initialDeliveryAreaSlug
+          ? `?areaSlug=${encodeURIComponent(initialDeliveryAreaSlug)}`
+          : "";
+        router.push(`/${encodeURIComponent(tenantSlug)}/cart${areaQuery}`);
       } catch {
         setPrescriptionUploadError("تعذر رفع الروشتة. حاول مرة أخرى.");
       } finally {

@@ -2,7 +2,9 @@
 
 import { ReactNode, useState } from "react";
 import Link from "next/link";
-import AreaAutocomplete from "@/components/stores-directory/AreaAutocomplete";
+import AreaAutocomplete, {
+  type AreaAutocompleteOption,
+} from "@/components/stores-directory/AreaAutocomplete";
 import BottomSheet from "@/components/ui/BottomSheet";
 
 export type DirectoryCategoryCard = {
@@ -13,32 +15,36 @@ export type DirectoryCategoryCard = {
   icon: ReactNode;
 };
 
-export type DirectoryAreaOption = {
-  name: string;
-  nameEn?: string | null;
-  slug: string;
-  stores: number;
-  categoryCounts: Record<string, number>;
-};
-
 type Props = {
   categories: DirectoryCategoryCard[];
-  areas: DirectoryAreaOption[];
-  selectedAreaSlug?: string;
+  deliveryAreas: AreaAutocompleteOption[];
+  selectedMainAreaSlug?: string;
+  selectedDeliveryAreaSlug?: string;
 };
 
 export default function CategoryGrid({
   categories,
-  areas,
-  selectedAreaSlug,
+  deliveryAreas,
+  selectedMainAreaSlug,
+  selectedDeliveryAreaSlug,
 }: Props) {
   const [selectedCategory, setSelectedCategory] =
     useState<DirectoryCategoryCard | null>(null);
+  const selectedDeliveryArea = deliveryAreas.find(
+    (area) => area.slug === selectedDeliveryAreaSlug,
+  );
   const selectedCategoryAreas = selectedCategory
-    ? areas
+    ? deliveryAreas
+        .filter(
+          (area) =>
+            area.destinationSlug &&
+            area.destinationSlug !== area.slug &&
+            (!selectedMainAreaSlug ||
+              area.destinationSlug === selectedMainAreaSlug),
+        )
         .map((area) => ({
           ...area,
-          selectedStores: area.categoryCounts[selectedCategory.slug] ?? 0,
+          selectedStores: area.categoryCounts?.[selectedCategory.slug] ?? 0,
         }))
         .filter((area) => area.selectedStores > 0)
     : [];
@@ -79,11 +85,16 @@ export default function CategoryGrid({
             </>
           );
 
-          if (selectedAreaSlug) {
+          if (selectedDeliveryArea?.destinationSlug) {
+            const params = new URLSearchParams({
+              deliveryArea: selectedDeliveryArea.slug,
+            });
             return (
               <Link
                 key={cat.slug}
-                href={`/stores/${encodeURIComponent(selectedAreaSlug)}/${encodeURIComponent(cat.slug)}`}
+                href={`/stores/${encodeURIComponent(
+                  selectedDeliveryArea.destinationSlug,
+                )}/${encodeURIComponent(cat.slug)}?${params.toString()}`}
                 className="group flex w-full items-center rounded-2xl border border-gray-100 bg-white p-6 text-right shadow-sm transition-all hover:border-[#27AE60]/30 hover:shadow-md"
               >
                 {cardContent}
@@ -115,7 +126,10 @@ export default function CategoryGrid({
               name: area.name,
               nameEn: area.nameEn,
               slug: area.slug,
+              destinationSlug: area.destinationSlug,
+              parentNameAr: area.parentNameAr,
               stores: area.selectedStores,
+              categoryCounts: area.categoryCounts,
             }))}
             destination={{
               type: "category",
@@ -129,7 +143,11 @@ export default function CategoryGrid({
             {selectedCategoryAreas.map((area) => (
               <Link
                 key={area.slug}
-                href={`/stores/${encodeURIComponent(area.slug)}/${encodeURIComponent(selectedCategory?.slug ?? "")}`}
+                href={`/stores/${encodeURIComponent(
+                  area.destinationSlug || area.slug,
+                )}/${encodeURIComponent(
+                  selectedCategory?.slug ?? "",
+                )}?deliveryArea=${encodeURIComponent(area.slug)}`}
                 className="rounded-full border border-gray-200 bg-[#F7F8F6] px-4 py-2 text-sm font-semibold text-[#0F5A3D] transition-colors hover:border-[#27AE60]/30 hover:bg-[#E8F5ED]"
               >
                 {area.name}
@@ -139,6 +157,11 @@ export default function CategoryGrid({
               </Link>
             ))}
           </div>
+          {selectedCategoryAreas.length === 0 ? (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
+              لا توجد منطقة توصيل متاحة لهذا القسم حالياً.
+            </p>
+          ) : null}
         </div>
       </BottomSheet>
     </>

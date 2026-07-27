@@ -5,7 +5,6 @@ import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import CustomerPwaInstallTracking from "@/components/analytics/CustomerPwaInstallTracking";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import JsonLd from "@/components/seo/JsonLd";
-import SafeImage from "@/components/ui/SafeImage";
 import AreaAutocomplete, {
   type AreaAutocompleteOption,
 } from "@/components/stores-directory/AreaAutocomplete";
@@ -17,10 +16,8 @@ import {
   StoresDirectoryCategory,
   StoresDirectoryLanding,
   StoresDirectorySearchArea,
-  StoresDirectoryStoreCard,
 } from "@/types/models/stores-directory";
 import CategoryGrid, {
-  DirectoryAreaOption,
   DirectoryCategoryCard,
 } from "@/components/stores-directory/CategoryGrid";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -29,11 +26,11 @@ import { CUSTOMER_PWA_INSTALL_SURFACES } from "@/lib/analytics/storefront-ga4";
 import { CUSTOMER_PWA, CUSTOMER_PWA_METADATA } from "@/lib/customer-pwa";
 import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
 import type { ZoneStorefront } from "@/types/models/zone-storefront";
-import { formatCurrency } from "@/lib/utils/currency";
 import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 type StoresDirectorySearchParams = {
   area?: string;
+  deliveryArea?: string;
 };
 
 type StoresDirectoryPageProps = {
@@ -194,27 +191,24 @@ const getCategoryIcon = (category: StoresDirectoryCategory) => {
 const toCategoryCards = (
   categories: StoresDirectoryCategory[],
   selectedArea?: StoresDirectoryArea,
+  selectedDeliveryArea?: AreaAutocompleteOption,
 ): DirectoryCategoryCard[] =>
   categories
     .map((category) => ({
       slug: category.slug,
       name: getCategoryName(category),
-      stores: selectedArea
-        ? (selectedArea.categoryCounts?.[category.slug] ?? 0)
-        : category.storesCount,
+      stores: selectedDeliveryArea
+        ? (selectedDeliveryArea.categoryCounts?.[category.slug] ?? 0)
+        : selectedArea
+          ? (selectedArea.categoryCounts?.[category.slug] ?? 0)
+          : category.storesCount,
       color: getCategoryColor(category),
       icon: getCategoryIcon(category),
     }))
-    .filter((category) => !selectedArea || category.stores > 0);
-
-const toAreaOptions = (areas: StoresDirectoryArea[]): DirectoryAreaOption[] =>
-  areas.map((area) => ({
-    name: area.nameAr,
-    nameEn: area.nameEn,
-    slug: area.slug,
-    stores: area.storesCount,
-    categoryCounts: area.categoryCounts ?? {},
-  }));
+    .filter(
+      (category) =>
+        (!selectedArea && !selectedDeliveryArea) || category.stores > 0,
+    );
 
 const toSearchAreaOptions = (
   areas: StoresDirectorySearchArea[],
@@ -226,6 +220,7 @@ const toSearchAreaOptions = (
     destinationSlug: area.destinationSlug,
     parentNameAr: area.parentNameAr,
     stores: area.storesCount,
+    categoryCounts: area.categoryCounts,
   }));
 
 const buildJsonLd = (params: {
@@ -292,75 +287,48 @@ const buildJsonLd = (params: {
   ];
 };
 
-const resolveStorefrontUrl = (store: StoresDirectoryStoreCard) => {
-  const params = new URLSearchParams({ src: "directory" });
-  if (store.areaSlug) {
-    params.set("areaSlug", store.areaSlug);
-  }
-
-  return `${store.storefrontUrl}?${params.toString()}`;
-};
-
-const StoreCard = ({ store }: { store: StoresDirectoryStoreCard }) => (
-  <Link
-    href={resolveStorefrontUrl(store)}
-    className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 text-right shadow-sm transition-all hover:border-[#27AE60]/30 hover:shadow-md"
-  >
-    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[#E8F5ED] text-lg font-black text-[#0F5A3D]">
-      {store.logoUrl ? (
-        <SafeImage
-          src={store.logoUrl}
-          alt={store.name}
-          width={64}
-          height={64}
-          imageClassName="h-16 w-16 rounded-xl object-cover"
-          sizes="64px"
-          fallback={store.name.slice(0, 1)}
-        />
-      ) : (
-        store.name.slice(0, 1)
-      )}
-    </div>
-    <div className="min-w-0 flex-1">
-      <h3 className="line-clamp-1 text-base font-bold text-[#222B2E]">
-        {store.name}
-      </h3>
-      <p className="mt-1 line-clamp-1 text-sm text-gray-500">
-        {store.areaName || store.address || "متجر محلي على تجارتك"}
-      </p>
-      {store.deliveryAvailable ? (
-        <p className="mt-1 text-xs font-bold text-[#0F5A3D]">
-          {store.deliveryFee > 0
-            ? `التوصيل يبدأ من ${formatCurrency(store.deliveryFee)}`
-            : "توصيل مجاني"}
-        </p>
-      ) : null}
-    </div>
-  </Link>
-);
-
 async function LegacyDirectoryContent({
   searchParams,
 }: StoresDirectoryPageProps) {
   const resolvedSearchParams = await searchParams;
-  const { area } = resolvedSearchParams;
+  const { area, deliveryArea } = resolvedSearchParams;
   const selectedAreaSlug = area?.trim() || undefined;
+  const selectedDeliveryAreaSlug = deliveryArea?.trim() || undefined;
   const landing = await getStoresLanding();
   const areas = landing?.areas ?? [];
-  const selectedArea = selectedAreaSlug
-    ? areas.find((item) => item.slug === selectedAreaSlug)
-    : undefined;
   const categories = landing?.categories?.length
     ? landing.categories
     : fallbackCategories;
-  const featuredStores = landing?.featuredStores ?? [];
   const seo = resolveSeo(landing);
   const jsonLd = buildJsonLd({ seo, areas, categories });
-  const categoryCards = toCategoryCards(categories, selectedArea);
-  const areaOptions = toAreaOptions(areas);
   const searchAreaOptions = landing?.searchAreas?.length
     ? toSearchAreaOptions(landing.searchAreas)
-    : areaOptions;
+    : areas.map((item) => ({
+        name: item.nameAr,
+        nameEn: item.nameEn,
+        slug: item.slug,
+        destinationSlug: item.slug,
+        stores: item.storesCount,
+        categoryCounts: item.categoryCounts,
+      }));
+  const selectedDeliveryArea = selectedDeliveryAreaSlug
+    ? searchAreaOptions.find(
+        (item) =>
+          item.slug === selectedDeliveryAreaSlug &&
+          item.destinationSlug !== item.slug &&
+          (!selectedAreaSlug || item.destinationSlug === selectedAreaSlug),
+      )
+    : undefined;
+  const effectiveMainAreaSlug =
+    selectedDeliveryArea?.destinationSlug ?? selectedAreaSlug;
+  const selectedArea = effectiveMainAreaSlug
+    ? areas.find((item) => item.slug === effectiveMainAreaSlug)
+    : undefined;
+  const categoryCards = toCategoryCards(
+    categories,
+    selectedArea,
+    selectedDeliveryArea,
+  );
   const topAreas = areas.slice(0, 8);
   const searchedAreas = areas.slice(0, 4);
 
@@ -380,6 +348,29 @@ async function LegacyDirectoryContent({
             areas={searchAreaOptions}
             destination={{ type: "landing" }}
           />
+
+          {selectedDeliveryArea ? (
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[#27AE60]/25 bg-[#E8F5ED] px-4 py-3">
+              <div>
+                <p className="text-xs font-semibold text-gray-600">
+                  التوصيل إلى
+                </p>
+                <p className="mt-0.5 font-black text-[#0F5A3D]">
+                  {selectedDeliveryArea.name}
+                </p>
+              </div>
+              <Link
+                href={
+                  effectiveMainAreaSlug
+                    ? `/?area=${encodeURIComponent(effectiveMainAreaSlug)}`
+                    : "/"
+                }
+                className="min-h-11 rounded-lg border border-[#27AE60]/30 bg-white px-4 py-2.5 text-sm font-bold text-[#0F5A3D]"
+              >
+                تغيير المنطقة
+              </Link>
+            </div>
+          ) : null}
 
           {searchedAreas.length > 0 && (
             <div className="mt-4 flex items-start gap-3">
@@ -418,12 +409,13 @@ async function LegacyDirectoryContent({
             </div>
             <CategoryGrid
               categories={categoryCards}
-              areas={areaOptions}
-              selectedAreaSlug={selectedAreaSlug}
+              deliveryAreas={searchAreaOptions}
+              selectedMainAreaSlug={effectiveMainAreaSlug}
+              selectedDeliveryAreaSlug={selectedDeliveryArea?.slug}
             />
         </section>
 
-        {topAreas.length > 0 && (
+        {!selectedArea && topAreas.length > 0 && (
             <section id="areas">
               <div className="mb-4 flex flex-col gap-3">
                 <h2 className="text-3xl font-bold text-[#222B2E]">
@@ -483,23 +475,6 @@ async function LegacyDirectoryContent({
             </section>
         )}
 
-        {featuredStores.length > 0 && (
-            <section>
-              <div className="mb-6 flex flex-col gap-2">
-                <h2 className="text-3xl font-bold text-[#222B2E]">
-                  متاجر متاحة الآن
-                </h2>
-                <p className="text-base leading-7 text-gray-600">
-                  متاجر محلية يمكنك الطلب منها مباشرة عبر تجارتك.
-                </p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {featuredStores.slice(0, 6).map((store) => (
-                  <StoreCard key={store.id} store={store} />
-                ))}
-              </div>
-            </section>
-        )}
       </div>
     </>
   );

@@ -208,12 +208,13 @@ export class StoresDirectoryService {
   }
 
   /**
-   * Returns paginated public store cards by main area and category.
+   * Returns delivery-zone choices and exact-zone public stores for a category.
    */
   async getCategoryPage(
     areaSlug: string,
     categorySlug: string,
     options: {
+      deliveryAreaSlug?: string;
       search?: string;
       openNow?: boolean;
       page?: number;
@@ -226,31 +227,35 @@ export class StoresDirectoryService {
     const limit = Number.isFinite(options.limit)
       ? Math.min(50, Math.max(1, options.limit!))
       : 20;
+    const normalizedDeliveryAreaSlug = options.deliveryAreaSlug?.trim();
     const normalizedSearch = options.search?.trim();
+    const publicDeliveryAreas = await this.findPublicDeliveryAreas({
+      mainAreaId: area.id,
+    });
+    const deliveryAreas = this.buildCategoryDeliveryAreas(
+      publicDeliveryAreas,
+      category.tenantCategory,
+    );
+    const selectedDeliveryArea = normalizedDeliveryAreaSlug
+      ? await this.findActiveChildArea(area.id, normalizedDeliveryAreaSlug)
+      : null;
 
     const baseWhere: Prisma.TenantDeliveryAreaWhereInput = {
       is_active: true,
       deleted_at: null,
       area: {
+        id: selectedDeliveryArea?.id,
         is_active: true,
         deleted_at: null,
-        OR: [
-          {
-            parent_area_id: area.id,
-            parent_area: {
-              is: {
-                id: area.id,
-                parent_area_id: null,
-                is_active: true,
-                deleted_at: null,
-              },
-            },
-          },
-          {
+        parent_area_id: area.id,
+        parent_area: {
+          is: {
             id: area.id,
             parent_area_id: null,
+            is_active: true,
+            deleted_at: null,
           },
-        ],
+        },
       },
       tenant: {
         status: TenantStatus.active,
@@ -286,11 +291,13 @@ export class StoresDirectoryService {
       },
     };
 
-    const rows = await this.prisma.tenantDeliveryArea.findMany({
-      where: baseWhere,
-      include: this.publicDeliveryAreaInclude(),
-      orderBy: [{ tenant: { id: 'asc' } }],
-    });
+    const rows = selectedDeliveryArea
+      ? await this.prisma.tenantDeliveryArea.findMany({
+          where: baseWhere,
+          include: this.publicDeliveryAreaInclude(),
+          orderBy: [{ tenant: { id: 'asc' } }],
+        })
+      : [];
 
     const uniqueRows = this.getLowestFeeDeliveryAreaByTenant(rows);
     const tenantIds = uniqueRows.map((row) => row.tenant.id);
@@ -329,7 +336,7 @@ export class StoresDirectoryService {
           }),
           dailyRotationScore: this.getDailyRotationScore({
             tenantId: row.tenant.id,
-            areaSlug: area.slug,
+            areaSlug: selectedDeliveryArea?.slug ?? area.slug,
             categorySlug: category.slug,
             date: rankingDate,
           }),
@@ -350,8 +357,8 @@ export class StoresDirectoryService {
     const paginatedRows = rankedRows.slice((page - 1) * limit, page * limit);
     const stores = this.toStoreCards(
       paginatedRows.map((item) => item.row.tenant),
-      area.name_ar,
-      undefined,
+      selectedDeliveryArea?.name_ar ?? area.name_ar,
+      selectedDeliveryArea?.slug,
       new Map(
         paginatedRows.map((item) => [
           item.row.tenant.id,
@@ -376,6 +383,10 @@ export class StoresDirectoryService {
 
     return {
       area: this.toAreaDto(area),
+      deliveryAreas,
+      selectedDeliveryArea: selectedDeliveryArea
+        ? this.toAreaDto(selectedDeliveryArea)
+        : null,
       category: {
         slug: category.slug,
         label: category.label,
@@ -1023,6 +1034,32 @@ export class StoresDirectoryService {
     return area;
   }
 
+  /** Resolves one active direct child of the selected public main area. */
+  private async findActiveChildArea(mainAreaId: number, slug: string) {
+    const area = await this.prisma.directoryArea.findFirst({
+      where: {
+        slug,
+        parent_area_id: mainAreaId,
+        is_active: true,
+        deleted_at: null,
+        parent_area: {
+          is: {
+            id: mainAreaId,
+            parent_area_id: null,
+            is_active: true,
+            deleted_at: null,
+          },
+        },
+      },
+    });
+
+    if (!area) {
+      throw new NotFoundException('Delivery area not found');
+    }
+
+    return area;
+  }
+
   private async ensureAreaExists(id: number) {
     const area = await this.prisma.directoryArea.findFirst({
       where: { id, deleted_at: null },
@@ -1205,6 +1242,54 @@ export class StoresDirectoryService {
     });
   }
 
+  /** Builds exact child-zone choices for one public directory category. */
+  private buildCategoryDeliveryAreas(
+    deliveryAreas: Awaited<
+      ReturnType<StoresDirectoryService['findPublicDeliveryAreas']>
+    >,
+    tenantCategory: TenantCategory,
+  ) {
+    const areasById = new Map<
+      number,
+      {
+        area: (typeof deliveryAreas)[number]['area'];
+        tenantIds: Set<number>;
+      }
+    >();
+
+    for (const deliveryArea of deliveryAreas) {
+      if (
+        deliveryArea.tenant.category !== tenantCategory ||
+        deliveryArea.area.parent_area_id === null
+      ) {
+        continue;
+      }
+
+      const existing = areasById.get(deliveryArea.area.id);
+      if (existing) {
+        existing.tenantIds.add(deliveryArea.tenant.id);
+        continue;
+      }
+
+      areasById.set(deliveryArea.area.id, {
+        area: deliveryArea.area,
+        tenantIds: new Set([deliveryArea.tenant.id]),
+      });
+    }
+
+    return Array.from(areasById.values())
+      .sort(
+        (left, right) =>
+          left.area.sort_order - right.area.sort_order ||
+          left.area.name_ar.localeCompare(right.area.name_ar, 'ar') ||
+          left.area.id - right.area.id,
+      )
+      .map(({ area: deliveryArea, tenantIds }) => ({
+        ...this.toAreaDto(deliveryArea),
+        storesCount: tenantIds.size,
+      }));
+  }
+
   private toPublicAreaSummaries(
     deliveryAreas: Awaited<
       ReturnType<StoresDirectoryService['findPublicDeliveryAreas']>
@@ -1322,6 +1407,7 @@ export class StoresDirectoryService {
         parentNameAr?: string;
         sortOrder: number;
         tenantIds: Set<number>;
+        categoryTenantIds: Record<DirectoryCategorySlug, Set<number>>;
       }
     >();
 
@@ -1335,9 +1421,17 @@ export class StoresDirectoryService {
         area.id === destinationArea.id ? [area] : [area, destinationArea];
 
       for (const searchableArea of searchableAreas) {
+        const category = CATEGORY_DEFINITIONS.find(
+          (item) => item.tenantCategory === deliveryArea.tenant.category,
+        );
         const existing = areasById.get(searchableArea.id);
         if (existing) {
           existing.tenantIds.add(deliveryArea.tenant.id);
+          if (category) {
+            existing.categoryTenantIds[category.slug].add(
+              deliveryArea.tenant.id,
+            );
+          }
           continue;
         }
 
@@ -1353,6 +1447,18 @@ export class StoresDirectoryService {
               : destinationArea.name_ar,
           sortOrder: searchableArea.sort_order,
           tenantIds: new Set([deliveryArea.tenant.id]),
+          categoryTenantIds: {
+            supermarkets: new Set(
+              category?.slug === 'supermarkets'
+                ? [deliveryArea.tenant.id]
+                : [],
+            ),
+            pharmacies: new Set(
+              category?.slug === 'pharmacies'
+                ? [deliveryArea.tenant.id]
+                : [],
+            ),
+          },
         });
       }
     }
@@ -1372,6 +1478,10 @@ export class StoresDirectoryService {
         destinationSlug: area.destinationSlug,
         ...(area.parentNameAr ? { parentNameAr: area.parentNameAr } : {}),
         storesCount: area.tenantIds.size,
+        categoryCounts: {
+          supermarkets: area.categoryTenantIds.supermarkets.size,
+          pharmacies: area.categoryTenantIds.pharmacies.size,
+        },
       }));
   }
 

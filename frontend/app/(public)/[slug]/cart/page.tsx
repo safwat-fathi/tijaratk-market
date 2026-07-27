@@ -11,11 +11,20 @@ import type { StorefrontAnalyticsContext } from "@/lib/analytics/storefront-ga4"
 
 export const metadata: Metadata = { title: "مراجعة الطلب | تجارتك" };
 
-type CartPageProps = { params: Promise<{ slug: string }> };
+type CartPageProps = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ areaSlug?: string }>;
+};
 
 /** Dedicated merchant cart review page. */
-export default async function CartPage({ params }: CartPageProps) {
-  const { slug } = await params;
+export default async function CartPage({
+  params,
+  searchParams,
+}: CartPageProps) {
+  const [{ slug }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const [tenantResponse, draft, orderAvailabilityResponse] = await Promise.all([
     tenantsService.getPublicTenant(slug),
     getStorefrontCartDraftAction(slug),
@@ -23,6 +32,12 @@ export default async function CartPage({ params }: CartPageProps) {
   ]);
   if (!tenantResponse.success || !tenantResponse.data) notFound();
   const tenant = tenantResponse.data;
+  const linkedDeliveryArea = resolvedSearchParams.areaSlug
+    ? tenant.tenant_delivery_areas?.find(
+        (deliveryArea) =>
+          deliveryArea.area?.slug === resolvedSearchParams.areaSlug,
+      )
+    : undefined;
   const orderAvailability =
     orderAvailabilityResponse.success && orderAvailabilityResponse.data
       ? orderAvailabilityResponse.data
@@ -49,6 +64,7 @@ export default async function CartPage({ params }: CartPageProps) {
           <HeaderCartButton
             tenantSlug={tenant.slug}
             initialCount={draft?.items.length ?? 0}
+            areaSlug={linkedDeliveryArea?.area?.slug}
           />
         }
       />
@@ -56,6 +72,8 @@ export default async function CartPage({ params }: CartPageProps) {
         tenantSlug={tenant.slug}
         initialDraft={draft}
         deliveryAreas={tenant.tenant_delivery_areas ?? []}
+        initialDeliveryAreaId={linkedDeliveryArea?.area_id}
+        initialDeliveryAreaSlug={linkedDeliveryArea?.area?.slug}
         isPharmacy={tenant.category === "pharmacy"}
         orderAvailability={orderAvailability}
         storeAnalytics={storeAnalytics}

@@ -24,6 +24,16 @@ export class DirectoryAreasQueryDto {
  * Query parameters for category store listing.
  */
 export class DirectoryCategoryStoresQueryDto {
+  @ApiPropertyOptional({
+    example: 'el-hay-el-16',
+    description:
+      'Exact active child delivery-area slug required before store results are returned',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  delivery_area_slug?: string;
+
   @ApiPropertyOptional({ example: 'hania' })
   @IsOptional()
   @IsString()

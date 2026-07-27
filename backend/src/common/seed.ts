@@ -13,7 +13,10 @@ import { DirectoryStatus, PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { passwordExtension } from '../prisma/password.extension';
 
-import { EGYPT_DIRECTORY_AREAS } from './seeders/directory-areas.seeder';
+import {
+  EGYPT_DIRECTORY_AREAS,
+  DIRECTORY_AREA_PARENT_ASSIGNMENTS,
+} from './seeders/directory-areas.seeder';
 import { seedZoneStorefronts } from './seeders/zone-storefronts.seeder';
 
 config({
@@ -95,27 +98,7 @@ async function seedDirectoryAreas(prisma: PrismaClient) {
 }
 
 async function assignDirectoryAreaParents(prisma: PrismaClient) {
-  const parentAssignments = {
-    'sheikh-zayed': ['al-khamayel'],
-    '6th-of-october': [
-      'october-1st-district',
-      'october-2nd-district',
-      'october-3rd-district',
-      'october-4th-district',
-      'october-5th-district',
-      'october-6th-district',
-      'october-7th-district',
-      'october-8th-district',
-      'october-9th-district',
-      'october-10th-district',
-      'october-11th-district',
-      'october-12th-district',
-      'october-al-motamayez',
-      'october-gharb-somid',
-      'hadayek-october',
-      'october-northern-expansions',
-    ],
-  } as const;
+  const parentAssignments = DIRECTORY_AREA_PARENT_ASSIGNMENTS;
 
   await prisma.directoryArea.updateMany({
     where: { slug: { in: Object.keys(parentAssignments) } },
@@ -143,39 +126,49 @@ async function assignDirectoryAreaParents(prisma: PrismaClient) {
 async function seedDirectoryProfiles(prisma: PrismaClient) {
   const logger = new Logger('DirectoryProfilesSeeder');
 
-  const zayedArea = await prisma.directoryArea.findUnique({
-    where: { slug: 'sheikh-zayed' },
-  });
-  const octoberArea = await prisma.directoryArea.findUnique({
-    where: { slug: '6th-of-october' },
-  });
+  const allAreas = await prisma.directoryArea.findMany();
+  const areaBySlug = new Map(allAreas.map((a) => [a.slug, a]));
 
-  if (!zayedArea || !octoberArea) {
-    logger.warn(
-      'Skipping ranking directory profile seed because required areas are missing.',
-    );
-    return;
-  }
+  for (const [parentSlug, zoneSlugs] of Object.entries(
+    DIRECTORY_AREA_PARENT_ASSIGNMENTS,
+  )) {
+    const parentArea = areaBySlug.get(parentSlug);
+    if (!parentArea) continue;
 
-  for (const merchant of SUPERMARKET_SEED_MERCHANTS) {
-    await seedRankingDirectoryProfile(prisma, {
-      slug: merchant.slug,
-      primaryArea: zayedArea,
-      deliveryAreas: [zayedArea, octoberArea],
-      address: 'Sheikh Zayed, Giza',
-      description:
-        'Order groceries and supermarket essentials through Tijaratk.',
-    });
-  }
+    for (const zoneSlug of zoneSlugs) {
+      const zoneArea = areaBySlug.get(zoneSlug);
+      if (!zoneArea) continue;
 
-  for (const merchant of PHARMACY_SEED_MERCHANTS) {
-    await seedRankingDirectoryProfile(prisma, {
-      slug: merchant.slug,
-      primaryArea: octoberArea,
-      deliveryAreas: [octoberArea, zayedArea],
-      address: '6th of October City, Giza',
-      description: 'Order medicines, vitamins and cosmetics through Tijaratk.',
-    });
+      // Seed 5 Supermarkets per zone
+      for (let i = 1; i <= 5; i++) {
+        const slug = `${zoneSlug}-supermarket-${i}`;
+        const tenant = await prisma.tenant.findUnique({ where: { slug } });
+        if (tenant) {
+          await seedRankingDirectoryProfile(prisma, {
+            slug,
+            primaryArea: zoneArea,
+            deliveryAreas: [zoneArea], // Restricted ONLY to that zone
+            address: `${zoneArea.name_en}, ${parentArea.name_en}`,
+            description: `Order groceries from ${tenant.name} in ${zoneArea.name_en}.`,
+          });
+        }
+      }
+
+      // Seed 5 Pharmacies per zone
+      for (let i = 1; i <= 5; i++) {
+        const slug = `${zoneSlug}-pharmacy-${i}`;
+        const tenant = await prisma.tenant.findUnique({ where: { slug } });
+        if (tenant) {
+          await seedRankingDirectoryProfile(prisma, {
+            slug,
+            primaryArea: zoneArea,
+            deliveryAreas: [zoneArea], // Restricted ONLY to that zone
+            address: `${zoneArea.name_en}, ${parentArea.name_en}`,
+            description: `Order medicines from ${tenant.name} in ${zoneArea.name_en}.`,
+          });
+        }
+      }
+    }
   }
 }
 

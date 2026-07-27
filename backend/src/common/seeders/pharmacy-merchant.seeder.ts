@@ -27,20 +27,24 @@ type CatalogSeedProduct = {
   order_config?: Prisma.InputJsonValue;
 };
 
-export const PHARMACY_SEED_MERCHANTS: StandardSeedMerchant[] = [
-  {
-    name: 'صيدلية الشفاء',
-    phone: '+201000000003',
-    slug: 'el-shifaa-pharmacy',
-    ownerName: 'أحمد محمد',
-  },
-  {
-    name: 'صيدليات النور',
-    phone: '+201000000004',
-    slug: 'al-noor-pharmacy',
-    ownerName: 'محمد عادل',
-  },
-] as const;
+import { DIRECTORY_AREA_PARENT_ASSIGNMENTS } from './directory-areas.seeder';
+
+export const PHARMACY_SEED_MERCHANTS: StandardSeedMerchant[] = [];
+
+let pharmPhoneCounter = 2000000;
+for (const zoneSlugs of Object.values(DIRECTORY_AREA_PARENT_ASSIGNMENTS)) {
+  for (const zoneSlug of zoneSlugs) {
+    for (let i = 1; i <= 5; i++) {
+      pharmPhoneCounter++;
+      PHARMACY_SEED_MERCHANTS.push({
+        name: `صيدلية ${zoneSlug} ${i}`,
+        phone: `+2010${String(pharmPhoneCounter).padStart(7, '0')}`,
+        slug: `${zoneSlug}-pharmacy-${i}`,
+        ownerName: `مالك صيدلية ${zoneSlug} ${i}`,
+      });
+    }
+  }
+}
 
 /**
  * Seeds pharmacy tenants using existing DB catalog items.
@@ -51,9 +55,10 @@ export async function seedPharmacyMerchant(prisma: PrismaClient) {
     process.env.SEED_PHARMACY_OWNER_CREDENTIAL ??
     process.env.SEED_SUPERMARKET_OWNER_CREDENTIAL;
 
-  await prisma.$transaction(async (tx) => {
-    const catalogProducts = await findCatalogProducts(
-      tx,
+  await prisma.$transaction(
+    async (tx) => {
+      const catalogProducts = await findCatalogProducts(
+        tx,
       CATALOG_SOURCE_CHEFAA,
     );
 
@@ -77,7 +82,7 @@ export async function seedPharmacyMerchant(prisma: PrismaClient) {
         `Seeded pharmacy merchant ${tenant.slug} with ${products.length} catalog-backed products.`,
       );
     }
-  });
+  }, { timeout: 120000 });
 }
 
 async function upsertTenant(

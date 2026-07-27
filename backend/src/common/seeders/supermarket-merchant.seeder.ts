@@ -27,20 +27,24 @@ type CatalogSeedProduct = {
   order_config?: Prisma.InputJsonValue;
 };
 
-export const SUPERMARKET_SEED_MERCHANTS: StandardSeedMerchant[] = [
-  {
-    name: 'سوبر ماركت الخير',
-    phone: '+201000000001',
-    slug: 'khair-supermarket',
-    ownerName: 'خالد محمد',
-  },
-  {
-    name: 'سوبر ماركت الهدى',
-    phone: '+201000000002',
-    slug: 'hoda-supermarket',
-    ownerName: 'محمود فاروق',
-  },
-] as const;
+import { DIRECTORY_AREA_PARENT_ASSIGNMENTS } from './directory-areas.seeder';
+
+export const SUPERMARKET_SEED_MERCHANTS: StandardSeedMerchant[] = [];
+
+let superPhoneCounter = 1000000;
+for (const zoneSlugs of Object.values(DIRECTORY_AREA_PARENT_ASSIGNMENTS)) {
+  for (const zoneSlug of zoneSlugs) {
+    for (let i = 1; i <= 5; i++) {
+      superPhoneCounter++;
+      SUPERMARKET_SEED_MERCHANTS.push({
+        name: `سوبر ماركت ${zoneSlug} ${i}`,
+        phone: `+2010${String(superPhoneCounter).padStart(7, '0')}`,
+        slug: `${zoneSlug}-supermarket-${i}`,
+        ownerName: `مالك ${zoneSlug} ${i}`,
+      });
+    }
+  }
+}
 
 /**
  * Seeds supermarket tenants using existing DB catalog items.
@@ -49,11 +53,12 @@ export async function seedSupermarketMerchant(prisma: PrismaClient) {
   const logger = new Logger('SupermarketMerchantSeeder');
   const ownerCredential = process.env.SEED_SUPERMARKET_OWNER_CREDENTIAL;
 
-  await prisma.$transaction(async (tx) => {
-    const catalogProducts = await findCatalogProducts(
-      tx,
-      CATALOG_SOURCE_TALABAT,
-    );
+  await prisma.$transaction(
+    async (tx) => {
+      const catalogProducts = await findCatalogProducts(
+        tx,
+        CATALOG_SOURCE_TALABAT,
+      );
 
     if (catalogProducts.length === 0) {
       logger.warn(
@@ -75,7 +80,7 @@ export async function seedSupermarketMerchant(prisma: PrismaClient) {
         `Seeded supermarket merchant ${tenant.slug} with ${products.length} catalog-backed products.`,
       );
     }
-  });
+  }, { timeout: 120000 });
 }
 
 async function upsertTenant(
@@ -150,7 +155,6 @@ async function seedOwner(
     });
   }
 }
-
 async function assignDefaultPlan(
   tx: Prisma.TransactionClient,
   tenantId: number,

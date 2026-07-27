@@ -25,6 +25,17 @@ export type StoresDirectorySearchArea = {
   destinationSlug: string;
   parentNameAr?: string;
   storesCount: number;
+  categoryCounts: Record<string, number>;
+};
+
+export type StoresDirectoryDeliveryArea = {
+  id: number;
+  nameAr: string;
+  nameEn: string | null;
+  slug: string;
+  parentAreaId: number;
+  city: string | null;
+  governorate: string | null;
 };
 
 export type StoresDirectoryStoreCard = {
@@ -71,6 +82,8 @@ export type StoresDirectoryPagination = {
 
 export type StoresDirectoryCategoryPage = {
   area: StoresDirectoryArea;
+  deliveryAreas: Array<StoresDirectoryDeliveryArea & { storesCount: number }>;
+  selectedDeliveryArea: StoresDirectoryDeliveryArea | null;
   category: Omit<StoresDirectoryCategory, "storesCount">;
   stores: StoresDirectoryStoreCard[];
   pagination: StoresDirectoryPagination;
