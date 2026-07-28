@@ -33,11 +33,13 @@ const CATEGORY_DEFINITIONS = [
   {
     slug: 'supermarkets',
     label: 'Supermarkets',
+    labelAr: 'سوبر ماركت',
     tenantCategory: TenantCategory.grocery,
   },
   {
     slug: 'pharmacies',
     label: 'Pharmacies',
+    labelAr: 'صيدليات',
     tenantCategory: TenantCategory.pharmacy,
   },
 ] as const;
@@ -148,9 +150,9 @@ export class StoresDirectoryService {
         deliveryFees,
       ),
       seo: {
-        title: 'Stores Directory | Tijaratk',
+        title: 'دليل المتاجر | تجارتك',
         description:
-          'Browse supermarkets and pharmacies in your area and order directly from local stores.',
+          'تصفح السوبر ماركت والصيدليات في منطقتك واطلب مباشرة من المتاجر المحلية.',
       },
     };
   }
@@ -199,10 +201,10 @@ export class StoresDirectoryService {
       seo: {
         title:
           area.seo_title ||
-          `Stores in ${area.name_en || area.name_ar} | Tijaratk`,
+          `المتاجر في ${area.name_ar} | تجارتك`,
         description:
           area.seo_description ||
-          `Browse supermarkets and pharmacies delivering in ${area.name_en || area.name_ar}.`,
+          `تصفح السوبر ماركت والصيدليات التي توصل إلى ${area.name_ar}.`,
       },
     };
   }
@@ -400,8 +402,8 @@ export class StoresDirectoryService {
         lastPage: Math.max(1, Math.ceil(total / limit)),
       },
       seo: {
-        title: `${category.label} in ${area.name_en || area.name_ar} | Tijaratk`,
-        description: `Discover ${category.label.toLowerCase()} delivering in ${area.name_en || area.name_ar}.`,
+        title: `${category.labelAr} في ${area.name_ar} | تجارتك`,
+        description: `اكتشف ${category.labelAr} توصل إلى ${area.name_ar}.`,
         canonicalUrl: `/stores/${area.slug}/${category.slug}`,
       },
     };
