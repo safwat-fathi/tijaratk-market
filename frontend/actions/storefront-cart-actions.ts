@@ -114,6 +114,7 @@ const checkoutFieldMap = {
   customer_phone: "phone",
   delivery_address: "address",
   delivery_slot: "delivery_slot",
+  delivery_area_id: "delivery_area",
 } as const;
 
 const resolveValidationAnalyticsError = (
