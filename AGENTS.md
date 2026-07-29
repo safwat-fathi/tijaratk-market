@@ -29,6 +29,26 @@ sources or rely on frontend filtering to hide the wrong products.
   tenant's allowed source and must not fall back to unrelated active catalog
   rows.
 
+## Testing policy
+
+This repository does not use unit tests. Do not create, restore, or reintroduce
+them.
+
+- Do not add `*.spec.ts`, `*.test.ts`, `*.spec.tsx`, `*.test.tsx`, or
+  `__tests__/` files anywhere in `backend/`, `frontend/`, or `mobile/`.
+- Do not add test frameworks, runners, or helper packages (jest, vitest,
+  playwright, cypress, mocha, testing-library, and similar) to any
+  `package.json`.
+- Do not add `test`, `test:watch`, or `coverage` scripts, jest/vitest config
+  files, or CI test steps.
+- The only tests in this repository are the security e2e suites in
+  `backend/test/` (`security.e2e-spec.js` and
+  `zone-storefront.security.e2e-spec.js`, run via `pnpm run test:e2e`). They are
+  maintained deliberately. Do not delete them, and do not extend them into a
+  general-purpose test suite.
+- Verify changes by reasoning about the code and by asking the user to exercise
+  the running application. Report plainly what was verified and what was not.
+
 ## Command execution restrictions for AI agents
 
 AI agents must not run verification, migration, package-manager, dependency, lint, typecheck, test, build, or dev-server commands in this repository.

@@ -50,6 +50,8 @@ export type StoresDirectoryStoreCard = {
   deliveryAvailable: boolean;
   deliveryFee: number;
   deliveryAvailableNow: boolean;
+  /** Optional so a frontend deploy that lands before the backend still renders. */
+  deliveryOrderingMode?: "asap" | "scheduled" | "unavailable";
   readinessLevel: "complete" | "partial" | "poor";
   badges: Array<
     "open_now" | "new_store" | "complete_profile" | "delivery_available"

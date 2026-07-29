@@ -1,6 +1,7 @@
 import type { TenantDeliverySettings } from "@/types/models/tenant";
 import type { PublicCustomerProfile } from "@/services/api/customers.service";
 import { formatCurrency } from "@/lib/utils/currency";
+import { formatArabicTimeWindow } from "@/lib/delivery-configuration";
 import { useState } from "react";
 import BottomSheet from "@/components/ui/BottomSheet";
 import type { DeliveryAvailability } from "@/types/models/delivery";
@@ -86,23 +87,16 @@ export default function DeliveryDetailsSection({
         ? formatCurrency(deliveryFee)
         : "مجاني";
 
-  let deliveryTimeWindow: string | null = null;
   const deliveryStartsAt = deliveryAvailability
     ? deliveryAvailability.operating_hours.starts_at
     : deliverySettings?.delivery_starts_at;
   const deliveryEndsAt = deliveryAvailability
     ? deliveryAvailability.operating_hours.ends_at
     : deliverySettings?.delivery_ends_at;
-  if (deliveryStartsAt && deliveryEndsAt) {
-    const formatTime = (time: string) => {
-      const [hours, minutes] = time.split(":");
-      const h = parseInt(hours, 10);
-      const period = h >= 12 ? "مساءً" : "صباحاً";
-      const h12 = h % 12 || 12;
-      return `${h12}:${minutes} ${period}`;
-    };
-    deliveryTimeWindow = `من ${formatTime(deliveryStartsAt)} إلى ${formatTime(deliveryEndsAt)}`;
-  }
+  const deliveryTimeWindow = formatArabicTimeWindow(
+    deliveryStartsAt,
+    deliveryEndsAt,
+  );
   const deliveryTimeWindowLabel = deliveryTimeWindow || "طوال اليوم";
 
   return (

@@ -22,6 +22,7 @@ import {
   type StorefrontAnalyticsContext,
 } from "@/lib/analytics/storefront-ga4";
 import { DEFAULT_UNAVAILABLE_ITEM_ACTION } from "@/lib/orders/unavailable-item-action";
+import { isScheduledOnlyOrdering } from "@/lib/storefront-order-availability";
 import { UnavailableItemAction } from "@/types/enums";
 import type { StorefrontCartDraft } from "@/types/models/storefront-cart-draft";
 import type { TenantDeliveryArea } from "@/types/models/tenant";
@@ -406,6 +407,12 @@ export default function StorefrontCart({
       </section>
 
       {message ? <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">{message}</p> : null}
+
+      {isScheduledOnlyOrdering(orderAvailability) && hasContent && deliveryAreaId ? (
+        <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-900">
+          المتجر مغلق حالياً · هتختار معاد التوصيل في الخطوة الجاية.
+        </p>
+      ) : null}
 
       {!orderAvailability.accepting_orders ? (
         <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold text-amber-900">

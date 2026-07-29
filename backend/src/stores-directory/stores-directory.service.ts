@@ -28,6 +28,7 @@ import {
   ResolveMissingDeliveryAreaRequestDto,
 } from './dto/missing-delivery-area-request.dto';
 import { rankAreaSearchResults } from './utils/area-search.util';
+import { DeliverySchedulingService } from 'src/delivery-configuration/delivery-scheduling.service';
 
 const CATEGORY_DEFINITIONS = [
   {
@@ -98,6 +99,8 @@ type StoreProductStats = {
 
 type StoreReadinessLevel = 'complete' | 'partial' | 'poor';
 
+type DeliveryOrderingMode = 'asap' | 'scheduled' | 'unavailable';
+
 type StoreBadge =
   | 'open_now'
   | 'new_store'
@@ -120,7 +123,10 @@ type ReadinessInput = {
  */
 @Injectable()
 export class StoresDirectoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly deliveryScheduling: DeliverySchedulingService,
+  ) {}
 
   /**
    * Returns active main areas, category counts, and featured stores for the directory landing.
@@ -187,16 +193,18 @@ export class StoresDirectoryService {
       deliveryAreas,
     ).slice(0, 6);
     const deliveryFees = this.buildDeliveryFeeMap(deliveryAreas);
+    const now = new Date();
 
     return {
       area: this.toAreaDto(area),
-      categories: this.buildAreaCategories(deliveryAreas),
+      categories: this.buildAreaCategories(deliveryAreas, now),
       featuredStores: this.toStoreCards(
         featuredTenants,
         area.name_ar,
         undefined,
         undefined,
         deliveryFees,
+        now,
       ),
       seo: {
         title:
@@ -304,7 +312,10 @@ export class StoresDirectoryService {
     const uniqueRows = this.getLowestFeeDeliveryAreaByTenant(rows);
     const tenantIds = uniqueRows.map((row) => row.tenant.id);
     const productStats = await this.getProductStatsByTenantIds(tenantIds);
-    const rankingDate = this.formatRankingDate(new Date());
+    // One clock read for the whole request so a card's availability, its
+    // badges, and its ranking bucket can never straddle a minute boundary.
+    const now = new Date();
+    const rankingDate = this.formatRankingDate(now);
 
     const rankedRows = uniqueRows
       .map((row) => {
@@ -319,7 +330,8 @@ export class StoresDirectoryService {
           deliveryStartsAt: row.tenant.delivery_starts_at,
           deliveryEndsAt: row.tenant.delivery_ends_at,
         }).score;
-        const isOpenNow = this.isDeliveryAvailableNow(row.tenant);
+        const orderingMode = this.resolveDeliveryOrderingMode(row.tenant, now);
+        const isOpenNow = orderingMode === 'asap';
         const readinessLevel = this.getReadinessLevel(readinessScore);
 
         return {
@@ -335,6 +347,7 @@ export class StoresDirectoryService {
             readinessScore,
             isOpenNow,
             deliveryAvailable: row.tenant.delivery_available,
+            deliveryOrderingMode: orderingMode,
           }),
           dailyRotationScore: this.getDailyRotationScore({
             tenantId: row.tenant.id,
@@ -381,6 +394,7 @@ export class StoresDirectoryService {
           Number(item.row.delivery_fee),
         ]),
       ),
+      now,
     );
 
     return {
@@ -1224,6 +1238,7 @@ export class StoresDirectoryService {
     deliveryAreas: Awaited<
       ReturnType<StoresDirectoryService['findPublicDeliveryAreas']>
     >,
+    now: Date = new Date(),
   ) {
     const uniqueTenants = this.getUniqueTenantsFromDeliveryAreas(deliveryAreas);
 
@@ -1237,8 +1252,8 @@ export class StoresDirectoryService {
         label: category.label,
         tenantCategory: category.tenantCategory,
         storesCount: categoryTenants.length,
-        availableNowCount: categoryTenants.filter((tenant) =>
-          this.isDeliveryAvailableNow(tenant),
+        availableNowCount: categoryTenants.filter(
+          (tenant) => this.resolveDeliveryOrderingMode(tenant, now) === 'asap',
         ).length,
       };
     });
@@ -1565,11 +1580,13 @@ export class StoresDirectoryService {
       }
     >,
     deliveryFees?: Map<number, number>,
+    now: Date = new Date(),
   ) {
     return tenants.map((tenant) => {
       const displayName = tenant.directory_profile?.display_name || tenant.name;
       const whatsappNumber = tenant.phone.replace(/[^\d]/g, '');
       const meta = rankingMeta?.get(tenant.id);
+      const orderingMode = this.resolveDeliveryOrderingMode(tenant, now);
 
       return {
         id: tenant.id,
@@ -1585,7 +1602,8 @@ export class StoresDirectoryService {
         areaSlug: fallbackAreaSlug || null,
         deliveryAvailable: tenant.delivery_available,
         deliveryFee: deliveryFees?.get(tenant.id) ?? 0,
-        deliveryAvailableNow: this.isDeliveryAvailableNow(tenant),
+        deliveryOrderingMode: orderingMode,
+        deliveryAvailableNow: orderingMode === 'asap',
         readinessLevel:
           meta?.readinessLevel ??
           this.getReadinessLevel(
@@ -1594,7 +1612,7 @@ export class StoresDirectoryService {
         badges:
           meta?.badges ??
           this.buildStoreBadges(
-            this.isDeliveryAvailableNow(tenant),
+            orderingMode === 'asap',
             tenant.delivery_available,
             this.getReadinessLevel(
               tenant.directory_profile?.profile_completion_score ?? 0,
@@ -1624,52 +1642,26 @@ export class StoresDirectoryService {
     return fees;
   }
 
-  private isDeliveryAvailableNow(
+  /**
+   * Resolves the public ordering mode through the authoritative scheduling
+   * engine so directory cards, ranking, and the storefront never disagree.
+   * Mirrors `TenantsService.resolvePublicDeliveryAvailability`, including its
+   * fail-closed behaviour for invalid operating hours.
+   */
+  private resolveDeliveryOrderingMode(
     tenant: Pick<
       StoreCardTenant,
       'delivery_available' | 'delivery_starts_at' | 'delivery_ends_at'
     >,
-  ) {
-    if (!tenant.delivery_available) {
-      return false;
-    }
-
-    if (!tenant.delivery_starts_at || !tenant.delivery_ends_at) {
-      return true;
-    }
-
-    return this.isWithinDeliveryWindow(
-      tenant.delivery_starts_at,
-      tenant.delivery_ends_at,
-      new Date(),
-    );
-  }
-
-  private isWithinDeliveryWindow(
-    startsAt: string,
-    endsAt: string,
     now: Date,
-  ) {
-    const cairoTime = new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Africa/Cairo',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(now);
-    const currentMinutes = this.parseHHMM(cairoTime);
-    const startMinutes = this.parseHHMM(startsAt);
-    const endMinutes = this.parseHHMM(endsAt);
-
-    if (startMinutes <= endMinutes) {
-      return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+  ): DeliveryOrderingMode {
+    try {
+      return this.deliveryScheduling.getAvailability(tenant, now, {
+        allowAlwaysOpenWithoutHours: true,
+      }).ordering_mode;
+    } catch {
+      return 'unavailable';
     }
-
-    return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
-  }
-
-  private parseHHMM(value: string) {
-    const [hours = '0', minutes = '0'] = value.split(':');
-    return Number(hours) * 60 + Number(minutes);
   }
 
   /** Builds the authoritative server-side filter for area administration. */
@@ -1982,10 +1974,15 @@ export class StoresDirectoryService {
     readinessScore: number;
     isOpenNow: boolean;
     deliveryAvailable: boolean;
+    deliveryOrderingMode: DeliveryOrderingMode;
   }) {
     if (!input.isDirectoryVisible) return 99;
     if (input.status !== TenantStatus.active) return 99;
     if (input.availableProductsCount <= 0) return 40;
+    // A store the storefront hard-blocks must not out-rank one that still
+    // accepts scheduled pre-orders. Demote, never exclude: 40 stays under the
+    // 99 cutoff, so listing totals and SEO pages are unchanged.
+    if (input.deliveryOrderingMode === 'unavailable') return 40;
 
     const isComplete = input.readinessScore >= COMPLETE_READINESS_SCORE;
     if (input.isOpenNow && input.deliveryAvailable && isComplete) return 10;

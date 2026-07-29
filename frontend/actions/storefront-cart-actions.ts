@@ -72,7 +72,14 @@ const checkoutSchema = z.object({
 });
 
 type CheckoutAnalyticsError = {
-  error_field: "phone" | "name" | "address" | "delivery_area" | "cart" | "server";
+  error_field:
+    | "phone"
+    | "name"
+    | "address"
+    | "delivery_area"
+    | "delivery_slot"
+    | "cart"
+    | "server";
   error_type:
     | "required"
     | "invalid_format"
@@ -106,7 +113,7 @@ const checkoutFieldMap = {
   customer_name: "name",
   customer_phone: "phone",
   delivery_address: "address",
-  delivery_slot: "delivery_area",
+  delivery_slot: "delivery_slot",
 } as const;
 
 const resolveValidationAnalyticsError = (

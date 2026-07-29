@@ -231,6 +231,17 @@ pnpm run test:e2e
 
 `test:e2e` currently delegates to the security e2e flow.
 
+### Testing Policy
+
+This backend does not use unit tests. Do not add `*.spec.ts` / `*.test.ts`
+files, test frameworks or runners (jest, vitest, playwright, cypress, mocha,
+and similar), `test`/`coverage` scripts, or CI test steps.
+
+The security e2e suites in `test/` (`security.e2e-spec.js`,
+`zone-storefront.security.e2e-spec.js`) are the single deliberate exception.
+Keep them, and do not grow them into a general-purpose test suite. See the
+"Testing policy" section in the repository root `AGENTS.md`.
+
 ## Meta Rollout
 
 Use `META_CAPI_TEST_EVENT_CODE` while checking consented merchant and zone

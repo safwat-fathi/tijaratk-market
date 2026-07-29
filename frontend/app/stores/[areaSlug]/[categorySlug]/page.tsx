@@ -160,6 +160,43 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+/**
+ * A closed store can still take pre-orders, so it must not be labelled the same
+ * as one that cannot be ordered from at all. Falls back to the legacy boolean
+ * pair when the backend has not yet shipped `deliveryOrderingMode`.
+ */
+const resolveAvailabilityBadge = (store: StoresDirectoryStoreCard) => {
+  const mode =
+    store.deliveryOrderingMode ??
+    (store.deliveryAvailableNow
+      ? "asap"
+      : store.deliveryAvailable
+        ? "scheduled"
+        : "unavailable");
+
+  if (mode === "asap") {
+    return { label: "متاح الآن", className: "bg-[#E8F5ED] text-[#0F5A3D]" };
+  }
+
+  if (mode === "scheduled") {
+    return { label: "مغلق · الحجز متاح", className: "bg-amber-50 text-amber-900" };
+  }
+
+  return { label: "غير متاح الآن", className: "bg-gray-100 text-gray-500" };
+};
+
+const AvailabilityBadge = ({ store }: { store: StoresDirectoryStoreCard }) => {
+  const badge = resolveAvailabilityBadge(store);
+
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-bold ${badge.className}`}
+    >
+      {badge.label}
+    </span>
+  );
+};
+
 const StoreCard = ({
   store,
   categorySlug,
@@ -191,15 +228,7 @@ const StoreCard = ({
         <h2 className="line-clamp-1 text-base font-bold text-[#222B2E]">
           {store.name}
         </h2>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-bold ${
-            store.deliveryAvailableNow
-              ? "bg-[#E8F5ED] text-[#0F5A3D]"
-              : "bg-gray-100 text-gray-500"
-          }`}
-        >
-          {store.deliveryAvailableNow ? "متاح الآن" : "غير متاح الآن"}
-        </span>
+        <AvailabilityBadge store={store} />
       </div>
       <p className="mt-1 line-clamp-1 text-sm text-gray-500">
         {store.areaName || store.address || "متجر محلي على تجارتك"}

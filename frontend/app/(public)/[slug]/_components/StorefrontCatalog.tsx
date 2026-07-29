@@ -9,6 +9,8 @@ import {
   uploadStorefrontPrescriptionAction,
 } from "@/actions/storefront-cart-actions";
 import { formatCurrency } from "@/lib/utils/currency";
+import { formatArabicTimeWindow } from "@/lib/delivery-configuration";
+import { isScheduledOnlyOrdering } from "@/lib/storefront-order-availability";
 import { sendMetaPixelEvent } from "@/lib/analytics/meta-pixel";
 import {
   trackCartSelectionChange,
@@ -87,6 +89,11 @@ export default function StorefrontCatalog({
   storeAnalytics,
 }: StorefrontCatalogProps) {
   const router = useRouter();
+  const scheduledOnly = isScheduledOnlyOrdering(orderAvailability);
+  const operatingHoursLabel = formatArabicTimeWindow(
+    orderAvailability.delivery_availability.operating_hours.starts_at,
+    orderAvailability.delivery_availability.operating_hours.ends_at,
+  );
   const [selections, setSelections] = useState(() => draftSelections(initialDraft));
   const selectionsRef = useRef(selections);
   const [products, setProducts] = useState(initialProducts);
@@ -453,6 +460,27 @@ export default function StorefrontCatalog({
           <p className="mt-1 text-xs text-amber-800">
             يمكنك تصفح المنتجات والعودة لاحقاً.
           </p>
+        </div>
+      ) : null}
+
+      {scheduledOnly ? (
+        <div
+          className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center"
+          role="status"
+        >
+          <span className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">
+            حجز مسبق
+          </span>
+          <p className="mt-2 font-black text-amber-950">المتجر مغلق حالياً</p>
+          <p className="mt-1 text-sm font-semibold leading-6 text-amber-900">
+            تقدر تكمّل طلبك دلوقتي وتختار معاد التوصيل المناسب ليك من المواعيد
+            المتاحة.
+          </p>
+          {operatingHoursLabel ? (
+            <p className="mt-1 text-xs text-amber-800">
+              مواعيد التوصيل: {operatingHoursLabel}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

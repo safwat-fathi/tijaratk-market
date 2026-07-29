@@ -4,6 +4,23 @@ import type {
   DirectoryArea,
 } from "@/types/models/tenant";
 
+/** Formats an `HH:MM` operating-hours value as Arabic 12-hour time. */
+export const formatArabicTime = (value: string) => {
+  const [hourValue, minutes] = value.split(":");
+  const hour = Number(hourValue);
+
+  return `${hour % 12 || 12}:${minutes} ${hour >= 12 ? "مساءً" : "صباحاً"}`;
+};
+
+/** Formats an operating-hours pair as `من … إلى …`, or null when incomplete. */
+export const formatArabicTimeWindow = (
+  startsAt: string | null | undefined,
+  endsAt: string | null | undefined,
+) =>
+  startsAt && endsAt
+    ? `من ${formatArabicTime(startsAt)} إلى ${formatArabicTime(endsAt)}`
+    : null;
+
 export const extractMainAreaIds = (
   tenantDeliveryAreas: Array<{ area_id: number; area?: { parent_area_id: number | null } }>,
 ) =>

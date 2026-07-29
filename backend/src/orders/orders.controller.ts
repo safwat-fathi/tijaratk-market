@@ -165,6 +165,16 @@ export class OrdersController {
         source_metadata: { type: 'object' },
         delivery_area_id: { type: 'number' },
         delivery_area_slug: { type: 'string' },
+        delivery_slot: {
+          type: 'object',
+          description:
+            'Required when the store is closed (ordering_mode "scheduled"); rejected when it is open. Sent as a JSON string for multipart requests.',
+          properties: {
+            date: { type: 'string', example: '2026-07-30' },
+            starts_at: { type: 'string', example: '09:00' },
+            ends_at: { type: 'string', example: '10:00' },
+          },
+        },
         unavailable_item_action: { type: 'string' },
         prescription_unavailability_action: { type: 'string' },
         prescription_file: { type: 'string', format: 'binary' },

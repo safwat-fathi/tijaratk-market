@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { Send, Wallet } from "lucide-react";
-import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   checkoutStorefrontCartAction,
@@ -28,7 +35,10 @@ import {
 } from "@/lib/analytics/storefront-ga4";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { PublicCustomerProfile } from "@/services/api/customers.service";
-import type { DeliveryAvailability, DeliverySlot } from "@/types/models/delivery";
+import type {
+  DeliveryAvailability,
+  DeliverySlot,
+} from "@/types/models/delivery";
 import type { StorefrontCartDraft } from "@/types/models/storefront-cart-draft";
 import type { TenantDeliverySettings } from "@/types/models/tenant";
 import ScheduledDeliverySelector from "./ScheduledDeliverySelector";
@@ -69,11 +79,15 @@ export default function StorefrontCheckout({
   const [phone, setPhone] = useState(savedCustomerProfile?.phone ?? "");
   const [address, setAddress] = useState(savedCustomerProfile?.address ?? "");
   const [notes, setNotes] = useState(savedCustomerProfile?.notes ?? "");
-  const [suggestion, setSuggestion] = useState<PublicCustomerProfile | null>(null);
+  const [suggestion, setSuggestion] = useState<PublicCustomerProfile | null>(
+    null,
+  );
   const [accessCode, setAccessCode] = useState("");
   const [lookupMessage, setLookupMessage] = useState<string | null>(null);
   const [isLookingUp, startLookup] = useTransition();
-  const [scheduledWindow, setScheduledWindow] = useState<DeliverySlot | null>(null);
+  const [scheduledWindow, setScheduledWindow] = useState<DeliverySlot | null>(
+    null,
+  );
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [analyticsIdentifiers, setAnalyticsIdentifiers] =
     useState<GoogleAnalyticsIdentifiers | null>(null);
@@ -143,7 +157,8 @@ export default function StorefrontCheckout({
   }, [state, storeAnalytics]);
 
   useEffect(() => {
-    if (!state.success || !state.data?.public_token || hasNavigated.current) return;
+    if (!state.success || !state.data?.public_token || hasNavigated.current)
+      return;
     hasNavigated.current = true;
     if (state.data.meta_purchase) {
       sendMetaPixelEvent(
@@ -174,7 +189,14 @@ export default function StorefrontCheckout({
       target.searchParams.set("customerCode", state.data.customer_access_code);
     }
     router.replace(`${target.pathname}${target.search}`);
-  }, [itemCount, router, state.data, state.success, storeAnalytics, tenantSlug]);
+  }, [
+    itemCount,
+    router,
+    state.data,
+    state.success,
+    storeAnalytics,
+    tenantSlug,
+  ]);
 
   const deliveryAreaName = draft.delivery_area?.name_ar ?? "منطقة التوصيل";
   const totalLabel = useMemo(
@@ -197,8 +219,12 @@ export default function StorefrontCheckout({
     <main className="px-4 pb-8 pt-5" dir="rtl">
       <div className="mb-5 flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-brand-primary">الخطوة 2 من 2</p>
-          <h2 className="mt-1 text-2xl font-black text-brand-text">بيانات التوصيل</h2>
+          <p className="text-sm font-semibold text-brand-primary">
+            الخطوة 2 من 2
+          </p>
+          <h2 className="mt-1 text-2xl font-black text-brand-text">
+            بيانات التوصيل
+          </h2>
         </div>
         <Link
           href={`/${encodeURIComponent(tenantSlug)}/cart`}
@@ -214,11 +240,23 @@ export default function StorefrontCheckout({
             <p className="font-black text-brand-text">
               {itemCount > 0 ? `${itemCount} منتجات` : "طلب خاص"}
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">{deliveryAreaName}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {deliveryAreaName}
+            </p>
           </div>
           <strong className="text-brand-primary">{totalLabel}</strong>
         </div>
       </section>
+
+      {scheduledRequired ? (
+        <ScheduledDeliverySelector
+          availability={deliveryAvailability}
+          value={scheduledWindow}
+          isOpen={scheduleOpen}
+          onOpenChange={setScheduleOpen}
+          onChange={setScheduledWindow}
+        />
+      ) : null}
 
       <form
         action={formAction}
@@ -238,10 +276,9 @@ export default function StorefrontCheckout({
           trackCheckoutError({
             store: storeAnalytics,
             errorField: fieldMap[fieldName] ?? "server",
-            errorType:
-              (event.target as HTMLInputElement).validity.valueMissing
-                ? "required"
-                : "invalid_format",
+            errorType: (event.target as HTMLInputElement).validity.valueMissing
+              ? "required"
+              : "invalid_format",
           });
         }}
       >
@@ -264,12 +301,16 @@ export default function StorefrontCheckout({
 
         <section className="rounded-2xl border border-brand-border bg-white p-5 shadow-soft">
           <h3 className="font-black text-brand-text">لديك كود عميل؟</h3>
-          <p className="mt-1 text-sm text-muted-foreground">اكتب الكود ورقم الهاتف لاسترجاع بياناتك.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            اكتب الكود ورقم الهاتف لاسترجاع بياناتك.
+          </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <input
               type="text"
               value={accessCode}
-              onChange={(event) => setAccessCode(event.target.value.toUpperCase())}
+              onChange={(event) =>
+                setAccessCode(event.target.value.toUpperCase())
+              }
               placeholder="A7K-42Q9"
               dir="ltr"
               className="min-h-12 rounded-xl border border-brand-border px-3"
@@ -296,7 +337,11 @@ export default function StorefrontCheckout({
               {isLookingUp ? "جاري البحث…" : "استخدام الكود"}
             </button>
           </div>
-          {lookupMessage ? <p className="mt-2 text-sm font-semibold text-muted-foreground">{lookupMessage}</p> : null}
+          {lookupMessage ? (
+            <p className="mt-2 text-sm font-semibold text-muted-foreground">
+              {lookupMessage}
+            </p>
+          ) : null}
         </section>
 
         <section className="space-y-5 rounded-2xl border border-brand-border bg-white p-5 shadow-soft">
@@ -310,7 +355,11 @@ export default function StorefrontCheckout({
               autoComplete="name"
               className="mt-2 min-h-12 w-full rounded-xl border border-brand-border bg-brand-soft/20 px-4 text-base outline-none focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/15"
             />
-            {state.errors?.customer_name ? <span className="mt-1 block text-sm text-status-error">{state.errors.customer_name[0]}</span> : null}
+            {state.errors?.customer_name ? (
+              <span className="mt-1 block text-sm text-status-error">
+                {state.errors.customer_name[0]}
+              </span>
+            ) : null}
           </label>
 
           <label className="block text-sm font-bold text-brand-text">
@@ -325,7 +374,10 @@ export default function StorefrontCheckout({
               onBlur={() => {
                 if (phone.trim().length < 7) return;
                 startLookup(async () => {
-                  const result = await getPublicCustomerByPhoneAction({ slug: tenantSlug, phone });
+                  const result = await getPublicCustomerByPhoneAction({
+                    slug: tenantSlug,
+                    phone,
+                  });
                   if (result.success && result.data) setSuggestion(result.data);
                 });
               }}
@@ -333,13 +385,25 @@ export default function StorefrontCheckout({
               autoComplete="tel"
               className="mt-2 min-h-12 w-full rounded-xl border border-brand-border bg-brand-soft/20 px-4 text-base outline-none focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/15"
             />
-            {state.errors?.customer_phone ? <span className="mt-1 block text-sm text-status-error">{state.errors.customer_phone[0]}</span> : null}
+            {state.errors?.customer_phone ? (
+              <span className="mt-1 block text-sm text-status-error">
+                {state.errors.customer_phone[0]}
+              </span>
+            ) : null}
           </label>
 
           {suggestion ? (
             <div className="rounded-xl border border-brand-accent/30 bg-brand-soft/50 p-4">
-              <p className="text-sm font-bold text-brand-text">وجدنا بيانات محفوظة لهذا الرقم</p>
-              <button type="button" onClick={() => applyProfile(suggestion)} className="mt-3 min-h-11 rounded-lg bg-brand-primary px-4 text-sm font-bold text-white">استخدام البيانات</button>
+              <p className="text-sm font-bold text-brand-text">
+                وجدنا بيانات محفوظة لهذا الرقم
+              </p>
+              <button
+                type="button"
+                onClick={() => applyProfile(suggestion)}
+                className="mt-3 min-h-11 rounded-lg bg-brand-primary px-4 text-sm font-bold text-white"
+              >
+                استخدام البيانات
+              </button>
             </div>
           ) : null}
 
@@ -354,7 +418,11 @@ export default function StorefrontCheckout({
               placeholder="العمارة، الشارع، الدور…"
               className="mt-2 min-h-12 w-full rounded-xl border border-brand-border bg-brand-soft/20 px-4 text-base outline-none focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/15"
             />
-            {state.errors?.delivery_address ? <span className="mt-1 block text-sm text-status-error">{state.errors.delivery_address[0]}</span> : null}
+            {state.errors?.delivery_address ? (
+              <span className="mt-1 block text-sm text-status-error">
+                {state.errors.delivery_address[0]}
+              </span>
+            ) : null}
           </label>
 
           <label className="block text-sm font-bold text-brand-text">
@@ -369,23 +437,14 @@ export default function StorefrontCheckout({
           </label>
         </section>
 
-        {scheduledRequired ? (
-          <ScheduledDeliverySelector
-            availability={deliveryAvailability}
-            value={scheduledWindow}
-            isOpen={scheduleOpen}
-            onOpenChange={setScheduleOpen}
-            onChange={setScheduledWindow}
-          />
-        ) : null}
-
-        {(deliverySettings.instapay_account_number ||
-          deliverySettings.ewallet_account_number ||
-          deliverySettings.card_on_delivery_available) ? (
+        {deliverySettings.instapay_account_number ||
+        deliverySettings.ewallet_account_number ||
+        deliverySettings.card_on_delivery_available ? (
           <section className="rounded-2xl border border-brand-border bg-white p-5 shadow-soft">
             <h3 className="font-black text-brand-text">طرق الدفع المتاحة</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              يمكنك الدفع نقداً عند الاستلام أو التحويل باستخدام البيانات المتاحة.
+              يمكنك الدفع نقداً عند الاستلام أو التحويل باستخدام البيانات
+              المتاحة.
             </p>
             <div className="mt-4 space-y-3 text-sm">
               {deliverySettings.instapay_account_number ? (
@@ -395,7 +454,9 @@ export default function StorefrontCheckout({
                       <Send className="h-5 w-5" />
                     </div>
                     <div>
-                      <strong className="block text-base font-bold text-brand-text">InstaPay</strong>
+                      <strong className="block text-base font-bold text-brand-text">
+                        InstaPay
+                      </strong>
                       {deliverySettings.instapay_account_name ? (
                         <span className="mt-0.5 block text-xs font-medium text-muted-foreground">
                           {deliverySettings.instapay_account_name}
@@ -403,7 +464,10 @@ export default function StorefrontCheckout({
                       ) : null}
                     </div>
                   </div>
-                  <span className="inline-block rounded-lg border border-brand-border bg-white px-3 py-1.5 text-center text-sm font-bold tracking-wide text-brand-primary shadow-sm" dir="ltr">
+                  <span
+                    className="inline-block rounded-lg border border-brand-border bg-white px-3 py-1.5 text-center text-sm font-bold tracking-wide text-brand-primary shadow-sm"
+                    dir="ltr"
+                  >
                     {deliverySettings.instapay_account_number}
                   </span>
                 </div>
@@ -415,7 +479,9 @@ export default function StorefrontCheckout({
                       <Wallet className="h-5 w-5" />
                     </div>
                     <div>
-                      <strong className="block text-base font-bold text-brand-text">محفظة إلكترونية</strong>
+                      <strong className="block text-base font-bold text-brand-text">
+                        محفظة إلكترونية
+                      </strong>
                       {deliverySettings.ewallet_account_name ? (
                         <span className="mt-0.5 block text-xs font-medium text-muted-foreground">
                           {deliverySettings.ewallet_account_name}
@@ -423,7 +489,10 @@ export default function StorefrontCheckout({
                       ) : null}
                     </div>
                   </div>
-                  <span className="inline-block rounded-lg border border-brand-border bg-white px-3 py-1.5 text-center text-sm font-bold tracking-wide text-brand-primary shadow-sm" dir="ltr">
+                  <span
+                    className="inline-block rounded-lg border border-brand-border bg-white px-3 py-1.5 text-center text-sm font-bold tracking-wide text-brand-primary shadow-sm"
+                    dir="ltr"
+                  >
                     {deliverySettings.ewallet_account_number}
                   </span>
                 </div>
@@ -434,13 +503,19 @@ export default function StorefrontCheckout({
 
         {deliverySettings.card_on_delivery_available ? (
           <label className="flex min-h-14 items-center gap-3 rounded-xl border border-brand-border bg-white p-4 font-bold text-brand-text">
-            <input type="checkbox" name="card_on_delivery_requested" className="h-5 w-5 accent-brand-primary" />
+            <input
+              type="checkbox"
+              name="card_on_delivery_requested"
+              className="h-5 w-5 accent-brand-primary"
+            />
             أحتاج ماكينة دفع عند الاستلام
           </label>
         ) : null}
 
         {state.message && !state.success ? (
-          <p className="rounded-xl border border-status-error/20 bg-status-error/10 p-4 text-sm font-bold text-status-error">{state.message}</p>
+          <p className="rounded-xl border border-status-error/20 bg-status-error/10 p-4 text-sm font-bold text-status-error">
+            {state.message}
+          </p>
         ) : null}
 
         {orderingUnavailable ? (

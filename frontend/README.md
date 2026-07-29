@@ -73,6 +73,17 @@ pnpm -C frontend type-check
 
 `pnpm -C frontend lint` runs ESLint and TypeScript checking.
 
+### Testing Policy
+
+This frontend has no tests and must not gain any. Do not add `*.spec.ts(x)` /
+`*.test.ts(x)` files or `__tests__/` directories, do not add test frameworks or
+runners (jest, vitest, playwright, cypress, testing-library, and similar) to
+`package.json`, and do not add `test`/`coverage` scripts or CI test steps.
+
+Lint and type-check are the automated checks here. Verify behaviour by
+exercising the running application. See the "Testing policy" section in the
+repository root `AGENTS.md`.
+
 ## Main Routes
 
 - `/`: Arabic landing page.

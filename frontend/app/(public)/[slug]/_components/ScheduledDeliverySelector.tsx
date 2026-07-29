@@ -7,6 +7,7 @@ import type {
 } from "@/types/models/delivery";
 import { CalendarClock, Check, ChevronLeft, Clock3 } from "lucide-react";
 import { useId, useRef, useState } from "react";
+import { formatArabicTime as formatTime } from "@/lib/delivery-configuration";
 
 const CAIRO_TIME_ZONE = "Africa/Cairo";
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -20,12 +21,6 @@ const fromMinutes = (value: number) => {
   const hour = Math.floor(value / 60);
   const minute = value % 60;
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-};
-
-const formatTime = (value: string) => {
-  const [hourValue, minutes] = value.split(":");
-  const hour = Number(hourValue);
-  return `${hour % 12 || 12}:${minutes} ${hour >= 12 ? "مساءً" : "صباحاً"}`;
 };
 
 const formatDate = (value: string) =>
