@@ -38,7 +38,11 @@ import {
   ImportProductSpreadsheetDto,
   PreviewProductImportDto,
 } from 'src/products/dto/product-import.dto';
-import { productSpreadsheetFileFilter } from 'src/common/utils/file-filters';
+import {
+  imageFileFilter,
+  productSpreadsheetFileFilter,
+} from 'src/common/utils/file-filters';
+import { UploadFile } from 'src/common/decorators/upload-file.decorator';
 import { AdminActorContext } from './admin-managed.types';
 import { CurrentAdminActor } from './decorators/current-admin-actor.decorator';
 import {
@@ -150,15 +154,21 @@ export class AdminManagedProductsController {
   @RequireManagedFeature('product_write')
   @RequireManagedPermissions(ADMIN_MANAGED_PERMISSIONS.ProductsCreate)
   @ApiOperation({ summary: 'Create managed tenant product' })
+  @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: CreateProductDto })
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
   createProduct(
     @CurrentAdminActor() actor: AdminActorContext,
     @Body() dto: CreateProductDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.productsService.createForTenantAsAdmin(
       actor.tenantId,
       dto,
-      undefined,
+      file,
       actor,
     );
   }
@@ -297,13 +307,24 @@ export class AdminManagedProductsController {
   @RequireManagedFeature('product_write')
   @RequireManagedPermissions(ADMIN_MANAGED_PERMISSIONS.ProductsUpdate)
   @ApiOperation({ summary: 'Update managed product details' })
+  @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: UpdateManagedProductDetailsDto })
+  @UploadFile('file', {
+    fileFilter: imageFileFilter,
+    limits: { fileSize: CONSTANTS.UPLOAD.MAX_IMAGE_SIZE_BYTES },
+  })
   updateDetails(
     @CurrentAdminActor() actor: AdminActorContext,
     @Param('productId', ParseIntPipe) productId: number,
     @Body() dto: UpdateManagedProductDetailsDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.productsService.updateForManagedAdmin(actor, productId, dto);
+    return this.productsService.updateForManagedAdmin(
+      actor,
+      productId,
+      dto,
+      file,
+    );
   }
 
   /** Updates only the current product price. */

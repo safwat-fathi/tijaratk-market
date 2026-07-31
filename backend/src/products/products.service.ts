@@ -312,15 +312,10 @@ export class ProductsService {
     actor: ProductActivityActor & { tenantId: number },
     productId: number,
     updateProductDto: UpdateProductDto,
+    file?: Express.Multer.File,
   ): Promise<Product> {
     return this.runAsTenantForAdmin(actor.tenantId, () =>
-      this.update(
-        productId,
-        actor.tenantId,
-        updateProductDto,
-        undefined,
-        actor,
-      ),
+      this.update(productId, actor.tenantId, updateProductDto, file, actor),
     );
   }
 

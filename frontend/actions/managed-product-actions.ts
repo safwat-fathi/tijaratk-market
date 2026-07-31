@@ -10,7 +10,7 @@ import type {
   ProductImportSummary,
 } from "@/types/models/product-import";
 
-type ManagedProductCategoryMoveActionResult = {
+type ManagedProductActionResult = {
   success: boolean;
   message: string;
 };
@@ -23,6 +23,27 @@ type ManagedProductBulkUpdatePayload = {
 };
 
 const positiveIdSchema = z.number().int().positive();
+const productNameSchema = z.string().trim().min(1).max(120);
+const productPriceSchema = z.coerce.number().positive();
+
+const INVALID_PRODUCT_NAME_MESSAGE = "اسم المنتج مطلوب (حتى 120 حرفًا)";
+const INVALID_PRODUCT_PRICE_MESSAGE = "أدخل سعرًا صحيحًا أكبر من صفر";
+
+/**
+ * Converts a thrown action error into an error result. Next redirects (issued
+ * when the management session expires) must keep propagating.
+ */
+const toFailureResult = (
+  error: unknown,
+  fallback: string,
+): ManagedProductActionResult => {
+  if (isNextRedirectError(error)) {
+    throw error;
+  }
+
+  console.error(fallback, error);
+  return { success: false, message: fallback };
+};
 
 const parseNullableString = (value: FormDataEntryValue | null) => {
   if (typeof value !== "string") {
@@ -30,6 +51,83 @@ const parseNullableString = (value: FormDataEntryValue | null) => {
   }
 
   return value.trim() || null;
+};
+
+const PRODUCT_IMAGE_SIZE_MESSAGE = "حجم الصورة كبير. الحد الأقصى 15 ميجابايت.";
+const PRODUCT_IMAGE_FORMAT_MESSAGE =
+  "صيغة الصورة غير مدعومة. استخدم JPG أو PNG أو WEBP أو HEIC أو HEIF.";
+const PRODUCT_IMAGE_TIMEOUT_MESSAGE =
+  "استغرق رفع/معالجة الصورة وقتًا أطول من المتوقع. حاول مرة أخرى.";
+
+/** Maps backend upload failures to the Arabic copy used across product screens. */
+const localizeProductImageError = (
+  message: string | undefined,
+  fallback: string,
+): string => {
+  const normalized = message?.trim();
+  if (!normalized) return fallback;
+
+  if (
+    /(unsupported image format|unsupported codec|صيغة الصورة غير مدعومة)/i.test(
+      normalized,
+    )
+  ) {
+    return PRODUCT_IMAGE_FORMAT_MESSAGE;
+  }
+
+  if (
+    /(limit_file_size|payload too large|entity too large|file too large|حجم الصورة|exceed.*(?:size|limit))/i.test(
+      normalized,
+    )
+  ) {
+    return PRODUCT_IMAGE_SIZE_MESSAGE;
+  }
+
+  if (
+    /(timeout|timed out|aborterror|operation was aborted|signal is aborted)/i.test(
+      normalized,
+    )
+  ) {
+    return PRODUCT_IMAGE_TIMEOUT_MESSAGE;
+  }
+
+  return normalized;
+};
+
+/** Returns the selected product image only when the picker produced a real file. */
+const readImageFile = (formData: FormData): File | null => {
+  const file = formData.get("file");
+  return file instanceof File && file.size > 0 ? file : null;
+};
+
+const isImageCleared = (formData: FormData): boolean =>
+  formData.get("clear_image") === "true";
+
+/** Builds the multipart body accepted by the managed product create endpoint. */
+const buildManagedProductFormData = ({
+  name,
+  currentPrice,
+  category,
+  isAvailable,
+  imageFile,
+}: {
+  name: string;
+  currentPrice?: number;
+  category?: string;
+  isAvailable: boolean;
+  imageFile: File;
+}): FormData => {
+  const payload = new FormData();
+  payload.set("name", name);
+  if (typeof currentPrice === "number") {
+    payload.set("current_price", String(currentPrice));
+  }
+  if (category) {
+    payload.set("category", category);
+  }
+  payload.set("is_available", String(isAvailable));
+  payload.set("file", imageFile);
+  return payload;
 };
 
 const revalidateManagedProductPaths = async (tenantId: number) => {
@@ -80,22 +178,59 @@ const localizeProductImportError = (
 export async function createManagedProductAction(
   tenantId: number,
   formData: FormData,
-): Promise<void> {
-  positiveIdSchema.parse(tenantId);
-  const name = z.string().trim().min(1).max(120).parse(formData.get("name"));
-  const priceValue = String(formData.get("current_price") || "").trim();
-  const currentPrice = priceValue ? Number(priceValue) : undefined;
-  const category = String(formData.get("category") || "").trim() || undefined;
-  const response = await adminService.createManagedProduct(tenantId, {
-    name,
-    current_price: currentPrice,
-    category,
-    is_available: true,
-  });
-  if (!response.success) {
-    throw new Error(response.message || "تعذر إضافة المنتج");
+): Promise<ManagedProductActionResult> {
+  const parsedName = productNameSchema.safeParse(formData.get("name"));
+  if (!parsedName.success) {
+    return { success: false, message: INVALID_PRODUCT_NAME_MESSAGE };
   }
-  await revalidateManagedProductPaths(tenantId);
+
+  const priceValue = String(formData.get("current_price") || "").trim();
+  const parsedPrice = priceValue
+    ? productPriceSchema.safeParse(priceValue)
+    : null;
+  if (parsedPrice && !parsedPrice.success) {
+    return { success: false, message: INVALID_PRODUCT_PRICE_MESSAGE };
+  }
+
+  try {
+    positiveIdSchema.parse(tenantId);
+    const name = parsedName.data;
+    const currentPrice = parsedPrice?.data;
+    const category = String(formData.get("category") || "").trim() || undefined;
+    const imageFile = readImageFile(formData);
+
+    const response = await adminService.createManagedProduct(
+      tenantId,
+      imageFile
+        ? buildManagedProductFormData({
+            name,
+            currentPrice,
+            category,
+            isAvailable: true,
+            imageFile,
+          })
+        : {
+            name,
+            current_price: currentPrice,
+            category,
+            is_available: true,
+          },
+    );
+    if (!response.success) {
+      return {
+        success: false,
+        message: localizeProductImageError(
+          response.message,
+          "تعذر إضافة المنتج",
+        ),
+      };
+    }
+
+    await revalidateManagedProductPaths(tenantId);
+    return { success: true, message: "تم إضافة المنتج" };
+  } catch (error) {
+    return toFailureResult(error, "تعذر إضافة المنتج");
+  }
 }
 
 export async function previewManagedProductImportAction(
@@ -183,64 +318,123 @@ export async function importManagedProductSpreadsheetAction(
 export async function addManagedCatalogProductAction(
   tenantId: number,
   catalogItemId: number,
-): Promise<void> {
-  positiveIdSchema.parse(tenantId);
-  positiveIdSchema.parse(catalogItemId);
-  const response = await adminService.addManagedProductFromCatalog(
-    tenantId,
-    catalogItemId,
-  );
-  if (!response.success) {
-    throw new Error(response.message || "تعذر إضافة منتج الكتالوج");
+): Promise<ManagedProductActionResult> {
+  try {
+    positiveIdSchema.parse(tenantId);
+    positiveIdSchema.parse(catalogItemId);
+    const response = await adminService.addManagedProductFromCatalog(
+      tenantId,
+      catalogItemId,
+    );
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر إضافة منتج الكتالوج",
+      };
+    }
+
+    await revalidateManagedProductPaths(tenantId);
+    return { success: true, message: "تم إضافة المنتج من الكتالوج" };
+  } catch (error) {
+    return toFailureResult(error, "تعذر إضافة منتج الكتالوج");
   }
-  await revalidateManagedProductPaths(tenantId);
 }
 
 export async function updateManagedProductPriceAction(
   tenantId: number,
   productId: number,
   formData: FormData,
-): Promise<void> {
-  const currentPrice = z.coerce
-    .number()
-    .positive()
-    .parse(formData.get("current_price"));
-  const response = await adminService.updateManagedProduct(
-    tenantId,
-    productId,
-    "price",
-    { current_price: currentPrice },
+): Promise<ManagedProductActionResult> {
+  const parsedPrice = productPriceSchema.safeParse(
+    formData.get("current_price"),
   );
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تحديث السعر");
+  if (!parsedPrice.success) {
+    return { success: false, message: INVALID_PRODUCT_PRICE_MESSAGE };
   }
-  await revalidateManagedProductPaths(tenantId);
+
+  try {
+    const response = await adminService.updateManagedProduct(
+      tenantId,
+      productId,
+      "price",
+      { current_price: parsedPrice.data },
+    );
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحديث السعر",
+      };
+    }
+
+    await revalidateManagedProductPaths(tenantId);
+    return { success: true, message: "تم تحديث السعر" };
+  } catch (error) {
+    return toFailureResult(error, "تعذر تحديث السعر");
+  }
 }
 
 export async function updateManagedProductDetailsAction(
   tenantId: number,
   productId: number,
   formData: FormData,
-): Promise<void> {
-  const name = z.string().trim().min(1).max(120).parse(formData.get("name"));
-  const category = parseNullableString(formData.get("category"));
-  const response = await adminService.updateManagedProduct(
-    tenantId,
-    productId,
-    "details",
-    { name, ...(category ? { category } : {}) },
-  );
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تحديث بيانات المنتج");
+): Promise<ManagedProductActionResult> {
+  const parsedName = productNameSchema.safeParse(formData.get("name"));
+  if (!parsedName.success) {
+    return { success: false, message: INVALID_PRODUCT_NAME_MESSAGE };
   }
-  await revalidateManagedProductPaths(tenantId);
+
+  try {
+    const name = parsedName.data;
+    const category = parseNullableString(formData.get("category"));
+    const imageFile = readImageFile(formData);
+    const clearImage = isImageCleared(formData);
+
+    let payload: FormData | Record<string, unknown>;
+    if (imageFile || clearImage) {
+      const multipartPayload = new FormData();
+      multipartPayload.set("name", name);
+      if (category) {
+        multipartPayload.set("category", category);
+      }
+      // A file always wins over the clear checkbox: that combination is a replace.
+      if (imageFile) {
+        multipartPayload.set("file", imageFile);
+      } else {
+        multipartPayload.set("image_url", "");
+      }
+      payload = multipartPayload;
+    } else {
+      payload = { name, ...(category ? { category } : {}) };
+    }
+
+    const response = await adminService.updateManagedProduct(
+      tenantId,
+      productId,
+      "details",
+      payload,
+    );
+    if (!response.success) {
+      return {
+        success: false,
+        message: localizeProductImageError(
+          response.message,
+          "تعذر تحديث بيانات المنتج",
+        ),
+      };
+    }
+
+    await revalidateManagedProductPaths(tenantId);
+    return { success: true, message: "تم حفظ البيانات الأساسية" };
+  } catch (error) {
+    return toFailureResult(error, "تعذر تحديث بيانات المنتج");
+  }
 }
 
 export async function moveManagedProductCategoryAction(
   tenantId: number,
   productId: number,
   categoryValue: string,
-): Promise<ManagedProductCategoryMoveActionResult> {
+): Promise<ManagedProductActionResult> {
   try {
     const normalizedTenantId = positiveIdSchema.parse(tenantId);
     const normalizedProductId = positiveIdSchema.parse(productId);
@@ -292,11 +486,10 @@ export async function moveManagedProductCategoryAction(
     await revalidateManagedProductPaths(normalizedTenantId);
     return { success: true, message: "تم نقل المنتج إلى التصنيف المحدد" };
   } catch (error) {
-    console.error("Move managed product category failed:", error);
-    return {
-      success: false,
-      message: "تعذر نقل المنتج إلى التصنيف المحدد. حاول مرة أخرى.",
-    };
+    return toFailureResult(
+      error,
+      "تعذر نقل المنتج إلى التصنيف المحدد. حاول مرة أخرى.",
+    );
   }
 }
 
@@ -304,40 +497,64 @@ export async function updateManagedProductAvailabilityAction(
   tenantId: number,
   productId: number,
   isAvailable: boolean,
-): Promise<void> {
-  const response = await adminService.updateManagedProduct(
-    tenantId,
-    productId,
-    "availability",
-    { is_available: isAvailable },
-  );
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تحديث الإتاحة");
+): Promise<ManagedProductActionResult> {
+  try {
+    const response = await adminService.updateManagedProduct(
+      tenantId,
+      productId,
+      "availability",
+      { is_available: isAvailable },
+    );
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحديث الإتاحة",
+      };
+    }
+
+    await revalidateManagedProductPaths(tenantId);
+    return {
+      success: true,
+      message: isAvailable ? "تم إتاحة المنتج" : "تم إخفاء المنتج",
+    };
+  } catch (error) {
+    return toFailureResult(error, "تعذر تحديث الإتاحة");
   }
-  await revalidateManagedProductPaths(tenantId);
 }
 
 export async function updateManagedProductStatusAction(
   tenantId: number,
   productId: number,
   status: "active" | "archived",
-): Promise<void> {
-  const response = await adminService.updateManagedProduct(
-    tenantId,
-    productId,
-    "status",
-    { status },
-  );
-  if (!response.success) {
-    throw new Error(response.message || "تعذر تحديث حالة المنتج");
+): Promise<ManagedProductActionResult> {
+  try {
+    const response = await adminService.updateManagedProduct(
+      tenantId,
+      productId,
+      "status",
+      { status },
+    );
+    if (!response.success) {
+      return {
+        success: false,
+        message: response.message || "تعذر تحديث حالة المنتج",
+      };
+    }
+
+    await revalidateManagedProductPaths(tenantId);
+    return {
+      success: true,
+      message: status === "archived" ? "تم أرشفة المنتج" : "تم استعادة المنتج",
+    };
+  } catch (error) {
+    return toFailureResult(error, "تعذر تحديث حالة المنتج");
   }
-  await revalidateManagedProductPaths(tenantId);
 }
 
 export async function bulkUpdateManagedProductsAction(
   tenantId: number,
   payload: ManagedProductBulkUpdatePayload,
-): Promise<{ success: boolean; message?: string }> {
+): Promise<ManagedProductActionResult> {
   try {
     const response = await adminService.bulkUpdateManagedProducts(
       tenantId,
@@ -350,12 +567,8 @@ export async function bulkUpdateManagedProductsAction(
       };
     }
     await revalidateManagedProductPaths(tenantId);
-    return { success: true };
+    return { success: true, message: "تم تنفيذ الإجراء على المنتجات المحددة" };
   } catch (error) {
-    return {
-      success: false,
-      message:
-        error instanceof Error ? error.message : "حدث خطأ غير متوقع",
-    };
+    return toFailureResult(error, "تعذر تنفيذ الإجراء المجمع");
   }
 }

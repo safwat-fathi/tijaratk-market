@@ -640,12 +640,18 @@ class AdminApiService extends HttpService {
 		);
 	}
 
-	public async createManagedProduct(tenantId: number, payload: AdminProductPayload) {
+	public async createManagedProduct(
+		tenantId: number,
+		payload: FormData | AdminProductPayload,
+	) {
 		return this.post<Product>(
 			`managed-tenants/${tenantId}/products`,
 			payload,
 			undefined,
-			ADMIN_AUTH_OPTIONS,
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: payload instanceof FormData ? 30000 : undefined,
+			},
 		);
 	}
 
@@ -692,13 +698,16 @@ class AdminApiService extends HttpService {
 		tenantId: number,
 		productId: number,
 		section: "details" | "price" | "availability" | "status",
-		payload: Record<string, unknown>,
+		payload: FormData | Record<string, unknown>,
 	) {
 		return this.patch<Product>(
 			`managed-tenants/${tenantId}/products/${productId}/${section}`,
 			payload,
 			undefined,
-			ADMIN_AUTH_OPTIONS,
+			{
+				...ADMIN_AUTH_OPTIONS,
+				timeoutMs: payload instanceof FormData ? 30000 : undefined,
+			},
 		);
 	}
 

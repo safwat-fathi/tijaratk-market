@@ -17,6 +17,21 @@ import {
 } from "@/actions/managed-product-actions";
 import { AdminBulkEssentialsButton } from "../../../_components/AdminBulkEssentialsButton";
 import ProductImportWizard from "./ProductImportWizard";
+import ManagedProductImageField from "./ManagedProductImageField";
+import ImageThumbnail from "@/components/ui/ImageThumbnail";
+import Toast from "@/components/ui/Toast";
+import { resolveImageUrl } from "@/app/(dashboard)/merchant/(features)/products/new/_utils/product-onboarding";
+
+type ToastState = {
+  id: number;
+  message: string;
+  type: "success" | "error";
+};
+
+type ManagedProductActionResult = {
+  success: boolean;
+  message: string;
+};
 
 type ProductsClientViewProps = {
   tenantId: number;
@@ -49,8 +64,14 @@ export default function ProductsClientView({
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [isProductImportOpen, setIsProductImportOpen] = useState(false);
   const [addTab, setAddTab] = useState<"catalog" | "manual">("catalog");
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  // Derived from the freshly revalidated list so the sheet never renders a
+  // stale snapshot of the product being edited.
+  const editingProduct =
+    productsData.find((product) => product.id === editingProductId) ?? null;
+
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -102,24 +123,48 @@ export default function ProductsClientView({
     setSelectedIds(newSet);
   };
 
-  const handleBulkAction = async (payload: any) => {
-    if (selectedIds.size === 0) return;
+  const runAction = (
+    run: () => Promise<ManagedProductActionResult>,
+    onSuccess?: () => void,
+  ) => {
     startTransition(async () => {
-      const result = await bulkUpdateManagedProductsAction(tenantId, {
-        ids: Array.from(selectedIds),
-        ...payload,
+      const result = await run();
+      setToast({
+        id: Date.now(),
+        message: result.message,
+        type: result.success ? "success" : "error",
       });
       if (result.success) {
-        setSelectedIds(new Set());
-        setIsCategoryModalOpen(false);
-      } else {
-        alert(result.message);
+        onSuccess?.();
       }
     });
   };
 
+  const handleBulkAction = async (payload: any) => {
+    if (selectedIds.size === 0) return;
+    runAction(
+      () =>
+        bulkUpdateManagedProductsAction(tenantId, {
+          ids: Array.from(selectedIds),
+          ...payload,
+        }),
+      () => {
+        setSelectedIds(new Set());
+        setIsCategoryModalOpen(false);
+      },
+    );
+  };
+
   return (
     <div className="space-y-6 relative">
+      {toast ? (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      ) : null}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">منتجات المتجر</h1>
@@ -273,8 +318,26 @@ export default function ProductsClientView({
                     </td>
                   )}
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-gray-900">{product.name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{product.category || "بدون تصنيف"}</p>
+                    <div className="flex items-center gap-3">
+                      <ImageThumbnail
+                        src={resolveImageUrl(product.image_url)}
+                        alt={product.name}
+                        width={40}
+                        height={40}
+                        sizes="40px"
+                        disableEnlarge={true}
+                        imageClassName="h-10 w-10 rounded-md object-cover ring-1 ring-gray-200"
+                        fallback={
+                          <span className="flex h-10 w-10 items-center justify-center rounded-md bg-gray-100 text-xs text-gray-400">
+                            🛒
+                          </span>
+                        }
+                      />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900">{product.name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{product.category || "بدون تصنيف"}</p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-700">
                     {product.current_price != null ? `${product.current_price} ج.م` : "-"}
@@ -292,23 +355,41 @@ export default function ProductsClientView({
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-2">
                       {permissions.has("products.update") && (
-                        <Button onClick={() => setEditingProduct(product)} size="sm" variant="outline" className="h-8 text-xs bg-white">
+                        <Button onClick={() => setEditingProductId(product.id)} size="sm" variant="outline" className="h-8 text-xs bg-white">
                           تعديل
                         </Button>
                       )}
                       {permissions.has("products.update_availability") && (
-                        <form action={updateManagedProductAvailabilityAction.bind(null, tenantId, product.id, !product.is_available)}>
-                          <Button type="submit" size="sm" variant="outline" className="h-8 text-xs bg-white">
-                            {product.is_available ? "إخفاء" : "إتاحة"}
-                          </Button>
-                        </form>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs bg-white"
+                          disabled={isPending}
+                          onClick={() =>
+                            runAction(() =>
+                              updateManagedProductAvailabilityAction(tenantId, product.id, !product.is_available),
+                            )
+                          }
+                        >
+                          {product.is_available ? "إخفاء" : "إتاحة"}
+                        </Button>
                       )}
                       {permissions.has("products.archive") && (
-                        <form action={updateManagedProductStatusAction.bind(null, tenantId, product.id, product.status === "archived" ? "active" : "archived")}>
-                          <Button type="submit" size="sm" variant="outline" className="h-8 text-xs bg-white">
-                            {product.status === "archived" ? "استعادة" : "أرشفة"}
-                          </Button>
-                        </form>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs bg-white"
+                          disabled={isPending}
+                          onClick={() =>
+                            runAction(() =>
+                              updateManagedProductStatusAction(tenantId, product.id, product.status === "archived" ? "active" : "archived"),
+                            )
+                          }
+                        >
+                          {product.status === "archived" ? "استعادة" : "أرشفة"}
+                        </Button>
                       )}
                     </div>
                   </td>
@@ -437,9 +518,18 @@ export default function ProductsClientView({
                     <p className="text-sm font-semibold text-gray-900">{item.name}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{item.category} · {item.price ? `${item.price} ج.م` : "بدون سعر"}</p>
                   </div>
-                  <form action={addManagedCatalogProductAction.bind(null, tenantId, item.id)}>
-                    <Button type="submit" size="sm" variant="outline" className="h-8">إضافة</Button>
-                  </form>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    disabled={isPending}
+                    onClick={() =>
+                      runAction(() => addManagedCatalogProductAction(tenantId, item.id))
+                    }
+                  >
+                    إضافة
+                  </Button>
                 </div>
               ))}
               {catalogData.length === 0 && <p className="text-sm text-center text-gray-500 py-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">لا توجد عناصر.</p>}
@@ -468,7 +558,22 @@ export default function ProductsClientView({
             )}
           </div>
         ) : (
-          <form action={createManagedProductAction.bind(null, tenantId)} className="space-y-4 pt-2">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = event.currentTarget;
+              const formData = new FormData(form);
+              runAction(
+                () => createManagedProductAction(tenantId, formData),
+                () => {
+                  form.reset();
+                  setIsAddProductOpen(false);
+                },
+              );
+            }}
+            encType="multipart/form-data"
+            className="space-y-4 pt-2"
+          >
             <div className="space-y-1">
               <label className="text-sm font-medium text-gray-700">اسم المنتج</label>
               <input name="name" required maxLength={120} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-accent/50" />
@@ -481,7 +586,10 @@ export default function ProductsClientView({
               <label className="text-sm font-medium text-gray-700">السعر (ج.م)</label>
               <input name="current_price" type="number" min="0.01" step="0.01" className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-accent/50" />
             </div>
-            <Button type="submit" className="w-full">حفظ المنتج</Button>
+            <ManagedProductImageField key={isAddProductOpen ? "open" : "closed"} />
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? "جاري الحفظ..." : "حفظ المنتج"}
+            </Button>
           </form>
         )}
       </BottomSheet>
@@ -489,28 +597,56 @@ export default function ProductsClientView({
       {/* Edit Product Bottom Sheet */}
       <BottomSheet
         isOpen={!!editingProduct}
-        onClose={() => setEditingProduct(null)}
+        onClose={() => setEditingProductId(null)}
         title="تعديل المنتج"
       >
         {editingProduct && (
           <div className="space-y-6 pt-2">
-            <form action={updateManagedProductDetailsAction.bind(null, tenantId, editingProduct.id)} className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
+            {/* Keyed on the fields each form owns so the uncontrolled inputs
+                re-seed from the server once a save lands. */}
+            <form
+              key={`details-${editingProduct.id}-${editingProduct.name}-${editingProduct.image_url ?? ""}`}
+              onSubmit={(event) => {
+                event.preventDefault();
+                const formData = new FormData(event.currentTarget);
+                runAction(() =>
+                  updateManagedProductDetailsAction(tenantId, editingProduct.id, formData),
+                );
+              }}
+              encType="multipart/form-data"
+              className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100"
+            >
               <h3 className="font-semibold text-sm text-gray-900 mb-2">البيانات الأساسية</h3>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-gray-600">اسم المنتج</label>
                 <input name="name" required maxLength={120} defaultValue={editingProduct.name} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/50" />
               </div>
-              <Button type="submit" size="sm" className="w-full mt-2">حفظ البيانات الأساسية</Button>
+              <ManagedProductImageField currentImageUrl={editingProduct.image_url} />
+              <Button type="submit" size="sm" className="w-full mt-2" disabled={isPending}>
+                {isPending ? "جاري الحفظ..." : "حفظ البيانات الأساسية"}
+              </Button>
             </form>
 
             {permissions.has("products.update_price") && (
-              <form action={updateManagedProductPriceAction.bind(null, tenantId, editingProduct.id)} className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <form
+                key={`price-${editingProduct.id}-${editingProduct.current_price ?? ""}`}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const formData = new FormData(event.currentTarget);
+                  runAction(() =>
+                    updateManagedProductPriceAction(tenantId, editingProduct.id, formData),
+                  );
+                }}
+                className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-100"
+              >
                 <h3 className="font-semibold text-sm text-gray-900 mb-2">تعديل السعر</h3>
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-gray-600">السعر الحالي (ج.م)</label>
                   <input name="current_price" type="number" min="0.01" step="0.01" required defaultValue={editingProduct.current_price == null ? "" : String(editingProduct.current_price)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/50" />
                 </div>
-                <Button type="submit" size="sm" className="w-full mt-2">حفظ السعر</Button>
+                <Button type="submit" size="sm" className="w-full mt-2" disabled={isPending}>
+                  {isPending ? "جاري الحفظ..." : "حفظ السعر"}
+                </Button>
               </form>
             )}
           </div>
