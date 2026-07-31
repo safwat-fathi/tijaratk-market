@@ -126,13 +126,10 @@ export default function CustomerAccessOrdersLookup({
       order?.total !== null && order?.total !== undefined
         ? formatCurrency(Number(order.total) || 0)
         : "يتم تأكيد السعر";
-    const isZoneOrder =
-      Boolean(order?.zone_storefront) || slug.startsWith("market:");
-    const reorderBase = isZoneOrder
-      ? order?.zone_storefront?.reorder_url ?? null
-      : slug
-        ? `/${slug}`
-        : null;
+    // Retired central-zone orders were tracked under a "market:<zone>" sentinel
+    // slug and have no storefront left to reorder from.
+    const reorderBase =
+      slug && !slug.startsWith("market:") ? `/${slug}` : null;
 
     return (
       <div

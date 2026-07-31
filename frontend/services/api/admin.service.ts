@@ -19,13 +19,6 @@ import type {
 	AdminAuditLogsResponse,
 	GetAdminAuditLogsParams,
 } from "@/types/models/admin-audit-log";
-import type {
-	AdminZoneStorefront,
-	EligibleZoneMerchant,
-	ManagedZoneDispatchContext,
-	ZoneEssentialCatalogSyncResult,
-	ZoneOrderDispatch,
-} from "@/types/models/zone-storefront";
 
 type AdminLoginPayload = {
 	phone: string;
@@ -184,13 +177,6 @@ export type AdminTenant = {
 	directory_profile?: AdminTenantDirectoryProfile | null;
 	tenant_delivery_areas?: AdminTenantDeliveryArea[];
 	cancellation_policy?: AdminTenantCancellationPolicy;
-	operated_zone_storefront?: {
-		id: number;
-		name: string;
-		slug: string;
-		is_active: boolean;
-		area: Pick<AdminDirectoryArea, "id" | "name_ar" | "name_en" | "slug">;
-	} | null;
 };
 
 export type AdminPlan = {
@@ -423,10 +409,7 @@ export type AdminManagedPermission =
 	| "orders.update_pricing"
 	| "orders.manage_replacements"
 	| "customers.read_limited"
-	| "activity_logs.read"
-	| "dispatches.read"
-	| "dispatches.assign"
-	| "dispatches.cancel";
+	| "activity_logs.read";
 
 export type AdminProfile = {
 	id: number;
@@ -466,7 +449,6 @@ export type AdminManagementSession = {
 		name: string;
 		slug: string;
 		status: string;
-		operated_zone_storefront?: { id: number; slug: string } | null;
 	};
 };
 
@@ -791,148 +773,6 @@ class AdminApiService extends HttpService {
 		return this.get<{ items: import("@/types/models/activity-log").ActivityLog[]; next_cursor: number | null }>(
 			`managed-tenants/${tenantId}/activity-logs`,
 			params,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async getZones() {
-		return this.get<AdminZoneStorefront[]>("zones", undefined, ADMIN_AUTH_OPTIONS);
-	}
-
-	public async getZone(zoneId: number) {
-		return this.get<AdminZoneStorefront>(`zones/${zoneId}`, undefined, ADMIN_AUTH_OPTIONS);
-	}
-
-	public async getEligibleZoneMerchants(zoneId: number) {
-		return this.get<EligibleZoneMerchant[]>(
-			`zones/${zoneId}/eligible-merchants`,
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async syncZoneEssentialCatalog(zoneId: number) {
-		return this.post<ZoneEssentialCatalogSyncResult>(
-			`zones/${zoneId}/catalog/sync-essentials`,
-			{},
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async createZone(payload: {
-		name: string;
-		slug: string;
-		area_id: number;
-		category: "grocery" | "pharmacy";
-		operations_phone: string;
-		delivery_fee?: number;
-	}) {
-		return this.post<AdminZoneStorefront>(
-			"zones",
-			payload,
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async updateZoneActivation(zoneId: number, isActive: boolean) {
-		return this.patch<AdminZoneStorefront>(
-			`zones/${zoneId}/activation`,
-			{ is_active: isActive },
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async updateZoneDeliveryFees(
-		zoneId: number,
-		payload: {
-			delivery_areas: Array<{ area_id: number; delivery_fee: number }>;
-		},
-	) {
-		return this.patch<AdminZoneStorefront>(
-			`zones/${zoneId}/delivery-fees`,
-			payload,
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async updateZoneOperatingHours(
-		zoneId: number,
-		payload: { delivery_starts_at: string; delivery_ends_at: string },
-	) {
-		return this.patch<AdminZoneStorefront>(
-			`zones/${zoneId}/operating-hours`,
-			payload,
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async upsertZoneMerchant(
-		zoneId: number,
-		payload: { tenant_id: number; priority?: number; is_active?: boolean },
-	) {
-		return this.post<AdminZoneStorefront>(
-			`zones/${zoneId}/merchants`,
-			payload,
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async getManagedZoneDispatches(tenantId: number, status?: string) {
-		return this.get<ZoneOrderDispatch[]>(
-			`managed-tenants/${tenantId}/zone-dispatches`,
-			status ? { status } : undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async getManagedZoneDispatchContext(tenantId: number) {
-		return this.get<ManagedZoneDispatchContext>(
-			`managed-tenants/${tenantId}/zone-dispatches/context`,
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async getManagedZoneDispatch(tenantId: number, dispatchId: number) {
-		return this.get<ZoneOrderDispatch>(
-			`managed-tenants/${tenantId}/zone-dispatches/${dispatchId}`,
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async assignManagedZoneDispatch(
-		tenantId: number,
-		dispatchId: number,
-		payload: {
-			target_tenant_id: number;
-			expected_version: number;
-			internal_notes?: string;
-		},
-	) {
-		return this.post<ZoneOrderDispatch>(
-			`managed-tenants/${tenantId}/zone-dispatches/${dispatchId}/assign`,
-			payload,
-			undefined,
-			ADMIN_AUTH_OPTIONS,
-		);
-	}
-
-	public async cancelManagedZoneDispatch(
-		tenantId: number,
-		dispatchId: number,
-		payload: { expected_version: number; reason: string },
-	) {
-		return this.post<ZoneOrderDispatch>(
-			`managed-tenants/${tenantId}/zone-dispatches/${dispatchId}/cancel`,
-			payload,
-			undefined,
 			ADMIN_AUTH_OPTIONS,
 		);
 	}

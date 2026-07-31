@@ -2,16 +2,15 @@ import { formatArabicInteger } from "@/lib/utils/number";
 import { OrderStatus } from "@/types/enums";
 import { ScrollableTabList, TabButton } from "@/components/ui/ScrollableTabs";
 
-export type OrdersTab = OrderStatus | "assigned";
+export type OrdersTab = OrderStatus;
 
 interface StatusTabsProps {
   currentStatus: OrdersTab;
   counts: Record<OrdersTab, number>;
   onTabChange: (status: OrdersTab) => void;
-  zoneStorefrontsEnabled: boolean;
 }
 
-const ALL_TABS = [
+const TABS = [
   {
     id: OrderStatus.DRAFT,
     label: "جديد",
@@ -42,11 +41,6 @@ const ALL_TABS = [
     label: "رفض العميل",
     color: "text-status-cancelled bg-status-cancelled/15",
   },
-  {
-    id: "assigned",
-    label: "الطلبات المسندة",
-    color: "text-brand-primary bg-brand-soft",
-  },
 ] satisfies ReadonlyArray<{
   id: OrdersTab;
   label: string;
@@ -57,16 +51,11 @@ export default function StatusTabs({
   currentStatus,
   counts,
   onTabChange,
-  zoneStorefrontsEnabled,
 }: StatusTabsProps) {
-  const tabs = ALL_TABS.filter(
-    (tab) => zoneStorefrontsEnabled || tab.id !== "assigned",
-  );
-
   return (
     <div className="border-b border-brand-border bg-white">
       <ScrollableTabList className="px-4 py-2">
-        {tabs.map((tab) => {
+        {TABS.map((tab) => {
           const isActive = currentStatus === tab.id;
           const count = counts[tab.id] || 0;
 

@@ -4,7 +4,6 @@ import type {
   AdminTenantAccess,
 } from "@/services/api/admin.service";
 import type { ServiceResponse } from "@/services/base/http.service";
-import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 const MANAGED_SESSION_FAILURE_CODES = new Set([
   "MANAGEMENT_SESSION_REQUIRED",
@@ -15,19 +14,14 @@ const MANAGED_SESSION_FAILURE_CODES = new Set([
 
 type ManagedSessionNavigation = Pick<
   AdminManagementSession,
-  "tenant_id" | "permissions" | "tenant"
+  "tenant_id" | "permissions"
 >;
 
-export type ManagedStoreSection =
-  | "products"
-  | "orders"
-  | "activity"
-  | "dispatches";
+export type ManagedStoreSection = "products" | "orders" | "activity";
 
 const MANAGED_SECTION_READ_PERMISSIONS = {
   products: "products.read",
   activity: "activity_logs.read",
-  dispatches: "dispatches.read",
 } as const satisfies Record<
   Exclude<ManagedStoreSection, "orders">,
   AdminManagedPermission
@@ -78,15 +72,6 @@ export function getManagedStoreLandingPath(
   session: ManagedSessionNavigation,
 ): string | null {
   const { tenant_id: tenantId, permissions } = session;
-  const operatedZone = session.tenant.operated_zone_storefront;
-
-  if (
-    isZoneStorefrontEnabled() &&
-    operatedZone &&
-    hasManagedSectionAccess(permissions, "dispatches")
-  ) {
-    return `/admin/zones/${operatedZone.id}/dispatches`;
-  }
 
   if (hasManagedSectionAccess(permissions, "products")) {
     return `/admin/merchants/${tenantId}/manage/products`;

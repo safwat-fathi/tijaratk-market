@@ -21,7 +21,6 @@ type AdminShellProps = {
   role: AdminRole;
   children: ReactNode;
   pushConfig: PushNotificationsConfig;
-  zoneStorefrontsEnabled: boolean;
 };
 
 const platformNavigation: NavItem[] = [
@@ -41,13 +40,11 @@ const platformNavigation: NavItem[] = [
   { label: "الطلبات", href: "/admin/orders" },
   { label: "المناطق", href: "/admin/areas" },
   { label: "طلبات المناطق", href: "/admin/missing-delivery-area-requests" },
-  { label: "واجهات المناطق", href: "/admin/zones" },
   { label: "سجل نشاط الإدارة", href: "/admin/activity" },
 ];
 
 const operationsNavigation: NavItem[] = [
   { label: "المتاجر المسندة", href: "/admin/merchants" },
-  { label: "توزيع طلبات المناطق", href: "/admin/zones" },
 ];
 
 export const AdminShell = ({
@@ -55,18 +52,12 @@ export const AdminShell = ({
   role,
   children,
   pushConfig,
-  zoneStorefrontsEnabled,
 }: AdminShellProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigation = useMemo(
     () =>
-      (role === "platform_admin"
-        ? platformNavigation
-        : operationsNavigation
-      ).filter(
-        (item) => zoneStorefrontsEnabled || item.href !== "/admin/zones",
-      ),
-    [role, zoneStorefrontsEnabled],
+      role === "platform_admin" ? platformNavigation : operationsNavigation,
+    [role],
   );
 
   return (

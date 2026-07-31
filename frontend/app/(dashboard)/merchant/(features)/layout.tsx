@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import MerchantLayoutClient from "./ClientLayout";
-import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 import {
   getInboxSummaryCached,
   getMyTenantCached,
@@ -53,7 +52,6 @@ export default async function MerchantFeaturesLayout({
     <MerchantLayoutClient
       merchantAppName={merchantAppName}
       newOrdersCount={newOrdersCount}
-      zoneStorefrontsEnabled={isZoneStorefrontEnabled()}
       pushConfig={
         pushConfigResponse.success && pushConfigResponse.data
           ? pushConfigResponse.data

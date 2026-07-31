@@ -181,29 +181,21 @@ export default function MerchantLayoutClient({
   merchantAppName,
   newOrdersCount,
   pushConfig,
-  zoneStorefrontsEnabled,
 }: {
   children: React.ReactNode;
   merchantAppName: string;
   newOrdersCount: number;
   pushConfig: PushNotificationsConfig;
-  zoneStorefrontsEnabled: boolean;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const merchantNavigation = useMemo(
     () =>
       navigation.map((item) =>
         item.href === "/merchant/orders"
-          ? {
-              ...item,
-              badgeCount: newOrdersCount,
-              activePrefixes: zoneStorefrontsEnabled
-                ? ["/merchant/assigned-orders"]
-                : undefined,
-            }
+          ? { ...item, badgeCount: newOrdersCount }
           : item,
       ),
-    [newOrdersCount, zoneStorefrontsEnabled],
+    [newOrdersCount],
   );
 
   return (

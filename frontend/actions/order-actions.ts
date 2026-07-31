@@ -1,7 +1,6 @@
 'use server';
 
 import { ordersService } from '@/services/api/orders.service';
-import { zoneStorefrontsService } from '@/services/api/zone-storefronts.service';
 import {
   OrderSource,
   OrderStatus,
@@ -552,75 +551,6 @@ export async function createOrderAction(
         error instanceof Error
           ? error.message
           : 'Failed to create order. Please try again.',
-    };
-  }
-}
-
-export async function createZoneOrderAction(
-  zoneSlug: string,
-  _prevState: CreateOrderState,
-  formData: FormData,
-): Promise<CreateOrderState> {
-  const rawData = Object.fromEntries(formData.entries());
-  const validatedFields = createOrderSchema.safeParse(rawData);
-
-  if (!validatedFields.success) {
-    return {
-      success: false,
-      message: 'Validation failed, please check inputs.',
-      errors: validatedFields.error.flatten().fieldErrors,
-    };
-  }
-
-  const { cart, order_request, ...customerData } = validatedFields.data;
-  const items = parseCartItems(cart);
-  const payload = buildCreateOrderPayload({
-    customerData,
-    items,
-    orderRequest: order_request,
-  });
-  const formDataPayload = buildCreateOrderFormData(payload, formData);
-
-  try {
-    const metaRequestHeaders = await buildMetaRequestContextHeaders();
-    const response = await zoneStorefrontsService.createPublicOrder(
-      zoneSlug,
-      formDataPayload,
-      metaRequestHeaders,
-    );
-    if (!response.success) {
-      return {
-        success: false,
-        message: response.message || 'تعذر إنشاء الطلب',
-        errors: response.errors as Record<string, string[]> | undefined,
-      };
-    }
-
-    await persistCreatedOrderTrackingArtifacts({
-      tenantSlug: `market:${zoneSlug}`,
-      responseData: response.data,
-      customerData,
-    });
-    const { publicToken, customerAccessCode, metaPurchase } = extractOrderMeta(response.data);
-    return {
-      success: true,
-      message: 'تم إنشاء الطلب بنجاح',
-      data: publicToken
-        ? {
-            public_token: publicToken,
-            ...(customerAccessCode
-              ? { customer_access_code: customerAccessCode }
-              : {}),
-            ...(metaPurchase ? { meta_purchase: metaPurchase } : {}),
-          }
-        : response.data,
-    };
-  } catch (error) {
-    if (isNextRedirectError(error)) throw error;
-    console.error('Failed to create zone order:', error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'تعذر إنشاء الطلب',
     };
   }
 }

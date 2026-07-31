@@ -1,8 +1,5 @@
 import type { AdminManagedPermission } from "@/services/api/admin.service";
 
-export const DISPATCH_SESSION_PERMISSION_MESSAGE =
-  "لا يمكنك فتح قائمة التوزيع لأن حسابك لا يملك صلاحية عرض طلبات التوزيع لهذه المنطقة.";
-
 export const ADMIN_MANAGED_PERMISSION_LABELS = {
   "products.read": "عرض المنتجات",
   "products.create": "إضافة المنتجات",
@@ -16,9 +13,6 @@ export const ADMIN_MANAGED_PERMISSION_LABELS = {
   "orders.manage_replacements": "إدارة بدائل المنتجات",
   "customers.read_limited": "عرض بيانات العميل اللازمة للتنفيذ",
   "activity_logs.read": "عرض سجل النشاط",
-  "dispatches.read": "عرض طلبات التوزيع",
-  "dispatches.assign": "إسناد الطلبات للمتاجر",
-  "dispatches.cancel": "إلغاء طلبات التوزيع",
 } satisfies Record<AdminManagedPermission, string>;
 
 export const ADMIN_MANAGED_PERMISSION_OPTIONS = Object.entries(

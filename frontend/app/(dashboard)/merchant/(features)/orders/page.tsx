@@ -3,11 +3,9 @@ import { getInboxSummaryCached } from "@/lib/server/dashboard-request-cache";
 import OrdersView from "./_components/OrdersView";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import { createNoIndexMetadata } from "@/lib/marketing-seo";
-import { assignedOrdersService } from "@/services/api/assigned-orders.service";
 import { OrderStatus } from "@/types/enums";
 import type { MerchantOrderInboxSummary } from "@/types/services/orders";
 import type { OrdersTab } from "./_components/StatusTabs";
-import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 export const metadata = createNoIndexMetadata(
 	"إدارة الطلبات",
@@ -41,24 +39,13 @@ const EMPTY_INBOX_SUMMARY: MerchantOrderInboxSummary = {
 		[OrderStatus.CANCELLED]: 0,
 		[OrderStatus.REJECTED_BY_CUSTOMER]: 0,
 	},
-	assigned_counts: { pending: 0, accepted: 0, total: 0 },
 	new_orders_count: 0,
 };
 
-const VALID_TABS = new Set<string>([
-	...Object.values(OrderStatus),
-	"assigned",
-]);
+const VALID_TABS = new Set<string>(Object.values(OrderStatus));
 
-const normalizeTab = (
-	tab: string | undefined,
-	zoneStorefrontsEnabled: boolean,
-): OrdersTab =>
-	tab &&
-	VALID_TABS.has(tab) &&
-	(zoneStorefrontsEnabled || tab !== "assigned")
-		? (tab as OrdersTab)
-		: OrderStatus.DRAFT;
+const normalizeTab = (tab: string | undefined): OrdersTab =>
+	tab && VALID_TABS.has(tab) ? (tab as OrdersTab) : OrderStatus.DRAFT;
 
 export default async function OrdersPage({
 	searchParams,
@@ -66,16 +53,11 @@ export default async function OrdersPage({
 	searchParams: Promise<{ date?: string; tab?: string }>;
 }) {
 	const { date, tab } = await searchParams;
-	const zoneStorefrontsEnabled = isZoneStorefrontEnabled();
 
-	const [orders, assignedResponse, summaryResponse] = await Promise.all([
+	const [orders, summaryResponse] = await Promise.all([
 		getOrders(date),
-		zoneStorefrontsEnabled
-			? assignedOrdersService.getAssignedOrders()
-			: Promise.resolve(null),
 		getInboxSummaryCached(date),
 	]);
-	const assignedOrders = assignedResponse?.data?.filter(Boolean) ?? [];
 	const inboxSummary =
 		summaryResponse.success && summaryResponse.data
 			? summaryResponse.data
@@ -83,13 +65,11 @@ export default async function OrdersPage({
 
 	return (
 		<OrdersView
-			key={normalizeTab(tab, zoneStorefrontsEnabled)}
+			key={normalizeTab(tab)}
 			initialOrders={orders}
-			initialAssignedOrders={assignedOrders}
 			inboxSummary={inboxSummary}
-			initialTab={normalizeTab(tab, zoneStorefrontsEnabled)}
+			initialTab={normalizeTab(tab)}
 			selectedDate={date}
-			zoneStorefrontsEnabled={zoneStorefrontsEnabled}
 		/>
 	);
 }

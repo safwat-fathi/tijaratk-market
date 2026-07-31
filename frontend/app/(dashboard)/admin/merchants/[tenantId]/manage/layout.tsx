@@ -8,7 +8,6 @@ import {
   isManagedSessionFailure,
 } from "@/lib/admin-managed-access";
 import { adminService } from "@/services/api/admin.service";
-import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 type LayoutProps = {
   children: ReactNode;
@@ -31,25 +30,12 @@ export default async function ManagedStoreLayout({ children, params }: LayoutPro
     redirect(getManagedSessionRevokePath(tenantId));
   }
 
-  const isZoneOperator = Boolean(
-    isZoneStorefrontEnabled() &&
-      session.tenant.operated_zone_storefront &&
-      hasManagedSectionAccess(session.permissions, "dispatches"),
-  );
   const links = [
     hasManagedSectionAccess(session.permissions, "products")
       ? { href: `/admin/merchants/${tenantId}/manage/products`, label: "المنتجات" }
       : null,
-    hasManagedSectionAccess(session.permissions, "orders") && !isZoneOperator
+    hasManagedSectionAccess(session.permissions, "orders")
       ? { href: `/admin/merchants/${tenantId}/manage/orders`, label: "الطلبات" }
-      : null,
-    isZoneStorefrontEnabled() &&
-    hasManagedSectionAccess(session.permissions, "dispatches") &&
-    session.tenant.operated_zone_storefront
-      ? {
-          href: `/admin/zones/${session.tenant.operated_zone_storefront.id}/dispatches`,
-          label: "توزيع طلبات المنطقة",
-        }
       : null,
     hasManagedSectionAccess(session.permissions, "activity")
       ? { href: `/admin/merchants/${tenantId}/manage/activity`, label: "سجل النشاط" }

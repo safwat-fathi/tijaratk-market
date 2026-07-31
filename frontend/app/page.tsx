@@ -3,12 +3,12 @@ import Link from "next/link";
 import { cache, Suspense } from "react";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import CustomerPwaInstallTracking from "@/components/analytics/CustomerPwaInstallTracking";
+import CustomerPwaProvider from "@/components/pwa/CustomerPwaProvider";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import JsonLd from "@/components/seo/JsonLd";
 import AreaAutocomplete, {
   type AreaAutocompleteOption,
 } from "@/components/stores-directory/AreaAutocomplete";
-import ZoneStorefrontHome from "@/components/zone-storefronts/ZoneStorefrontHome";
 import { createPublicMetadata, SITE_URL } from "@/lib/marketing-seo";
 import { storesDirectoryService } from "@/services/api/stores-directory.service";
 import {
@@ -24,9 +24,6 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import InstallPwaAction from "@/components/pwa/InstallPwaAction";
 import { CUSTOMER_PWA_INSTALL_SURFACES } from "@/lib/analytics/storefront-ga4";
 import { CUSTOMER_PWA, CUSTOMER_PWA_METADATA } from "@/lib/customer-pwa";
-import { zoneStorefrontsService } from "@/services/api/zone-storefronts.service";
-import type { ZoneStorefront } from "@/types/models/zone-storefront";
-import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 
 type StoresDirectorySearchParams = {
   area?: string;
@@ -41,9 +38,6 @@ const STORES_PATH = "/";
 const DEFAULT_SEO_TITLE = "دليل المتاجر في مصر | سوبر ماركت وصيدليات قريبة";
 const DEFAULT_SEO_DESCRIPTION =
   "اكتشف سوبر ماركت وصيدليات بتوصل في منطقتك داخل مصر، وتصفح المتاجر المحلية المتاحة للطلب المباشر من خلال تجارتك.";
-const ZONE_SEO_TITLE = "اطلب احتياجات منطقتك | سوبر ماركت وصيدليات";
-const ZONE_SEO_DESCRIPTION =
-  "اختر منطقتك واطلب مباشرة من خدمة السوبر ماركت أو الصيدلية المتاحة عبر واجهة تجارتك المركزية.";
 
 const fallbackCategories: StoresDirectoryCategory[] = [
   {
@@ -91,36 +85,7 @@ const getStoresLanding = cache(
   },
 );
 
-const getPublicZoneStorefronts = cache(async (): Promise<ZoneStorefront[]> => {
-  if (!isZoneStorefrontEnabled()) return [];
-
-  try {
-    const response = await zoneStorefrontsService.getPublicZones();
-    return response.success && Array.isArray(response.data) ? response.data : [];
-  } catch {
-    return [];
-  }
-});
-
 export function generateMetadata(): Metadata {
-  if (isZoneStorefrontEnabled()) {
-    return {
-      ...createPublicMetadata({
-        title: ZONE_SEO_TITLE,
-        description: ZONE_SEO_DESCRIPTION,
-        path: STORES_PATH,
-      }),
-      ...CUSTOMER_PWA_METADATA,
-      keywords: [
-        "توصيل حسب المنطقة",
-        "سوبر ماركت في منطقتك",
-        "صيدلية في منطقتك",
-        "طلبات المنطقة",
-        "تجارتك",
-      ],
-    };
-  }
-
   return {
     ...createPublicMetadata({
       title: DEFAULT_SEO_TITLE,
@@ -287,7 +252,7 @@ const buildJsonLd = (params: {
   ];
 };
 
-async function LegacyDirectoryContent({
+async function DirectoryContent({
   searchParams,
 }: StoresDirectoryPageProps) {
   const resolvedSearchParams = await searchParams;
@@ -480,7 +445,7 @@ async function LegacyDirectoryContent({
   );
 }
 
-function LegacyDirectoryFallback() {
+function DirectoryFallback() {
   return (
     <>
       <section className="border-b border-gray-200/50 bg-[#F7F8F6] px-4 py-6">
@@ -501,7 +466,7 @@ function LegacyDirectoryFallback() {
   );
 }
 
-function LegacyStoresDirectoryPage(props: StoresDirectoryPageProps) {
+function StoresDirectoryPage(props: StoresDirectoryPageProps) {
   return (
     <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
       <AppHeader
@@ -528,8 +493,8 @@ function LegacyStoresDirectoryPage(props: StoresDirectoryPageProps) {
           </div>
         </section>
 
-        <Suspense fallback={<LegacyDirectoryFallback />}>
-          <LegacyDirectoryContent {...props} />
+        <Suspense fallback={<DirectoryFallback />}>
+          <DirectoryContent {...props} />
         </Suspense>
       </main>
 
@@ -538,32 +503,14 @@ function LegacyStoresDirectoryPage(props: StoresDirectoryPageProps) {
   );
 }
 
-export default async function HomePage(props: StoresDirectoryPageProps) {
-  if (!isZoneStorefrontEnabled()) {
-    return (
-      <>
-        <CustomerAnalytics pageLocation={STORES_PATH} />
-        <CustomerPwaInstallTracking
-          installSurface={CUSTOMER_PWA_INSTALL_SURFACES.HOME}
-        />
-        <LegacyStoresDirectoryPage {...props} />
-      </>
-    );
-  }
-
-  const publicZones = await getPublicZoneStorefronts();
-
+export default function HomePage(props: StoresDirectoryPageProps) {
   return (
-    <>
+    <CustomerPwaProvider>
       <CustomerAnalytics pageLocation={STORES_PATH} />
       <CustomerPwaInstallTracking
         installSurface={CUSTOMER_PWA_INSTALL_SURFACES.HOME}
       />
-      {publicZones.length > 0 ? (
-        <ZoneStorefrontHome zones={publicZones} />
-      ) : (
-        <LegacyStoresDirectoryPage {...props} />
-      )}
-    </>
+      <StoresDirectoryPage {...props} />
+    </CustomerPwaProvider>
   );
 }

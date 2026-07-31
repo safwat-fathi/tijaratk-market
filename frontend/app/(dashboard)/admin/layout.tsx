@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { STORAGE_KEYS } from "@/constants";
 import { AdminShell } from "./_components/AdminShell";
 import type { Metadata } from "next";
-import { isZoneStorefrontEnabled } from "@/lib/zone-storefront-feature";
 import {
   getCurrentAdminCached,
   getPushNotificationsConfigCached,
@@ -40,7 +39,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     <AdminShell
       adminName={response.data.name}
       role={response.data.role}
-      zoneStorefrontsEnabled={isZoneStorefrontEnabled()}
       pushConfig={
         pushConfigResponse.success && pushConfigResponse.data
           ? pushConfigResponse.data

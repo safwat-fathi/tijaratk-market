@@ -2,16 +2,12 @@
 
 import { adminService } from "@/services/api/admin.service";
 import { redirect } from "next/navigation";
-import { setCookieAction, deleteCookieAction } from "@/app/actions/cookie-store";
+import { setCookieAction, deleteCookieAction } from "@/actions/cookie-actions";
 import { STORAGE_KEYS } from "@/constants";
-import { DISPATCH_SESSION_PERMISSION_MESSAGE } from "@/constants/admin-managed-permissions";
 import { revalidatePath } from "next/cache";
 import { loginSchema } from "@/lib/validations/auth";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
-import {
-  getManagedStoreFallbackPath,
-  hasActiveManagedPermission,
-} from "@/lib/admin-managed-access";
+import { getManagedStoreFallbackPath } from "@/lib/admin-managed-access";
 import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
 import type {
   BulkEssentialStage,
@@ -44,20 +40,9 @@ export type ActionState = {
   timestamp?: number;
 };
 
-export type ZoneMutationActionResult = {
-  success: boolean;
-  message: string;
-  timestamp: number;
-};
-
 export type DirectoryStatusActionState = {
   success: boolean;
   message?: string;
-};
-
-export type DispatchSessionStartResult = {
-  success: false;
-  message: string;
 };
 
 export type AdminMerchantSearchSuggestion = {
@@ -94,60 +79,6 @@ export async function searchAdminMerchantsAction(
     return [];
   }
 }
-
-const zoneMutationMessages: Record<string, string> = {
-  ZONE_OPERATOR_NOT_READY:
-    "مشغل المنطقة غير جاهز لاستقبال الطلبات. راجع حالة المشغل وإتاحة التوصيل.",
-  ZONE_CATALOG_NOT_READY:
-    "كتالوج المنطقة غير جاهز. نفّذ مزامنة المنتجات الأساسية أولاً.",
-  ZONE_DELIVERY_FEES_NOT_READY:
-    "يجب تحديد رسوم توصيل لكل منطقة فرعية نشطة قبل تفعيل الواجهة.",
-  ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT:
-    "يلزم وجود متجر تنفيذ واحد على الأقل يكون نشطاً ومؤهلاً داخل المنطقة.",
-  MERCHANT_INACTIVE: "المتجر غير نشط حالياً. فعّل المتجر أولاً.",
-  MERCHANT_DELETED: "المتجر محذوف ولا يمكن إضافته إلى المنطقة.",
-  MERCHANT_DELIVERY_DISABLED:
-    "التوصيل متوقف في هذا المتجر. فعّل التوصيل أولاً.",
-  MERCHANT_CATEGORY_MISMATCH:
-    "تصنيف المتجر لا يطابق تصنيف واجهة المنطقة.",
-  MERCHANT_IS_ZONE_OPERATOR:
-    "مشغل منطقة داخلي لا يمكن استخدامه كمتجر تنفيذ.",
-  MERCHANT_DELIVERY_AREA_MISSING:
-    "المتجر لا يغطي أي منطقة فرعية نشطة داخل هذه الواجهة. أضف منطقة فرعية إلى مناطق توصيله أولاً.",
-  MERCHANT_DELIVERY_AREA_INACTIVE:
-    "كل تغطية المتجر للمناطق الفرعية داخل هذه الواجهة متوقفة. فعّل إحداها أولاً.",
-  MERCHANT_NOT_FOUND: "تعذر العثور على المتجر المطلوب.",
-};
-
-const getZoneMutationMessage = (
-  data: unknown,
-  message: string | undefined,
-  fallback: string,
-) => {
-  const code =
-    data && typeof data === "object" && "code" in data
-      ? String((data as { code?: unknown }).code ?? "")
-      : "";
-  if (code && zoneMutationMessages[code]) return zoneMutationMessages[code];
-
-  const normalized = message?.trim();
-  if (normalized === "Merchant is not eligible for this zone") {
-    return "المتجر غير مؤهل لهذه المنطقة. راجع حالته وإتاحة التوصيل ومناطق التغطية.";
-  }
-  if (normalized === "At least one eligible active merchant is required") {
-    return zoneMutationMessages.ZONE_NO_ELIGIBLE_ACTIVE_MERCHANT;
-  }
-  if (normalized === "Zone catalog is not ready") {
-    return zoneMutationMessages.ZONE_CATALOG_NOT_READY;
-  }
-  if (normalized === "Every active child area requires a delivery fee") {
-    return zoneMutationMessages.ZONE_DELIVERY_FEES_NOT_READY;
-  }
-  if (normalized === "Zone operator is not ready for ordering") {
-    return zoneMutationMessages.ZONE_OPERATOR_NOT_READY;
-  }
-  return normalized || fallback;
-};
 
 const UPDATE_PRODUCT_FALLBACK_MESSAGE = "تعذر تعديل المنتج، حاول مرة أخرى.";
 const UPDATE_PRODUCT_IMAGE_SIZE_MESSAGE =
@@ -382,9 +313,6 @@ const managedPermissionValues = [
   "orders.manage_replacements",
   "customers.read_limited",
   "activity_logs.read",
-  "dispatches.read",
-  "dispatches.assign",
-  "dispatches.cancel",
 ] as const;
 
 const managedPermissionSchema = z.enum(managedPermissionValues);
@@ -408,9 +336,6 @@ const managedPermissionPresets: Record<string, AdminManagedPermission[]> = {
     "products.read",
     "products.update_availability",
     "activity_logs.read",
-    "dispatches.read",
-    "dispatches.assign",
-    "dispatches.cancel",
   ],
 };
 managedPermissionPresets.store_manager = Array.from(
@@ -419,453 +344,6 @@ managedPermissionPresets.store_manager = Array.from(
     ...managedPermissionPresets.order_operator,
   ]),
 );
-
-const createZoneSchema = z.object({
-  name: z.string().trim().min(2).max(120),
-  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  area_id: z.coerce.number().int().positive(),
-  category: z.enum(["grocery", "pharmacy"]),
-  operations_phone: z.string().trim().min(8).max(32),
-  delivery_fee: z.coerce.number().min(0).optional(),
-});
-
-const zoneCreateValidationMessages: Record<string, string> = {
-  name: "اكتب اسمًا عامًا من حرفين على الأقل.",
-  slug: "اكتب رابطًا بالإنجليزية باستخدام حروف صغيرة وأرقام وشرطات فقط.",
-  area_id: "اختر المنطقة.",
-  category: "اختر قطاعًا صحيحًا.",
-  operations_phone: "اكتب رقم هاتف عمليات صحيحًا.",
-  delivery_fee: "اكتب رسوم توصيل تساوي صفرًا أو أكثر.",
-};
-
-export type ZoneCreateActionState = ActionState & {
-  conflictCode?: string;
-};
-
-const getZoneCreateConflictCode = (value: unknown): string | undefined => {
-  if (!value || typeof value !== "object") return undefined;
-
-  const errors = (value as Record<string, unknown>).errors;
-  if (!errors || typeof errors !== "object") return undefined;
-
-  const code = (errors as Record<string, unknown>).code;
-  return typeof code === "string" ? code : undefined;
-};
-
-const getZoneCreateFieldErrors = (
-  conflictCode: string | undefined,
-  message: string,
-): ActionState["errors"] => {
-  if (conflictCode === "ZONE_AREA_CATEGORY_CONFLICT") {
-    return { area_id: [message], category: [message] };
-  }
-  if (
-    conflictCode === "ZONE_SLUG_CONFLICT" ||
-    conflictCode === "ZONE_OPERATOR_SLUG_CONFLICT"
-  ) {
-    return { slug: [message] };
-  }
-  return undefined;
-};
-
-const getAdminSafeZoneCreateMessage = (message?: string): string => {
-  const normalized = message?.trim();
-  return normalized && /[\u0600-\u06FF]/.test(normalized)
-    ? normalized
-    : "تعذر إنشاء واجهة المنطقة. تحقق من البيانات وحاول مرة أخرى.";
-};
-
-export async function createZoneStorefrontAction(
-  _previousState: ZoneCreateActionState,
-  formData: FormData,
-): Promise<ZoneCreateActionState> {
-  void _previousState;
-  const parsed = createZoneSchema.safeParse(
-    Object.fromEntries(formData.entries()),
-  );
-  if (!parsed.success) {
-    const invalidFields = new Set(
-      parsed.error.issues
-        .map((issue) => issue.path[0])
-        .filter((field): field is string => typeof field === "string"),
-    );
-    return {
-      success: false,
-      message: "يرجى مراجعة بيانات واجهة المنطقة.",
-      errors: Object.fromEntries(
-        Array.from(invalidFields, (field) => [
-          field,
-          [zoneCreateValidationMessages[field] ?? "راجع هذه القيمة."],
-        ]),
-      ),
-      timestamp: Date.now(),
-    };
-  }
-
-  const response = await adminService.createZone(parsed.data);
-  if (!response.success) {
-    const message = getAdminSafeZoneCreateMessage(response.message);
-    const conflictCode = getZoneCreateConflictCode(response.data);
-    return {
-      success: false,
-      message,
-      conflictCode,
-      errors: getZoneCreateFieldErrors(conflictCode, message),
-      timestamp: Date.now(),
-    };
-  }
-  if (!response.data?.id) {
-    return {
-      success: false,
-      message: "تم إنشاء الواجهة دون إرجاع معرّف صالح. حدّث الصفحة وحاول مرة أخرى.",
-      timestamp: Date.now(),
-    };
-  }
-
-  revalidatePath("/admin/zones");
-  redirect(`/admin/zones/${response.data.id}`);
-}
-
-export async function updateZoneActivationAction(
-  zoneId: number,
-  isActive: boolean,
-): Promise<ZoneMutationActionResult> {
-  const id = positiveIdSchema.parse(zoneId);
-  const response = await adminService.updateZoneActivation(id, isActive);
-  if (!response.success) {
-    return {
-      success: false,
-      message: getZoneMutationMessage(
-        response.data,
-        response.message,
-        "تعذر تحديث حالة المنطقة.",
-      ),
-      timestamp: Date.now(),
-    };
-  }
-  revalidatePath("/admin/zones");
-  revalidatePath("/admin/zones/" + id);
-  revalidatePath("/");
-  if (response.data?.slug) {
-    revalidatePath("/market/" + response.data.slug);
-  }
-  return {
-    success: true,
-    message: isActive ? "تم تفعيل المنطقة بنجاح." : "تم إيقاف الطلبات الجديدة.",
-    timestamp: Date.now(),
-  };
-}
-
-const zoneDeliveryFeesSchema = z
-  .array(
-    z.object({
-      area_id: z.number().int().positive(),
-      delivery_fee: z.number().min(0),
-    }),
-  )
-  .min(1)
-  .superRefine((entries, context) => {
-    if (new Set(entries.map((entry) => entry.area_id)).size !== entries.length) {
-      context.addIssue({
-        code: "custom",
-        message: "لا يمكن تكرار منطقة التوصيل.",
-      });
-    }
-  });
-
-export async function updateZoneDeliveryFeesAction(
-  zoneId: number,
-  zoneSlug: string,
-  _previousState: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  void _previousState;
-  const id = positiveIdSchema.parse(zoneId);
-  let rawPayload: unknown;
-  try {
-    rawPayload = JSON.parse(String(formData.get("delivery_areas") ?? ""));
-  } catch {
-    return {
-      success: false,
-      message: "تعذر قراءة رسوم مناطق التوصيل.",
-      timestamp: Date.now(),
-    };
-  }
-  const parsed = zoneDeliveryFeesSchema.safeParse(rawPayload);
-  if (!parsed.success) {
-    return {
-      success: false,
-      message: parsed.error.issues[0]?.message || "راجع رسوم مناطق التوصيل.",
-      timestamp: Date.now(),
-    };
-  }
-
-  const response = await adminService.updateZoneDeliveryFees(id, {
-    delivery_areas: parsed.data,
-  });
-  if (!response.success) {
-    return {
-      success: false,
-      message:
-        response.message || "تعذر حفظ رسوم مناطق التوصيل. حاول مرة أخرى.",
-      timestamp: Date.now(),
-    };
-  }
-
-  revalidatePath("/admin/zones");
-  revalidatePath(`/admin/zones/${id}`);
-  revalidatePath("/");
-  revalidatePath(`/market/${zoneSlug}`);
-  return {
-    success: true,
-    message: "تم حفظ رسوم كل مناطق التوصيل.",
-    timestamp: Date.now(),
-  };
-}
-
-const zoneOperatingHoursSchema = z
-  .object({
-    delivery_starts_at: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
-    delivery_ends_at: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
-  })
-  .refine(
-    ({ delivery_starts_at, delivery_ends_at }) => {
-      const toMinutes = (value: string) => {
-        const [hours, minutes] = value.split(":").map(Number);
-        return hours * 60 + minutes;
-      };
-      const startMins = toMinutes(delivery_starts_at);
-      let endMins = toMinutes(delivery_ends_at);
-      if (endMins <= startMins) {
-        endMins += 24 * 60;
-      }
-      return endMins - startMins >= 60;
-    },
-    { message: "يجب أن تكون مدة التشغيل ساعة على الأقل." },
-  );
-
-export async function updateZoneOperatingHoursAction(
-  zoneId: number,
-  zoneSlug: string,
-  _previousState: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  void _previousState;
-  const id = positiveIdSchema.parse(zoneId);
-  const parsed = zoneOperatingHoursSchema.safeParse(
-    Object.fromEntries(formData.entries()),
-  );
-  if (!parsed.success) {
-    return {
-      success: false,
-      message: parsed.error.issues[0]?.message || "راجع ساعات التشغيل.",
-      timestamp: Date.now(),
-    };
-  }
-  const response = await adminService.updateZoneOperatingHours(id, parsed.data);
-  if (!response.success) {
-    return {
-      success: false,
-      message: response.message || "تعذر حفظ ساعات التشغيل.",
-      timestamp: Date.now(),
-    };
-  }
-  revalidatePath("/admin/zones");
-  revalidatePath(`/admin/zones/${id}`);
-  revalidatePath("/");
-  revalidatePath(`/market/${zoneSlug}`);
-  return {
-    success: true,
-    message: "تم حفظ ساعات تشغيل المنطقة.",
-    timestamp: Date.now(),
-  };
-}
-
-export type ZoneEssentialCatalogSyncActionResult = {
-  success: boolean;
-  message: string;
-};
-
-export async function syncZoneEssentialCatalogAction(
-  zoneId: number,
-): Promise<ZoneEssentialCatalogSyncActionResult> {
-  const id = positiveIdSchema.parse(zoneId);
-  const response = await adminService.syncZoneEssentialCatalog(id);
-  if (!response.success || !response.data) {
-    return {
-      success: false,
-      message: "تعذر مزامنة المنتجات الأساسية للمنطقة. حاول مرة أخرى.",
-    };
-  }
-
-  revalidatePath("/admin/zones");
-  revalidatePath(`/admin/zones/${id}`);
-  revalidatePath("/");
-
-  const result = response.data;
-  return {
-    success: true,
-    message:
-      `تمت المزامنة بنجاح: ${result.active_products}/${result.expected_products} منتج في ` +
-      `${result.active_categories} قسم، مع إضافة ${result.created} ` +
-      `وربط ${result.linked} وأرشفة ${result.archived}` +
-      `${result.catalog_in_sync ? "." : "، وما زالت المزامنة غير مكتملة."}`,
-  };
-}
-
-export async function upsertZoneMerchantAction(
-  zoneId: number,
-  formData: FormData,
-): Promise<ZoneMutationActionResult> {
-  const id = positiveIdSchema.parse(zoneId);
-  const payload = z.object({
-    tenant_id: z.coerce.number().int().positive(),
-    priority: z.coerce.number().int().default(0),
-    is_active: z.enum(["true", "false"]).transform((value) => value === "true"),
-  }).parse(Object.fromEntries(formData.entries()));
-  const response = await adminService.upsertZoneMerchant(id, payload);
-  if (!response.success) {
-    return {
-      success: false,
-      message: getZoneMutationMessage(
-        response.data,
-        response.message,
-        "تعذر تحديث عضوية المتجر.",
-      ),
-      timestamp: Date.now(),
-    };
-  }
-  revalidatePath("/admin/zones");
-  revalidatePath("/admin/zones/" + id);
-  revalidatePath("/");
-  if (response.data?.slug) {
-    revalidatePath("/market/" + response.data.slug);
-  }
-  return {
-    success: true,
-    message: payload.is_active
-      ? "تم تفعيل عضوية المتجر في المنطقة."
-      : "تم إيقاف عضوية المتجر في المنطقة.",
-    timestamp: Date.now(),
-  };
-}
-
-export async function startZoneDispatchSessionAction(
-  zoneId: number,
-  tenantId: number,
-  formData: FormData,
-): Promise<DispatchSessionStartResult> {
-  const normalizedZoneId = positiveIdSchema.parse(zoneId);
-  const normalizedTenantId = positiveIdSchema.parse(tenantId);
-  const reason = managementReasonSchema.parse(formData.get("reason"));
-  const contextResponse = await adminService.getManagedMerchantContext(
-    normalizedTenantId,
-  );
-
-  if (!contextResponse.success) {
-    return {
-      success: false,
-      message: contextResponse.message || "تعذر التحقق من صلاحية التوزيع",
-    };
-  }
-
-  if (
-    !hasActiveManagedPermission(
-      contextResponse.data?.current_admin_access,
-      "dispatches.read",
-    )
-  ) {
-    return {
-      success: false,
-      message: DISPATCH_SESSION_PERMISSION_MESSAGE,
-    };
-  }
-
-  const response = await adminService.startManagementSession({
-    tenant_id: normalizedTenantId,
-    reason,
-  });
-
-  if (!response.success) {
-    const responseData = response.data as unknown;
-    const errors =
-      typeof responseData === "object" && responseData !== null
-        ? (responseData as Record<string, unknown>).errors
-        : null;
-    const errorCode =
-      typeof errors === "object" && errors !== null
-        ? (errors as Record<string, unknown>).code
-        : null;
-
-    return {
-      success: false,
-      message:
-        errorCode === "ADMIN_TENANT_ACCESS_REQUIRED"
-          ? DISPATCH_SESSION_PERMISSION_MESSAGE
-          : response.message || "تعذر بدء جلسة إدارة التوزيع",
-    };
-  }
-
-  const token = response.data?.session_token;
-  const expiresAt = response.data?.session?.expires_at;
-  if (!token || !expiresAt) {
-    return {
-      success: false,
-      message: "تعذر بدء جلسة إدارة التوزيع",
-    };
-  }
-  await setCookieAction(STORAGE_KEYS.ADMIN_MANAGEMENT_SESSION, token, {
-    maxAge: Math.max(1, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000)),
-  });
-  redirect(`/admin/zones/${normalizedZoneId}/dispatches`);
-}
-
-export async function assignZoneDispatchAction(
-  zoneId: number,
-  tenantId: number,
-  dispatchId: number,
-  formData: FormData,
-): Promise<void> {
-  const payload = z.object({
-    target_tenant_id: z.coerce.number().int().positive(),
-    expected_version: z.coerce.number().int().min(0),
-    internal_notes: z.string().trim().max(500).optional(),
-  }).parse(Object.fromEntries(formData.entries()));
-  const response = await adminService.assignManagedZoneDispatch(
-    positiveIdSchema.parse(tenantId),
-    positiveIdSchema.parse(dispatchId),
-    payload,
-  );
-  if (!response.success) throw new Error(response.message || "تعذر إسناد الطلب");
-  const normalizedZoneId = positiveIdSchema.parse(zoneId);
-  revalidatePath(`/admin/zones/${normalizedZoneId}/dispatches`);
-  revalidatePath(
-    `/admin/zones/${normalizedZoneId}/dispatches/${positiveIdSchema.parse(dispatchId)}`,
-  );
-}
-
-export async function cancelZoneDispatchAction(
-  zoneId: number,
-  tenantId: number,
-  dispatchId: number,
-  formData: FormData,
-): Promise<void> {
-  const payload = z.object({
-    expected_version: z.coerce.number().int().min(0),
-    reason: z.string().trim().min(3).max(500),
-  }).parse(Object.fromEntries(formData.entries()));
-  const response = await adminService.cancelManagedZoneDispatch(
-    positiveIdSchema.parse(tenantId),
-    positiveIdSchema.parse(dispatchId),
-    payload,
-  );
-  if (!response.success) throw new Error(response.message || "تعذر إلغاء الطلب");
-  const normalizedZoneId = positiveIdSchema.parse(zoneId);
-  revalidatePath(`/admin/zones/${normalizedZoneId}/dispatches`);
-  revalidatePath(
-    `/admin/zones/${normalizedZoneId}/dispatches/${positiveIdSchema.parse(dispatchId)}`,
-  );
-}
 
 export async function startManagedStoreSessionAction(
   tenantId: number,
@@ -2275,4 +1753,50 @@ export async function resolveMissingDeliveryAreaRequestAction(
   revalidatePath("/admin/missing-delivery-area-requests");
   revalidatePath("/admin/areas");
   return response.data;
+}
+
+export type UpdateTenantCategoryResult = {
+  success: boolean;
+  message?: string;
+  requiresForceCleanup?: boolean;
+  productCount?: number;
+};
+
+/**
+ * Category changes are triggered from a client form, so they go through an
+ * action instead of the admin service to keep `HttpService` off the browser.
+ */
+export async function updateTenantCategoryAction(
+  tenantId: number,
+  category: string,
+  forceCleanup = false,
+): Promise<UpdateTenantCategoryResult> {
+  const id = positiveIdSchema.parse(tenantId);
+  const parsedCategory = z.string().trim().min(1).max(50).safeParse(category);
+  if (!parsedCategory.success) {
+    return { success: false, message: "اختر نشاطاً صحيحاً للمتجر." };
+  }
+
+  const response = await adminService.updateTenantCategory(
+    id,
+    parsedCategory.data,
+    forceCleanup,
+  );
+
+  if (response.success) {
+    revalidatePath(`/admin/merchants/${id}`);
+    revalidatePath("/admin/merchants");
+    return { success: true };
+  }
+
+  const data = response.data as
+    | { requires_force_cleanup?: boolean; product_count?: number }
+    | undefined;
+
+  return {
+    success: false,
+    message: response.message || "تعذر تحديث نشاط المتجر.",
+    requiresForceCleanup: Boolean(data?.requires_force_cleanup),
+    productCount: data?.product_count,
+  };
 }

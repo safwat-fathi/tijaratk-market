@@ -10,14 +10,12 @@ interface OrderStatsProps {
   count: number;
   selectedDate?: string;
   selectedTab?: string;
-  dateFilterEnabled?: boolean;
 }
 
 export default function OrderStats({
   count,
   selectedDate,
   selectedTab,
-  dateFilterEnabled = true,
 }: OrderStatsProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -89,55 +87,43 @@ export default function OrderStats({
       <div className="sticky top-0 z-20 flex items-center justify-between border-b border-brand-border bg-white px-4 py-3 shadow-soft">
         <h1 className="text-xl font-bold text-brand-text">الطلبات</h1>
 
-        {dateFilterEnabled ? (
-          <button
-            type="button"
-            onClick={() => setIsOpen(true)}
-            className="flex min-h-10 items-center gap-1 rounded-full bg-brand-soft px-3 py-1 text-sm font-medium text-muted-foreground transition-colors active:bg-brand-soft/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="flex min-h-10 items-center gap-1 rounded-full bg-brand-soft px-3 py-1 text-sm font-medium text-muted-foreground transition-colors active:bg-brand-soft/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20"
+        >
+          <span>{getLabel()}</span>
+          <span className="text-brand-border">•</span>
+          <span className="font-bold text-brand-text">
+            {formatArabicInteger(count) || count} طلب
+          </span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="ms-1 text-muted-foreground"
           >
-            <span>{getLabel()}</span>
-            <span className="text-brand-border">•</span>
-            <span className="font-bold text-brand-text">
-              {formatArabicInteger(count) || count} طلب
-            </span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="ms-1 text-muted-foreground"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
-        ) : (
-          <div className="flex min-h-10 items-center gap-1 rounded-full bg-brand-soft px-3 py-1 text-sm font-medium text-muted-foreground">
-            <span>كل الطلبات المسندة</span>
-            <span className="text-brand-border">•</span>
-            <span className="font-bold text-brand-text">
-              {formatArabicInteger(count) || count} طلب
-            </span>
-          </div>
-        )}
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
       </div>
 
       {/* Hidden Date Input */}
-      {dateFilterEnabled ? (
-        <input
-          type="date"
-          ref={dateInputRef}
-          className="pointer-events-none absolute opacity-0"
-          onChange={handleDateChange}
-        />
-      ) : null}
+      <input
+        type="date"
+        ref={dateInputRef}
+        className="pointer-events-none absolute opacity-0"
+        onChange={handleDateChange}
+      />
 
       {/* Bottom Sheet Backdrop */}
-      {dateFilterEnabled && isOpen ? (
+      {isOpen ? (
         <div
           className="fixed inset-0 z-50 animate-fade-in bg-black/40 backdrop-blur-sm"
           onClick={() => setIsOpen(false)}

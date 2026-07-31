@@ -48,11 +48,6 @@ export interface OrderListResponse {
 
 export type MerchantOrderInboxSummary = {
   owned_status_counts: Record<OrderStatus, number>;
-  assigned_counts: {
-    pending: number;
-    accepted: number;
-    total: number;
-  };
   new_orders_count: number;
 };
 

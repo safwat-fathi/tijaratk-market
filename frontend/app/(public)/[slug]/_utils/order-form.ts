@@ -2,18 +2,9 @@ import type {
 	Product,
 	PublicProductCategory,
 } from "@/types/models/product";
-import type { Order } from "@/types/models/order";
 import type { ProductCartSelection } from "../_components/ProductList";
 
 export const ALL_PRODUCTS_CATEGORY = "__all_products__";
-
-export type PaginationState = {
-	page: number;
-	lastPage: number;
-	isLoading: boolean;
-	hasLoaded: boolean;
-	error: string | null;
-};
 
 export type CategoryTab = {
 	key: string;
@@ -95,80 +86,6 @@ export const resolveSelectionLineTotal = (
 	const multiplier = resolveUnitMultiplier(product, selection.unit_option_id);
 	return Number((qty * multiplier * productPrice).toFixed(2));
 };
-
-export const resolveSelectionQuantityText = (
-	selection: ProductCartSelection,
-	product: Product | undefined,
-): string => {
-	if (selection.selection_mode === "weight") {
-		const grams = Number(selection.selection_grams || 0);
-		return Number((grams / 1000).toFixed(3)).toString();
-	}
-
-	if (selection.selection_mode === "price") {
-		return "1";
-	}
-
-	const qty = Number(selection.selection_quantity || 0);
-	const multiplier = resolveUnitMultiplier(product, selection.unit_option_id);
-	return Number((qty * multiplier).toFixed(3)).toString();
-};
-
-export const buildInitialCartSelections = (
-	initialOrder?: Order | null,
-): Record<number, ProductCartSelection> =>
-	initialOrder?.items?.reduce(
-		(acc: Record<number, ProductCartSelection>, item) => {
-			if (!item.product_id) {
-				return acc;
-			}
-
-			const itemSelectionMode =
-				item.selection_mode === "weight" ||
-				item.selection_mode === "price" ||
-				item.selection_mode === "quantity"
-					? item.selection_mode
-					: "quantity";
-
-			if (itemSelectionMode === "weight") {
-				const grams = Number(item.selection_grams || 0);
-				if (Number.isFinite(grams) && grams > 0) {
-					acc[item.product_id] = {
-						selection_mode: "weight",
-						selection_grams: Math.round(grams),
-						item_note: item.notes || undefined,
-					};
-				}
-				return acc;
-			}
-
-			if (itemSelectionMode === "price") {
-				const amount = Number(item.selection_amount_egp || 0);
-				if (Number.isFinite(amount) && amount > 0) {
-					acc[item.product_id] = {
-						selection_mode: "price",
-						selection_amount_egp: Number(amount.toFixed(2)),
-						item_note: item.notes || undefined,
-					};
-				}
-				return acc;
-			}
-
-			const parsedQty =
-				Number(item.selection_quantity || 0) ||
-				Number.parseFloat(String(item.quantity ?? "1"));
-			if (Number.isFinite(parsedQty) && parsedQty > 0) {
-				acc[item.product_id] = {
-					selection_mode: "quantity",
-					selection_quantity: parsedQty,
-					unit_option_id: item.unit_option_id || undefined,
-					item_note: item.notes || undefined,
-				};
-			}
-			return acc;
-		},
-		{} as Record<number, ProductCartSelection>,
-	) || {};
 
 export const buildCategoryTabs = (
 	initialCategories: PublicProductCategory[],
@@ -266,23 +183,3 @@ export const calculateCartSummary = (
 		hasPricedItems,
 	};
 };
-
-export const buildCartItems = (
-	cartSelections: Record<number, ProductCartSelection>,
-	knownProductsById: Record<number, Product>,
-) =>
-	Object.entries(cartSelections).map(([pid, selection]) => {
-		const product = knownProductsById[Number(pid)];
-		return {
-			product_id: Number(pid),
-			name: product?.name || "منتج",
-			quantity: resolveSelectionQuantityText(selection, product),
-			total_price: resolveSelectionLineTotal(selection, product) || undefined,
-			notes: selection.item_note?.trim() || undefined,
-			selection_mode: selection.selection_mode,
-			selection_quantity: selection.selection_quantity,
-			selection_grams: selection.selection_grams,
-			selection_amount_egp: selection.selection_amount_egp,
-			unit_option_id: selection.unit_option_id,
-		};
-	});
