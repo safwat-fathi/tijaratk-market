@@ -13,9 +13,9 @@ import {
 import { redirect } from "next/navigation";
 import {
   deleteCookieAction,
-  getCookieAction,
   setCookieAction,
-} from "@/app/actions/cookie-store";
+} from "@/actions/cookie-actions";
+import { getCookie } from "@/lib/server/cookies";
 import { STORAGE_KEYS } from "@/constants";
 
 const MERCHANT_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
@@ -355,7 +355,7 @@ export async function resendPhoneChangeAction(
   _formData: FormData,
 ): Promise<ActionState> {
   void _formData;
-  const challengeToken = await getCookieAction(
+  const challengeToken = await getCookie(
     STORAGE_KEYS.PHONE_CHANGE_CHALLENGE,
   );
   if (!challengeToken) {
@@ -417,7 +417,7 @@ export async function verifyPhoneChangeAction(
     };
   }
 
-  const challengeToken = await getCookieAction(
+  const challengeToken = await getCookie(
     STORAGE_KEYS.PHONE_CHANGE_CHALLENGE,
   );
   if (!challengeToken) {

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { adminService } from "@/services/api/admin.service";
+import { updateTenantCategoryAction } from "@/actions/admin-server";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
@@ -40,7 +40,7 @@ export function TenantCategoryForm({
 
     startTransition(async () => {
       try {
-        const response = await adminService.updateTenantCategory(
+        const response = await updateTenantCategoryAction(
           tenantId,
           selectedCategory,
           forceCleanup,
@@ -50,21 +50,13 @@ export function TenantCategoryForm({
           setSuccess("تم تحديث نشاط المتجر بنجاح.");
           setConfirmDialog(null);
           router.refresh();
+        } else if (response.requiresForceCleanup && response.productCount) {
+          setConfirmDialog({
+            productCount: response.productCount,
+            targetCategory: selectedCategory,
+          });
         } else {
-          // Check if response indicates force cleanup is required
-          const data = response as unknown as {
-            requires_force_cleanup?: boolean;
-            product_count?: number;
-            message?: string;
-          };
-          if (data.requires_force_cleanup && data.product_count) {
-            setConfirmDialog({
-              productCount: data.product_count,
-              targetCategory: selectedCategory,
-            });
-          } else {
-            setError(response.message || "تعذر تحديث نشاط المتجر.");
-          }
+          setError(response.message || "تعذر تحديث نشاط المتجر.");
         }
       } catch (err: unknown) {
         const errorObj = err as {

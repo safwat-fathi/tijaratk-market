@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
 import { tenantsService } from "@/services/api/tenants.service";
+import type { Tenant } from "@/types/models/tenant";
 
 export type UpdateDeliverySettingsState = {
   success: boolean;
@@ -340,4 +341,93 @@ export async function updateStoreSettingsAction(
     success: true,
     message: "تم حفظ التغييرات بنجاح.",
   };
+}
+
+export type OnboardingProgressInput = {
+  onboarding_completed?: boolean;
+  onboarding_step?: number;
+};
+
+/**
+ * Onboarding progress is written from the wizard, which is a client component.
+ * It goes through an action so the wizard never imports an API service.
+ */
+export async function updateOnboardingProgressAction(
+  input: OnboardingProgressInput,
+): Promise<{ success: boolean; message?: string }> {
+  const parsed = z
+    .object({
+      onboarding_completed: z.boolean().optional(),
+      onboarding_step: z.coerce.number().int().min(1).max(20).optional(),
+    })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    return { success: false, message: "تعذر حفظ تقدم الإعداد." };
+  }
+
+  const response = await tenantsService.updateMyOnboardingProgress(parsed.data);
+  if (!response.success) {
+    return {
+      success: false,
+      message: response.message || "تعذر حفظ تقدم الإعداد. حاول مرة أخرى.",
+    };
+  }
+
+  revalidatePath("/merchant");
+  return { success: true };
+}
+
+const paymentMethodsSchema = z.object({
+  name: z.string().trim().min(1),
+  category: z.string().trim().min(1),
+  instapay_account_name: z.string().trim().optional(),
+  instapay_account_number: z.string().trim().optional(),
+  ewallet_account_name: z.string().trim().optional(),
+  ewallet_account_number: z.string().trim().optional(),
+  card_on_delivery_available: z.boolean().optional(),
+});
+
+export async function updatePaymentMethodsAction(
+  input: z.input<typeof paymentMethodsSchema>,
+): Promise<{ success: boolean; message?: string; data?: Tenant }> {
+  const parsed = paymentMethodsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: "راجع بيانات طرق الدفع قبل الحفظ." };
+  }
+
+  const response = await tenantsService.updateMyGeneralSettings(parsed.data);
+  if (!response.success || !response.data) {
+    return {
+      success: false,
+      message: response.message || "تعذر حفظ طرق الدفع. حاول مرة أخرى.",
+    };
+  }
+
+  revalidatePath("/merchant");
+  return { success: true, data: response.data };
+}
+
+/** Used by the onboarding delivery step, which saves outside the settings form. */
+export async function saveOnboardingDeliverySettingsAction(
+  input: unknown,
+): Promise<{ success: boolean; message?: string; data?: Tenant }> {
+  const validated = deliveryConfigurationSchema.safeParse(input);
+  if (!validated.success) {
+    return { success: false, message: "راجع بيانات التوصيل قبل الحفظ." };
+  }
+
+  const response = await tenantsService.updateMyDeliverySettings(
+    normalizeDeliveryConfiguration(validated.data),
+  );
+  if (!response.success || !response.data) {
+    return {
+      success: false,
+      message: response.message || "تعذر حفظ إعدادات التوصيل. حاول مرة أخرى.",
+    };
+  }
+
+  revalidatePath("/merchant");
+  revalidatePath("/");
+  return { success: true, data: response.data };
 }

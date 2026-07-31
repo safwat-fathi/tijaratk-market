@@ -1,3 +1,5 @@
+import "server-only";
+
 import {
 	HttpRequestOptions,
 	HttpServiceAbstract,
@@ -5,10 +7,7 @@ import {
 	IParams,
 	TMethod,
 } from "@/types/services/base";
-import {
-	getCookieAction,
-	getCookiesStringAction,
-} from "@/app/actions/cookie-store";
+import { getCookie, getCookiesString } from "@/lib/server/cookies";
 
 import { STORAGE_KEYS } from "@/constants";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
@@ -144,7 +143,6 @@ const extractFirstReadableMessage = (value: unknown, depth = 0): string | null =
 
 export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 	private readonly _baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-	private _token: string | undefined = undefined;
 	private readonly _timeout: number;
 	private readonly _defaultHeaders: HeadersInit;
 
@@ -163,16 +161,8 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 	}
 
 	private async _handleUnauthorized(): Promise<void> {
-		if (typeof window === "undefined") {
-			const { redirect } = await import("next/navigation");
-			redirect(this._unauthorizedRedirectRoute);
-			return;
-		}
-
-		const { revokeSessionAndRedirectClient } = await import(
-			"@/lib/auth/unauthorized.client"
-		);
-		await revokeSessionAndRedirectClient();
+		const { redirect } = await import("next/navigation");
+		redirect(this._unauthorizedRedirectRoute);
 	}
 
 	private async _parseErrorResponse(
@@ -208,26 +198,30 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 	protected _tokenKey: string = STORAGE_KEYS.ACCESS_TOKEN;
 	protected _unauthorizedRedirectRoute: string = REVOKE_ROUTE;
 
-	private async _getAuthHeaders(): Promise<HeadersInit> {
-		if (typeof window !== "undefined") {
+	/**
+	 * Only authenticated calls read cookies. Reading them for a public request
+	 * would opt the calling route out of static rendering, and would put a
+	 * per-visitor `Cookie` header into the Next Data Cache key — which makes
+	 * the `next: { revalidate }` windows on public endpoints useless.
+	 */
+	private async _getAuthHeaders(authRequired: boolean): Promise<HeadersInit> {
+		if (!authRequired) {
 			return {};
 		}
 
 		// Always get fresh token from cookies
-		this._token = await getCookieAction(this._tokenKey);
+		const token = await getCookie(this._tokenKey);
 
 		const headers: HeadersInit = {};
 
-		if (this._token) {
-			headers["Authorization"] = `Bearer ${this._token.replace(/['"]+/g, "")}`;
+		if (token) {
+			headers["Authorization"] = `Bearer ${token.replace(/['"]+/g, "")}`;
 		}
 
 		// Forward all cookies in SSR
-		if (typeof window === "undefined") {
-			const cookies = await getCookiesStringAction();
-			if (cookies) {
-				headers["Cookie"] = cookies;
-			}
+		const cookies = await getCookiesString();
+		if (cookies) {
+			headers["Cookie"] = cookies;
 		}
 
 		return headers;
@@ -245,25 +239,21 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 		method: TMethod,
 		options: HttpRequestOptions,
 		authHeaders: HeadersInit,
-	): { requestOptions: RequestInit; authRequired: boolean } {
+	): RequestInit {
 		const {
-			authRequired = false,
+			authRequired: _authRequired,
 			timeoutMs = this._timeout,
 			...requestOverrides
 		} = options;
 
 		return {
-			authRequired,
-			requestOptions: {
-				...requestOverrides,
-				signal: requestOverrides.signal || AbortSignal.timeout(timeoutMs),
-				method,
-				headers: {
-					...this._defaultHeaders,
-					...authHeaders,
-					...requestOverrides.headers,
-				},
-				credentials: "include",
+			...requestOverrides,
+			signal: requestOverrides.signal || AbortSignal.timeout(timeoutMs),
+			method,
+			headers: {
+				...this._defaultHeaders,
+				...authHeaders,
+				...requestOverrides.headers,
 			},
 		};
 	}
@@ -335,9 +325,10 @@ export default class HttpService<T = unknown> extends HttpServiceAbstract<T> {
 				};
 			}
 
-			const authHeaders = await this._getAuthHeaders();
+			const authRequired = options.authRequired ?? false;
+			const authHeaders = await this._getAuthHeaders(authRequired);
 			const fullURL = this._buildFullURL(route, params);
-			const { requestOptions, authRequired } = this._buildRequestOptions(
+			const requestOptions = this._buildRequestOptions(
 				method,
 				options,
 				authHeaders,

@@ -4,7 +4,10 @@ import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Tenant } from "@/types/models/tenant";
 import { Field, Input, Select } from "@/components/ui/Field";
-import { merchantDirectoryService } from "@/services/api/stores-directory.service";
+import {
+  getActiveDirectoryAreasAction,
+  updateDirectoryProfileAction,
+} from "@/actions/merchant-directory-actions";
 import { DirectoryArea } from "@/types/models/tenant";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
@@ -33,7 +36,7 @@ export default function LocationStep({
     const fetchAreas = async () => {
       setAreasLoading(true);
       try {
-        const response = await merchantDirectoryService.getActiveAreas();
+        const response = await getActiveDirectoryAreasAction();
         if (response.success && response.data) {
           setAllAreas(response.data);
         }
@@ -61,13 +64,13 @@ export default function LocationStep({
     }
     setLoading(true);
     try {
-      const payload: Parameters<
-        typeof merchantDirectoryService.updateProfile
-      >[0] = {
-        area_id: Number(locationData.cityId),
-      };
-
-      await merchantDirectoryService.updateProfile(payload);
+      const response = await updateDirectoryProfileAction(
+        Number(locationData.cityId),
+      );
+      if (!response.success) {
+        setError(response.message || "حدث خطأ أثناء حفظ البيانات");
+        return;
+      }
       await onNext();
     } catch (err) {
       console.error(err);

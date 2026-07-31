@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Tenant } from "@/types/models/tenant";
 import { Field, Input } from "@/components/ui/Field";
-import { tenantsService } from "@/services/api/tenants.service";
+import { updatePaymentMethodsAction } from "@/actions/tenant-actions";
 
 export default function PaymentMethodsStep({
   tenant,
@@ -29,7 +29,7 @@ export default function PaymentMethodsStep({
     setError(null);
     
     try {
-      const response = await tenantsService.updateMyGeneralSettings({
+      const response = await updatePaymentMethodsAction({
         name: tenant.name,
         category: tenant.category,
         instapay_account_name: instapayName,

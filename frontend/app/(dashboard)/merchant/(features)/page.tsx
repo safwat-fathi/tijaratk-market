@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getCookieAction } from "@/app/actions/cookie-store";
+import { getCookie } from "@/lib/server/cookies";
 import { STORAGE_KEYS } from "@/constants";
 import { ordersService } from "@/services/api/orders.service";
 import { merchantDashboardService } from "@/services/api/merchant-dashboard.service";
@@ -135,7 +135,7 @@ export default async function Dashboard({
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const period = normalizePeriod(resolvedSearchParams.period);
-  const userCookie = await getCookieAction(STORAGE_KEYS.USER);
+  const userCookie = await getCookie(STORAGE_KEYS.USER);
   const user = userCookie ? JSON.parse(userCookie) : null;
   const name = user?.name || "تاجر";
 

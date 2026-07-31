@@ -22,7 +22,10 @@ import {
   normalizeDeliveryConfiguration,
   resolveMainAreaId,
 } from "@/lib/delivery-configuration";
-import { merchantDirectoryService } from "@/services/api/stores-directory.service";
+import {
+  createMissingDeliveryAreaRequestAction,
+  getMissingDeliveryAreaRequestAction,
+} from "@/actions/merchant-directory-actions";
 import type {
   DeliveryConfigurationInput,
   DirectoryArea,
@@ -127,9 +130,7 @@ export default function SettingsForm({
     let cancelled = false;
     setMissingRequest(null);
     setMissingAreaError(null);
-    void merchantDirectoryService
-      .getMissingDeliveryAreaRequest(mainAreaId)
-      .then((response) => {
+    void getMissingDeliveryAreaRequestAction(mainAreaId).then((response) => {
         if (cancelled) return;
         if (response.success) {
           setMissingRequest(response.data ?? null);
@@ -187,7 +188,7 @@ export default function SettingsForm({
     try {
       if (!currentMissingRequest) {
         const requestResponse =
-          await merchantDirectoryService.createMissingDeliveryAreaRequest({
+          await createMissingDeliveryAreaRequestAction({
             main_area_id: mainAreaId,
             requested_area_name: requestedAreaName.trim(),
             note: requestNote.trim() || undefined,

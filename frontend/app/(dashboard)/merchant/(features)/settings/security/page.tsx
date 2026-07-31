@@ -4,7 +4,7 @@ import { createNoIndexMetadata } from "@/lib/marketing-seo";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { tenantsService } from "@/services/api/tenants.service";
-import { getCookieAction } from "@/app/actions/cookie-store";
+import { getCookie } from "@/lib/server/cookies";
 import { STORAGE_KEYS } from "@/constants";
 
 export const metadata = createNoIndexMetadata(
@@ -15,7 +15,7 @@ export const metadata = createNoIndexMetadata(
 export default async function SecuritySettingsPage() {
   const [tenantResponse, userCookie] = await Promise.all([
     tenantsService.getMyTenant(),
-    getCookieAction(STORAGE_KEYS.USER),
+    getCookie(STORAGE_KEYS.USER),
   ]);
   const currentPhone = tenantResponse.data?.phone || "";
   let userRole: string | undefined;

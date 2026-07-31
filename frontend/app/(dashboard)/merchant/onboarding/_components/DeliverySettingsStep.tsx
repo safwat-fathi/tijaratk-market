@@ -5,8 +5,13 @@ import { Button } from "@/components/ui/Button";
 import DeliveryConfigurationEditor from "@/components/delivery/DeliveryConfigurationEditor";
 import MissingDeliveryAreaPanel from "@/components/delivery/MissingDeliveryAreaPanel";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import { tenantsService } from "@/services/api/tenants.service";
-import { merchantDirectoryService } from "@/services/api/stores-directory.service";
+import { saveOnboardingDeliverySettingsAction } from "@/actions/tenant-actions";
+import {
+  createMissingDeliveryAreaRequestAction,
+  getActiveDirectoryAreasAction,
+  getDirectoryProfileAction,
+  getMissingDeliveryAreaRequestAction,
+} from "@/actions/merchant-directory-actions";
 import {
   extractMainAreaIds,
   getActiveChildAreas,
@@ -63,8 +68,8 @@ export default function DeliverySettingsStep({
 
     const loadConfiguration = async () => {
       const [profileResponse, areasResponse] = await Promise.all([
-        merchantDirectoryService.getProfile(),
-        merchantDirectoryService.getActiveAreas(),
+        getDirectoryProfileAction(),
+        getActiveDirectoryAreasAction(),
       ]);
       if (cancelled) return;
 
@@ -118,9 +123,7 @@ export default function DeliverySettingsStep({
     }
     let cancelled = false;
     setMissingRequest(null);
-    void merchantDirectoryService
-      .getMissingDeliveryAreaRequest(mainAreaId)
-      .then((response) => {
+    void getMissingDeliveryAreaRequestAction(mainAreaId).then((response) => {
         if (cancelled) return;
         if (response.success) {
           setMissingRequest(response.data ?? null);
@@ -161,7 +164,7 @@ export default function DeliverySettingsStep({
       setSaving(true);
       try {
         if (!currentMissingRequest) {
-          const requestResponse = await merchantDirectoryService.createMissingDeliveryAreaRequest({
+          const requestResponse = await createMissingDeliveryAreaRequestAction({
             main_area_id: mainAreaId,
             requested_area_name: requestedAreaName.trim(),
             note: requestNote.trim() || undefined,
@@ -172,8 +175,8 @@ export default function DeliverySettingsStep({
           }
           setMissingRequest(requestResponse.data);
         }
-        const response = await tenantsService.updateMyDeliverySettings({
-          ...normalizeDeliveryConfiguration(configuration),
+        const response = await saveOnboardingDeliverySettingsAction({
+          ...configuration,
           delivery_available: false,
           delivery_areas: [],
         });
@@ -204,9 +207,7 @@ export default function DeliverySettingsStep({
     }
 
     setSaving(true);
-    const response = await tenantsService.updateMyDeliverySettings(
-      normalizeDeliveryConfiguration(configuration),
-    );
+    const response = await saveOnboardingDeliverySettingsAction(configuration);
     setSaving(false);
 
     if (!response.success || !response.data) {
