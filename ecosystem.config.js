@@ -3,13 +3,13 @@ module.exports = {
     {
       name: "tijaratk-staging-backend",
       script: "dist/src/main.js",
-      cwd: "/var/www/tijaratk-staging/backend",
+      cwd: "/home/tijaratk/tijaratk-market-staging/backend",
       env: { NODE_ENV: "production", HTTP_SERVER_PORT: 8100 },
     },
     {
       name: "tijaratk-staging-frontend",
       script: ".next/standalone/frontend/server.js",
-      cwd: "/var/www/tijaratk-staging/frontend",
+      cwd: "/home/tijaratk/tijaratk-market-staging/frontend",
       env: { NODE_ENV: "production", PORT: 3100 },
     },
   ],
