@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
-import { SITE_URL } from "@/lib/marketing-seo";
+import {
+  createPublicMetadata,
+  getPublicMarketingPage,
+} from "@/lib/marketing-seo";
 
-export const metadata: Metadata = {
-  title: "شروط الاستخدام",
-  description: "شروط استخدام منصة تجارتك للتجار والعملاء.",
-  alternates: {
-    canonical: `${SITE_URL}/terms`,
-  },
-};
+export const metadata: Metadata = createPublicMetadata(
+  getPublicMarketingPage("/terms"),
+);
 
 export default function TermsOfServicePage() {
   return (

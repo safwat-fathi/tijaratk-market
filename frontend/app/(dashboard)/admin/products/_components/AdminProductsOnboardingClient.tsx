@@ -7,7 +7,6 @@ import {
   adminLoadCatalogItemsAction,
   adminLoadProductOnboardingAction,
   adminSearchTenantProductsAction,
-  adminUploadProductCatalogSheetAction,
   adminUpdateProductAvailabilityAction,
   adminUpdateProductPayloadAction,
 } from "@/actions/admin-server";

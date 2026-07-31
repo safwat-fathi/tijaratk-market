@@ -24,6 +24,8 @@ import { AdminPagination } from "../_components/AdminPagination";
 import { AdminMerchantFilters } from "./_components/AdminMerchantFilters";
 import { getCurrentAdminCached } from "@/lib/server/dashboard-request-cache";
 
+export const metadata = { title: "التجار" };
+
 export const dynamic = "force-dynamic";
 
 function formatHours(startsAt?: string | null, endsAt?: string | null) {

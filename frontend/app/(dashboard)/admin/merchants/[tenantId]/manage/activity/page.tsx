@@ -9,6 +9,8 @@ import {
 } from "@/lib/admin-managed-access";
 import { adminService } from "@/services/api/admin.service";
 
+export const metadata = { title: "سجل نشاط المتجر" };
+
 export const dynamic = "force-dynamic";
 
 export default async function ManagedActivityPage({

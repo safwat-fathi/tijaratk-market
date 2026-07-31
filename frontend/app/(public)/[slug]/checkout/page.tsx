@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getStorefrontCartDraftAction } from "@/actions/storefront-cart-actions";
 import {
@@ -13,8 +12,12 @@ import HeaderCartButton from "../_components/HeaderCartButton";
 import StorefrontCheckout from "../_components/StorefrontCheckout";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import type { StorefrontAnalyticsContext } from "@/lib/analytics/storefront-ga4";
+import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
-export const metadata: Metadata = { title: "إتمام الطلب | تجارتك" };
+export const metadata = createNoIndexMetadata(
+  "إتمام الطلب",
+  "صفحة إتمام الطلب الخاصة بالعميل وليست مخصصة للفهرسة.",
+);
 
 type CheckoutPageProps = { params: Promise<{ slug: string }> };
 

@@ -11,7 +11,7 @@ import {
   Compass,
   Share,
 } from "lucide-react";
-import { usePwaStandalone } from "@/hooks/usePwaStandalone";
+import { usePwaStandalone } from "@/lib/hooks/usePwaStandalone";
 import { Logo } from "@/components/ui/Logo";
 
 type BrowserFamily = "ios" | "android" | "desktop" | "unknown";

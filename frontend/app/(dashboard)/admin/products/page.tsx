@@ -2,6 +2,8 @@ import { Card } from "@/components/ui/Card";
 import { AdminPagination } from "../_components/AdminPagination";
 import { adminService, type AdminProduct } from "@/services/api/admin.service";
 
+export const metadata = { title: "المنتجات" };
+
 export const dynamic = "force-dynamic";
 
 type PageProps = {

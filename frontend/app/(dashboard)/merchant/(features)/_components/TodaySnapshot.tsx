@@ -1,4 +1,3 @@
-import React from "react";
 import { DashboardStats } from "./dashboard.types";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatArabicInteger } from "@/lib/utils/number";

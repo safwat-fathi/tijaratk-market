@@ -9,6 +9,8 @@ import {
 import { adminService } from "@/services/api/admin.service";
 import ProductsClientView from "./ProductsClientView";
 
+export const metadata = { title: "منتجات المتجر" };
+
 export const dynamic = "force-dynamic";
 
 export default async function ManagedProductsPage({

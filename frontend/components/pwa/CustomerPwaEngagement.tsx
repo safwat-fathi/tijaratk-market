@@ -28,7 +28,7 @@ import {
   disableCustomerPushSubscriptionAction,
   syncCustomerPushSubscriptionAction,
 } from "@/actions/customer-push-notification-actions";
-import { usePwaStandalone } from "@/hooks/usePwaStandalone";
+import { usePwaStandalone } from "@/lib/hooks/usePwaStandalone";
 import { runAfterLoadAndIdle } from "@/lib/browser/run-after-load-and-idle";
 import { cn } from "@/lib/utils";
 import BottomSheet from "@/components/ui/BottomSheet";
@@ -79,10 +79,8 @@ const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
   "admin",
   "api",
   "auth",
-  "dummy-storefront",
   "features",
   "install",
-  "market",
   "merchant",
   "offline",
   "privacy",
@@ -145,9 +143,6 @@ const isCustomerRoute = (pathname: string) =>
 const isEligibleShoppingPath = (pathname: string) => {
   if (pathname === "/") return true;
   if (pathname.startsWith("/stores/")) return true;
-  if (pathname.startsWith("/market/")) {
-    return !/(?:^|\/)(?:checkout|success)(?:\/|$)/.test(pathname);
-  }
 
   const segments = pathname.split("/").filter(Boolean);
   return (

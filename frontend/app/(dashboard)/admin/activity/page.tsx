@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { adminService } from "@/services/api/admin.service";
+import { getCurrentAdminCached } from "@/lib/server/dashboard-request-cache";
 import type {
   AdminAuditLog,
   AdminAuditOutcome,
@@ -114,7 +115,7 @@ export default async function AdminActivityPage({
   searchParams: Promise<AuditSearchParams>;
 }) {
   const query = await searchParams;
-  const profile = await adminService.getCurrentAdmin();
+  const profile = await getCurrentAdminCached();
   if (!profile.success || !profile.data) redirect("/admin/login");
   if (profile.data.role !== "platform_admin") redirect("/admin/merchants");
 

@@ -3,6 +3,8 @@ import { adminService } from "@/services/api/admin.service";
 import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import MissingDeliveryAreaRequestsManager from "./_components/MissingDeliveryAreaRequestsManager";
 
+export const metadata = { title: "طلبات إضافة المناطق" };
+
 export const dynamic = "force-dynamic";
 
 export default async function MissingDeliveryAreaRequestsPage() {

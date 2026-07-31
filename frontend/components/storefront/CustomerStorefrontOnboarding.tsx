@@ -5,7 +5,7 @@ import { CircleHelp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { EventData, Step } from "react-joyride";
 import { cn } from "@/lib/utils";
-import { usePwaStandalone } from "@/hooks/usePwaStandalone";
+import { usePwaStandalone } from "@/lib/hooks/usePwaStandalone";
 
 const Joyride = dynamic(
   () => import("react-joyride").then((module) => module.Joyride),

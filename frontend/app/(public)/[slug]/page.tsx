@@ -18,6 +18,7 @@ import {
 } from "@/types/models/product";
 import { Order } from "@/types/models/order";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { Metadata } from "next";
 import MetaStorefrontView from "@/components/analytics/MetaStorefrontView";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
@@ -46,13 +47,13 @@ type Props = {
   searchParams: Promise<StoreSearchParams>;
 };
 
-// Fetch data
-async function getTenant(slug: string): Promise<Tenant | null> {
+/** Shared by `generateMetadata` and the page so the tenant is fetched once. */
+const getTenant = cache(async (slug: string): Promise<Tenant | null> => {
   const response = await tenantsService.getPublicTenant(slug);
 
   if (!response.success || !response.data) return null;
   return response.data;
-}
+});
 
 const EMPTY_PRODUCTS_META: PublicProductsMeta = {
   total: 0,

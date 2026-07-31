@@ -5,6 +5,8 @@ import { togglePlanStatusAction } from '@/actions/admin-server';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import { redirect } from 'next/navigation';
 
+export const metadata = { title: "الباقات" };
+
 export const dynamic = 'force-dynamic';
 
 async function getPlans() {

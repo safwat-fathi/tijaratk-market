@@ -1,4 +1,3 @@
-import React from "react";
 import { ActionItem } from "./dashboard.types";
 import Link from "next/link";
 import { cn } from "@/lib/utils";

@@ -9,7 +9,11 @@ export default function robots(): MetadataRoute.Robots {
 		"/checkout/session/",
 		"/merchant/",
 		"/track-order/",
+		"/track-orders",
 		"/*/success/",
+		"/*/cart",
+		"/*/checkout",
+		"/offline",
 	];
 
 	return {

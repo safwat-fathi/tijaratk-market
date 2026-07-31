@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
-import { SITE_URL } from "@/lib/marketing-seo";
+import {
+  createPublicMetadata,
+  getPublicMarketingPage,
+} from "@/lib/marketing-seo";
 
-export const metadata: Metadata = {
-  title: "سياسة الخصوصية وحماية البيانات الشخصية",
-  description: "سياسة الخصوصية وحماية البيانات الشخصية لمنصة تجارتك وفقاً للقوانين المصرية.",
-  alternates: {
-    canonical: `${SITE_URL}/privacy`,
-  },
-};
+export const metadata: Metadata = createPublicMetadata(
+  getPublicMarketingPage("/privacy"),
+);
 
 export default function PrivacyPolicyPage() {
   return (

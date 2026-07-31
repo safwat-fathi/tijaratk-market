@@ -19,7 +19,6 @@ const PUBLIC_MARKETING_PATHS = new Set([
 const RESERVED_TOP_LEVEL_PATHS = new Set([
   "admin",
   "api",
-  "dummy-storefront",
   "merchant",
   "stores",
   "track-order",
@@ -34,10 +33,6 @@ const isAllowlistedPublicPath = (pathname: string) => {
   }
 
   const segments = pathname.split("/").filter(Boolean);
-  if (segments.length === 2 && segments[0] === "market") {
-    return true;
-  }
-
   const storefrontSlug = segments[0] || "";
   if (RESERVED_TOP_LEVEL_PATHS.has(storefrontSlug)) return false;
 

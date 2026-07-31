@@ -1,4 +1,3 @@
-import React from "react";
 import { LatestOrder } from "./dashboard.types";
 import Link from "next/link";
 import { OrderStatus } from "@/types/enums";

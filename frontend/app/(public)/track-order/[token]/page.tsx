@@ -222,18 +222,14 @@ export default async function TrackOrder({ params }: Props) {
   if (!order) return notFound();
   const deliveryAreaLabel =
     order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
-  const reorderBase = order.zone_storefront
-    ? order.zone_storefront.reorder_url
-    : order.tenant?.slug
-      ? `/${order.tenant.slug}`
-      : null;
+  const reorderBase = order.tenant?.slug ? `/${order.tenant.slug}` : null;
 
   return (
     <div className="overflow-hidden rounded-lg border border-brand-border bg-white shadow-soft">
       <div className="flex items-center gap-2 px-2">
         <SafeImage
-          src="/logo.png"
-          alt="Tijaratk"
+          src="/tijaratk-logo-suite/app-icon-light.png"
+          alt="تجارتك"
           width={80}
           height={80}
           fallback={<div className="h-20 w-20 rounded-md bg-brand-soft" />}

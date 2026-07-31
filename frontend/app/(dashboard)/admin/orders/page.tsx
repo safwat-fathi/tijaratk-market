@@ -13,6 +13,8 @@ import { redirect } from "next/navigation";
 import { AdminPagination } from "../_components/AdminPagination";
 import { AdminOrderRow } from "./_components/AdminOrderRow";
 
+export const metadata = { title: "الطلبات" };
+
 export const dynamic = "force-dynamic";
 
 type Props = {

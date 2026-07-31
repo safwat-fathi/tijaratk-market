@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
-import { SITE_URL } from "@/lib/marketing-seo";
+import {
+  createPublicMetadata,
+  getPublicMarketingPage,
+} from "@/lib/marketing-seo";
 
-export const metadata: Metadata = {
-  title: "سياسة الإرجاع والاستبدال",
-  description: "سياسة الإرجاع والاستبدال للطلبات عبر منصة تجارتك.",
-  alternates: {
-    canonical: `${SITE_URL}/return-policy`,
-  },
-};
+export const metadata: Metadata = createPublicMetadata(
+  getPublicMarketingPage("/return-policy"),
+);
 
 export default function ReturnPolicyPage() {
   return (

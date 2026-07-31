@@ -7,6 +7,8 @@ import {
 } from "@/lib/admin-managed-access";
 import { adminService } from "@/services/api/admin.service";
 
+export const metadata = { title: "إدارة المتجر" };
+
 export default async function ManagedStorePage({
   params,
 }: {

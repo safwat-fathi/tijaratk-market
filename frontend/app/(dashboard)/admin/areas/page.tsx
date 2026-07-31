@@ -9,6 +9,8 @@ import { AdminPagination } from "../_components/AdminPagination";
 import AreasManager from "./_components/AreasManager";
 import { AreasFilters } from "./_components/AreasFilters";
 
+export const metadata = { title: "المناطق" };
+
 export const dynamic = "force-dynamic";
 
 type SearchParamValue = string | string[] | undefined;

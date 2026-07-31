@@ -6,7 +6,7 @@ export const STORAGE_KEYS = {
   CUSTOMER_AVAILABILITY_STATE: "customer_availability_state",
   ADMIN_ACCESS_TOKEN: "admin_access_token",
   ADMIN_MANAGEMENT_SESSION: "admin_management_session",
-};
+} as const;
 
 export {
   TENANT_CATEGORIES,

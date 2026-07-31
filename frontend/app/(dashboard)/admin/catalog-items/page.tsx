@@ -14,6 +14,8 @@ import { isNextRedirectError } from "@/lib/auth/navigation-errors";
 import AdminCatalogItemsBulkClient from "./_components/AdminCatalogItemsBulkClient";
 import AdminCatalogItemCreateClient from "./_components/AdminCatalogItemCreateClient";
 
+export const metadata = { title: "عناصر الكتالوج" };
+
 export const dynamic = "force-dynamic";
 
 type Props = {

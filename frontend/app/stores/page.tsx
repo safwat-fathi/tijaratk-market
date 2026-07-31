@@ -1,4 +1,10 @@
 import { redirect } from "next/navigation";
+import { createNoIndexMetadata } from "@/lib/marketing-seo";
+
+export const metadata = createNoIndexMetadata(
+  "دليل المتاجر",
+  "تحويل إلى صفحة دليل المتاجر المناسبة.",
+);
 type StoresRedirectSearchParams = {
   area?: string;
   category?: string;

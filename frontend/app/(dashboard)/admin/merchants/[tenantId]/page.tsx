@@ -10,8 +10,11 @@ import {
   getAdminManagedPermissionLabel,
 } from "@/constants/admin-managed-permissions";
 import { adminService } from "@/services/api/admin.service";
+import { getCurrentAdminCached } from "@/lib/server/dashboard-request-cache";
 import { ManageStoreDialog } from "./_components/ManageStoreDialog";
 import { TenantCategoryForm } from "../_components/TenantCategoryForm";
+
+export const metadata = { title: "ملف التاجر" };
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +28,7 @@ export default async function AdminMerchantDetailsPage({ params }: PageProps) {
   if (!Number.isInteger(tenantId) || tenantId <= 0) notFound();
 
   const [profileResponse, contextResponse] = await Promise.all([
-    adminService.getCurrentAdmin(),
+    getCurrentAdminCached(),
     adminService.getManagedMerchantContext(tenantId),
   ]);
   if (!profileResponse.data || !contextResponse.data) notFound();

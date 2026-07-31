@@ -1,8 +1,11 @@
 import { adminService } from '@/services/api/admin.service';
+import { getCurrentAdminCached } from "@/lib/server/dashboard-request-cache";
 import { Card } from '@/components/ui/Card';
 import { isNextRedirectError } from '@/lib/auth/navigation-errors';
 import { formatArabicInteger } from '@/lib/utils/number';
 import { redirect } from 'next/navigation';
+
+export const metadata = { title: "لوحة التحكم" };
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +31,7 @@ async function getStats() {
 }
 
 export default async function AdminDashboard() {
-  const profile = await adminService.getCurrentAdmin();
+  const profile = await getCurrentAdminCached();
   if (profile.data?.role === 'operations_admin') {
     redirect('/admin/merchants');
   }

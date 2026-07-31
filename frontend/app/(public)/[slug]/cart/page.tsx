@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getStorefrontCartDraftAction } from "@/actions/storefront-cart-actions";
 import { tenantsService } from "@/services/api/tenants.service";
@@ -8,8 +7,12 @@ import StorefrontCart from "../_components/StorefrontCart";
 import { createUnavailableStorefrontOrderState } from "@/lib/storefront-order-availability";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import type { StorefrontAnalyticsContext } from "@/lib/analytics/storefront-ga4";
+import { createNoIndexMetadata } from "@/lib/marketing-seo";
 
-export const metadata: Metadata = { title: "مراجعة الطلب | تجارتك" };
+export const metadata = createNoIndexMetadata(
+  "مراجعة الطلب",
+  "سلة الطلب الخاصة بالعميل وليست مخصصة للفهرسة.",
+);
 
 type CartPageProps = {
   params: Promise<{ slug: string }>;

@@ -6,90 +6,47 @@ type LogoProps = {
   variant?: 'auto' | 'light' | 'dark' | 'icon' | 'icon-light' | 'icon-dark';
   width?: number;
   height?: number;
+  priority?: boolean;
 };
 
-export function Logo({ className, variant = 'auto', width = 160, height = 48 }: LogoProps) {
-  // 'auto' uses tailwind dark mode classes to swap automatically
-  // 'light' forces the logo for light backgrounds (horizontal-logo-light.png)
-  // 'dark' forces the logo for dark backgrounds (horizontal-logo-dark.png)
-  // 'icon' shows the app icon
+const HORIZONTAL_SOURCES = {
+  light: '/tijaratk-logo-suite/horizontal-logo-light.png',
+  dark: '/tijaratk-logo-suite/horizontal-logo-dark.png',
+} as const;
 
-  if (variant === 'icon') {
-    return (
-      <>
-        <Image 
-          src="/tijaratk-logo-suite/app-icon-light.png" 
-          alt="Tijaratk App Icon" 
-          width={width} 
-          height={height} 
-          className={cn("dark:hidden", className)} 
-        />
-        <Image 
-          src="/tijaratk-logo-suite/app-icon-dark.png" 
-          alt="Tijaratk App Icon" 
-          width={width} 
-          height={height} 
-          className={cn("hidden dark:block", className)} 
-        />
-      </>
-    );
-  }
+const ICON_SOURCES = {
+  light: '/tijaratk-logo-suite/app-icon-light.png',
+  dark: '/tijaratk-logo-suite/app-icon-dark.png',
+} as const;
 
-  if (variant === 'icon-light' || variant === 'icon-dark') {
-    return (
-      <Image
-        src={`/tijaratk-logo-suite/app-icon-${variant === 'icon-light' ? 'light' : 'dark'}.png`}
-        alt="Tijaratk App Icon"
-        width={width}
-        height={height}
-        className={className}
-      />
-    );
-  }
+/**
+ * Renders exactly one image.
+ *
+ * The previous implementation rendered both the light and the dark asset and
+ * hid one with `dark:hidden`, which downloads and decodes two files on every
+ * page that shows a logo. The app declares `colorScheme: "light"` in the root
+ * viewport, so `auto` resolves to the light asset; callers sitting on a dark
+ * surface ask for the dark variant explicitly.
+ */
+export function Logo({
+  className,
+  variant = 'auto',
+  width = 160,
+  height = 48,
+  priority,
+}: LogoProps) {
+  const isIcon = variant.startsWith('icon');
+  const isDark = variant === 'dark' || variant === 'icon-dark';
+  const sources = isIcon ? ICON_SOURCES : HORIZONTAL_SOURCES;
 
-  if (variant === 'light') {
-    // For light background
-    return (
-      <Image 
-        src="/tijaratk-logo-suite/horizontal-logo-light.png" 
-        alt="Tijaratk Logo" 
-        width={width} 
-        height={height} 
-        className={className} 
-      />
-    );
-  }
-
-  if (variant === 'dark') {
-    // For dark background
-    return (
-      <Image 
-        src="/tijaratk-logo-suite/horizontal-logo-dark.png" 
-        alt="Tijaratk Logo" 
-        width={width} 
-        height={height} 
-        className={className} 
-      />
-    );
-  }
-
-  // 'auto'
   return (
-    <>
-      <Image 
-        src="/tijaratk-logo-suite/horizontal-logo-light.png" 
-        alt="Tijaratk Logo" 
-        width={width} 
-        height={height} 
-        className={cn("dark:hidden", className)} 
-      />
-      <Image 
-        src="/tijaratk-logo-suite/horizontal-logo-dark.png" 
-        alt="Tijaratk Logo" 
-        width={width} 
-        height={height} 
-        className={cn("hidden dark:block", className)} 
-      />
-    </>
+    <Image
+      src={isDark ? sources.dark : sources.light}
+      alt={isIcon ? 'أيقونة تطبيق تجارتك' : 'شعار تجارتك'}
+      width={width}
+      height={height}
+      priority={priority}
+      className={cn(className)}
+    />
   );
 }

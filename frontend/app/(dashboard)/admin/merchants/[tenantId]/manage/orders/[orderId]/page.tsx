@@ -17,6 +17,8 @@ import {
 import { adminService } from "@/services/api/admin.service";
 import ManagedOutOfStockAction from "./ManagedOutOfStockAction";
 
+export const metadata = { title: "تفاصيل طلب المتجر" };
+
 export const dynamic = "force-dynamic";
 
 export default async function ManagedOrderDetailsPage({

@@ -9,6 +9,8 @@ import { CancelImportButton } from "./_components/CancelImportButton";
 import { AutoRefresh } from "./_components/AutoRefresh";
 import type { ImportRun, ImportStatus } from "@/types/models/import";
 
+export const metadata = { title: "استيراد الكتالوج" };
+
 export const dynamic = "force-dynamic";
 
 const STATUS_LABELS: Record<ImportStatus, string> = {

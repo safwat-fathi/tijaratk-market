@@ -9,6 +9,8 @@ import {
 } from "@/lib/admin-managed-access";
 import { adminService } from "@/services/api/admin.service";
 
+export const metadata = { title: "طلبات المتجر" };
+
 export const dynamic = "force-dynamic";
 
 const statusLabels: Record<string, string> = {

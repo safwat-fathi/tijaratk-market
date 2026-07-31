@@ -22,6 +22,8 @@ import { resolveImageUrl } from "@/app/(dashboard)/merchant/(features)/products/
 import { EditCategorySheet } from "./_components/EditCategorySheet";
 import { MoveCategoryItemsSheet } from "./_components/MoveCategoryItemsSheet";
 
+export const metadata = { title: "التصنيفات" };
+
 export const dynamic = "force-dynamic";
 
 type Props = {

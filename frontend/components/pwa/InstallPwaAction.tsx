@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Copy, Download, ExternalLink, Share2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePwaStandalone } from "@/hooks/usePwaStandalone";
+import { usePwaStandalone } from "@/lib/hooks/usePwaStandalone";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;

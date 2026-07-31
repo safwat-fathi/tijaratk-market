@@ -18,7 +18,8 @@ Tijaratk is a **bootstrapped, operations-first SaaS** that enables local merchan
 - `middlewares` contains middlewares to be stacked on top of the Next.js middleware stack
 - `types` contains types and global models definitions
 - `services` contains API services and utilities logic
-  - `services/api` contains API services
+  - `services/api` contains API services (server-only — never import one from a
+  client component; add a server action instead)
   - `services/base` contains main HTTPService logic
   - `services/bff` contains BFF services (composed API services in a single service)
 
@@ -27,18 +28,19 @@ Tijaratk is a **bootstrapped, operations-first SaaS** that enables local merchan
 - `npm run dev`: starts the development server
 - `npm run build`: builds the production version
 - `npm run start`: starts the production server
-- `npm run lint`: runs eslint and prettier on the codebase
-- `npm run prettier —write path/to/file.tsx` for single file format instead of formatting the whole project
-- `npx eslint path/to/file.tsx` to lint a single file instead of building / linting the whole project
+- `pnpm run lint`: runs eslint, `tsc --noEmit`, and the Next 16 request-API check
+- `pnpm run type-check`: runs `tsc --noEmit` only
+- `npx eslint path/to/file.tsx` to lint a single file instead of linting the whole project
+
+Prettier is not installed; formatting is whatever eslint enforces.
 
 ## Key technologies
 
 - Next.js v16
 - TypeScript
-- React
-- TailwindCSS
+- React 19
+- TailwindCSS v4
 - Zod
-- Zustand
 - `pnpm` for package management
 
 ## Testing
@@ -112,8 +114,12 @@ export default async function InvoicesPage({
 
 ### State Management
 
-- Use Zustand for state management
-- Do not use React Context API for state management
+- Keep state local to the component that owns it, and lift it only as far as it
+  needs to go. Prefer server components and URL state over client state.
+- No global state library is installed. Do not add one without discussion.
+- React Context is acceptable for a genuinely cross-cutting client concern
+  (`CustomerPwaEngagement`, `PushNotificationsControl` both use it); it is not a
+  substitute for passing props one or two levels.
 
 ### Forms
 
@@ -126,6 +132,13 @@ export default async function InvoicesPage({
 - All API services should be defined in `services/api` directory
 - All API services should be inherited from `services/base/HTTPService`
 - `access_token` and `refresh_token` stored in Cookies can be read in server-side only
+- Cookie *reads* live in `lib/server/cookies.ts` (`server-only`, not actions).
+  Never expose a cookie reader as a `"use server"` action — an action is a
+  callable endpoint, and returning the cookie string would hand httpOnly session
+  tokens to the browser. Cookie *writes* are actions in `actions/cookie-actions.ts`.
+- Only pass `authRequired: true` on service calls that genuinely need the
+  session. It gates cookie access, and reading cookies opts the route out of
+  static rendering and poisons the fetch cache key with per-visitor data.
 - Define models for API responses
 - For complex and composed queries use (BFF) the same as `services/bff/example.service.ts`
 - Cache API responses on the server side for better performance
@@ -180,7 +193,11 @@ export const STORAGE_KEYS = {
 - The app is intended for Arabic language users
 - Make sure to use context7 mcp if it’s present to get latest documentations for a new feature, page or component
 - For any feature that requires using 3rd party code or building a custom one check React available ready-to-use code first. For example instead of building a custom useDebounce hook you can use `useDeferredValue` React hook.
-- This is an ERP application do not focus on SEO optimization methodologies
+- The dashboards (`/admin`, `/merchant`) are ERP surfaces and are `noindex`;
+  do not spend effort on SEO there beyond a specific page `title`.
+- The public surfaces (`/`, `/stores/*`, storefront `/[slug]`, and the marketing
+  pages) ARE SEO targets: keep `createPublicMetadata`, JSON-LD, and the sitemap
+  in sync when adding a public route.
 - Shared types, global models (`User`, `Invoice`, `Customer`, etc…) should be defined in types die
 - Use PascalCase for all React component file and component names (e.g., InvoiceForm.tsx, Sidebar.tsx).
 - Prefer to read and summarize before editing.
