@@ -10,9 +10,6 @@ import {
   Prisma,
   TenantStatus,
 } from '../../generated/prisma/client';
-import {
-  resolveZoneStorefrontReorderUrl,
-} from 'src/zone-storefronts/zone-storefront-feature';
 
 type PublicCustomerProfile = Pick<Customer, 'name' | 'phone' | 'notes'> & {
   addresses: string[];
@@ -33,12 +30,6 @@ type PublicCustomerOrder = Pick<
 > & {
   tenant?: { id: number; name: string; slug: string };
   items?: unknown[];
-  zone_storefront?: {
-    id: number;
-    name: string;
-    slug: string;
-    reorder_url: string | null;
-  } | null;
 };
 
 export type PublicCustomerIdentityCredential = {
@@ -346,13 +337,6 @@ export class CustomersService {
         },
         include: {
           tenant: { select: { id: true, name: true, slug: true } },
-          order_dispatch: {
-            select: {
-              zone_storefront: {
-                select: { id: true, name: true, slug: true, is_active: true },
-              },
-            },
-          },
           order_items: {
             include: {
               replaced_by_product: true,
@@ -366,7 +350,6 @@ export class CustomersService {
     });
 
     return orders.map((order) => {
-      const zoneStorefront = order.order_dispatch?.zone_storefront;
       return {
         id: order.id,
         public_token: order.public_token,
@@ -378,25 +361,8 @@ export class CustomersService {
         scheduled_delivery_date: order.scheduled_delivery_date,
         scheduled_delivery_starts_at: order.scheduled_delivery_starts_at,
         scheduled_delivery_ends_at: order.scheduled_delivery_ends_at,
-        tenant: zoneStorefront
-          ? {
-              id: zoneStorefront.id,
-              name: zoneStorefront.name,
-              slug: zoneStorefront.slug,
-            }
-          : order.tenant,
+        tenant: order.tenant,
         items: order.order_items,
-        zone_storefront: zoneStorefront
-          ? {
-              id: zoneStorefront.id,
-              name: zoneStorefront.name,
-              slug: zoneStorefront.slug,
-              reorder_url: resolveZoneStorefrontReorderUrl({
-                slug: zoneStorefront.slug,
-                isActive: zoneStorefront.is_active,
-              }),
-            }
-          : null,
       };
     }) as PublicCustomerOrder[];
   }

@@ -41,11 +41,11 @@ them.
   `package.json`.
 - Do not add `test`, `test:watch`, or `coverage` scripts, jest/vitest config
   files, or CI test steps.
-- The only tests in this repository are the security e2e suites in
-  `backend/test/` (`security.e2e-spec.js` and
-  `zone-storefront.security.e2e-spec.js`, run via `pnpm run test:e2e`). They are
-  maintained deliberately. Do not delete them, and do not extend them into a
-  general-purpose test suite.
+- The only test in this repository is the security e2e suite in
+  `backend/test/security.e2e-spec.js`, run via `pnpm run test:e2e`. It is
+  maintained deliberately. Do not delete it, and do not extend it into a
+  general-purpose test suite. (`zone-storefront.security.e2e-spec.js` was
+  removed together with the zone storefront backend module it covered.)
 - Verify changes by reasoning about the code and by asking the user to exercise
   the running application. Report plainly what was verified and what was not.
 

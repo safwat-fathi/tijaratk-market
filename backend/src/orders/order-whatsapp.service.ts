@@ -9,7 +9,6 @@ import {
   DirectoryArea,
 } from '../../generated/prisma/client';
 import { OrderStatus } from 'src/common/enums/order-status.enum';
-import { PrismaService } from 'src/prisma/prisma.service';
 
 type OrderWithRelations = Order & {
   customer?: Customer | null;
@@ -30,7 +29,6 @@ export class OrderWhatsappService {
     @Inject(WhatsappService)
     @Optional()
     private readonly whatsappService: WhatsappService | undefined,
-    private readonly prisma: PrismaService,
   ) {}
 
   private resolveStatusLabel(status: OrderStatus): string | null {
@@ -199,7 +197,7 @@ export class OrderWhatsappService {
     const customerNumber = order.customer_phone || order.customer?.phone;
     if (!customerNumber || !item.pending_replacement_product?.name) return;
 
-    const fulfillingMerchant = await this.resolveFulfillingMerchant(order);
+    const fulfillingMerchant = this.resolveFulfillingMerchant(order);
     const storeName = fulfillingMerchant?.name || order.tenant?.name || 'المتجر';
 
     await whatsappService.sendTemplatedMessage({
@@ -224,7 +222,7 @@ export class OrderWhatsappService {
     const whatsappService = this.whatsappService;
     if (!whatsappService) return;
 
-    const sellerNumber = (await this.resolveFulfillingMerchant(order))?.phone;
+    const sellerNumber = this.resolveFulfillingMerchant(order)?.phone;
     if (!sellerNumber) return;
 
     const customerName = order.customer_name || order.customer?.name || 'عميل';
@@ -250,7 +248,7 @@ export class OrderWhatsappService {
     const whatsappService = this.whatsappService;
     if (!whatsappService) return;
 
-    const sellerNumber = (await this.resolveFulfillingMerchant(order))?.phone;
+    const sellerNumber = this.resolveFulfillingMerchant(order)?.phone;
     if (!sellerNumber) return;
 
     const customerName = order.customer_name || order.customer?.name || 'عميل';
@@ -269,21 +267,10 @@ export class OrderWhatsappService {
     });
   }
 
-  /** Resolves the accepted dispatch merchant before falling back to the order owner. */
-  private async resolveFulfillingMerchant(
+  /** Resolves the merchant that owns the order. */
+  private resolveFulfillingMerchant(
     order: OrderWithRelations,
-  ): Promise<{ name: string; phone: string } | undefined> {
-    const acceptedAssignment = await this.prisma.orderDispatchAssignment.findFirst({
-      where: {
-        status: 'accepted',
-        is_current: true,
-        order_dispatch: { order_id: order.id, status: 'accepted' },
-      },
-      select: { target_tenant: { select: { name: true, phone: true } } },
-      orderBy: { id: 'desc' },
-    });
-
-    if (acceptedAssignment) return acceptedAssignment.target_tenant;
+  ): { name: string; phone: string } | undefined {
     if (!order.tenant?.phone) return undefined;
     return { name: order.tenant.name, phone: order.tenant.phone };
   }

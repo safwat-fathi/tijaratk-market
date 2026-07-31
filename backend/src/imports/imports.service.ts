@@ -34,9 +34,6 @@ import {
   type ExistingCatalogImageState,
 } from './services/catalog-import-image.service';
 import { parseBooleanLike } from 'src/products/utils/parse-boolean-like';
-import {
-  enqueueZoneCatalogReconciliation,
-} from 'src/zone-storefronts/zone-catalog-reconciliation.repository';
 
 const EXPECTED_CURRENCY = 'EGP';
 const PROGRESS_UPDATE_INTERVAL = 100;
@@ -69,7 +66,6 @@ type CatalogItemData = {
 type CatalogReplacementState = {
   source: CatalogSource | null;
   externalIds: Set<string>;
-  affectedSources: Set<CatalogSource>;
 };
 
 /**
@@ -204,7 +200,6 @@ export class ImportsService {
     const replacementState: CatalogReplacementState = {
       source: null,
       externalIds: new Set<string>(),
-      affectedSources: new Set<CatalogSource>(),
     };
 
     await this.prisma.importRun.update({
@@ -310,7 +305,7 @@ export class ImportsService {
     }
 
     await this.flushRowErrors(importRunId);
-    await this.finishImport(importRunId, counters, replacementState);
+    await this.finishImport(importRunId, counters);
   }
 
   private async processBatch(
@@ -370,7 +365,6 @@ export class ImportsService {
 
     try {
       const itemData = this.mapCatalogRow(parsed.data);
-      replacementState.affectedSources.add(itemData.source);
       this.trackReplacementSource(mode, itemData, replacementState);
       const existingItem = await this.findExistingCatalogItem(itemData);
 
@@ -813,7 +807,6 @@ export class ImportsService {
   private async finishImport(
     importRunId: number,
     counters: CatalogImportCounters,
-    replacementState: CatalogReplacementState,
   ) {
     let status: ImportStatus = ImportStatus.failed;
     if (counters.failedRows === 0) {
@@ -822,24 +815,13 @@ export class ImportsService {
       status = ImportStatus.partial_success;
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.importRun.update({
-        where: { id: importRunId },
-        data: {
-          ...this.toImportProgressData(counters),
-          status,
-          finished_at: new Date(),
-        },
-      });
-
-      if (
-        status === ImportStatus.success ||
-        status === ImportStatus.partial_success
-      ) {
-        for (const source of replacementState.affectedSources) {
-          await enqueueZoneCatalogReconciliation(tx, source);
-        }
-      }
+    await this.prisma.importRun.update({
+      where: { id: importRunId },
+      data: {
+        ...this.toImportProgressData(counters),
+        status,
+        finished_at: new Date(),
+      },
     });
   }
 

@@ -61,9 +61,6 @@ import {
   ActivityEntityTypes,
   ActivitySources,
 } from 'src/activity-log/constants/activity-types';
-import {
-  enqueueZoneCatalogReconciliation,
-} from 'src/zone-storefronts/zone-catalog-reconciliation.repository';
 import { QueryAdminOrdersDto } from './dto/query-admin-orders.dto';
 import { UpdateTenantCategoryDto } from './dto/update-tenant-category.dto';
 
@@ -1101,11 +1098,6 @@ export class AdminService {
           },
           data: { category: newName },
         });
-        await enqueueZoneCatalogReconciliation(
-          tx,
-          category.source as CatalogSource,
-        );
-
         return updatedCategory;
       });
 
@@ -1194,9 +1186,6 @@ export class AdminService {
         },
         data: { category: toCategory },
       });
-      if (updated.count > 0) {
-        await enqueueZoneCatalogReconciliation(tx, source);
-      }
       return updated;
     });
 
@@ -1453,7 +1442,6 @@ export class AdminService {
             dto.is_essential === true ? dto.essential_sort_order : null,
         },
       });
-      await enqueueZoneCatalogReconciliation(tx, source);
       return item;
     });
   }
@@ -1529,10 +1517,6 @@ export class AdminService {
 
     const updatedItem = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.catalogItem.update({ where: { id }, data });
-      await enqueueZoneCatalogReconciliation(
-        tx,
-        item.source as CatalogSource,
-      );
       return updated;
     });
 
@@ -1597,18 +1581,9 @@ export class AdminService {
       data.essential_sort_order = null;
     }
 
-    const sources = Array.from(
-      new Set(items.map((item) => item.source as CatalogSource)),
-    );
-    const result = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.catalogItem.updateMany({
-        where: { id: { in: dto.ids } },
-        data,
-      });
-      for (const source of sources) {
-        await enqueueZoneCatalogReconciliation(tx, source);
-      }
-      return updated;
+    const result = await this.prisma.catalogItem.updateMany({
+      where: { id: { in: dto.ids } },
+      data,
     });
 
     return { success: true, count: result.count };
@@ -1620,19 +1595,13 @@ export class AdminService {
   async deleteAdminCatalogItem(id: number) {
     const item = await this.findAdminCatalogItem(id);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.catalogItem.update({
-        where: { id },
-        data: {
-          is_active: false,
-          is_essential: false,
-          essential_sort_order: null,
-        },
-      });
-      await enqueueZoneCatalogReconciliation(
-        tx,
-        item.source as CatalogSource,
-      );
+    await this.prisma.catalogItem.update({
+      where: { id },
+      data: {
+        is_active: false,
+        is_essential: false,
+        essential_sort_order: null,
+      },
     });
 
     return { success: true };
@@ -1768,7 +1737,6 @@ export class AdminService {
           essential_sort_order: dto.essential_sort_order,
         },
       });
-      await enqueueZoneCatalogReconciliation(tx, CATALOG_SOURCE_TALABAT);
       return item;
     });
   }
@@ -1820,7 +1788,6 @@ export class AdminService {
 
     const updatedItem = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.catalogItem.update({ where: { id }, data });
-      await enqueueZoneCatalogReconciliation(tx, CATALOG_SOURCE_TALABAT);
       return updated;
     });
 
@@ -1836,15 +1803,12 @@ export class AdminService {
   async deleteSupermarketEssential(id: number) {
     await this.findSupermarketCatalogItem(id, true);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.catalogItem.update({
-        where: { id },
-        data: {
-          is_essential: false,
-          essential_sort_order: null,
-        },
-      });
-      await enqueueZoneCatalogReconciliation(tx, CATALOG_SOURCE_TALABAT);
+    await this.prisma.catalogItem.update({
+      where: { id },
+      data: {
+        is_essential: false,
+        essential_sort_order: null,
+      },
     });
 
     return { success: true };
@@ -2165,7 +2129,6 @@ export class AdminService {
           deleted_at: null,
         },
       });
-      await enqueueZoneCatalogReconciliation(tx, CATALOG_SOURCE_TALABAT);
       return item;
     });
   }

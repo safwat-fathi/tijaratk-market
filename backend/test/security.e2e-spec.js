@@ -662,6 +662,8 @@ describe('Security E2E (multi-tenant)', () => {
       permitted.some((target) => target.adminRole === 'operations_admin'),
     ).toBe(true);
 
+    // Zone storefronts are retired. Residual outbox rows must resolve to no
+    // targets so the worker drains them instead of delivering removed routes.
     const zoneEvent = {
       ...event,
       event_key: `zone-order:e2e-${runId}`,
@@ -669,32 +671,24 @@ describe('Security E2E (multi-tenant)', () => {
       dispatch_id: 10,
       zone_id: 20,
     };
-    const missingDispatchPermission =
-      await pushNotificationsService.resolveDeliveryTargets(zoneEvent);
     expect(
-      missingDispatchPermission.some(
-        (target) => target.adminRole === 'operations_admin',
-      ),
-    ).toBe(false);
-
-    await prisma.adminTenantAccess.update({
-      where: { id: access.id },
-      data: { permissions: ['dispatches.read'] },
-    });
-    const dispatchPermitted =
-      await pushNotificationsService.resolveDeliveryTargets(zoneEvent);
+      await pushNotificationsService.resolveDeliveryTargets(zoneEvent),
+    ).toHaveLength(0);
     expect(
-      dispatchPermitted.some(
-        (target) => target.adminRole === 'operations_admin',
-      ),
-    ).toBe(true);
+      await pushNotificationsService.resolveDeliveryTargets({
+        ...zoneEvent,
+        event_key: `zone-assignment:e2e-${runId}`,
+        event_type: 'zone_assignment_created',
+        assignment_id: 30,
+      }),
+    ).toHaveLength(0);
 
     await prisma.adminTenantAccess.update({
       where: { id: access.id },
       data: { expires_at: new Date(Date.now() - 60_000) },
     });
     const expired =
-      await pushNotificationsService.resolveDeliveryTargets(zoneEvent);
+      await pushNotificationsService.resolveDeliveryTargets(event);
     expect(
       expired.some((target) => target.adminRole === 'platform_admin'),
     ).toBe(true);
@@ -815,6 +809,7 @@ describe('Security E2E (multi-tenant)', () => {
       })
       .expect(201);
 
+    // Zone storefronts are retired: residual zone rows must reach nobody.
     const zoneTargets = await pushNotificationsService.resolveDeliveryTargets({
       id: 1,
       event_key: `zone-order:merchant-exclusion-${runId}`,
@@ -828,32 +823,22 @@ describe('Security E2E (multi-tenant)', () => {
       attempt_count: 1,
       created_at: new Date(),
     });
-    expect(
-      zoneTargets.some((target) => target.actor === 'merchant'),
-    ).toBe(false);
+    expect(zoneTargets).toHaveLength(0);
 
-    const assignmentId = Number(`${Date.now()}`.slice(-8));
-    const eventKey = `zone-assignment:${assignmentId}`;
+    const retryOrderId = Number(`${Date.now()}`.slice(-8));
+    const eventKey = `merchant-order:${retryOrderId}`;
     await prisma.$transaction((tx) =>
-      pushNotificationsService.enqueueZoneAssignment(tx, {
-        assignmentId,
-        dispatchId: assignmentId + 1,
-        orderId: assignmentId + 2,
-        targetTenantId: tenantAId,
-        merchantName: `E2E Store A ${runId}`,
-        zoneId: assignmentId + 3,
-        zoneName: 'E2E Zone',
+      pushNotificationsService.enqueueMerchantOrder(tx, {
+        orderId: retryOrderId,
+        tenantId: tenantAId,
+        storeName: `E2E Store A ${runId}`,
       }),
     );
     await prisma.$transaction((tx) =>
-      pushNotificationsService.enqueueZoneAssignment(tx, {
-        assignmentId,
-        dispatchId: assignmentId + 1,
-        orderId: assignmentId + 2,
-        targetTenantId: tenantAId,
-        merchantName: `E2E Store A ${runId}`,
-        zoneId: assignmentId + 3,
-        zoneName: 'E2E Zone',
+      pushNotificationsService.enqueueMerchantOrder(tx, {
+        orderId: retryOrderId,
+        tenantId: tenantAId,
+        storeName: `E2E Store A ${runId}`,
       }),
     );
     expect(
@@ -876,9 +861,7 @@ describe('Security E2E (multi-tenant)', () => {
         actor: 'merchant',
       },
     );
-    expect(envelope.url).toBe(
-      `/merchant/assigned-orders/${assignmentId + 1}`,
-    );
+    expect(envelope.url).toBe('/merchant/orders?tab=draft');
     expect(Object.keys(envelope).sort()).toEqual(
       [
         'body',

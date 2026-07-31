@@ -20,7 +20,6 @@ import { StoresDirectoryModule } from './stores-directory/stores-directory.modul
 import { MerchantDashboardModule } from './merchant-dashboard/merchant-dashboard.module';
 import { ActivityLogModule } from './activity-log/activity-log.module';
 import { AdminAuditModule } from './admin-audit/admin-audit.module';
-import { ZoneStorefrontsModule } from './zone-storefronts/zone-storefronts.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { StorefrontCartDraftsModule } from './storefront-cart-drafts/storefront-cart-drafts.module';
 
@@ -58,7 +57,6 @@ const ENV = process.env.NODE_ENV;
     StoresDirectoryModule,
     MerchantDashboardModule,
     ActivityLogModule,
-    ZoneStorefrontsModule,
     PushNotificationsModule,
     StorefrontCartDraftsModule,
   ],

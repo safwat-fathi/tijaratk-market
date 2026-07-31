@@ -45,9 +45,6 @@ type PushOutboxEnqueueMetadata = {
   eventKey: string;
   tenantId: number;
   orderId?: number;
-  dispatchId?: number;
-  assignmentId?: number;
-  zoneId?: number;
 };
 
 type PushOutboxEnqueueInput = PushOutboxEnqueueMetadata &
@@ -57,10 +54,7 @@ type PushOutboxEnqueueInput = PushOutboxEnqueueMetadata &
         payload: MerchantRegistrationPushOutboxPayload;
       }
     | {
-        eventType:
-          | typeof PushNotificationEventType.merchant_order_created
-          | typeof PushNotificationEventType.zone_order_created
-          | typeof PushNotificationEventType.zone_assignment_created;
+        eventType: typeof PushNotificationEventType.merchant_order_created;
         payload: OrderPushOutboxPayload;
       }
     | {
@@ -347,60 +341,6 @@ export class PushNotificationsService {
     });
   }
 
-  /** Adds one public zone order event inside the operator transaction. */
-  async enqueueZoneOrder(
-    manager: Prisma.TransactionClient,
-    input: {
-      orderId: number;
-      tenantId: number;
-      storeName: string;
-      zoneId: number;
-      dispatchId: number;
-    },
-  ): Promise<void> {
-    await this.enqueue(manager, {
-      eventKey: `zone-order:${input.orderId}`,
-      eventType: PushNotificationEventType.zone_order_created,
-      tenantId: input.tenantId,
-      orderId: input.orderId,
-      dispatchId: input.dispatchId,
-      zoneId: input.zoneId,
-      payload: {
-        storeName: this.normalizeDisplayName(input.storeName),
-        orderNumber: String(input.orderId),
-      },
-    });
-  }
-
-  /** Adds one merchant assignment event inside the dispatch transaction. */
-  async enqueueZoneAssignment(
-    manager: Prisma.TransactionClient,
-    input: {
-      assignmentId: number;
-      dispatchId: number;
-      orderId: number;
-      targetTenantId: number;
-      merchantName: string;
-      zoneId: number;
-      zoneName: string;
-    },
-  ): Promise<void> {
-    await this.enqueue(manager, {
-      eventKey: `zone-assignment:${input.assignmentId}`,
-      eventType: PushNotificationEventType.zone_assignment_created,
-      tenantId: input.targetTenantId,
-      orderId: input.orderId,
-      dispatchId: input.dispatchId,
-      assignmentId: input.assignmentId,
-      zoneId: input.zoneId,
-      payload: {
-        storeName: this.normalizeDisplayName(input.merchantName),
-        zoneName: this.normalizeDisplayName(input.zoneName),
-        orderNumber: String(input.orderId),
-      },
-    });
-  }
-
   /** Adds one privacy-minimized customer order status event transactionally. */
   async enqueueCustomerOrderStatus(
     manager: Prisma.TransactionClient,
@@ -457,23 +397,19 @@ export class PushNotificationsService {
       return this.resolvePlatformAdminTargets();
     }
 
-    if (event.event_type === PushNotificationEventType.zone_assignment_created) {
-      return this.resolveMerchantTargets(event.tenant_id);
+    // Zone storefronts are retired. Residual outbox rows resolve to no targets so
+    // the worker drains them instead of delivering links to removed routes.
+    if (
+      event.event_type === PushNotificationEventType.zone_order_created ||
+      event.event_type === PushNotificationEventType.zone_assignment_created
+    ) {
+      return [];
     }
 
-    const adminPermission =
-      event.event_type === PushNotificationEventType.zone_order_created
-        ? ADMIN_MANAGED_PERMISSIONS.DispatchesRead
-        : ADMIN_MANAGED_PERMISSIONS.OrdersRead;
     const adminTargets = await this.resolveAdminTargets(
       event.tenant_id,
-      adminPermission,
+      ADMIN_MANAGED_PERMISSIONS.OrdersRead,
     );
-
-    if (event.event_type === PushNotificationEventType.zone_order_created) {
-      return adminTargets;
-    }
-
     const merchantTargets = await this.resolveMerchantTargets(event.tenant_id);
     return [...merchantTargets, ...adminTargets];
   }
@@ -552,26 +488,17 @@ export class PushNotificationsService {
 
     const payload = this.parseOrderPayload(event.payload);
     const orderNumber = payload.orderNumber;
-    const isAssignment =
-      event.event_type === PushNotificationEventType.zone_assignment_created;
     const isAdmin = target.actor === 'admin';
     let type: PushNotificationEnvelope['type'];
     let title: string;
     let body: string;
     let url: string;
 
-    if (isAssignment) {
-      type = PUSH_CLIENT_EVENT_TYPES.MerchantAssignmentCreated;
-      title = 'طلب منطقة جديد';
-      body = `تم إسناد الطلب #${orderNumber} إلى متجرك.`;
-      url = `/merchant/assigned-orders/${event.dispatch_id}`;
-    } else if (isAdmin) {
+    if (isAdmin) {
       type = PUSH_CLIENT_EVENT_TYPES.AdminOrderCreated;
       title = 'طلب جديد';
       body = `وصل طلب جديد #${orderNumber} إلى ${payload.storeName}.`;
-      if (event.event_type === PushNotificationEventType.zone_order_created) {
-        url = `/admin/zones/${event.zone_id}/dispatches/${event.dispatch_id}`;
-      } else if (target.adminRole === AdminRole.platform_admin) {
+      if (target.adminRole === AdminRole.platform_admin) {
         url = `/admin/orders?search=${encodeURIComponent(orderNumber)}`;
       } else {
         url = `/admin/merchants/${event.tenant_id}`;
@@ -703,9 +630,6 @@ export class PushNotificationsService {
         event_type: input.eventType,
         tenant_id: input.tenantId,
         order_id: input.orderId,
-        dispatch_id: input.dispatchId,
-        assignment_id: input.assignmentId,
-        zone_id: input.zoneId,
         payload: input.payload as Prisma.InputJsonValue,
       },
       update: {},
@@ -730,11 +654,6 @@ export class PushNotificationsService {
           id: true,
           public_token: true,
           customer: { select: { global_customer_id: true } },
-          order_dispatch: {
-            select: {
-              zone_storefront: { select: { name: true } },
-            },
-          },
           tenant: {
             select: {
               name: true,
@@ -768,9 +687,7 @@ export class PushNotificationsService {
       encryptedSubscription: subscription.encrypted_subscription,
       actor: 'customer' as const,
       notificationUrl: `/track-order/${order.public_token}`,
-      storeName: this.normalizeDisplayName(
-        order.order_dispatch?.zone_storefront.name ?? order.tenant.name,
-      ),
+      storeName: this.normalizeDisplayName(order.tenant.name),
       orderNumber: String(order.id),
       notificationIconUrl: this.normalizeNotificationIconUrl(
         order.tenant.directory_profile?.logo_url,
@@ -924,9 +841,6 @@ export class PushNotificationsService {
     return {
       storeName: this.normalizeDisplayName(payload.storeName),
       orderNumber,
-      ...(typeof payload.zoneName === 'string'
-        ? { zoneName: this.normalizeDisplayName(payload.zoneName) }
-        : {}),
     };
   }
 

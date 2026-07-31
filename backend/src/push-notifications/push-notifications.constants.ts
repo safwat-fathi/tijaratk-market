@@ -12,7 +12,6 @@ export const PUSH_CLIENT_EVENT_TYPES = {
   AdminMerchantRegistered: 'admin.merchant.registered',
   MerchantOrderCreated: 'merchant.order.created',
   AdminOrderCreated: 'admin.order.created',
-  MerchantAssignmentCreated: 'merchant.assignment.created',
   CustomerOrderStatusChanged: 'customer.order.status_changed',
   CustomerReplacementRequested: 'customer.order.replacement_requested',
 } as const;

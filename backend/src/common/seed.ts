@@ -17,7 +17,6 @@ import {
   EGYPT_DIRECTORY_AREAS,
   DIRECTORY_AREA_PARENT_ASSIGNMENTS,
 } from './seeders/directory-areas.seeder';
-import { seedZoneStorefronts } from './seeders/zone-storefronts.seeder';
 
 config({
   path: process.env.NODE_ENV ? `.env.${process.env.NODE_ENV}` : '.env',
@@ -49,7 +48,6 @@ async function bootstrap() {
     await seedSupermarketMerchant(prisma);
     await seedPharmacyMerchant(prisma);
     await seedDirectoryProfiles(prisma);
-    await seedZoneStorefronts(prisma);
 
     logger.log('Seeding completed successfully.');
   } catch (error) {

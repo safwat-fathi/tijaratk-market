@@ -11,9 +11,6 @@ export const ADMIN_MANAGED_PERMISSIONS = {
   OrdersManageReplacements: 'orders.manage_replacements',
   CustomersReadLimited: 'customers.read_limited',
   ActivityLogsRead: 'activity_logs.read',
-  DispatchesRead: 'dispatches.read',
-  DispatchesAssign: 'dispatches.assign',
-  DispatchesCancel: 'dispatches.cancel',
 } as const;
 
 export type AdminManagedPermission =
@@ -42,9 +39,6 @@ const ORDER_OPERATOR_PERMISSIONS: AdminManagedPermission[] = [
   ADMIN_MANAGED_PERMISSIONS.ProductsRead,
   ADMIN_MANAGED_PERMISSIONS.ProductsUpdateAvailability,
   ADMIN_MANAGED_PERMISSIONS.ActivityLogsRead,
-  ADMIN_MANAGED_PERMISSIONS.DispatchesRead,
-  ADMIN_MANAGED_PERMISSIONS.DispatchesAssign,
-  ADMIN_MANAGED_PERMISSIONS.DispatchesCancel,
 ];
 
 export const ADMIN_MANAGED_PERMISSION_PRESETS = {

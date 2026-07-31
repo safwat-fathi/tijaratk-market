@@ -73,7 +73,7 @@ export class OrdersController {
     }
     if (createOrderDto.order_source === OrderSource.zone_storefront) {
       throw new BadRequestException(
-        'Zone storefront source is reserved for the dedicated zone checkout',
+        'Zone storefront source is no longer accepted',
       );
     }
     return this.ordersService.createForTenantId(tenantId, createOrderDto, {
@@ -211,7 +211,7 @@ export class OrdersController {
     }
     if (createOrderDto.order_source === OrderSource.zone_storefront) {
       throw new BadRequestException(
-        'Zone storefront source is reserved for the dedicated zone checkout',
+        'Zone storefront source is no longer accepted',
       );
     }
 
@@ -266,7 +266,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Get exact merchant order inbox counters',
     description:
-      'Returns owned status counts, current assigned counts, and the combined new/actionable count.',
+      'Returns owned status counts and the new/actionable count.',
   })
   @ApiQuery({
     name: 'date',

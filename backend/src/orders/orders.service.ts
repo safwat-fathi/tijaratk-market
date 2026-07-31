@@ -19,7 +19,6 @@ import {
   OrderSource,
   TenantStatus,
   TenantCategory,
-  OrderDispatchAssignmentStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateOrderDto, CreateOrderItemDto } from './dto/create-order.dto';
@@ -52,10 +51,6 @@ import {
 } from 'src/activity-log/constants/activity-types';
 import { ActivityActor } from 'src/activity-log/activity-log.types';
 import { OrderInboxSummaryDto } from './dto/order-inbox-summary.dto';
-import {
-  isZoneStorefrontEnabled,
-  resolveZoneStorefrontReorderUrl,
-} from 'src/zone-storefronts/zone-storefront-feature';
 import { MetaConversionsService } from 'src/meta-conversions/meta-conversions.service';
 import type {
   MetaPurchaseResponse,
@@ -100,19 +95,6 @@ type OrderWithItemsPayload = Order & {
   order_items?: OrderItem[];
   items?: OrderItem[];
   tenant?: { id: number; name: string; slug: string };
-  order_dispatch?: {
-    status: string;
-    zone_storefront: {
-      id: number;
-      name: string;
-      slug: string;
-      is_active: boolean;
-    };
-    assignments: Array<{
-      status: string;
-      target_tenant: { name: string };
-    }>;
-  } | null;
 };
 
 type PrescriptionUpload = Pick<
@@ -212,7 +194,7 @@ export class OrdersService {
     if (createOrderDto.order_source === OrderSource.zone_storefront) {
       await this.deleteUploadedFileUnlessPreserved(prescriptionUpload, options);
       throw new BadRequestException(
-        'Zone storefront orders must use the dedicated zone checkout endpoint',
+        'Zone storefront orders are no longer accepted',
       );
     }
 
@@ -529,10 +511,7 @@ export class OrdersService {
           manager,
         );
 
-        if (
-          actor.source === 'storefront' &&
-          createOrderDto.order_source !== OrderSource.zone_storefront
-        ) {
+        if (actor.source === 'storefront') {
           await this.pushNotificationsService.enqueueMerchantOrder(manager, {
             orderId: persistedOrder.id,
             tenantId,
@@ -622,7 +601,7 @@ export class OrdersService {
     return orders.map((order) => this.mapOrderPayload(order));
   }
 
-  /** Returns exact owned and assigned order counters for the merchant inbox. */
+  /** Returns exact owned order counters for the merchant inbox. */
   async getInboxSummary(
     tenantId: number,
     date?: string,
@@ -635,35 +614,11 @@ export class OrdersService {
       };
     }
 
-    const zoneStorefrontsEnabled = isZoneStorefrontEnabled();
-    const [ownedGroups, assignedGroups] = await Promise.all([
-      this.orderClient().groupBy({
-        by: ['status'],
-        where: ownedWhere,
-        _count: { _all: true },
-      }),
-      zoneStorefrontsEnabled
-        ? this.prisma.orderDispatchAssignment.groupBy({
-            by: ['status'],
-            where: {
-              target_tenant_id: tenantId,
-              is_current: true,
-              status: {
-                in: [
-                  OrderDispatchAssignmentStatus.pending,
-                  OrderDispatchAssignmentStatus.accepted,
-                ],
-              },
-            },
-            _count: { _all: true },
-          })
-        : Promise.resolve(
-            [] as {
-              status: OrderDispatchAssignmentStatus;
-              _count: { _all: number };
-            }[],
-          ),
-    ]);
+    const ownedGroups = await this.orderClient().groupBy({
+      by: ['status'],
+      where: ownedWhere,
+      _count: { _all: true },
+    });
 
     const ownedStatusCounts: Record<OrderStatus, number> = {
       [OrderStatus.DRAFT]: 0,
@@ -677,24 +632,9 @@ export class OrdersService {
       ownedStatusCounts[group.status as OrderStatus] = group._count._all;
     }
 
-    const pendingAssigned =
-      assignedGroups.find(
-        (group) => group.status === OrderDispatchAssignmentStatus.pending,
-      )?._count._all ?? 0;
-    const acceptedAssigned =
-      assignedGroups.find(
-        (group) => group.status === OrderDispatchAssignmentStatus.accepted,
-      )?._count._all ?? 0;
-
     return {
       owned_status_counts: ownedStatusCounts,
-      assigned_counts: {
-        pending: pendingAssigned,
-        accepted: acceptedAssigned,
-        total: pendingAssigned + acceptedAssigned,
-      },
-      new_orders_count:
-        ownedStatusCounts[OrderStatus.DRAFT] + pendingAssigned,
+      new_orders_count: ownedStatusCounts[OrderStatus.DRAFT],
     };
   }
 
@@ -1456,31 +1396,6 @@ export class OrdersService {
           include: { customer: true, tenant: true, delivery_area: true },
         })) as unknown as Order;
 
-        const dispatch = await manager.orderDispatch.findUnique({
-          where: { order_id: order.id },
-          select: { id: true },
-        });
-        if (dispatch) {
-          await manager.orderDispatch.update({
-            where: { id: dispatch.id },
-            data: {
-              status: 'cancelled',
-              cancellation_reason: this.normalizeOptionalReason(reason),
-              cancelled_at: new Date(),
-              version: { increment: 1 },
-            },
-          });
-          await manager.orderDispatchAssignment.updateMany({
-            where: { order_dispatch_id: dispatch.id, is_current: true },
-            data: {
-              status: 'cancelled',
-              is_current: false,
-              responded_at: new Date(),
-              version: { increment: 1 },
-            },
-          });
-        }
-
         await this.googleAnalyticsService.enqueueLifecycleEvent({
           manager,
           orderId: order.id,
@@ -1733,21 +1648,6 @@ export class OrdersService {
         },
         tenant: { select: { id: true, name: true, slug: true } },
         delivery_area: true,
-        order_dispatch: {
-          include: {
-            zone_storefront: {
-              select: { id: true, name: true, slug: true, is_active: true },
-            },
-            assignments: {
-              where: { status: 'accepted' },
-              select: {
-                status: true,
-                target_tenant: { select: { name: true } },
-              },
-              take: 1,
-            },
-          },
-        },
       },
     });
 
@@ -1776,21 +1676,6 @@ export class OrdersService {
         },
         tenant: { select: { id: true, name: true, slug: true } },
         delivery_area: true,
-        order_dispatch: {
-          include: {
-            zone_storefront: {
-              select: { id: true, name: true, slug: true, is_active: true },
-            },
-            assignments: {
-              where: { status: 'accepted' },
-              select: {
-                status: true,
-                target_tenant: { select: { name: true } },
-              },
-              take: 1,
-            },
-          },
-        },
       },
     });
 
@@ -1809,43 +1694,15 @@ export class OrdersService {
    */
   private mapOrderPayload(order: OrderWithItemsPayload): Order {
     const orderItems = order.order_items;
-    const dispatch = order.order_dispatch;
-    const acceptedAssignment = dispatch?.assignments[0];
-    const { order_dispatch: _controlPlaneDispatch, ...publicOrder } = order;
     const {
       ga_client_id: _gaClientId,
       ga_session_id: _gaSessionId,
       ...safePublicOrder
-    } = publicOrder;
+    } = order;
 
     return {
       ...safePublicOrder,
-      tenant_id: dispatch
-        ? dispatch.zone_storefront.id
-        : safePublicOrder.tenant_id,
-      tenant: dispatch
-        ? {
-            id: dispatch.zone_storefront.id,
-            name: dispatch.zone_storefront.name,
-            slug: dispatch.zone_storefront.slug,
-          }
-        : safePublicOrder.tenant,
       items: order.items ?? orderItems ?? [],
-      zone_storefront: dispatch
-        ? {
-            id: dispatch.zone_storefront.id,
-            name: dispatch.zone_storefront.name,
-            slug: dispatch.zone_storefront.slug,
-            reorder_url: resolveZoneStorefrontReorderUrl({
-              slug: dispatch.zone_storefront.slug,
-              isActive: dispatch.zone_storefront.is_active,
-            }),
-          }
-        : null,
-      fulfilled_by:
-        dispatch?.status === 'accepted' && acceptedAssignment
-          ? { name: acceptedAssignment.target_tenant.name }
-          : null,
     } as unknown as Order;
   }
 
@@ -2259,38 +2116,12 @@ export class OrdersService {
       },
     });
 
-    const dispatch = await manager.orderDispatch.findUnique({
-      where: { order_id: order.id },
-      select: { id: true },
-    });
-    if (dispatch) {
-      await manager.orderDispatch.update({
-        where: { id: dispatch.id },
-        data: {
-          status: 'cancelled',
-          cancellation_reason: normalizedReason,
-          cancelled_by_admin_id: actor?.adminId ?? null,
-          cancelled_at: cancelledAt,
-          version: { increment: 1 },
-        },
-      });
-      await manager.orderDispatchAssignment.updateMany({
-        where: { order_dispatch_id: dispatch.id, is_current: true },
-        data: {
-          status: 'cancelled',
-          is_current: false,
-          responded_at: cancelledAt,
-          version: { increment: 1 },
-        },
-      });
-    } else {
-      await this.tenantCancellationPolicyService.recordMerchantCancellation(
-        order.tenant_id,
-        order.id,
-        manager,
-        actor?.adminId ? 'admin' : 'merchant',
-      );
-    }
+    await this.tenantCancellationPolicyService.recordMerchantCancellation(
+      order.tenant_id,
+      order.id,
+      manager,
+      actor?.adminId ? 'admin' : 'merchant',
+    );
 
     const oldStatusLabel = formatKnownValueAr(
       ORDER_STATUS_LABELS_AR,

@@ -21,25 +21,10 @@ export class OwnedOrderStatusCountsDto {
   rejected_by_customer: number;
 }
 
-/** Exact current assignment counts for the authenticated fulfillment merchant. */
-export class AssignedOrderCountsDto {
-  @ApiProperty({ example: 2 })
-  pending: number;
-
-  @ApiProperty({ example: 4 })
-  accepted: number;
-
-  @ApiProperty({ example: 6 })
-  total: number;
-}
-
 /** Counter payload shared by the merchant order inbox and sidebar navigation. */
 export class OrderInboxSummaryDto {
   @ApiProperty({ type: OwnedOrderStatusCountsDto })
   owned_status_counts: OwnedOrderStatusCountsDto;
-
-  @ApiProperty({ type: AssignedOrderCountsDto })
-  assigned_counts: AssignedOrderCountsDto;
 
   @ApiProperty({ example: 5 })
   new_orders_count: number;

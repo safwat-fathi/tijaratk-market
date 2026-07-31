@@ -36,9 +36,6 @@ import {
   ManagedFeature,
 } from './admin-managed.types';
 import { AdminManagedFeatureService } from './admin-managed-feature.service';
-import {
-  isZoneStorefrontEnabled,
-} from 'src/zone-storefronts/zone-storefront-feature';
 
 type RequestMetadata = {
   requestId?: string;
@@ -190,11 +187,7 @@ export class AdminManagedAccessService {
     });
 
     return accesses
-      .filter(
-        (access) =>
-          isZoneStorefrontEnabled() ||
-          access.tenant.operated_zone_storefront === null,
-      )
+      .filter((access) => access.tenant.operated_zone_storefront === null)
       .map((access) => ({
         ...access.tenant,
         access: this.mapAccess(access),
@@ -614,10 +607,7 @@ export class AdminManagedAccessService {
       },
     });
     if (!session || session.ended_at) return null;
-    if (
-      !isZoneStorefrontEnabled() &&
-      session.tenant.operated_zone_storefront
-    ) {
+    if (session.tenant.operated_zone_storefront) {
       return null;
     }
 
@@ -953,10 +943,8 @@ export class AdminManagedAccessService {
     };
   }
 
-  /** Rejects internal zone operators from generic managed-store access while disabled. */
+  /** Rejects retired zone operator tenants from generic managed-store access. */
   private async assertManagedTenantAvailable(tenantId: number): Promise<void> {
-    if (isZoneStorefrontEnabled()) return;
-
     const tenant = await this.prisma.tenant.findFirst({
       where: {
         id: tenantId,

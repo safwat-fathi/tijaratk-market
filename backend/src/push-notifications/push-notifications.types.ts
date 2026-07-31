@@ -45,7 +45,6 @@ export type MerchantRegistrationPushOutboxPayload = {
 export type OrderPushOutboxPayload = {
   storeName: string;
   orderNumber: string;
-  zoneName?: string;
 };
 
 export type CustomerOrderStatusPushOutboxPayload = {
