@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build && pnpm sentry:sourcemaps",
+    "build": "nest build && if [ \"$SENTRY_DISABLE_AUTO_UPLOAD\" != \"true\" ] && [ \"$SENTRY_DISABLE_AUTO_UPLOAD\" != \"1\" ]; then pnpm sentry:sourcemaps; fi",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
     "start:dev": "NODE_ENV=development nest start --watch",
