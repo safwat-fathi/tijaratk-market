@@ -2,7 +2,7 @@
 
 @theme {
   --font-sans: var(--font-ibm-plex-sans-arabic), ui-sans-serif, system-ui, sans-serif;
-  --font-latin: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-latin: ui-sans-serif, system-ui, sans-serif;
 
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));

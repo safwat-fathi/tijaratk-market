@@ -123,6 +123,18 @@ export default function MarketingTrackingRuntime({
 
   return (
     <>
+      {/*
+       * Cookieless, DNT-respecting analytics. It sits here rather than in the
+       * root layout so it inherits the public-path allowlist and never runs on
+       * the admin or merchant dashboards.
+       */}
+      <Script
+        id="tijaratk-simple-analytics"
+        src="https://scripts.simpleanalyticscdn.com/latest.js"
+        strategy="lazyOnload"
+        data-collect-dnt="true"
+      />
+
       {canLoadMetaScript && (
         <Script
           id="tijaratk-meta-pixel"

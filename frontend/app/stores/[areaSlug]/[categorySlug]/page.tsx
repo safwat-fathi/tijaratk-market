@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { X } from "lucide-react";
 import CustomerAnalytics from "@/components/analytics/CustomerAnalytics";
 import CustomerPwaInstallTracking from "@/components/analytics/CustomerPwaInstallTracking";
+import CustomerPwaProvider from "@/components/pwa/CustomerPwaProvider";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import AreaAutocomplete from "@/components/stores-directory/AreaAutocomplete";
@@ -57,21 +59,27 @@ const resolveStorefrontUrl = (
 const toAbsoluteSiteUrl = (pathOrUrl: string) =>
   pathOrUrl.startsWith("http") ? pathOrUrl : `${SITE_URL}${pathOrUrl}`;
 
-async function getCategoryPage(
+/**
+ * Wrapped in `cache` and called with identical arguments from both
+ * `generateMetadata` and the page, so a filtered view costs one API call
+ * instead of two.
+ */
+const fetchCategoryPage = cache(async (
   areaSlug: string,
   categorySlug: string,
-  searchParams?: Awaited<Props["searchParams"]>,
-): Promise<StoresDirectoryCategoryPage | null> {
-  const page = Number(searchParams?.page);
-  const openNow = searchParams?.open_now === "true" ? true : undefined;
+  deliveryAreaSlug?: string,
+  search?: string,
+  openNow?: boolean,
+  pageNumber?: number,
+): Promise<StoresDirectoryCategoryPage | null> => {
   const response = await storesDirectoryService.getCategoryPage(
     areaSlug,
     categorySlug,
     {
-      delivery_area_slug: searchParams?.deliveryArea?.trim() || undefined,
-      search: searchParams?.search,
+      delivery_area_slug: deliveryAreaSlug,
+      search,
       open_now: openNow,
-      page: Number.isFinite(page) && page > 0 ? page : undefined,
+      page: pageNumber,
     },
   );
 
@@ -80,6 +88,28 @@ async function getCategoryPage(
   }
 
   return response.data;
+});
+
+/**
+ * `cache` keys on argument identity, so the search params are flattened to
+ * primitives here. Both `generateMetadata` and the page call this with the same
+ * values, which turns what used to be two API round-trips into one.
+ */
+function getCategoryPage(
+  areaSlug: string,
+  categorySlug: string,
+  searchParams?: Awaited<Props["searchParams"]>,
+): Promise<StoresDirectoryCategoryPage | null> {
+  const page = Number(searchParams?.page);
+
+  return fetchCategoryPage(
+    areaSlug,
+    categorySlug,
+    searchParams?.deliveryArea?.trim() || undefined,
+    searchParams?.search,
+    searchParams?.open_now === "true" ? true : undefined,
+    Number.isFinite(page) && page > 0 ? page : undefined,
+  );
 }
 
 const buildCategoryJsonLd = (
@@ -142,9 +172,19 @@ const buildCategoryJsonLd = (
   ];
 };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { areaSlug, categorySlug } = await params;
-  const page = await getCategoryPage(areaSlug, categorySlug);
+export async function generateMetadata({
+  params,
+  searchParams,
+}: Props): Promise<Metadata> {
+  const [{ areaSlug, categorySlug }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
+  const page = await getCategoryPage(
+    areaSlug,
+    categorySlug,
+    resolvedSearchParams,
+  );
 
   if (!page) {
     return { title: "404 - الصفحة غير موجودة" };
@@ -267,6 +307,7 @@ export default async function StoresCategoryPage({
   const jsonLd = buildCategoryJsonLd(page, categoryName);
 
   return (
+    <CustomerPwaProvider>
     <div className="flex min-h-screen flex-col bg-[#F7F8F6]" dir="rtl">
       <CustomerAnalytics
         pageLocation={`/stores/${encodeURIComponent(areaSlug)}/${encodeURIComponent(categorySlug)}`}
@@ -418,5 +459,6 @@ export default async function StoresCategoryPage({
 
       <PublicFooter />
     </div>
+    </CustomerPwaProvider>
   );
 }

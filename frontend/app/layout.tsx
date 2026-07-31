@@ -1,10 +1,8 @@
-import type { Metadata } from "next";
-import { IBM_Plex_Sans_Arabic, Poppins } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import Script from "next/script";
 import { SITE_DESCRIPTION, SITE_URL } from "@/lib/marketing-seo";
 import MarketingTracking from "@/components/analytics/MarketingTracking";
-import CustomerPwaEngagement from "@/components/pwa/CustomerPwaEngagement";
-import KeyboardStateDetector from "@/components/pwa/KeyboardStateDetector";
-import { customerPushNotificationsService } from "@/services/api/push-notifications.service";
 import "./globals.css";
 
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
@@ -14,13 +12,10 @@ const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
 	display: "swap",
 });
 
-const poppins = Poppins({
-	subsets: ["latin"],
-	weight: ["400", "600"],
-	variable: "--font-poppins",
-	display: "swap",
-	preload: false,
-});
+export const viewport: Viewport = {
+	themeColor: "#0F5A3D",
+	colorScheme: "light",
+};
 
 export const metadata: Metadata = {
 	metadataBase: new URL(SITE_URL),
@@ -83,44 +78,34 @@ export const metadata: Metadata = {
 	},
 };
 
-export default async function RootLayout({
+/**
+ * Deliberately synchronous and request-independent. Anything awaited here makes
+ * the root layout dynamic, which forces every route in the application to be
+ * rendered per request — including the static marketing pages.
+ */
+export default function RootLayout({
 	children,
 }: Readonly<{
 	children: React.ReactNode;
 }>) {
-	const pushConfigResponse =
-		await customerPushNotificationsService.getConfig();
-	const pushConfig =
-		pushConfigResponse.success && pushConfigResponse.data
-			? pushConfigResponse.data
-			: { enabled: false };
-
 	return (
 		<html lang="ar" dir="rtl">
-			<head>
-				<script
-					dangerouslySetInnerHTML={{
-						__html: `
-              window.__installPromptEvent = null;
-              window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault();
-                window.__installPromptEvent = e;
-              });
-            `,
-					}}
-				/>
-			</head>
 			<body
-				className={`${ibmPlexSansArabic.variable} ${poppins.variable} font-sans antialiased`}
+				className={`${ibmPlexSansArabic.variable} font-sans antialiased`}
 			>
-				<KeyboardStateDetector />
-				<CustomerPwaEngagement config={pushConfig}>
-					{children}
-				</CustomerPwaEngagement>
+				{/*
+				 * Must run before hydration so the install prompt is not lost on
+				 * routes where the PWA shell mounts later.
+				 */}
+				<Script id="capture-install-prompt" strategy="beforeInteractive">
+					{`window.__installPromptEvent = null;
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();
+  window.__installPromptEvent = e;
+});`}
+				</Script>
+				{children}
 				<MarketingTracking />
-				{/* 100% privacy-first analytics */}
-				<script data-collect-dnt="true" async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
-				<noscript><img src="https://queue.simpleanalyticscdn.com/noscript.gif?collect-dnt=true" alt="" referrerPolicy="no-referrer-when-downgrade"/></noscript>
 			</body>
 		</html>
 	);
