@@ -15,6 +15,8 @@ import {
   Order,
   OrderItem,
   DayClosure,
+  DeliveryFeeMode,
+  OrderDeliveryFeeStatus,
   Prisma,
   OrderSource,
   TenantStatus,
@@ -354,6 +356,10 @@ export class OrdersService {
         const tenant = await manager.tenant.findUnique({
           where: { id: tenantId },
         });
+        // Deferred zones are stored at a zero fee until the merchant prices the
+        // address; the customer's total therefore covers items only for now.
+        const isDeferredDeliveryFee =
+          deliverySelection.feeMode === DeliveryFeeMode.on_order;
         const deliveryFee = deliverySelection.deliveryFee;
 
         const deliveryTimeWindowSnapshot =
@@ -373,6 +379,15 @@ export class OrdersService {
           pricing_mode: pricingMode,
           delivery_fee: deliveryFee,
           delivery_area_id: deliveryAreaId,
+          delivery_fee_status: isDeferredDeliveryFee
+            ? OrderDeliveryFeeStatus.pending
+            : OrderDeliveryFeeStatus.set,
+          delivery_fee_min_quote: isDeferredDeliveryFee
+            ? deliverySelection.minFee
+            : null,
+          delivery_fee_max_quote: isDeferredDeliveryFee
+            ? deliverySelection.maxFee
+            : null,
           delivery_time_window_snapshot: deliveryTimeWindowSnapshot,
           scheduled_delivery_date: options.deliverySchedule?.date,
           scheduled_delivery_starts_at: options.deliverySchedule?.starts_at,
@@ -496,6 +511,7 @@ export class OrdersService {
               status: persistedOrder.status,
               subtotal,
               delivery_fee: deliveryFee,
+              delivery_fee_status: persistedOrder.delivery_fee_status,
               total,
               order_type: persistedOrder.order_type,
             },
@@ -902,6 +918,15 @@ export class OrdersService {
 
       if (nextStatus && nextStatus !== previousStatus) {
         this.validateStatusTransition(previousStatus, nextStatus);
+      }
+
+      // Confirming an order promises the customer a final total, so a deferred
+      // delivery fee has to be priced first. Cancellation stays reachable.
+      if (
+        nextStatus === OrderStatus.CONFIRMED &&
+        order.delivery_fee_status === OrderDeliveryFeeStatus.pending
+      ) {
+        throw new BadRequestException('حدد رسوم التوصيل قبل تأكيد الطلب');
       }
 
       const updateData: Prisma.OrderUpdateInput = {};
@@ -1427,6 +1452,153 @@ export class OrdersService {
   }
 
   /**
+   * Prices a deferred (`on_order`) delivery zone once the merchant has read the
+   * customer's address, then recalculates totals and notifies the customer.
+   */
+  async setOrderDeliveryFee(
+    tenantId: number,
+    orderId: number,
+    deliveryFee: number,
+    actor?: OrderActivityActor,
+  ): Promise<Order> {
+    const normalizedFee = this.roundCurrency(Number(deliveryFee));
+    if (!Number.isFinite(normalizedFee) || normalizedFee < 0) {
+      throw new BadRequestException('رسوم التوصيل يجب أن تكون رقماً غير سالب');
+    }
+
+    await this.withTenantManager(tenantId, async (manager) => {
+      const order = await manager.order.findFirst({ where: { id: orderId } });
+
+      if (!order || order.tenant_id !== tenantId) {
+        throw new NotFoundException(`Order with ID ${orderId} not found`);
+      }
+
+      const orderStatus = order.status as unknown as OrderStatus;
+      if (
+        orderStatus !== OrderStatus.DRAFT &&
+        orderStatus !== OrderStatus.CONFIRMED
+      ) {
+        throw new BadRequestException(
+          'لا يمكن تعديل رسوم التوصيل بعد خروج الطلب للتوصيل',
+        );
+      }
+
+      if (order.delivery_fee_status !== OrderDeliveryFeeStatus.pending) {
+        throw new BadRequestException('رسوم التوصيل لهذا الطلب محددة بالفعل');
+      }
+
+      // Bounds come from the order snapshot, never the live zone row, so a later
+      // settings edit cannot move the range the customer already agreed to.
+      const minQuote =
+        order.delivery_fee_min_quote === null
+          ? null
+          : Number(order.delivery_fee_min_quote);
+      const maxQuote =
+        order.delivery_fee_max_quote === null
+          ? null
+          : Number(order.delivery_fee_max_quote);
+      if (
+        (minQuote !== null && normalizedFee < minQuote) ||
+        (maxQuote !== null && normalizedFee > maxQuote)
+      ) {
+        throw new BadRequestException(
+          `رسوم التوصيل يجب أن تكون ضمن النطاق المعلن للعميل ${this.describeFeeRange(
+            minQuote,
+            maxQuote,
+          )}`,
+        );
+      }
+
+      const previousTotal = this.toActivityNumber(order.total);
+
+      await manager.order.update({
+        where: { id: order.id },
+        data: {
+          delivery_fee: new Prisma.Decimal(normalizedFee),
+          delivery_fee_status: OrderDeliveryFeeStatus.set,
+          delivery_fee_set_at: new Date(),
+        },
+      });
+
+      // The total is still the system's own sum of items plus delivery, so an
+      // auto-priced storefront order must not be relabelled as manual pricing.
+      await this.recalculateOrderTotals(manager, order.id, {
+        preservePricingMode: true,
+      });
+
+      const repricedOrder = await manager.order.findFirstOrThrow({
+        where: { id: order.id },
+        select: { total: true },
+      });
+
+      await this.activityLogService.create(
+        {
+          tenantId,
+          ...this.toActivityActorFields(actor),
+          entityType: ActivityEntityTypes.Order,
+          entityId: order.id,
+          action: ActivityActions.OrderDeliveryFeeSet,
+          title: 'تم تحديد رسوم التوصيل',
+          description: `تم تحديد رسوم التوصيل بقيمة ${normalizedFee} جنيه`,
+          oldValues: {
+            delivery_fee: this.toActivityNumber(order.delivery_fee),
+            total: previousTotal,
+          },
+          newValues: {
+            delivery_fee: normalizedFee,
+            total: this.toActivityNumber(repricedOrder.total),
+          },
+          metadata: {
+            delivery_area_id: order.delivery_area_id,
+            quoted_min_delivery_fee: minQuote,
+            quoted_max_delivery_fee: maxQuote,
+          },
+          source: actor?.source ?? ActivitySources.Dashboard,
+        },
+        manager,
+      );
+
+      await this.pushNotificationsService.enqueueCustomerDeliveryFeeSet(
+        manager,
+        { orderId: order.id, tenantId },
+      );
+    });
+
+    const updatedOrder = await this.withTenantManager(tenantId, () =>
+      this.findOne(orderId),
+    );
+    await this.bumpDashboardCacheVersion(tenantId);
+    return updatedOrder;
+  }
+
+  /** Prices a deferred delivery zone within the managed tenant context. */
+  async setOrderDeliveryFeeForManagedAdmin(
+    actor: OrderActivityActor & { tenantId: number },
+    orderId: number,
+    deliveryFee: number,
+  ) {
+    await this.assertNotZoneOperatorForManagedOrders(actor.tenantId);
+    const order = await this.runInTenantContext(actor.tenantId, () =>
+      this.setOrderDeliveryFee(actor.tenantId, orderId, deliveryFee, actor),
+    );
+    return this.toManagedOrderPayload(order);
+  }
+
+  /** Renders the advertised delivery-fee bounds for a customer-facing message. */
+  private describeFeeRange(min: number | null, max: number | null): string {
+    if (min !== null && max !== null) {
+      return `(من ${min} إلى ${max} جنيه)`;
+    }
+    if (min !== null) {
+      return `(${min} جنيه على الأقل)`;
+    }
+    if (max !== null) {
+      return `(${max} جنيه كحد أقصى)`;
+    }
+    return '';
+  }
+
+  /**
    * Sets manual line price for an order item and recalculates order totals.
    */
   async updateOrderItemPrice(
@@ -1709,6 +1881,7 @@ export class OrdersService {
   private async recalculateOrderTotals(
     manager: Prisma.TransactionClient,
     orderId: number,
+    options: { preservePricingMode?: boolean } = {},
   ): Promise<void> {
     const order = await manager.order.findFirst({
       where: { id: orderId },
@@ -1747,7 +1920,9 @@ export class OrdersService {
     await manager.order.update({
       where: { id: order.id },
       data: {
-        pricing_mode: PricingMode.MANUAL,
+        ...(options.preservePricingMode
+          ? {}
+          : { pricing_mode: PricingMode.MANUAL }),
         subtotal: subtotal === undefined ? null : new Prisma.Decimal(subtotal),
         total:
           recomputedTotal === undefined

@@ -66,6 +66,13 @@ export interface Order {
   pricing_mode: PricingMode;
   subtotal?: OrderNumericValue;
   delivery_fee?: OrderNumericValue;
+  /** `pending` while the merchant still has to price an `on_order` zone. */
+  delivery_fee_status?: "set" | "pending";
+  /** Bounds quoted to the customer at checkout, snapshotted on the order. */
+  delivery_fee_min_quote?: OrderNumericValue;
+  delivery_fee_max_quote?: OrderNumericValue;
+  delivery_fee_set_at?: string | null;
+  delivery_address?: string | null;
   delivery_area_id?: number | null;
   delivery_area?: {
     id: number;

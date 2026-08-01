@@ -11,12 +11,15 @@ type OrderDetailsActionsProps = {
   orderId: number;
   status: OrderStatus;
   statusLabel: string;
+  /** Blocks confirmation until a deferred delivery zone has been priced. */
+  isDeliveryFeePending?: boolean;
 };
 
 export default function OrderDetailsActions({
   orderId,
   status,
   statusLabel,
+  isDeliveryFeePending = false,
 }: OrderDetailsActionsProps) {
   const [isPending, startTransition] = useTransition();
   const [isRejectSheetOpen, setIsRejectSheetOpen] = useState(false);
@@ -62,27 +65,34 @@ export default function OrderDetailsActions({
     return (
       <>
         <div className="safe-bottom-padding fixed bottom-0 left-0 right-0 border-t border-brand-border bg-white p-4 shadow-float">
-          <div className="mx-auto grid max-w-md grid-cols-2 gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full border-status-error/25 text-status-error hover:border-status-error/40 hover:bg-status-error/10"
-              onClick={() => {
-                setRejectError(null);
-                setIsRejectSheetOpen(true);
-              }}
-              disabled={isPending}
-            >
-              رفض الطلب
-            </Button>
-            <Button
-              type="button"
-              className="w-full"
-              onClick={() => updateStatus(OrderStatus.CONFIRMED)}
-              disabled={isPending}
-            >
-              تأكيد الطلب
-            </Button>
+          <div className="mx-auto max-w-md">
+            {isDeliveryFeePending ? (
+              <p className="mb-3 rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-center text-xs font-semibold text-brand-text">
+                حدد رسوم التوصيل أولاً لتتمكن من تأكيد الطلب.
+              </p>
+            ) : null}
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-status-error/25 text-status-error hover:border-status-error/40 hover:bg-status-error/10"
+                onClick={() => {
+                  setRejectError(null);
+                  setIsRejectSheetOpen(true);
+                }}
+                disabled={isPending}
+              >
+                رفض الطلب
+              </Button>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => updateStatus(OrderStatus.CONFIRMED)}
+                disabled={isPending || isDeliveryFeePending}
+              >
+                تأكيد الطلب
+              </Button>
+            </div>
           </div>
         </div>
 

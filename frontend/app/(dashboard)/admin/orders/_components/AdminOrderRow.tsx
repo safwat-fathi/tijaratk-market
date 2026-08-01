@@ -421,7 +421,9 @@ function OrderDetails({
             <div className="flex items-start justify-between gap-4">
               <dt className="text-gray-500">رسوم التوصيل</dt>
               <dd className="font-medium text-brand-text">
-                {formatMoney(order.delivery_fee)}
+                {order.delivery_fee_status === "pending"
+                  ? "تحدد حسب العنوان"
+                  : formatMoney(order.delivery_fee)}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-4 border-t border-brand-border pt-2.5">

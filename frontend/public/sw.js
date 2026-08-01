@@ -29,6 +29,7 @@ const PUSH_MESSAGE_TYPES = new Set([
   "merchant.assignment.created",
   "customer.order.status_changed",
   "customer.order.replacement_requested",
+  "customer.order.delivery_fee_set",
 ]);
 
 const getScopedTargetUrl = (targetPath) => {

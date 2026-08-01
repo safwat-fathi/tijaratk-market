@@ -271,6 +271,12 @@ model Order {
   pricing_mode                  PricingMode @default(auto) @map("pricing_mode")
   subtotal                      Decimal?    @db.Decimal(10, 2)
   delivery_fee                  Decimal     @default(0) @db.Decimal(10, 2)
+  /// `pending` until the merchant prices an `on_order` zone for this address.
+  delivery_fee_status           OrderDeliveryFeeStatus @default(set)
+  /// Bounds snapshotted at checkout so later zone edits cannot change what the customer was shown.
+  delivery_fee_min_quote        Decimal?    @db.Decimal(10, 2)
+  delivery_fee_max_quote        Decimal?    @db.Decimal(10, 2)
+  delivery_fee_set_at           DateTime?   @db.Timestamptz(6)
   delivery_address              String?
   delivery_area_id              Int?
   delivery_time_window_snapshot String?     @db.VarChar(64)
@@ -626,7 +632,13 @@ model TenantDeliveryArea {
   id         Int       @id(map: "PK_tenant_delivery_areas_id") @default(autoincrement())
   tenant_id  Int
   area_id    Int
+  /// Charged fee for `fixed` zones; always 0 for `on_order` zones.
   delivery_fee Decimal @db.Decimal(10, 2)
+  /// `on_order` zones are priced by the merchant after the customer's address is known.
+  fee_mode   DeliveryFeeMode @default(fixed)
+  /// Optional bounds advertised at checkout for `on_order` zones; enforced when the merchant sets the fee.
+  min_delivery_fee Decimal? @db.Decimal(10, 2)
+  max_delivery_fee Decimal? @db.Decimal(10, 2)
   is_active  Boolean   @default(true)
 
   tenant Tenant        @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_tenant_delivery_areas_tenant")
@@ -867,6 +879,20 @@ enum PricingMode {
   @@map("orders_pricing_mode_enum")
 }
 
+enum DeliveryFeeMode {
+  fixed
+  on_order
+
+  @@map("tenant_delivery_areas_fee_mode_enum")
+}
+
+enum OrderDeliveryFeeStatus {
+  set
+  pending
+
+  @@map("orders_delivery_fee_status_enum")
+}
+
 enum OrderStatus {
   draft
   confirmed
@@ -939,6 +965,7 @@ enum PushNotificationEventType {
   zone_assignment_created
   customer_order_status_changed
   customer_replacement_requested
+  customer_delivery_fee_set
 
   @@map("push_notification_event_type_enum")
 }

@@ -17,6 +17,7 @@ import {
   getActiveChildAreas,
   normalizeDeliveryConfiguration,
   resolveMainAreaId,
+  toDeliveryAreaFeeInput,
 } from "@/lib/delivery-configuration";
 import type {
   DeliveryConfigurationInput,
@@ -50,10 +51,7 @@ export default function DeliverySettingsStep({
               (area) =>
                 area.is_active !== false && area.area?.is_active !== false,
             )
-            .map((area) => ({
-              area_id: area.area_id,
-              delivery_fee: Number(area.delivery_fee),
-            })) || [],
+            .map(toDeliveryAreaFeeInput) || [],
       }),
     );
   const [areasLoading, setAreasLoading] = useState(true);
@@ -97,10 +95,7 @@ export default function DeliverySettingsStep({
           normalizeDeliveryConfiguration({
             ...current,
             main_area_ids: mainAreaIds,
-            delivery_areas: activeDeliveryAreas.map((area) => ({
-              area_id: area.area_id,
-              delivery_fee: Number(area.delivery_fee),
-            })),
+            delivery_areas: activeDeliveryAreas.map(toDeliveryAreaFeeInput),
           }),
         );
       }

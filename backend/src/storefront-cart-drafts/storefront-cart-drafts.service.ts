@@ -8,6 +8,7 @@ import {
 import { access, rm } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import {
+  DeliveryFeeMode,
   Order,
   OrderItemSelectionMode as PrismaSelectionMode,
   OrderSource,
@@ -18,6 +19,11 @@ import {
   TenantCategory,
   TenantStatus,
 } from '../../generated/prisma/client';
+import {
+  activeDeliveryZoneWhere,
+  toZonePricing,
+  zonePricingSelect,
+} from 'src/delivery-configuration/delivery-configuration.service';
 import { DbTenantContext } from 'src/common/contexts/db-tenant.context';
 import { OrderItemSelectionMode } from 'src/common/enums/order-item-selection-mode.enum';
 import { OrderType } from 'src/common/enums/order-type.enum';
@@ -498,30 +504,20 @@ export class StorefrontCartDraftsService {
     const delivery = draft.delivery_area_id
       ? await manager.tenantDeliveryArea.findFirst({
           where: {
-            tenant_id: draft.tenant_id,
+            ...activeDeliveryZoneWhere(draft.tenant_id),
             area_id: draft.delivery_area_id,
-            is_active: true,
-            deleted_at: null,
-            area: {
-              is_active: true,
-              deleted_at: null,
-              parent_area_id: { not: null },
-              parent_area: {
-                is: {
-                  is_active: true,
-                  deleted_at: null,
-                },
-              },
-            },
           },
-          select: { delivery_fee: true },
+          select: zonePricingSelect,
         })
       : null;
     const subtotal = validItems.reduce(
       (sum, item) => sum + this.resolveLineTotal(item),
       0,
     );
-    const deliveryFee = delivery ? Number(delivery.delivery_fee) : null;
+    const pricing = delivery ? toZonePricing(delivery) : null;
+    // A deferred zone has no fee to show yet, so the estimate covers items only.
+    const isDeferredFee = pricing?.feeMode === DeliveryFeeMode.on_order;
+    const deliveryFee = pricing && !isDeferredFee ? pricing.deliveryFee : null;
     return {
       token: draft.token,
       items: validItems.map((item) => ({
@@ -546,11 +542,15 @@ export class StorefrontCartDraftsService {
       delivery_area_id: delivery ? draft.delivery_area_id : null,
       delivery_area: delivery ? draft.delivery_area : null,
       delivery_fee: deliveryFee,
+      delivery_fee_mode: pricing?.feeMode ?? null,
+      delivery_fee_min: pricing?.minFee ?? null,
+      delivery_fee_max: pricing?.maxFee ?? null,
       subtotal: Number(subtotal.toFixed(2)),
-      estimated_total:
-        deliveryFee === null
-          ? null
-          : Number((subtotal + deliveryFee).toFixed(2)),
+      estimated_total: this.resolveEstimatedTotal(
+        subtotal,
+        deliveryFee,
+        isDeferredFee,
+      ),
       has_prescription: Boolean(draft.prescription_file_path),
       prescription_original_filename: draft.prescription_original_filename,
       prescription_unavailability_action:
@@ -589,6 +589,20 @@ export class StorefrontCartDraftsService {
     }
   }
 
+  /**
+   * Estimates the cart total. A deferred zone contributes no fee, so the
+   * estimate is the subtotal alone; an unchosen area leaves it unknown.
+   */
+  private resolveEstimatedTotal(
+    subtotal: number,
+    deliveryFee: number | null,
+    isDeferredFee: boolean,
+  ): number | null {
+    if (isDeferredFee) return Number(subtotal.toFixed(2));
+    if (deliveryFee === null) return null;
+    return Number((subtotal + deliveryFee).toFixed(2));
+  }
+
   /** Requires an active delivery-area association for the merchant. */
   private async requireDeliveryArea(
     manager: Prisma.TransactionClient,
@@ -596,23 +610,7 @@ export class StorefrontCartDraftsService {
     areaId: number,
   ): Promise<void> {
     const area = await manager.tenantDeliveryArea.findFirst({
-      where: {
-        tenant_id: tenantId,
-        area_id: areaId,
-        is_active: true,
-        deleted_at: null,
-        area: {
-          is_active: true,
-          deleted_at: null,
-          parent_area_id: { not: null },
-          parent_area: {
-            is: {
-              is_active: true,
-              deleted_at: null,
-            },
-          },
-        },
-      },
+      where: { ...activeDeliveryZoneWhere(tenantId), area_id: areaId },
       select: { area_id: true },
     });
     if (!area) throw new BadRequestException('منطقة التوصيل غير متاحة.');

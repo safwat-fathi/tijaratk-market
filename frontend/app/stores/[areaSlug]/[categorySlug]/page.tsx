@@ -237,6 +237,15 @@ const AvailabilityBadge = ({ store }: { store: StoresDirectoryStoreCard }) => {
   );
 };
 
+/**
+ * A merchant covering only zones priced after the order has no number to show,
+ * so it must never render as free delivery.
+ */
+const formatStoreDeliveryFee = (store: StoresDirectoryStoreCard) => {
+  if (store.deliveryFeeMode === "on_order") return "حسب العنوان";
+  return store.deliveryFee > 0 ? formatCurrency(store.deliveryFee) : "مجاني";
+};
+
 const StoreCard = ({
   store,
   categorySlug,
@@ -275,8 +284,7 @@ const StoreCard = ({
       </p>
       {store.deliveryAvailable ? (
         <p className="mt-1 text-xs font-bold text-[#0F5A3D]">
-          رسوم التوصيل:{" "}
-          {store.deliveryFee > 0 ? formatCurrency(store.deliveryFee) : "مجاني"}
+          رسوم التوصيل: {formatStoreDeliveryFee(store)}
         </p>
       ) : null}
     </div>

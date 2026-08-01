@@ -460,6 +460,26 @@ export async function updateManagedOrderTotalAction(
   revalidatePath(`/admin/merchants/${tenantId}/manage/orders/${orderId}`);
 }
 
+/** Prices a deferred delivery zone on a managed tenant's order. */
+export async function setManagedOrderDeliveryFeeAction(
+  tenantId: number,
+  orderId: number,
+  formData: FormData,
+): Promise<void> {
+  const deliveryFee = z.coerce
+    .number()
+    .min(0)
+    .parse(formData.get("delivery_fee"));
+  const response = await adminService.setManagedOrderDeliveryFee(
+    tenantId,
+    orderId,
+    deliveryFee,
+  );
+  if (!response.success)
+    throw new Error(response.message || "تعذر تحديد رسوم التوصيل");
+  revalidatePath(`/admin/merchants/${tenantId}/manage/orders/${orderId}`);
+}
+
 export async function updateManagedOrderItemAction(
   tenantId: number,
   orderId: number,
@@ -556,10 +576,27 @@ const adminDeliveryConfigurationSchema = z
       z.object({
         area_id: z.coerce.number().int().positive(),
         delivery_fee: z.coerce.number().min(0),
+        fee_mode: z.enum(["fixed", "on_order"]).default("fixed"),
+        min_delivery_fee: z.coerce.number().min(0).nullable().optional(),
+        max_delivery_fee: z.coerce.number().min(0).nullable().optional(),
       }),
     ),
   })
   .superRefine((data, ctx) => {
+    const invertedRange = data.delivery_areas.some(
+      (area) =>
+        area.fee_mode === "on_order" &&
+        area.min_delivery_fee != null &&
+        area.max_delivery_fee != null &&
+        area.min_delivery_fee > area.max_delivery_fee,
+    );
+    if (invertedRange) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["delivery_areas"],
+        message: "أقل رسوم توصيل يجب أن تكون أقل من أو تساوي أعلى رسوم",
+      });
+    }
     if (data.delivery_available && data.delivery_areas.length === 0) {
       ctx.addIssue({
         code: "custom",

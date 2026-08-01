@@ -19,6 +19,7 @@ import CONSTANTS from 'src/common/constants';
 import { OrdersService } from 'src/orders/orders.service';
 import { ReplaceOrderItemDto } from 'src/orders/dto/replace-order-item.dto';
 import { UpdateOrderItemPriceDto } from 'src/orders/dto/update-order-item-price.dto';
+import { SetOrderDeliveryFeeDto } from 'src/orders/dto/set-order-delivery-fee.dto';
 import { AdminActorContext } from './admin-managed.types';
 import { ADMIN_MANAGED_PERMISSIONS } from './constants/admin-managed-permissions';
 import { CurrentAdminActor } from './decorators/current-admin-actor.decorator';
@@ -99,6 +100,24 @@ export class AdminManagedOrdersController {
     @Body() dto: UpdateManagedOrderPricingDto,
   ) {
     return this.ordersService.updateForManagedAdmin(actor, orderId, dto);
+  }
+
+  /** Prices a deferred delivery zone once the address has been reviewed. */
+  @Patch(':orderId/delivery-fee')
+  @RequireManagedFeature('order_write')
+  @RequireManagedPermissions(ADMIN_MANAGED_PERMISSIONS.OrdersUpdatePricing)
+  @ApiOperation({ summary: 'Set managed order delivery fee' })
+  @ApiBody({ type: SetOrderDeliveryFeeDto })
+  setDeliveryFee(
+    @CurrentAdminActor() actor: AdminActorContext,
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Body() dto: SetOrderDeliveryFeeDto,
+  ) {
+    return this.ordersService.setOrderDeliveryFeeForManagedAdmin(
+      actor,
+      orderId,
+      dto.delivery_fee,
+    );
   }
 
   /** Updates one line price and recalculates the order. */

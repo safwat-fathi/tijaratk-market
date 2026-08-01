@@ -29,7 +29,8 @@ export type PushNotificationEnvelope = {
     | 'admin.order.created'
     | 'merchant.assignment.created'
     | 'customer.order.status_changed'
-    | 'customer.order.replacement_requested';
+    | 'customer.order.replacement_requested'
+    | 'customer.order.delivery_fee_set';
   title: string;
   body: string;
   url: string;

@@ -21,6 +21,7 @@ import {
   trackViewCart,
   type StorefrontAnalyticsContext,
 } from "@/lib/analytics/storefront-ga4";
+import { describeZoneDeliveryFee } from "@/lib/delivery-configuration";
 import { DEFAULT_UNAVAILABLE_ITEM_ACTION } from "@/lib/orders/unavailable-item-action";
 import { isScheduledOnlyOrdering } from "@/lib/storefront-order-availability";
 import { UnavailableItemAction } from "@/types/enums";
@@ -56,6 +57,21 @@ const selectionsFromDraft = (draft: StorefrontCartDraft | null) =>
       } satisfies ProductCartSelection,
     ] as const),
   ) as Record<number, ProductCartSelection>;
+
+/**
+ * Mirrors `serializeDraft` on the backend: a zone priced after the order
+ * contributes no fee, so the estimate covers items only; no chosen area leaves
+ * the total unknown.
+ */
+const resolveEstimatedTotal = (
+  subtotal: number,
+  deliveryFee: number | null,
+  isDeferred: boolean,
+) => {
+  if (isDeferred) return Number(subtotal.toFixed(2));
+  if (deliveryFee === null) return null;
+  return Number((subtotal + deliveryFee).toFixed(2));
+};
 
 /** Cart review step: quantities, special requests, prescription, area, and totals. */
 export default function StorefrontCart({
@@ -189,9 +205,22 @@ export default function StorefrontCart({
   const selectedArea = deliveryAreas.find((area) => area.area_id === deliveryAreaId);
   const selectedAreaSlug =
     selectedArea?.area?.slug || initialDeliveryAreaSlug;
-  const deliveryFee = selectedArea ? Number(selectedArea.delivery_fee) : null;
-  const estimatedTotal =
-    deliveryFee === null ? null : Number((Number(draft?.subtotal ?? 0) + deliveryFee).toFixed(2));
+  // Mirrors `serializeDraft` on the backend: a zone priced after the order
+  // contributes nothing to the estimate, so the total covers items only.
+  const selectedAreaFee = selectedArea
+    ? describeZoneDeliveryFee(selectedArea)
+    : null;
+  const isDeferredDelivery = selectedAreaFee?.isDeferred === true;
+  const deliveryFee =
+    selectedArea && !isDeferredDelivery
+      ? Number(selectedArea.delivery_fee)
+      : null;
+  const subtotal = Number(draft?.subtotal ?? 0);
+  const estimatedTotal = resolveEstimatedTotal(
+    subtotal,
+    deliveryFee,
+    isDeferredDelivery,
+  );
 
   return (
     <main className="px-4 pb-8 pt-5" dir="rtl">
@@ -401,9 +430,16 @@ export default function StorefrontCart({
       </section>
 
       <section className="mt-5 space-y-3 rounded-2xl border border-brand-border bg-white p-5 shadow-soft">
-        <div className="flex justify-between text-sm"><span>الإجمالي الفرعي</span><strong>{formatCurrency(Number(draft?.subtotal ?? 0))}</strong></div>
-        <div className="flex justify-between text-sm"><span>التوصيل</span><strong>{deliveryFee === null ? "حدد المنطقة" : (deliveryFee > 0 ? formatCurrency(deliveryFee) : "مجاني")}</strong></div>
-        <div className="flex justify-between border-t border-brand-border pt-3 text-lg"><span className="font-black">الإجمالي المتوقع</span><strong className="text-brand-primary">{estimatedTotal === null ? "—" : formatCurrency(estimatedTotal)}</strong></div>
+        <div className="flex justify-between text-sm"><span>الإجمالي الفرعي</span><strong>{formatCurrency(subtotal)}</strong></div>
+        <div className="flex justify-between text-sm"><span>التوصيل</span><strong>{selectedAreaFee ? selectedAreaFee.label : "حدد المنطقة"}</strong></div>
+        <div className="flex justify-between border-t border-brand-border pt-3 text-lg"><span className="font-black">{isDeferredDelivery ? "إجمالي المنتجات" : "الإجمالي المتوقع"}</span><strong className="text-brand-primary">{estimatedTotal === null ? "—" : formatCurrency(estimatedTotal)}</strong></div>
+        {isDeferredDelivery ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
+            رسوم التوصيل لهذه المنطقة يحددها المتجر بعد مراجعة عنوانك
+            {selectedAreaFee?.hint ? ` (${selectedAreaFee.hint})` : ""}، وسيصلك
+            إشعار بالإجمالي النهائي قبل تأكيد الطلب.
+          </p>
+        ) : null}
       </section>
 
       {message ? <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">{message}</p> : null}

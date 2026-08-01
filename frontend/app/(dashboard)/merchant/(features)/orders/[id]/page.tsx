@@ -5,6 +5,7 @@ import { activityLogsService } from "@/services/api/activity-logs.service";
 import { OrderStatus } from "@/types/enums";
 import OrderItemsReplacement from "./_components/OrderItemsReplacement";
 import OrderDetailsActions from "./_components/OrderDetailsActions";
+import DeliveryFeeForm from "./_components/DeliveryFeeForm";
 import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import { formatCurrency } from "@/lib/utils/currency";
 import { Card } from "@/components/ui/Card";
@@ -15,6 +16,10 @@ import {
 	formatPrescriptionUnavailabilityAction,
 } from "@/lib/orders/prescription-unavailability";
 import { formatUnavailableItemAction } from "@/lib/orders/unavailable-item-action";
+
+/** Reads an optional decimal the API may serialize as a string. */
+const toOptionalNumber = (value: number | string | null | undefined) =>
+	value == null ? null : Number(value);
 
 const statusLabelMap: Record<OrderStatus, string> = {
 	[OrderStatus.DRAFT]: "جديد",
@@ -74,6 +79,11 @@ export default async function OrderDetailsPage({
 	const customer = order.customer || {};
 	const deliveryAreaLabel =
 		order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
+	// A zone priced after the order blocks confirmation until the merchant
+	// prices it, so the totals card and the action bar both react to this.
+	const isDeliveryFeePending = order.delivery_fee_status === "pending";
+	const deliveryFeeMinQuote = toOptionalNumber(order.delivery_fee_min_quote);
+	const deliveryFeeMaxQuote = toOptionalNumber(order.delivery_fee_max_quote);
 	const prescriptionUnavailabilityLabel =
 		formatPrescriptionUnavailabilityAction(
 			order.prescription_unavailability_action,
@@ -264,6 +274,16 @@ export default async function OrderDetailsPage({
 					</section>
 				)}
 
+				{isDeliveryFeePending && (
+					<DeliveryFeeForm
+						orderId={order.id}
+						deliveryAddress={order.delivery_address ?? order.customer?.address}
+						areaName={order.delivery_area?.name_ar}
+						minQuote={deliveryFeeMinQuote}
+						maxQuote={deliveryFeeMaxQuote}
+					/>
+				)}
+
 				<Card className="p-4">
 					<div className="space-y-2">
 						<div className="flex justify-between text-sm text-muted-foreground">
@@ -277,11 +297,17 @@ export default async function OrderDetailsPage({
 
 						<div className="flex justify-between text-sm text-muted-foreground">
 							<span>رسوم التوصيل</span>
-							<span>{formatCurrency(order.delivery_fee) || "غير محدد"}</span>
+							<span>
+								{isDeliveryFeePending
+									? "تحدد حسب العنوان"
+									: formatCurrency(order.delivery_fee) || "غير محدد"}
+							</span>
 						</div>
 
 						<div className="flex items-end justify-between border-t border-brand-border pt-3">
-							<span className="font-bold text-brand-text">الإجمالي</span>
+							<span className="font-bold text-brand-text">
+								{isDeliveryFeePending ? "الإجمالي بدون التوصيل" : "الإجمالي"}
+							</span>
 							<span className="text-xl font-bold text-brand-text">
 								{order.total !== null && order.total !== undefined
 									? formatCurrency(order.total) || "غير محدد"
@@ -306,6 +332,7 @@ export default async function OrderDetailsPage({
 				orderId={order.id}
 				status={order.status}
 				statusLabel={statusLabelMap[order.status] || order.status}
+				isDeliveryFeePending={isDeliveryFeePending}
 			/>
 		</div>
 	);

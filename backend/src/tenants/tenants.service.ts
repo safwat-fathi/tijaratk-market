@@ -8,7 +8,10 @@ import { UpdateTenantDeliverySettingsDto } from './dto/update-tenant-delivery-se
 import { UpdateTenantSettingsDto } from './dto/update-tenant-settings.dto';
 import { StoresDirectoryService } from 'src/stores-directory/stores-directory.service';
 import { getDashboardCacheVersionKey } from 'src/merchant-dashboard/merchant-dashboard.service';
-import { DeliveryConfigurationService } from 'src/delivery-configuration/delivery-configuration.service';
+import {
+  DeliveryConfigurationService,
+  zonePricingSelect,
+} from 'src/delivery-configuration/delivery-configuration.service';
 import {
   type DeliveryAvailability,
   DeliverySchedulingService,
@@ -125,8 +128,7 @@ export class TenantsService {
           },
           select: {
             id: true,
-            area_id: true,
-            delivery_fee: true,
+            ...zonePricingSelect,
             is_active: true,
             area: {
               select: {

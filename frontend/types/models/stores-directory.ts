@@ -49,6 +49,8 @@ export type StoresDirectoryStoreCard = {
   areaSlug: string | null;
   deliveryAvailable: boolean;
   deliveryFee: number;
+  /** Optional so a frontend deploy that lands before the backend still renders. */
+  deliveryFeeMode?: "fixed" | "on_order";
   deliveryAvailableNow: boolean;
   /** Optional so a frontend deploy that lands before the backend still renders. */
   deliveryOrderingMode?: "asap" | "scheduled" | "unavailable";

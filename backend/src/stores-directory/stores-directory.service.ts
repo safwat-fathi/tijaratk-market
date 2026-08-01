@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import crypto from 'node:crypto';
 import {
+  DeliveryFeeMode,
   DirectoryEventType,
   DirectoryStatus,
   MissingDeliveryAreaRequestStatus,
@@ -29,6 +30,10 @@ import {
 } from './dto/missing-delivery-area-request.dto';
 import { rankAreaSearchResults } from './utils/area-search.util';
 import { DeliverySchedulingService } from 'src/delivery-configuration/delivery-scheduling.service';
+import { zonePricingSelect } from 'src/delivery-configuration/delivery-configuration.service';
+
+/** Cheapest advertisable delivery cost for one merchant's store card. */
+type DeliveryFeeSummary = { fee: number; mode: DeliveryFeeMode };
 
 const CATEGORY_DEFINITIONS = [
   {
@@ -391,7 +396,7 @@ export class StoresDirectoryService {
       new Map(
         paginatedRows.map((item) => [
           item.row.tenant.id,
-          Number(item.row.delivery_fee),
+          this.toDeliveryFeeSummary(item.row),
         ]),
       ),
       now,
@@ -995,8 +1000,7 @@ export class StoresDirectoryService {
             where: { deleted_at: null },
             select: {
               id: true,
-              area_id: true,
-              delivery_fee: true,
+              ...zonePricingSelect,
               is_active: true,
               area: true,
             },
@@ -1548,23 +1552,54 @@ export class StoresDirectoryService {
       }));
   }
 
-  /** Keeps one public coverage row per merchant using its lowest child-area fee. */
+  /**
+   * Keeps one public coverage row per merchant using its lowest child-area fee.
+   * A zone priced after the order carries no comparable number, so a fixed-fee
+   * row always wins and a deferred row is only used when nothing else exists.
+   */
   private getLowestFeeDeliveryAreaByTenant<
-    T extends { tenant: { id: number }; delivery_fee: Prisma.Decimal },
+    T extends {
+      tenant: { id: number };
+      delivery_fee: Prisma.Decimal;
+      fee_mode: DeliveryFeeMode;
+    },
   >(deliveryAreas: T[]) {
     const rowsByTenantId = new Map<number, T>();
 
     for (const deliveryArea of deliveryAreas) {
       const current = rowsByTenantId.get(deliveryArea.tenant.id);
-      if (
-        !current ||
-        Number(deliveryArea.delivery_fee) < Number(current.delivery_fee)
-      ) {
+      if (!current || this.prefersDeliveryRow(deliveryArea, current)) {
         rowsByTenantId.set(deliveryArea.tenant.id, deliveryArea);
       }
     }
 
     return Array.from(rowsByTenantId.values());
+  }
+
+  /** Ranks one coverage row against the current best for the same merchant. */
+  private prefersDeliveryRow(
+    candidate: { delivery_fee: Prisma.Decimal; fee_mode: DeliveryFeeMode },
+    current: { delivery_fee: Prisma.Decimal; fee_mode: DeliveryFeeMode },
+  ): boolean {
+    const candidateIsFixed = candidate.fee_mode === DeliveryFeeMode.fixed;
+    const currentIsFixed = current.fee_mode === DeliveryFeeMode.fixed;
+    if (candidateIsFixed !== currentIsFixed) {
+      return candidateIsFixed;
+    }
+    if (!candidateIsFixed) {
+      return false;
+    }
+    return Number(candidate.delivery_fee) < Number(current.delivery_fee);
+  }
+
+  /** Summarizes what a store card should say about delivery cost. */
+  private toDeliveryFeeSummary(row: {
+    delivery_fee: Prisma.Decimal;
+    fee_mode: DeliveryFeeMode;
+  }): DeliveryFeeSummary {
+    return row.fee_mode === DeliveryFeeMode.on_order
+      ? { fee: 0, mode: DeliveryFeeMode.on_order }
+      : { fee: Number(row.delivery_fee), mode: DeliveryFeeMode.fixed };
   }
 
   private toStoreCards(
@@ -1579,7 +1614,7 @@ export class StoresDirectoryService {
         badges: StoreBadge[];
       }
     >,
-    deliveryFees?: Map<number, number>,
+    deliveryFees?: Map<number, DeliveryFeeSummary>,
     now: Date = new Date(),
   ) {
     return tenants.map((tenant) => {
@@ -1601,7 +1636,9 @@ export class StoresDirectoryService {
           null,
         areaSlug: fallbackAreaSlug || null,
         deliveryAvailable: tenant.delivery_available,
-        deliveryFee: deliveryFees?.get(tenant.id) ?? 0,
+        deliveryFee: deliveryFees?.get(tenant.id)?.fee ?? 0,
+        deliveryFeeMode:
+          deliveryFees?.get(tenant.id)?.mode ?? DeliveryFeeMode.fixed,
         deliveryOrderingMode: orderingMode,
         deliveryAvailableNow: orderingMode === 'asap',
         readinessLevel:
@@ -1625,19 +1662,29 @@ export class StoresDirectoryService {
     });
   }
 
+  /**
+   * Maps each merchant to its cheapest advertisable delivery cost. Deferred
+   * zones never contribute a number, so a merchant covering only those is
+   * reported as `on_order` rather than as free delivery.
+   */
   private buildDeliveryFeeMap<
     T extends {
       delivery_fee: Prisma.Decimal;
+      fee_mode: DeliveryFeeMode;
       tenant: { id: number };
     },
   >(deliveryAreas: T[]) {
-    const fees = new Map<number, number>();
+    const bestRows = new Map<number, T>();
     for (const deliveryArea of deliveryAreas) {
-      const fee = Number(deliveryArea.delivery_fee);
-      const current = fees.get(deliveryArea.tenant.id);
-      if (current === undefined || fee < current) {
-        fees.set(deliveryArea.tenant.id, fee);
+      const current = bestRows.get(deliveryArea.tenant.id);
+      if (!current || this.prefersDeliveryRow(deliveryArea, current)) {
+        bestRows.set(deliveryArea.tenant.id, deliveryArea);
       }
+    }
+
+    const fees = new Map<number, DeliveryFeeSummary>();
+    for (const [tenantId, row] of bestRows) {
+      fees.set(tenantId, this.toDeliveryFeeSummary(row));
     }
     return fees;
   }

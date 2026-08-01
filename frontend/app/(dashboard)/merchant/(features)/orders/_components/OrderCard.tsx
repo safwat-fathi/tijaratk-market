@@ -27,6 +27,12 @@ interface OrderCardProps {
   isHighlighted?: boolean;
 }
 
+/** Describes what the headline total represents for this order. */
+const getTotalCaption = (order: Order) => {
+  if (order.delivery_fee_status === "pending") return "بدون التوصيل";
+  return order.pricing_mode === "manual" ? "يدوي" : "نقدي";
+};
+
 export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -68,6 +74,9 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
   
   // Safe customer access
   const customerName = order.customer?.name || "عميل جديد";
+  // An unpriced delivery zone makes the headline total incomplete, so say so
+  // instead of labelling how the order was priced.
+  const totalCaption = getTotalCaption(order);
   const deliveryAreaLabel =
     order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
   const prescriptionUnavailabilityLabel =
@@ -156,7 +165,7 @@ export default function OrderCard({ order, isHighlighted }: OrderCardProps) {
                 {formatCurrency(order.total) || "غير محدد"}
               </span>
               <span className="text-xs font-medium text-muted-foreground">
-                {order.pricing_mode === "manual" ? "يدوي" : "نقدي"}
+                {totalCaption}
               </span>
             </div>
           </div>

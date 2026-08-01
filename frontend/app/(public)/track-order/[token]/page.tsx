@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { ordersService } from "@/services/api/orders.service";
 import { formatCurrency } from "@/lib/utils/currency";
+import { formatDeferredFeeRange } from "@/lib/delivery-configuration";
 import SafeImage from "@/components/ui/SafeImage";
 import Link from "next/link";
 import { OrderStatus } from "@/types/enums";
@@ -191,6 +192,36 @@ const StatusBadge = ({ status }: { status: OrderStatus }) => {
   );
 };
 
+/** Reads an optional decimal the API may serialize as a string. */
+const toOptionalNumber = (value: number | string | null | undefined) =>
+  value == null ? null : Number(value);
+
+/** Shows the delivery fee, or that the store still has to price the address. */
+const DeliveryFeeValue = ({
+  isPending,
+  deliveryFee,
+  quotedRange,
+}: {
+  isPending: boolean;
+  deliveryFee: number | string | null | undefined;
+  quotedRange: string | null;
+}) => {
+  if (!isPending) return <>{formatCurrency(Number(deliveryFee) || 0)}</>;
+
+  return (
+    <>
+      <span className="font-semibold text-amber-900">
+        تحدد بعد مراجعة العنوان
+      </span>
+      {quotedRange ? (
+        <span className="mt-1 block text-xs text-muted-foreground">
+          النطاق المتوقع: {quotedRange}
+        </span>
+      ) : null}
+    </>
+  );
+};
+
 async function getOrder(token: string) {
   try {
     const response = await ordersService.getOrderByPublicToken(token);
@@ -223,6 +254,14 @@ export default async function TrackOrder({ params }: Props) {
   const deliveryAreaLabel =
     order.delivery_area?.name_ar || order.delivery_area?.name_en || null;
   const reorderBase = order.tenant?.slug ? `/${order.tenant.slug}` : null;
+  // The store still has to price this address, so the total shown excludes delivery.
+  const isDeliveryFeePending = order.delivery_fee_status === "pending";
+  const quotedDeliveryFeeRange = isDeliveryFeePending
+    ? formatDeferredFeeRange(
+        toOptionalNumber(order.delivery_fee_min_quote),
+        toOptionalNumber(order.delivery_fee_max_quote),
+      )
+    : null;
 
   return (
     <div className="overflow-hidden rounded-lg border border-brand-border bg-white shadow-soft">
@@ -341,17 +380,27 @@ export default async function TrackOrder({ params }: Props) {
               رسوم التوصيل
             </dt>
             <dd className="mt-1 text-sm text-brand-text sm:col-span-2 sm:mt-0">
-              {formatCurrency(Number(order.delivery_fee) || 0)}
+              <DeliveryFeeValue
+                isPending={isDeliveryFeePending}
+                deliveryFee={order.delivery_fee}
+                quotedRange={quotedDeliveryFeeRange}
+              />
             </dd>
           </div>
           <div className="bg-brand-soft/50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt className="text-sm font-medium text-muted-foreground">
-              الإجمالي
+              {isDeliveryFeePending ? "الإجمالي بدون التوصيل" : "الإجمالي"}
             </dt>
             <dd className="mt-1 text-sm font-bold text-brand-text sm:col-span-2 sm:mt-0">
               {order.total !== null && order.total !== undefined
                 ? formatCurrency(Number(order.total) || 0)
                 : "السعر يتم تأكيده بعد الطلب"}
+              {isDeliveryFeePending ? (
+                <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                  سيصلك إشعار بالإجمالي النهائي بعد أن يحدد المتجر رسوم
+                  التوصيل، ويمكنك رفض الطلب حينها إذا لم يناسبك.
+                </span>
+              ) : null}
             </dd>
           </div>
           <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">

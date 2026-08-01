@@ -65,6 +65,10 @@ type PushOutboxEnqueueInput = PushOutboxEnqueueMetadata &
         eventType: typeof PushNotificationEventType.customer_replacement_requested;
         payload: Record<string, never>;
       }
+    | {
+        eventType: typeof PushNotificationEventType.customer_delivery_fee_set;
+        payload: Record<string, never>;
+      }
   );
 
 /** Owns encrypted subscriptions, transactional enqueueing, and recipient resolution. */
@@ -362,6 +366,20 @@ export class PushNotificationsService {
     });
   }
 
+  /** Adds one customer delivery-fee event transactionally, carrying no amount. */
+  async enqueueCustomerDeliveryFeeSet(
+    manager: Prisma.TransactionClient,
+    input: { orderId: number; tenantId: number },
+  ): Promise<void> {
+    await this.enqueue(manager, {
+      eventKey: `customer-delivery-fee:${input.orderId}`,
+      eventType: PushNotificationEventType.customer_delivery_fee_set,
+      tenantId: input.tenantId,
+      orderId: input.orderId,
+      payload: {},
+    });
+  }
+
   /** Adds one customer replacement-action event transactionally. */
   async enqueueCustomerReplacement(
     manager: Prisma.TransactionClient,
@@ -388,7 +406,8 @@ export class PushNotificationsService {
       event.event_type ===
         PushNotificationEventType.customer_order_status_changed ||
       event.event_type ===
-        PushNotificationEventType.customer_replacement_requested
+        PushNotificationEventType.customer_replacement_requested ||
+      event.event_type === PushNotificationEventType.customer_delivery_fee_set
     ) {
       return this.resolveCustomerTargets(event);
     }
@@ -425,10 +444,16 @@ export class PushNotificationsService {
     const isCustomerReplacement =
       event.event_type ===
       PushNotificationEventType.customer_replacement_requested;
+    const isCustomerDeliveryFee =
+      event.event_type === PushNotificationEventType.customer_delivery_fee_set;
 
-    if (isCustomerStatus || isCustomerReplacement) {
+    if (isCustomerStatus || isCustomerReplacement || isCustomerDeliveryFee) {
       if (target.actor !== 'customer') {
         throw new Error('Invalid push delivery target');
+      }
+
+      if (isCustomerDeliveryFee) {
+        return this.buildCustomerDeliveryFeeEnvelope(event, target);
       }
 
       if (isCustomerReplacement) {
@@ -856,6 +881,26 @@ export class PushNotificationsService {
       throw new Error('Invalid push outbox payload');
     }
     return { status: payload.status as OrderStatus };
+  }
+
+  /** Builds the delivery-fee notification, deliberately without any amount. */
+  private buildCustomerDeliveryFeeEnvelope(
+    event: ClaimedPushEvent,
+    target: Extract<PushDeliveryTarget, { actor: 'customer' }>,
+  ): PushNotificationEnvelope {
+    return {
+      version: 1,
+      eventId: event.event_key,
+      type: PUSH_CLIENT_EVENT_TYPES.CustomerDeliveryFeeSet,
+      title: 'تم تحديد رسوم التوصيل',
+      body: `${target.storeName} حدّد رسوم التوصيل للطلب #${target.orderNumber}. افتح الطلب لمراجعة الإجمالي.`,
+      url: target.notificationUrl,
+      ...(target.notificationIconUrl
+        ? { iconUrl: target.notificationIconUrl }
+        : {}),
+      tag: event.event_key,
+      createdAt: event.created_at.toISOString(),
+    };
   }
 
   /** Returns a concise Arabic label suitable for a private lock screen. */

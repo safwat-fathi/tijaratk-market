@@ -60,11 +60,23 @@ export interface TenantDirectoryProfile {
   };
 }
 
+/** How a zone is priced: up front, or by the merchant once the address is known. */
+export type DeliveryFeeMode = "fixed" | "on_order";
+
+/** A decimal the API may serialize as a string, absent when never set. */
+export type OptionalDecimalValue = number | string | null;
+
 export interface TenantDeliveryArea {
   id?: number;
   tenant_id?: number;
   area_id: number;
+  /** Always 0 for `on_order` zones. */
   delivery_fee: number | string;
+  /** Optional so a frontend deploy that lands before the backend still renders. */
+  fee_mode?: DeliveryFeeMode;
+  /** Optional bounds advertised at checkout for `on_order` zones. */
+  min_delivery_fee?: OptionalDecimalValue;
+  max_delivery_fee?: OptionalDecimalValue;
   is_active?: boolean;
   area?: DirectoryArea;
 }
@@ -84,6 +96,9 @@ export type MissingDeliveryAreaRequest = {
 export type DeliveryAreaFeeInput = {
   area_id: number;
   delivery_fee: number;
+  fee_mode: DeliveryFeeMode;
+  min_delivery_fee?: number | null;
+  max_delivery_fee?: number | null;
 };
 
 export type DeliveryConfigurationInput = {

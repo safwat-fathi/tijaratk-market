@@ -5,13 +5,22 @@ import { useMemo, useState, type ReactNode } from "react";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { SelectableChip } from "@/components/ui/SelectableChip";
 import {
+  DEFAULT_ZONE_DELIVERY_FEE,
   excludeMainAreasFromDeliveryAreas,
+  isDeferredDeliveryFee,
   normalizeDeliveryConfiguration,
 } from "@/lib/delivery-configuration";
 import type {
+  DeliveryAreaFeeInput,
   DeliveryConfigurationInput,
+  DeliveryFeeMode,
   DirectoryArea,
 } from "@/types/models/tenant";
+
+const FEE_MODE_OPTIONS: Array<{ mode: DeliveryFeeMode; label: string }> = [
+  { mode: "fixed", label: "رسوم ثابتة" },
+  { mode: "on_order", label: "تحدد حسب العنوان" },
+];
 
 const DELIVERY_TIME_PRESETS = [
   { label: "طوال اليوم", start: "", end: "" },
@@ -50,14 +59,8 @@ export default function DeliveryConfigurationEditor({
       ),
     [value.delivery_areas, value.main_area_ids],
   );
-  const selectedFees = useMemo(
-    () =>
-      new Map(
-        deliveryAreas.map((area) => [
-          area.area_id,
-          area.delivery_fee,
-        ]),
-      ),
+  const selectedAreas = useMemo(
+    () => new Map(deliveryAreas.map((area) => [area.area_id, area])),
     [deliveryAreas],
   );
   const eligibleAreas = useMemo(
@@ -89,7 +92,13 @@ export default function DeliveryConfigurationEditor({
         ),
     [areas],
   );
-  const fees = deliveryAreas.map((area) => area.delivery_fee);
+  // Deferred zones have no advertised number, so they stay out of the summary
+  // range and are counted separately instead.
+  const fixedAreas = deliveryAreas.filter(
+    (area) => !isDeferredDeliveryFee(area.fee_mode),
+  );
+  const deferredAreasCount = deliveryAreas.length - fixedAreas.length;
+  const fees = fixedAreas.map((area) => area.delivery_fee);
   const minimumFee = fees.length > 0 ? Math.min(...fees) : 0;
   const maximumFee = fees.length > 0 ? Math.max(...fees) : 0;
 
@@ -122,33 +131,45 @@ export default function DeliveryConfigurationEditor({
   };
 
   const toggleArea = (areaId: number) => {
-    const existingFee = selectedFees.get(areaId);
     update({
-      delivery_areas:
-        existingFee === undefined
-          ? [...deliveryAreas, { area_id: areaId, delivery_fee: 20 }]
-          : deliveryAreas.filter((area) => area.area_id !== areaId),
+      delivery_areas: selectedAreas.has(areaId)
+        ? deliveryAreas.filter((area) => area.area_id !== areaId)
+        : [
+            ...deliveryAreas,
+            {
+              area_id: areaId,
+              delivery_fee: DEFAULT_ZONE_DELIVERY_FEE,
+              fee_mode: "fixed" as const,
+            },
+          ],
     });
   };
 
-  const updateAreaFee = (areaId: number, deliveryFee: number) => {
+  const patchArea = (areaId: number, patch: Partial<DeliveryAreaFeeInput>) => {
     update({
       delivery_areas: deliveryAreas.map((area) =>
-        area.area_id === areaId
-          ? { ...area, delivery_fee: deliveryFee }
-          : area,
+        area.area_id === areaId ? { ...area, ...patch } : area,
       ),
     });
   };
 
+  /** Reads an optional bound input, treating an empty field as "no bound". */
+  const parseOptionalFee = (value: string) => {
+    if (value.trim() === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+  };
+
+  // Bulk pricing only makes sense for zones that carry a number.
   const applyBulkFee = () => {
     const parsedFee = Number(bulkFee);
     if (!Number.isFinite(parsedFee) || parsedFee < 0) return;
     update({
-      delivery_areas: deliveryAreas.map((area) => ({
-        ...area,
-        delivery_fee: parsedFee,
-      })),
+      delivery_areas: deliveryAreas.map((area) =>
+        isDeferredDeliveryFee(area.fee_mode)
+          ? area
+          : { ...area, delivery_fee: parsedFee },
+      ),
     });
   };
 
@@ -207,6 +228,11 @@ export default function DeliveryConfigurationEditor({
                 ? `${minimumFee} جنيه`
                 : `${minimumFee} - ${maximumFee} جنيه`}
           </p>
+          {deferredAreasCount > 0 ? (
+            <p className="mt-1 text-xs font-semibold text-muted-foreground">
+              {deferredAreasCount} منطقة تحدد حسب العنوان
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -290,8 +316,9 @@ export default function DeliveryConfigurationEditor({
             {eligibleAreas.length > 0 ? (
               <div className="space-y-3">
                 {eligibleAreas.map((area) => {
-                  const fee = selectedFees.get(area.id);
-                  const isSelected = fee !== undefined;
+                  const selection = selectedAreas.get(area.id);
+                  const isSelected = selection !== undefined;
+                  const isDeferred = isDeferredDeliveryFee(selection?.fee_mode);
                   return (
                     <div
                       key={area.id}
@@ -324,30 +351,114 @@ export default function DeliveryConfigurationEditor({
                           </span>
                         </label>
                       </div>
-                      {isSelected ? (
-                        <label className="mt-3 block space-y-2 text-xs font-semibold text-muted-foreground">
-                          رسوم التوصيل
-                          <div className="relative">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              inputMode="decimal"
-                              value={fee}
-                              onChange={(event) =>
-                                updateAreaFee(
-                                  area.id,
-                                  Math.max(0, Number(event.target.value) || 0),
-                                )
-                              }
-                              disabled={disabled}
-                              className="min-h-11 w-full rounded-lg border border-brand-border bg-white px-3 pe-16 text-base font-bold tabular-nums text-brand-text focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/20"
-                            />
-                            <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-semibold text-muted-foreground">
-                              جنيه
-                            </span>
+                      {isSelected && selection ? (
+                        <div className="mt-3 space-y-3">
+                          <div
+                            role="radiogroup"
+                            aria-label={`طريقة تسعير التوصيل في ${area.name_ar}`}
+                            className="flex gap-2"
+                          >
+                            {FEE_MODE_OPTIONS.map((option) => {
+                              const isActive =
+                                (selection.fee_mode ?? "fixed") === option.mode;
+                              return (
+                                <button
+                                  key={option.mode}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={isActive}
+                                  onClick={() =>
+                                    patchArea(area.id, { fee_mode: option.mode })
+                                  }
+                                  disabled={disabled}
+                                  className={`min-h-11 flex-1 rounded-lg border px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/20 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                    isActive
+                                      ? "border-brand-primary bg-brand-soft text-brand-primary"
+                                      : "border-brand-border bg-white text-brand-text hover:border-brand-accent"
+                                  }`}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
                           </div>
-                        </label>
+
+                          {isDeferred ? (
+                            <>
+                              <p className="text-xs leading-5 text-muted-foreground">
+                                لن يرى العميل رسوم توصيل عند الطلب، وستحددها أنت بعد
+                                مراجعة عنوانه. النطاق اختياري، وإذا أدخلته لن تتمكن
+                                من تجاوزه.
+                              </p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <label className="space-y-2 text-xs font-semibold text-muted-foreground">
+                                  أقل رسوم (اختياري)
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    inputMode="decimal"
+                                    value={selection.min_delivery_fee ?? ""}
+                                    onChange={(event) =>
+                                      patchArea(area.id, {
+                                        min_delivery_fee: parseOptionalFee(
+                                          event.target.value,
+                                        ),
+                                      })
+                                    }
+                                    disabled={disabled}
+                                    className="min-h-11 w-full rounded-lg border border-brand-border bg-white px-3 text-base font-bold tabular-nums text-brand-text focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/20"
+                                  />
+                                </label>
+                                <label className="space-y-2 text-xs font-semibold text-muted-foreground">
+                                  أعلى رسوم (اختياري)
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    inputMode="decimal"
+                                    value={selection.max_delivery_fee ?? ""}
+                                    onChange={(event) =>
+                                      patchArea(area.id, {
+                                        max_delivery_fee: parseOptionalFee(
+                                          event.target.value,
+                                        ),
+                                      })
+                                    }
+                                    disabled={disabled}
+                                    className="min-h-11 w-full rounded-lg border border-brand-border bg-white px-3 text-base font-bold tabular-nums text-brand-text focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/20"
+                                  />
+                                </label>
+                              </div>
+                            </>
+                          ) : (
+                            <label className="block space-y-2 text-xs font-semibold text-muted-foreground">
+                              رسوم التوصيل
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  inputMode="decimal"
+                                  value={selection.delivery_fee}
+                                  onChange={(event) =>
+                                    patchArea(area.id, {
+                                      delivery_fee: Math.max(
+                                        0,
+                                        Number(event.target.value) || 0,
+                                      ),
+                                    })
+                                  }
+                                  disabled={disabled}
+                                  className="min-h-11 w-full rounded-lg border border-brand-border bg-white px-3 pe-16 text-base font-bold tabular-nums text-brand-text focus:border-brand-accent focus:outline-none focus:ring-4 focus:ring-brand-accent/20"
+                                />
+                                <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-semibold text-muted-foreground">
+                                  جنيه
+                                </span>
+                              </div>
+                            </label>
+                          )}
+                        </div>
                       ) : null}
                     </div>
                   );

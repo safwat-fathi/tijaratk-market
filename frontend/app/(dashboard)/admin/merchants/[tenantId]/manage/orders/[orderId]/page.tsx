@@ -1,9 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import {
+  setManagedOrderDeliveryFeeAction,
   updateManagedOrderItemAction,
   updateManagedOrderStatusAction,
   updateManagedOrderTotalAction,
 } from "@/actions/admin-server";
+import { formatDeferredFeeRange } from "@/lib/delivery-configuration";
 import { ActivityTimeline } from "@/components/activity/ActivityTimeline";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -20,6 +22,10 @@ import ManagedOutOfStockAction from "./ManagedOutOfStockAction";
 export const metadata = { title: "تفاصيل طلب المتجر" };
 
 export const dynamic = "force-dynamic";
+
+/** Reads an optional decimal the API may serialize as a string. */
+const toOptionalNumber = (value: number | string | null | undefined) =>
+  value == null ? null : Number(value);
 
 export default async function ManagedOrderDetailsPage({
   params,
@@ -106,6 +112,13 @@ export default async function ManagedOrderDetailsPage({
   const deliverableItemCount = order.items.filter(
     (item) => !item.is_out_of_stock,
   ).length;
+  const isDeliveryFeePending = order.delivery_fee_status === "pending";
+  const quotedDeliveryFeeRange = isDeliveryFeePending
+    ? formatDeferredFeeRange(
+        toOptionalNumber(order.delivery_fee_min_quote),
+        toOptionalNumber(order.delivery_fee_max_quote),
+      )
+    : null;
 
   return (
     <div className="space-y-5">
@@ -122,7 +135,14 @@ export default async function ManagedOrderDetailsPage({
             <p><strong>العميل:</strong> {order.customer?.name || "-"}</p>
             <p><strong>الهاتف:</strong> <a className="text-brand-primary" href={`tel:${order.customer?.phone || ""}`}>{order.customer?.phone || "-"}</a></p>
             <p><strong>العنوان:</strong> {order.customer?.address || "-"}</p>
-            <p><strong>الإجمالي:</strong> {String(order.total ?? 0)} ج.م</p>
+            <p><strong>الإجمالي:</strong> {String(order.total ?? 0)} ج.م{isDeliveryFeePending ? " (بدون التوصيل)" : ""}</p>
+            {isDeliveryFeePending ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                رسوم التوصيل لهذا الطلب تحدد حسب العنوان ولم يحددها التاجر بعد،
+                ولا يمكن تأكيد الطلب قبل تحديدها.
+                {quotedDeliveryFeeRange ? ` النطاق المعلن: ${quotedDeliveryFeeRange}.` : ""}
+              </p>
+            ) : null}
           </div>
         </Card>
 
@@ -139,6 +159,12 @@ export default async function ManagedOrderDetailsPage({
               </select>
               <input name="cancellation_reason" maxLength={500} placeholder="سبب الإلغاء عند الحاجة" className="rounded-md border border-gray-300 px-3 py-2" />
               <Button type="submit">تحديث الحالة</Button>
+            </form>
+          ) : null}
+          {permissions.has("orders.update_pricing") && isDeliveryFeePending ? (
+            <form action={setManagedOrderDeliveryFeeAction.bind(null, tenantId, orderId)} className="flex flex-wrap gap-2">
+              <input name="delivery_fee" type="number" min="0" step="0.01" required placeholder="رسوم التوصيل" className="rounded-md border border-gray-300 px-3 py-2" />
+              <Button type="submit">تحديد رسوم التوصيل</Button>
             </form>
           ) : null}
           {permissions.has("orders.update_pricing") ? (

@@ -14,4 +14,5 @@ export const PUSH_CLIENT_EVENT_TYPES = {
   AdminOrderCreated: 'admin.order.created',
   CustomerOrderStatusChanged: 'customer.order.status_changed',
   CustomerReplacementRequested: 'customer.order.replacement_requested',
+  CustomerDeliveryFeeSet: 'customer.order.delivery_fee_set',
 } as const;

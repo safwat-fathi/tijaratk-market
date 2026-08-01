@@ -11,8 +11,10 @@ import BottomSheet from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import {
   extractMainAreaIds,
+  isDeferredDeliveryFee,
   normalizeDeliveryConfiguration,
   resolveMainAreaId,
+  toDeliveryAreaFeeInput,
 } from "@/lib/delivery-configuration";
 import type {
   DeliveryConfigurationInput,
@@ -61,10 +63,7 @@ export function TenantAreaForm({ tenant, areas }: TenantAreaFormProps) {
               (area) =>
                 area.is_active !== false && area.area.is_active !== false,
             )
-            .map((area) => ({
-              area_id: area.area_id,
-              delivery_fee: Number(area.delivery_fee),
-            })) || [],
+            .map(toDeliveryAreaFeeInput) || [],
       }),
     );
 
@@ -93,10 +92,7 @@ export function TenantAreaForm({ tenant, areas }: TenantAreaFormProps) {
       return normalizeDeliveryConfiguration({
         ...current,
         main_area_ids: mainAreaIds,
-        delivery_areas: activeDeliveryAreas.map((area) => ({
-          area_id: area.area_id,
-          delivery_fee: Number(area.delivery_fee),
-        })),
+        delivery_areas: activeDeliveryAreas.map(toDeliveryAreaFeeInput),
       });
     });
   }, [tenant, areas]);
@@ -105,13 +101,26 @@ export function TenantAreaForm({ tenant, areas }: TenantAreaFormProps) {
     if (state.success) setIsOpen(false);
   }, [state.success]);
 
-  const fees = configuration.delivery_areas.map((area) => area.delivery_fee);
-  const feeSummary =
+  // Zones priced after the order carry no number to summarize.
+  const fees = configuration.delivery_areas
+    .filter((area) => !isDeferredDeliveryFee(area.fee_mode))
+    .map((area) => area.delivery_fee);
+  const deferredCount = configuration.delivery_areas.length - fees.length;
+  const fixedFeeSummary =
     fees.length === 0
-      ? "بدون مناطق"
+      ? null
       : Math.min(...fees) === Math.max(...fees)
         ? `${Math.min(...fees)} جنيه`
         : `${Math.min(...fees)} - ${Math.max(...fees)} جنيه`;
+  const feeSummary =
+    configuration.delivery_areas.length === 0
+      ? "بدون مناطق"
+      : [
+          fixedFeeSummary,
+          deferredCount > 0 ? `${deferredCount} حسب العنوان` : null,
+        ]
+          .filter(Boolean)
+          .join(" + ");
   const deliveryConfigured =
     configuration.delivery_available &&
     configuration.delivery_areas.length > 0;

@@ -34,6 +34,10 @@ import {
   type StorefrontAnalyticsContext,
 } from "@/lib/analytics/storefront-ga4";
 import { formatCurrency } from "@/lib/utils/currency";
+import {
+  formatDeferredFeeRange,
+  isDeferredDeliveryFee,
+} from "@/lib/delivery-configuration";
 import type { PublicCustomerProfile } from "@/services/api/customers.service";
 import type {
   DeliveryAvailability,
@@ -199,6 +203,12 @@ export default function StorefrontCheckout({
   ]);
 
   const deliveryAreaName = draft.delivery_area?.name_ar ?? "منطقة التوصيل";
+  // The chosen zone may be priced after the order, in which case the estimate
+  // deliberately excludes delivery and the shopper is told so explicitly.
+  const isDeferredDelivery = isDeferredDeliveryFee(draft.delivery_fee_mode);
+  const deferredFeeRange = isDeferredDelivery
+    ? formatDeferredFeeRange(draft.delivery_fee_min, draft.delivery_fee_max)
+    : null;
   const totalLabel = useMemo(
     () =>
       draft.estimated_total === null
@@ -244,8 +254,22 @@ export default function StorefrontCheckout({
               {deliveryAreaName}
             </p>
           </div>
-          <strong className="text-brand-primary">{totalLabel}</strong>
+          <div className="text-end">
+            <strong className="text-brand-primary">{totalLabel}</strong>
+            {isDeferredDelivery ? (
+              <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">
+                بدون التوصيل
+              </span>
+            ) : null}
+          </div>
         </div>
+        {isDeferredDelivery ? (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
+            رسوم التوصيل لهذه المنطقة يحددها المتجر بعد مراجعة عنوانك
+            {deferredFeeRange ? ` (${deferredFeeRange})` : ""}. هيوصلك إشعار
+            بالإجمالي النهائي، وتقدر ترفض الطلب لو مش مناسب.
+          </p>
+        ) : null}
       </section>
 
       {scheduledRequired ? (

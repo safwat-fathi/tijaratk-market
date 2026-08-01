@@ -8,8 +8,8 @@ import {
   prepareAreaSearchOptions,
   rankPreparedAreaSearchOptions,
 } from "@/lib/stores-directory/area-search";
+import { describeZoneDeliveryFee } from "@/lib/delivery-configuration";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/utils/currency";
 import type {
   DirectoryArea,
   TenantDeliveryArea,
@@ -90,6 +90,9 @@ export default function DeliveryAreaSelector({
   const selectedArea = selectableAreas.find(
     (area) => area.area_id === selectedAreaId,
   );
+  const selectedAreaFee = selectedArea
+    ? describeZoneDeliveryFee(selectedArea)
+    : null;
   const normalizedSearch = normalizeAreaSearchValue(search);
 
   const filteredGroups = useMemo(() => {
@@ -183,10 +186,8 @@ export default function DeliveryAreaSelector({
             ) : null}
             {selectedArea ? (
               <span className="mt-0.5 block text-xs font-semibold text-brand-primary">
-                رسوم التوصيل:{" "}
-                {Number(selectedArea.delivery_fee) > 0
-                  ? formatCurrency(Number(selectedArea.delivery_fee))
-                  : "مجاني"}
+                رسوم التوصيل: {selectedAreaFee?.label}
+                {selectedAreaFee?.hint ? ` (${selectedAreaFee.hint})` : ""}
               </span>
             ) : null}
           </span>
@@ -290,13 +291,21 @@ export default function DeliveryAreaSelector({
                             {deliveryArea.area?.name_ar}
                           </span>
                         </span>
-                        <span className="shrink-0 text-sm font-black tabular-nums text-brand-primary">
-                          {Number(deliveryArea.delivery_fee) > 0
-                            ? formatCurrency(
-                                Number(deliveryArea.delivery_fee),
-                              )
-                            : "مجاني"}
-                        </span>
+                        {(() => {
+                          const fee = describeZoneDeliveryFee(deliveryArea);
+                          return (
+                            <span className="shrink-0 text-end">
+                              <span className="block text-sm font-black tabular-nums text-brand-primary">
+                                {fee.label}
+                              </span>
+                              {fee.hint ? (
+                                <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">
+                                  {fee.hint}
+                                </span>
+                              ) : null}
+                            </span>
+                          );
+                        })()}
                       </button>
                     );
                   })}

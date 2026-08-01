@@ -3,9 +3,72 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '../../generated/prisma/client';
+import { DeliveryFeeMode, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UpdateDeliveryConfigurationDto } from './dto/update-delivery-configuration.dto';
+import {
+  DeliveryAreaFeeDto,
+  UpdateDeliveryConfigurationDto,
+} from './dto/update-delivery-configuration.dto';
+
+/**
+ * Matches the zones a shopper can actually order from: an active, non-deleted
+ * tenant row pointing at an active child area whose parent is also active.
+ * Shared by order creation, cart pricing and directory listings so the three
+ * cannot drift apart.
+ */
+export function activeDeliveryZoneWhere(
+  tenantId: number,
+): Prisma.TenantDeliveryAreaWhereInput {
+  return {
+    tenant_id: tenantId,
+    is_active: true,
+    deleted_at: null,
+    area: {
+      is_active: true,
+      deleted_at: null,
+      parent_area_id: { not: null },
+      parent_area: {
+        is: {
+          is_active: true,
+          deleted_at: null,
+        },
+      },
+    },
+  };
+}
+
+/** Every column needed to price a zone, whatever its fee mode. */
+export const zonePricingSelect = {
+  area_id: true,
+  delivery_fee: true,
+  fee_mode: true,
+  min_delivery_fee: true,
+  max_delivery_fee: true,
+} satisfies Prisma.TenantDeliveryAreaSelect;
+
+export type ZonePricingRow = Prisma.TenantDeliveryAreaGetPayload<{
+  select: typeof zonePricingSelect;
+}>;
+
+export type ResolvedZonePricing = {
+  areaId: number;
+  deliveryFee: number;
+  feeMode: DeliveryFeeMode;
+  minFee: number | null;
+  maxFee: number | null;
+};
+
+/** Normalizes a zone row into plain numbers, forcing on_order zones to a zero fee. */
+export function toZonePricing(row: ZonePricingRow): ResolvedZonePricing {
+  const isDeferred = row.fee_mode === DeliveryFeeMode.on_order;
+  return {
+    areaId: row.area_id,
+    deliveryFee: isDeferred ? 0 : Number(row.delivery_fee),
+    feeMode: row.fee_mode,
+    minFee: row.min_delivery_fee === null ? null : Number(row.min_delivery_fee),
+    maxFee: row.max_delivery_fee === null ? null : Number(row.max_delivery_fee),
+  };
+}
 
 const configurationSelect = {
   id: true,
@@ -58,6 +121,7 @@ export class DeliveryConfigurationService {
   ) {
     this.validateTimeWindow(dto);
     this.validateUniqueAreas(dto);
+    this.validateAreaPricing(dto);
 
     if (dto.delivery_available && dto.delivery_areas.length === 0) {
       throw new BadRequestException(
@@ -167,6 +231,7 @@ export class DeliveryConfigurationService {
         }
 
         for (const deliveryArea of dto.delivery_areas) {
+          const pricing = this.normalizeAreaPricing(deliveryArea);
           await tx.tenantDeliveryArea.upsert({
             where: {
               tenant_id_area_id: {
@@ -175,14 +240,14 @@ export class DeliveryConfigurationService {
               },
             },
             update: {
-              delivery_fee: deliveryArea.delivery_fee,
+              ...pricing,
               is_active: true,
               deleted_at: null,
             },
             create: {
               tenant_id: tenantId,
               area_id: deliveryArea.area_id,
-              delivery_fee: deliveryArea.delivery_fee,
+              ...pricing,
               is_active: true,
             },
           });
@@ -209,31 +274,22 @@ export class DeliveryConfigurationService {
     tx: Prisma.TransactionClient,
     tenantId: number,
     input: { areaId?: number; areaSlug?: string | null },
-  ): Promise<{ areaId: number; deliveryFee: number }> {
+  ): Promise<ResolvedZonePricing> {
     const normalizedSlug = input.areaSlug?.trim() || undefined;
+    const zoneWhere = activeDeliveryZoneWhere(tenantId);
     const requestedArea =
       input.areaId || normalizedSlug
         ? await tx.tenantDeliveryArea.findFirst({
             where: {
-              tenant_id: tenantId,
-              is_active: true,
-              deleted_at: null,
+              ...zoneWhere,
               area: {
-                is_active: true,
-                deleted_at: null,
-                parent_area_id: { not: null },
-                parent_area: {
-                  is: {
-                    is_active: true,
-                    deleted_at: null,
-                  },
-                },
+                ...(zoneWhere.area as Prisma.DirectoryAreaWhereInput),
                 ...(input.areaId
                   ? { id: input.areaId }
                   : { slug: normalizedSlug }),
               },
             },
-            select: { area_id: true, delivery_fee: true },
+            select: zonePricingSelect,
           })
         : null;
 
@@ -243,30 +299,12 @@ export class DeliveryConfigurationService {
           'منطقة التوصيل المختارة غير متاحة لهذا المتجر',
         );
       }
-      return {
-        areaId: requestedArea.area_id,
-        deliveryFee: Number(requestedArea.delivery_fee),
-      };
+      return toZonePricing(requestedArea);
     }
 
     const availableAreas = await tx.tenantDeliveryArea.findMany({
-      where: {
-        tenant_id: tenantId,
-        is_active: true,
-        deleted_at: null,
-        area: {
-          is_active: true,
-          deleted_at: null,
-          parent_area_id: { not: null },
-          parent_area: {
-            is: {
-              is_active: true,
-              deleted_at: null,
-            },
-          },
-        },
-      },
-      select: { area_id: true, delivery_fee: true },
+      where: zoneWhere,
+      select: zonePricingSelect,
       take: 2,
       orderBy: { area_id: 'asc' },
     });
@@ -282,10 +320,7 @@ export class DeliveryConfigurationService {
       );
     }
 
-    return {
-      areaId: availableAreas[0].area_id,
-      deliveryFee: Number(availableAreas[0].delivery_fee),
-    };
+    return toZonePricing(availableAreas[0]);
   }
 
   private validateTimeWindow(dto: UpdateDeliveryConfigurationDto) {
@@ -323,5 +358,42 @@ export class DeliveryConfigurationService {
         'المناطق الأساسية لا يمكن إضافتها ضمن مناطق التوصيل',
       );
     }
+  }
+
+  private validateAreaPricing(dto: UpdateDeliveryConfigurationDto) {
+    for (const area of dto.delivery_areas) {
+      const feeMode = area.fee_mode ?? DeliveryFeeMode.fixed;
+      if (feeMode !== DeliveryFeeMode.on_order) continue;
+
+      const min = area.min_delivery_fee;
+      const max = area.max_delivery_fee;
+      if (min != null && max != null && min > max) {
+        throw new BadRequestException(
+          'أقل رسوم توصيل يجب أن تكون أقل من أو تساوي أعلى رسوم',
+        );
+      }
+    }
+  }
+
+  /**
+   * Collapses a submitted zone into its stored form: a fixed zone keeps its fee
+   * and drops any bounds, an on_order zone stores a zero fee and keeps bounds.
+   */
+  private normalizeAreaPricing(area: DeliveryAreaFeeDto) {
+    const feeMode = area.fee_mode ?? DeliveryFeeMode.fixed;
+    if (feeMode === DeliveryFeeMode.on_order) {
+      return {
+        delivery_fee: 0,
+        fee_mode: DeliveryFeeMode.on_order,
+        min_delivery_fee: area.min_delivery_fee ?? null,
+        max_delivery_fee: area.max_delivery_fee ?? null,
+      };
+    }
+    return {
+      delivery_fee: area.delivery_fee,
+      fee_mode: DeliveryFeeMode.fixed,
+      min_delivery_fee: null,
+      max_delivery_fee: null,
+    };
   }
 }

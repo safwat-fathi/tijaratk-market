@@ -36,6 +36,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { ReplaceOrderItemDto } from './dto/replace-order-item.dto';
 import { UpdateOrderItemPriceDto } from './dto/update-order-item-price.dto';
+import { SetOrderDeliveryFeeDto } from './dto/set-order-delivery-fee.dto';
 import { DecideReplacementDto } from './dto/decide-replacement.dto';
 import { RejectOrderByCustomerDto } from './dto/reject-order-by-customer.dto';
 import { ResetOrderItemReplacementDto } from './dto/reset-order-item-replacement.dto';
@@ -325,6 +326,37 @@ export class OrdersController {
       userId: req.user?.userId,
       source: 'dashboard',
     });
+  }
+
+  @Patch(':id/delivery-fee')
+  @ApiBearerAuth(CONSTANTS.ACCESS_TOKEN)
+  @UseGuards(AuthGuard(CONSTANTS.AUTH.JWT))
+  @ApiOperation({
+    summary: 'Set the delivery fee for a deferred-pricing order',
+    description:
+      'Prices an order placed on an on_order delivery zone once the merchant has reviewed the address',
+  })
+  @ApiBody({ type: SetOrderDeliveryFeeDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Delivery fee set and order totals recalculated',
+  })
+  setOrderDeliveryFee(
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SetOrderDeliveryFeeDto,
+  ) {
+    const tenantId = req.user?.tenant_id;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant context is required');
+    }
+
+    return this.ordersService.setOrderDeliveryFee(
+      tenantId,
+      id,
+      dto.delivery_fee,
+      { userId: req.user?.userId, source: 'dashboard' },
+    );
   }
 
   @Patch('items/:id/replace')

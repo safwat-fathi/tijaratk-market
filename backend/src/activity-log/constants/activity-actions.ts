@@ -9,6 +9,7 @@ export const ActivityActions = {
   OrderCompleted: 'order.completed',
   OrderRejectedByCustomer: 'order.rejected_by_customer',
   OrderTotalChanged: 'order.total_changed',
+  OrderDeliveryFeeSet: 'order.delivery_fee_set',
   OrderItemPriceChanged: 'order.item_price_changed',
   OrderItemOutOfStock: 'order.item_out_of_stock',
   OrderReplacementProposed: 'order.replacement_proposed',

@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { normalizeDeliveryConfiguration } from "@/lib/delivery-configuration";
+import {
+  normalizeDeliveryConfiguration,
+  toDeliveryAreaFeeInput,
+} from "@/lib/delivery-configuration";
 import { tenantsService } from "@/services/api/tenants.service";
 import type { Tenant } from "@/types/models/tenant";
 
@@ -26,10 +29,38 @@ const deliveryConfigurationSchema = z
         delivery_fee: z.coerce
           .number({ error: "أدخل قيمة رقمية صحيحة" })
           .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر"),
+        fee_mode: z.enum(["fixed", "on_order"]).default("fixed"),
+        min_delivery_fee: z.coerce
+          .number({ error: "أدخل قيمة رقمية صحيحة" })
+          .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر")
+          .nullable()
+          .optional(),
+        max_delivery_fee: z.coerce
+          .number({ error: "أدخل قيمة رقمية صحيحة" })
+          .min(0, "رسوم التوصيل لا يمكن أن تكون أقل من صفر")
+          .nullable()
+          .optional(),
       }),
     ),
   })
   .superRefine((data, ctx) => {
+    // Mirrors `validateAreaPricing` on the backend: both bounds are optional,
+    // but a pair that is given must be ordered.
+    const invertedRange = data.delivery_areas.some(
+      (area) =>
+        area.fee_mode === "on_order" &&
+        area.min_delivery_fee != null &&
+        area.max_delivery_fee != null &&
+        area.min_delivery_fee > area.max_delivery_fee,
+    );
+    if (invertedRange) {
+      ctx.addIssue({
+        code: "custom",
+        message: "أقل رسوم توصيل يجب أن تكون أقل من أو تساوي أعلى رسوم",
+        path: ["delivery_areas"],
+      });
+    }
+
     const areaIds = data.delivery_areas.map((area) => area.area_id);
     if (new Set(areaIds).size !== areaIds.length) {
       ctx.addIssue({
@@ -177,10 +208,7 @@ export async function toggleStoreAvailabilityAction(
             (area) =>
               area.is_active !== false && area.area?.is_active !== false,
           )
-          .map((area) => ({
-            area_id: area.area_id,
-            delivery_fee: Number(area.delivery_fee),
-          })) || [],
+          .map(toDeliveryAreaFeeInput) || [],
     }),
   );
 

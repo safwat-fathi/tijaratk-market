@@ -133,6 +133,9 @@ type AdminTenantDeliveryArea = {
 	id?: number;
 	area_id: number;
 	delivery_fee: number | string;
+	fee_mode?: "fixed" | "on_order";
+	min_delivery_fee?: number | string | null;
+	max_delivery_fee?: number | string | null;
 	is_active?: boolean;
 	area: AdminDirectoryArea;
 };
@@ -282,6 +285,9 @@ export type AdminOrderListItem = Pick<
 	| "pricing_mode"
 	| "subtotal"
 	| "delivery_fee"
+	| "delivery_fee_status"
+	| "delivery_fee_min_quote"
+	| "delivery_fee_max_quote"
 	| "delivery_area_id"
 	| "delivery_area"
 	| "delivery_time_window_snapshot"
@@ -761,6 +767,19 @@ class AdminApiService extends HttpService {
 		);
 	}
 
+	public async setManagedOrderDeliveryFee(
+		tenantId: number,
+		orderId: number,
+		deliveryFee: number,
+	) {
+		return this.patch<AdminOrder>(
+			`managed-tenants/${tenantId}/orders/${orderId}/delivery-fee`,
+			{ delivery_fee: deliveryFee },
+			undefined,
+			ADMIN_AUTH_OPTIONS,
+		);
+	}
+
 	public async updateManagedOrderItem(
 		tenantId: number,
 		itemId: number,
@@ -893,7 +912,13 @@ class AdminApiService extends HttpService {
 			delivery_starts_at?: string | null;
 			delivery_ends_at?: string | null;
 			main_area_ids: number[];
-			delivery_areas: Array<{ area_id: number; delivery_fee: number }>;
+			delivery_areas: Array<{
+				area_id: number;
+				delivery_fee: number;
+				fee_mode: "fixed" | "on_order";
+				min_delivery_fee?: number | null;
+				max_delivery_fee?: number | null;
+			}>;
 		},
 	) {
 		return this.patch<AdminTenant>(

@@ -98,6 +98,37 @@ export async function resetOrderItemReplacementAction(
   }
 }
 
+/** Prices a deferred delivery zone once the merchant has reviewed the address. */
+export async function setOrderDeliveryFeeAction(
+  orderId: number,
+  deliveryFee: number,
+) {
+  try {
+    const response = await ordersService.setOrderDeliveryFee(orderId, {
+      delivery_fee: deliveryFee,
+    });
+
+    if (!response.success) {
+      return {
+        success: false,
+        error: response.message || 'تعذر تحديد رسوم التوصيل',
+      };
+    }
+
+    revalidatePath(`/merchant/orders/${orderId}`);
+    revalidatePath('/merchant/orders');
+    revalidatePath('/merchant');
+
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+    console.error('Failed to set order delivery fee:', error);
+    return { success: false, error: 'تعذر تحديد رسوم التوصيل' };
+  }
+}
+
 export async function updateOrderItemPriceAction(
   orderId: number,
   itemId: number,

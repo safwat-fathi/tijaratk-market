@@ -126,6 +126,18 @@ class OrdersService extends HttpService {
 		return this.patch<Order>(`tracking/${token}/reject`, payload);
 	}
 
+	public async setOrderDeliveryFee(
+		orderId: number,
+		payload: { delivery_fee: number },
+	) {
+		return this.patch<Order>(
+			`${orderId}/delivery-fee`,
+			payload,
+			undefined,
+			{ authRequired: true },
+		);
+	}
+
 	public async updateOrderItemPrice(
 		itemId: number,
 		payload: { total_price: number },

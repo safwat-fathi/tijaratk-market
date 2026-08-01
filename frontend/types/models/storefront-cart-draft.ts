@@ -1,6 +1,6 @@
 import type { Order } from "@/types/models/order";
 import type { Product } from "@/types/models/product";
-import type { DirectoryArea } from "@/types/models/tenant";
+import type { DeliveryFeeMode, DirectoryArea } from "@/types/models/tenant";
 import type { OrderSource, UnavailableItemAction } from "@/types/enums";
 
 export type StorefrontCartSelection = {
@@ -26,8 +26,14 @@ export type StorefrontCartDraft = {
   source_metadata?: Record<string, unknown> | null;
   delivery_area_id: number | null;
   delivery_area: DirectoryArea | null;
+  /** null when no area is chosen yet, and also when the chosen zone is `on_order`. */
   delivery_fee: number | null;
+  /** null until an area is chosen. */
+  delivery_fee_mode?: DeliveryFeeMode | null;
+  delivery_fee_min?: number | null;
+  delivery_fee_max?: number | null;
   subtotal: number;
+  /** Covers items only when the chosen zone is priced after the order. */
   estimated_total: number | null;
   has_prescription: boolean;
   prescription_original_filename?: string | null;
