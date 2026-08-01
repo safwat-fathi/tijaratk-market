@@ -1,0 +1,129 @@
+name: Deploy Staging
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  push:
+    branches:
+      - staging
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/deploy-staging.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed apps
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/deploy-staging.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/deploy-staging.yml'
+
+      - name: Setup SSH
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.backend == 'true' || steps.changes.outputs.frontend == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy Backend
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.backend == 'true'
+        run: |
+          ssh -T ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "bash -s" << 'EOF'
+            set -euo pipefail
+
+            cd ${{ secrets.STAGING_DEPLOY_PATH }}
+
+            export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new"
+            git fetch origin staging --prune
+            git checkout -f staging
+            git reset --hard origin/staging
+            git clean -fd
+
+            export NVM_DIR="$HOME/.nvm"
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              . "$NVM_DIR/nvm.sh"
+            fi
+
+            if command -v corepack >/dev/null 2>&1; then
+              corepack enable
+              corepack prepare pnpm@9 --activate
+            elif command -v npm >/dev/null 2>&1; then
+              npm install -g pnpm@9
+            else
+              echo "Neither corepack nor npm found; cannot install pnpm" >&2
+              exit 1
+            fi
+
+            rm -f ~/pnpm-workspace.yaml ../pnpm-workspace.yaml pnpm-workspace.yaml || true
+            pnpm -v
+            CI=true pnpm -C backend install --frozen-lockfile --force --ignore-workspace
+
+            # Must run before the build: `generated/prisma` is TypeScript source
+            # that nest build compiles into dist/generated/prisma.
+            NODE_ENV=production pnpm -C backend run prisma:generate
+            pnpm -C backend run prisma:migrate:deploy
+            NODE_ENV=production pnpm -C backend build
+
+            pm2 reload tijaratk-staging-backend --update-env || pm2 start ecosystem.config.js --only tijaratk-staging-backend
+          EOF
+
+      - name: Deploy Frontend
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.frontend == 'true'
+        run: |
+          ssh -T ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "NEXT_PUBLIC_SENTRY_DSN='${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}' SENTRY_DSN='${{ secrets.SENTRY_DSN }}' bash -s" << 'EOF'
+            set -euo pipefail
+
+            cd ${{ secrets.STAGING_DEPLOY_PATH }}
+
+            export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new"
+            git fetch origin staging --prune
+            git checkout -f staging
+            git reset --hard origin/staging
+            git clean -fd
+
+            export NVM_DIR="$HOME/.nvm"
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              . "$NVM_DIR/nvm.sh"
+            fi
+
+            if command -v corepack >/dev/null 2>&1; then
+              corepack enable
+              corepack prepare pnpm@9 --activate
+            elif command -v npm >/dev/null 2>&1; then
+              npm install -g pnpm@9
+            else
+              echo "Neither corepack nor npm found; cannot install pnpm" >&2
+              exit 1
+            fi
+
+            rm -f ~/pnpm-workspace.yaml ../pnpm-workspace.yaml pnpm-workspace.yaml || true
+            export NEXT_PUBLIC_SENTRY_DSN="${NEXT_PUBLIC_SENTRY_DSN:-}"
+            export SENTRY_DSN="${SENTRY_DSN:-}"
+            pnpm -v
+            CI=true pnpm -C frontend install --frozen-lockfile --force --ignore-workspace
+            pnpm -C frontend build
+
+            pm2 reload tijaratk-staging-frontend --update-env || pm2 start ecosystem.config.js --only tijaratk-staging-frontend
+          EOF
