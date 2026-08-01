@@ -96,8 +96,8 @@ jobs:
             export SENTRY_DSN="${SENTRY_DSN:-}"
             pnpm -v
             CI=true pnpm -C backend install --frozen-lockfile --force --ignore-workspace
-            NODE_ENV=production pnpm -C backend run prisma:generate
-            pnpm -C backend run prisma:migrate:deploy
+            NODE_ENV=production pnpm -C backend run db:generate
+            pnpm -C backend run db:migrate:deploy
             NODE_ENV=production pnpm -C backend build
             pm2 reload tijaratk-backend --update-env || pm2 start ecosystem.config.js --only tijaratk-backend --env production
           EOF
