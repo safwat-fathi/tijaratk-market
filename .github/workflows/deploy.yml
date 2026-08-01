@@ -1,4 +1,4 @@
-name: Deploy CI/CD
+name: Deploy Production
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -8,16 +8,16 @@ on:
     branches:
       - main
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - '.github/workflows/deploy.yml'
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/deploy.yml"
   pull_request:
     branches:
       - main
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - '.github/workflows/deploy.yml'
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 jobs:
